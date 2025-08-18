@@ -416,7 +416,7 @@ justify-content: center;
 <div class="top">
 <div class="user-row">
 <a class="btn" href="/chat_list" style="text-decoration:none;color:var(--muted);">◀</a>
-<a id="other-profile-link" href="#" class="avatar"><img id="other-avatar" src="https://res.cloudinary.com/duixjs8az/image/upload/v1755535367/default_profile_xjhkix.png" alt="avatar"></a>
+<a id="other-profile-link" href="#" class="avatar"><img id="other-avatar" src="https://res.cloudinary.com/duixjs8az/image/upload/v1/profile_pics/default_profile.png" alt="avatar"></a>
 <div class="meta">
 <div id="other-name" class="name">جارٍ التحميل...</div>
 <div id="other-username" class="sub small"></div>
@@ -511,13 +511,12 @@ messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 async function fetchOtherProfile() {
 try {
-const res = await fetch('/api/users', { credentials: 'include' });
-
+const res = await fetch('/api/users', { credentials: 'same-origin' });
 if (res.status === 401) return window.location.href = '/login';
 const list = await res.json();
 const other = Array.isArray(list) ? list.find(u => u.uid === otherId || u.id === otherId) : null;
 if (other) {
-otherAvatar.src = other.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1755535367/default_profile_xjhkix.png';
+otherAvatar.src = other.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1/profile_pics/default_profile.png';
 otherName.textContent = other.full_name || other.username || 'مستخدم';
 otherUsername.textContent = other.username ? ('@' + other.username) : '';
 } else {
@@ -531,7 +530,7 @@ console.error('fetchOtherProfile', err);
 let lastMessages = [];
 async function fetchMessages() {
 try {
-const res = await fetch('/api/messages/' + encodeURIComponent(otherId), { credentials: 'include' });
+const res = await fetch('/api/messages/' + encodeURIComponent(otherId), { credentials: 'same-origin' });
 if (res.status === 401) return window.location.href = '/login';
 const data = await res.json();
 if (!Array.isArray(data)) return;
@@ -546,7 +545,7 @@ return;
 }
 data.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 if (!myId) {
-const profileRes = await fetch('/api/profile', { credentials: 'include' });
+const profileRes = await fetch('/api/profile');
 if (profileRes.ok) {
 const user = await profileRes.json();
 myId = user.id;
@@ -711,14 +710,14 @@ if (replyToMessage) {
 if (uploadedFile) {
 formData.append('media', uploadedFile);
 } else if (audioChunks.length > 0) {
-const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); // تعديل هنا
 formData.append('media', audioBlob, 'recording.webm');
 }
 try {
 const res = await fetch('/api/messages/send', {
-  method: 'POST',
-  credentials: 'include',
-  body: formData
+method: 'POST',
+credentials: 'same-origin',
+body: formData
 });
 if (res.status === 401) return window.location.href = '/login';
 const result = await res.json();
@@ -747,10 +746,10 @@ sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 async function markRead() {
 try {
 await fetch('/api/mark_read', {
-  method: 'POST',
-  credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ other_id: otherId })
+method: 'POST',
+credentials: 'same-origin',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ other_id: otherId })
 });
 } catch (err) {
 console.error('markRead', err);
@@ -771,7 +770,7 @@ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m
 async function startRecording() {
 try {
 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-mediaRecorder = new MediaRecorder(stream);
+mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); // تعديل هنا
 audioChunks = [];
 mediaRecorder.ondataavailable = event => {
 audioChunks.push(event.data);
