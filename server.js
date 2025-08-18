@@ -25,14 +25,15 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: (req, file) => {
-        if (req.originalUrl.includes('/register')) {
-            return 'profile_pics';
-        } else if (req.originalUrl.includes('/messages/send')) {
-            return 'chat_media';
-        }
-        return 'general';
+      if (req.originalUrl.includes('/register')) {
+        return 'profile_pics';
+      } else if (req.originalUrl.includes('/messages/send')) {
+        return 'chat_media';
+      }
+      return 'general';
     },
     public_id: (req, file) => Date.now() + '-' + file.originalname,
+    resource_type: 'auto',   // ✅ هذا يضمن قبول الصوت
   },
 });
 
@@ -333,9 +334,8 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
 
   try {
     if (req.file) {
-      // The file has been uploaded to Cloudinary by multer
       media_url = req.file.path;
-      media_type = req.file.resource_type;
+      media_type = req.file.resource_type || 'raw'; // ✅ ضمان أن الصوت ما يسقطش
     }
 
     if (!other_id || (!content && !media_url)) {
@@ -357,9 +357,9 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
     };
 
     if (replied_to_id) {
-        payload.replied_to_id = replied_to_id;
-        payload.replied_to_content = replied_to_content;
-        payload.replied_to_sender = replied_to_sender;
+      payload.replied_to_id = replied_to_id;
+      payload.replied_to_content = replied_to_content;
+      payload.replied_to_sender = replied_to_sender;
     }
 
     await newMessageRef.set(payload);
@@ -369,7 +369,6 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
     res.status(500).json({ error: 'Server error' });
   }
 });
-
 
 app.post('/api/mark_read', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
