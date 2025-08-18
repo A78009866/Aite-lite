@@ -72,7 +72,7 @@ app.use(session({
   },
   store: new FirebaseStore({
     database: db,
-    collection: 'sessions', // يمكنك تغيير اسم المجموعة
+    collection: 'sessions',
     ttl: 3600
   })
 }));
@@ -467,6 +467,7 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
         full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
         profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
         is_online: !!profiles[uid].is_online,
+        is_verified: !!profiles[uid].is_online,
         is_verified: !!profiles[uid].is_verified
       };
     });
