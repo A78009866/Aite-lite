@@ -41,14 +41,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage: storage });
 
 // Load service account key from environment variable
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
-} catch (error) {
-  // هذا الجزء مخصص للتشغيل المحلي
-  console.warn("SERVICE_ACCOUNT_KEY is not a valid JSON string from environment variables. Falling back to local file.");
-  serviceAccount = require('./serviceAccountKey.json');
-}
+const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
