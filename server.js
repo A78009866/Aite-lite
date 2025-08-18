@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const FirebaseStore = require('connect-session-firebase')(session); // ✅ المكتبة الجديدة والطريقة الصحيحة
+const FirebaseStore = require('connect-session-firebase')(session);
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
@@ -141,7 +141,7 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', upload.single('profile_picture'), async (req, res) => {
   const { username, password } = req.body;
-  let profile_picture_url = cloudinary.url('default_profile.png', { secure: true });
+  let profile_picture_url = 'https://via.placeholder.com/150';
 
   try {
     if (!username || !password) {
@@ -194,6 +194,7 @@ app.get('/logout', (req, res) => {
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   const requestedUserId = req.query.user_id || currentUserId;
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
 
   try {
     const [profileSnapshot, userSnapshot] = await Promise.all([
@@ -209,7 +210,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       username: profileData.username || userData.username || userData.displayName || '',
       full_name: profileData.full_name || userData.full_name || userData.displayName || '',
       email: profileData.email || userData.email || '',
-      profile_picture_url: profileData.profile_picture_url || userData.profile_picture_url || cloudinary.url('default_profile.png', { secure: true }),
+      profile_picture_url: profileData.profile_picture_url || userData.profile_picture_url || defaultProfileUrl,
       is_online: !!(profileData.is_online || userData.is_online),
       is_verified: !!(profileData.is_verified || userData.is_verified)
     };
@@ -223,6 +224,8 @@ app.get('/api/profile', requireAuth, async (req, res) => {
 
 app.get('/api/chat_list', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
+
   try {
     const [profilesSnapshot, usersSnapshot, messagesSnapshot] = await Promise.all([
       db.ref('profiles').once('value'),
@@ -241,7 +244,7 @@ app.get('/api/chat_list', requireAuth, async (req, res) => {
         id: uid,
         username: users[uid].username || users[uid].displayName || '',
         full_name: users[uid].full_name || users[uid].displayName || '',
-        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || cloudinary.url('default_profile.png', { secure: true }),
+        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
         is_online: !!users[uid].is_online,
         is_verified: !!users[uid].is_verified
       };
@@ -252,7 +255,7 @@ app.get('/api/chat_list', requireAuth, async (req, res) => {
         id: uid,
         username: profiles[uid].username || (map[uid] && map[uid].username) || '',
         full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
-        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || cloudinary.url('default_profile.png', { secure: true }),
+        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
         is_online: !!profiles[uid].is_online,
         is_verified: !!profiles[uid].is_verified
       };
@@ -283,7 +286,7 @@ app.get('/api/chat_list', requireAuth, async (req, res) => {
           id: p.id,
           username: p.username,
           full_name: p.full_name || null,
-          profile_picture_url: p.profile_picture_url || cloudinary.url('default_profile.png', { secure: true }),
+          profile_picture_url: p.profile_picture_url || defaultProfileUrl,
           is_online: !!p.is_online,
           is_verified: !!p.is_verified
         },
@@ -343,13 +346,18 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
   try {
     if (req.file) {
       media_url = req.file.path;
-      if (req.file.mimetype.startsWith('audio/')) {
-        media_type = 'audio';
-      } else if (req.file.mimetype.startsWith('video/')) {
-        media_type = 'video';
-      } else if (req.file.mimetype.startsWith('image/')) {
-        media_type = 'image';
+      if (req.file.mimetype) {
+        if (req.file.mimetype.startsWith('audio/')) {
+          media_type = 'audio';
+        } else if (req.file.mimetype.startsWith('video/')) {
+          media_type = 'video';
+        } else if (req.file.mimetype.startsWith('image/')) {
+          media_type = 'image';
+        } else {
+          media_type = 'raw';
+        }
       } else {
+        console.warn('File uploaded without mimetype. Setting to "raw".');
         media_type = 'raw';
       }
     }
@@ -381,8 +389,8 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
     await newMessageRef.set(payload);
     res.json({ ok: true, message: payload });
   } catch (err) {
-    console.error('/api/messages/send error', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('/api/messages/send error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
@@ -427,6 +435,8 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
 
   const searchQuery = query.toLowerCase();
 
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
+  
   try {
     const [profilesSnapshot, usersSnapshot] = await Promise.all([
       db.ref('profiles').once('value'),
@@ -444,7 +454,7 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
         uid: uid,
         username: users[uid].username || users[uid].displayName || '',
         full_name: users[uid].full_name || users[uid].displayName || '',
-        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || cloudinary.url('default_profile.png', { secure: true }),
+        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
         is_online: !!users[uid].is_online,
         is_verified: !!users[uid].is_verified
       };
@@ -455,7 +465,7 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
         uid: uid,
         username: profiles[uid].username || (map[uid] && map[uid].username) || '',
         full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
-        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || cloudinary.url('default_profile.png', { secure: true }),
+        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
         is_online: !!profiles[uid].is_online,
         is_verified: !!profiles[uid].is_verified
       };
@@ -482,6 +492,8 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
 
 app.get('/api/users', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
+
   try {
     const [profilesSnapshot, usersSnapshot] = await Promise.all([
       db.ref('profiles').once('value'),
@@ -497,7 +509,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
         uid: uid,
         username: users[uid].username || users[uid].displayName || '',
         full_name: users[uid].full_name || users[uid].displayName || '',
-        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || cloudinary.url('default_profile.png', { secure: true }),
+        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
         is_online: !!users[uid].is_online,
         is_verified: !!users[uid].is_verified
       };
@@ -508,7 +520,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
         uid: uid,
         username: profiles[uid].username || (map[uid] && map[uid].username) || '',
         full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
-        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || cloudinary.url('default_profile.png', { secure: true }),
+        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
         is_online: !!profiles[uid].is_online,
         is_verified: !!profiles[uid].is_verified
       };
