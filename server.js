@@ -124,7 +124,7 @@ app.post('/login', async (req, res) => {
     const userRecord = await firebaseAuth.getUserByEmail(email);
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
-    await req.session.save();
+    await req.session.save(); // ✅ تأكد من وجود هذا السطر
     res.redirect('/chat_list');
   } catch (error) {
     console.error('Login error:', error.message);
@@ -168,7 +168,7 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
 
     req.session.userId = userRecord.uid;
     req.session.email = email;
-    await req.session.save(); // ✅ إضافة هذا السطر لحفظ الجلسة بشكل صريح قبل إعادة التوجيه
+    await req.session.save(); // ✅ تأكد من وجود هذا السطر
     res.redirect('/chat_list');
   } catch (error) {
     console.error('Registration Error:', error.message);
@@ -527,8 +527,11 @@ app.get('/api/debug/session', (req, res) => {
   res.json({
     ok: true,
     hasSession: !!(req.session && req.session.userId),
-    session: req.session || null,
-    cookies: req.headers.cookie || null
+    userId: req.session.userId || null,
+    cookies: req.headers.cookie || null,
+    nodeEnv: process.env.NODE_ENV,
+    isSecure: req.secure,
+    proxySetting: app.get('trust proxy')
   });
 });
 
