@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const FirebaseStore = require('express-session-firebase'); // ✅ المكتبة الجديدة
+const FirebaseStore = require('connect-session-firebase')(session); // ✅ المكتبة الجديدة والطريقة الصحيحة
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
@@ -72,7 +72,8 @@ app.use(session({
   },
   store: new FirebaseStore({
     database: db,
-    ttl: 3600 // مدة صلاحية الجلسة بالثواني (ساعة واحدة)
+    collection: 'sessions', // يمكنك تغيير اسم المجموعة
+    ttl: 3600
   })
 }));
 
