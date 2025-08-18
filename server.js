@@ -124,6 +124,7 @@ app.post('/login', async (req, res) => {
     const userRecord = await firebaseAuth.getUserByEmail(email);
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
+    await req.session.save();
     res.redirect('/chat_list');
   } catch (error) {
     console.error('Login error:', error.message);
@@ -167,6 +168,7 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
 
     req.session.userId = userRecord.uid;
     req.session.email = email;
+    await req.session.save(); // ✅ إضافة هذا السطر لحفظ الجلسة بشكل صريح قبل إعادة التوجيه
     res.redirect('/chat_list');
   } catch (error) {
     console.error('Registration Error:', error.message);
