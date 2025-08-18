@@ -25,7 +25,6 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: (req, file) => {
-        // تحديد المجلد بناءً على المسار
         if (req.originalUrl.includes('/register')) {
             return 'profile_pics';
         } else if (req.originalUrl.includes('/messages/send')) {
@@ -33,7 +32,6 @@ const storage = new CloudinaryStorage({
         }
         return 'general';
     },
-    // تم حذف سطر format للسماح برفع جميع أنواع الملفات
     public_id: (req, file) => Date.now() + '-' + file.originalname,
   },
 });
@@ -59,14 +57,14 @@ app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// إعدادات الجلسة (session) الجديدة والمعدلة
+// إعدادات الجلسة (session) الجديدة
 app.use(session({
   secret: 'a-firebase-secret-key-is-better',
   resave: false,
   saveUninitialized: false,
-  proxy: true, // ضروري ليعمل مع Vercel
+  proxy: true,
   cookie: {
-    secure: true, // ضروري ليعمل على HTTPS
+    secure: process.env.NODE_ENV === 'production', // فقط في Vercel/HTTPS
     httpOnly: true,
     sameSite: 'lax'
   }
@@ -145,8 +143,7 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
     const email = `${username}@trimer.io`;
 
     if (req.file) {
-      // The file has been uploaded to Cloudinary by multer
-      profile_picture_url = req.file.path; // CloudinaryStorage saves the public URL to req.file.path
+      profile_picture_url = req.file.path;
     }
 
     const userRecord = await firebaseAuth.createUser({
