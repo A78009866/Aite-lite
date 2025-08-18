@@ -335,7 +335,16 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
   try {
     if (req.file) {
       media_url = req.file.path;
-      media_type = req.file.resource_type || 'raw'; // ✅ ضمان أن الصوت ما يسقطش
+      // تعديل هنا: التأكد من نوع الميديا بشكل صريح
+      if (req.file.mimetype.startsWith('audio/')) {
+        media_type = 'audio';
+      } else if (req.file.mimetype.startsWith('video/')) {
+        media_type = 'video';
+      } else if (req.file.mimetype.startsWith('image/')) {
+        media_type = 'image';
+      } else {
+        media_type = 'raw';
+      }
     }
 
     if (!other_id || (!content && !media_url)) {
