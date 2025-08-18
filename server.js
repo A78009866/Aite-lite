@@ -34,7 +34,7 @@ const storage = new CloudinaryStorage({
         }
         return 'general';
     },
-    format: async (req, file) => 'jpg', // يمكنك تغيير التنسيق حسب حاجتك
+    // تم حذف سطر format: async (req, file) => 'jpg', للسماح برفع جميع أنواع الملفات
     public_id: (req, file) => Date.now() + '-' + file.originalname,
   },
 });
