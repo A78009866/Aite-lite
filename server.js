@@ -117,23 +117,25 @@ app.get('/register', (req, res) => {
 });
 
 // ---------------- Auth Routes ----------------
-app.post('/login', async (req, res) => {
+app.post('/login', async (req, res, next) => {
   const { username } = req.body;
   try {
     const email = `${username}@trimer.io`;
     const userRecord = await firebaseAuth.getUserByEmail(email);
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
-    await req.session.save(); // ✅ تأكد من وجود هذا السطر
-    res.redirect('/chat_list');
+    await req.session.save();
+    return next(); // ✅ تم التعديل: بدلاً من res.redirect، نستخدم next()
   } catch (error) {
     console.error('Login error:', error.message);
     const errorMessage = 'Invalid username or password.';
     res.redirect('/login?error=' + encodeURIComponent(errorMessage));
   }
+}, requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'chat_list.html'));
 });
 
-app.post('/register', upload.single('profile_picture'), async (req, res) => {
+app.post('/register', upload.single('profile_picture'), async (req, res, next) => {
   const { username, password } = req.body;
   let profile_picture_url = cloudinary.url('default_profile.png', { secure: true });
 
@@ -168,12 +170,14 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
 
     req.session.userId = userRecord.uid;
     req.session.email = email;
-    await req.session.save(); // ✅ تأكد من وجود هذا السطر
-    res.redirect('/chat_list');
+    await req.session.save();
+    return next(); // ✅ تم التعديل: بدلاً من res.redirect، نستخدم next()
   } catch (error) {
     console.error('Registration Error:', error.message);
     res.redirect('/register?error=' + encodeURIComponent(error.message));
   }
+}, requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'chat_list.html'));
 });
 
 app.get('/logout', (req, res) => {
