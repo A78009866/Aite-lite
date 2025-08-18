@@ -335,7 +335,10 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
   try {
     if (req.file) {
       media_url = req.file.path;
-      // تعديل هنا: التأكد من نوع الميديا بشكل صريح
+      // قم بإزالة هذا السطر لأنه يسبب الخطأ
+      // media_type = req.file.resource_type || 'raw';
+      
+      // ✅ اعتمد على نوع MIME لتحديد نوع الملف
       if (req.file.mimetype.startsWith('audio/')) {
         media_type = 'audio';
       } else if (req.file.mimetype.startsWith('video/')) {
