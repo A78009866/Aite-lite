@@ -1,4 +1,6 @@
-// server.js
+// تشغيل مكتبة dotenv لقراءة متغيرات البيئة من ملف .env محلياً
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
@@ -40,7 +42,15 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage: storage });
 
 // Load service account key from environment variable
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+} catch (error) {
+  // هذا الجزء مخصص للتشغيل المحلي
+  console.warn("SERVICE_ACCOUNT_KEY is not a valid JSON string from environment variables. Falling back to local file.");
+  serviceAccount = require('./serviceAccountKey.json');
+}
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: "https://trimer-4081b-default-rtdb.firebaseio.com",
@@ -57,12 +67,14 @@ app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// إعدادات الجلسة (session) الجديدة والمعدلة
 app.use(session({
   secret: 'a-firebase-secret-key-is-better',
   resave: false,
   saveUninitialized: false,
+  proxy: true, // ضروري ليعمل مع Vercel
   cookie: {
-    secure: false,
+    secure: true, // ضروري ليعمل على HTTPS
     httpOnly: true,
     sameSite: 'lax'
   }
