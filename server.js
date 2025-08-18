@@ -4,6 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const FirebaseStore = require('express-session-firebase'); // ✅ المكتبة الجديدة
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
@@ -33,7 +34,7 @@ const storage = new CloudinaryStorage({
       return 'general';
     },
     public_id: (req, file) => Date.now() + '-' + file.originalname,
-    resource_type: 'auto',   // ✅ هذا يضمن قبول الصوت
+    resource_type: 'auto',
   },
 });
 
@@ -58,17 +59,21 @@ app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// إعدادات الجلسة (session) الجديدة
+// إعدادات الجلسة (session) الجديدة مع Firebase
 app.use(session({
   secret: 'a-firebase-secret-key-is-better',
   resave: false,
   saveUninitialized: false,
   proxy: true,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // فقط في Vercel/HTTPS
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     sameSite: 'lax'
-  }
+  },
+  store: new FirebaseStore({
+    database: db,
+    ttl: 3600 // مدة صلاحية الجلسة بالثواني (ساعة واحدة)
+  })
 }));
 
 // ---------------- Authentication helper ----------------
@@ -124,8 +129,8 @@ app.post('/login', async (req, res) => {
     const userRecord = await firebaseAuth.getUserByEmail(email);
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
-    await req.session.save(); // ✅ مهم جداً: حفظ الجلسة بشكل صريح
-    res.redirect('/chat_list'); // ✅ إعادة التوجيه بعد الحفظ
+    await req.session.save();
+    res.redirect('/chat_list');
   } catch (error) {
     console.error('Login error:', error.message);
     const errorMessage = 'Invalid username or password.';
@@ -168,8 +173,8 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
 
     req.session.userId = userRecord.uid;
     req.session.email = email;
-    await req.session.save(); // ✅ مهم جداً: حفظ الجلسة بشكل صريح
-    res.redirect('/chat_list'); // ✅ إعادة التوجيه بعد الحفظ
+    await req.session.save();
+    res.redirect('/chat_list');
   } catch (error) {
     console.error('Registration Error:', error.message);
     res.redirect('/register?error=' + encodeURIComponent(error.message));
@@ -337,10 +342,6 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
   try {
     if (req.file) {
       media_url = req.file.path;
-      // قم بإزالة هذا السطر لأنه يسبب الخطأ
-      // media_type = req.file.resource_type || 'raw';
-      
-      // ✅ اعتمد على نوع MIME لتحديد نوع الملف
       if (req.file.mimetype.startsWith('audio/')) {
         media_type = 'audio';
       } else if (req.file.mimetype.startsWith('video/')) {
