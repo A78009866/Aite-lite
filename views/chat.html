@@ -511,7 +511,8 @@ messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 async function fetchOtherProfile() {
 try {
-const res = await fetch('/api/users', { credentials: 'same-origin' });
+const res = await fetch('/api/users', { credentials: 'include' });
+
 if (res.status === 401) return window.location.href = '/login';
 const list = await res.json();
 const other = Array.isArray(list) ? list.find(u => u.uid === otherId || u.id === otherId) : null;
@@ -530,7 +531,7 @@ console.error('fetchOtherProfile', err);
 let lastMessages = [];
 async function fetchMessages() {
 try {
-const res = await fetch('/api/messages/' + encodeURIComponent(otherId), { credentials: 'same-origin' });
+const res = await fetch('/api/messages/' + encodeURIComponent(otherId), { credentials: 'include' });
 if (res.status === 401) return window.location.href = '/login';
 const data = await res.json();
 if (!Array.isArray(data)) return;
@@ -545,7 +546,7 @@ return;
 }
 data.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 if (!myId) {
-const profileRes = await fetch('/api/profile');
+const profileRes = await fetch('/api/profile', { credentials: 'include' });
 if (profileRes.ok) {
 const user = await profileRes.json();
 myId = user.id;
@@ -715,9 +716,9 @@ formData.append('media', audioBlob, 'recording.wav');
 }
 try {
 const res = await fetch('/api/messages/send', {
-method: 'POST',
-credentials: 'same-origin',
-body: formData
+  method: 'POST',
+  credentials: 'include',
+  body: formData
 });
 if (res.status === 401) return window.location.href = '/login';
 const result = await res.json();
@@ -746,10 +747,10 @@ sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 async function markRead() {
 try {
 await fetch('/api/mark_read', {
-method: 'POST',
-credentials: 'same-origin',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ other_id: otherId })
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ other_id: otherId })
 });
 } catch (err) {
 console.error('markRead', err);
