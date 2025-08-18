@@ -11,7 +11,6 @@ const { getDatabase } = require('firebase-admin/database');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-// لم نعد بحاجة إلى مكتبة 'fs' لأننا لا نتعامل مع الملفات المحلية
 
 // Cloudinary Configuration using Environment Variables
 cloudinary.config({
@@ -34,7 +33,7 @@ const storage = new CloudinaryStorage({
         }
         return 'general';
     },
-    // تم حذف سطر format: async (req, file) => 'jpg', للسماح برفع جميع أنواع الملفات
+    // تم حذف سطر format للسماح برفع جميع أنواع الملفات
     public_id: (req, file) => Date.now() + '-' + file.originalname,
   },
 });
@@ -153,7 +152,7 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
     const email = `${username}@trimer.io`;
 
     if (req.file) {
-      // no need to manually upload or delete from local disk
+      // The file has been uploaded to Cloudinary by multer
       profile_picture_url = req.file.path; // CloudinaryStorage saves the public URL to req.file.path
     }
 
