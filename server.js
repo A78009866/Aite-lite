@@ -11,12 +11,11 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 // لم نعد بحاجة إلى مكتبة 'fs' لأننا لا نتعامل مع الملفات المحلية
 
-
-// Cloudinary Configuration
+// Cloudinary Configuration using Environment Variables
 cloudinary.config({
-  cloud_name: "duixjs8az",
-  api_key: "143978951428697",
-  api_secret: "9dX6eIvntdtGQIU7oXGMSRG9I2o",
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
   secure: true
 });
 
