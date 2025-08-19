@@ -82,7 +82,15 @@ function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
     return next();
   }
-  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
+  
+  // إذا كان المسار هو API، أرسل استجابة 401 Unauthorized بتنسيق JSON
+  if (req.path.startsWith('/api/')) {
+    console.error('API call unauthorized. Session not found for user ID:', req.session.userId);
+    return res.status(401).json({ error: 'Unauthorized', message: 'User session not found or expired.' });
+  }
+
+  // خلاف ذلك، أعد التوجيه إلى صفحة تسجيل الدخول
+  console.log('Redirecting to login. Path:', req.path);
   return res.redirect('/login');
 }
 
@@ -338,10 +346,14 @@ app.get('/api/messages/:other_id', requireAuth, async (req, res) => {
 });
 
 app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, res) => {
+  console.log('API call to /api/messages/send received.');
   const currentUserId = req.session.userId;
   const { other_id, content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
   let media_url = null;
   let media_type = 'text';
+
+  // Check if session user ID is correct
+  console.log('Current User ID:', currentUserId);
 
   try {
     if (req.file) {
@@ -360,9 +372,11 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
         console.warn('File uploaded without mimetype. Setting to "raw".');
         media_type = 'raw';
       }
+      console.log('Media file received. Path:', media_url);
     }
 
     if (!other_id || (!content && !media_url)) {
+      console.log('Missing other_id or content/media.');
       return res.status(400).json({ error: 'other_id and content or media are required' });
     }
 
@@ -386,10 +400,13 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
       payload.replied_to_sender = replied_to_sender;
     }
 
+    console.log('Payload for message:', payload);
     await newMessageRef.set(payload);
-    res.json({ ok: true, message: payload });
+    console.log('Message sent successfully. Responding with JSON.');
+    res.status(200).send(JSON.stringify({ ok: true, message: payload }));
   } catch (err) {
     console.error('/api/messages/send error:', err);
+    console.log('Responding with an error status.');
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
@@ -523,6 +540,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
         full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
         profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
         is_online: !!profiles[uid].is_online,
+        is_verified: !!profiles[uid].is_online,
         is_verified: !!profiles[uid].is_verified
       };
     });
@@ -568,6 +586,20 @@ app.get('/api/debug/raw_users', requireAuth, async (req, res) => {
     console.error('raw_users error', err);
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ---------------- Error handling middleware for Multer ----------------
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    // خطأ من Multer (مثل حجم الملف كبير جدًا)
+    console.error('Multer error:', err);
+    return res.status(400).json({ error: 'Upload failed', message: err.message });
+  } else if (err) {
+    // أي خطأ آخر
+    console.error('General error:', err);
+    return res.status(500).json({ error: 'Server error', message: err.message });
+  }
+  next();
 });
 
 app.listen(port, () => {

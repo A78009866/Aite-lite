@@ -719,7 +719,16 @@ method: 'POST',
 credentials: 'same-origin',
 body: formData
 });
-if (res.status === 401) return window.location.href = '/login';
+if (res.status === 401) {
+    console.error('Session expired. Redirecting to login.');
+    return window.location.href = '/login';
+}
+if (!res.ok) {
+    const errorText = await res.text();
+    console.error('Send failed with status:', res.status, 'Response:', errorText);
+    alert('فشل في إرسال الرسالة: ' + res.statusText);
+    return;
+}
 const result = await res.json();
 if (result && result.ok) {
 msgInput.value = '';
