@@ -287,6 +287,21 @@ app.get('/api/chat_list', requireAuth, async (req, res) => {
       });
 
       const last = lastMessage;
+      let lastMessageText = 'بدء محادثة جديدة';
+      if (last) {
+        if (last.content) {
+            lastMessageText = last.content;
+        } else if (last.media_type === 'audio') {
+            lastMessageText = 'قام بارسال رسالة صوتية';
+        } else if (last.media_type === 'image') {
+            lastMessageText = 'قام بارسال صورة';
+        } else if (last.media_type === 'video') {
+            lastMessageText = 'قام بارسال فيديو';
+        } else if (last.media_url) {
+            lastMessageText = 'ملف مرفق';
+        }
+      }
+      
       const is_new = !!(last && last.sender_id !== currentUserId && !last.is_read);
 
       results.push({
@@ -298,7 +313,7 @@ app.get('/api/chat_list', requireAuth, async (req, res) => {
           is_online: !!p.is_online,
           is_verified: !!p.is_verified
         },
-        last_message: last ? last.content : '',
+        last_message: lastMessageText,
         last_time: last ? last.created_at : null,
         is_new: is_new
       });
