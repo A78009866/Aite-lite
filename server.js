@@ -199,6 +199,16 @@ app.get('/logout', (req, res) => {
 
 // ---------------- API: Realtime Database backend ----------------
 
+// مسار جديد لفحص حالة المصادقة من جانب العميل
+app.get('/api/check-auth', requireAuth, (req, res) => {
+    if (req.session && req.session.userId) {
+        return res.status(200).json({ authenticated: true });
+    }
+    // في حال عدم وجود جلسة، يجب أن تعيد Middleware 'requireAuth' توجيه المستخدم أو إرسال خطأ 401
+    // ولكن لإضافة وضوح، نُعيد هنا أيضًا
+    res.status(401).json({ authenticated: false });
+});
+
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   const requestedUserId = req.query.user_id || currentUserId;
