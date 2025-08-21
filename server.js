@@ -33,7 +33,7 @@ const storage = new CloudinaryStorage({
       }
       return 'general';
     },
-    public_id: (req, file) => Date.now() + '-' + file.originalname,
+    public_id: (req, file) => Date.now() + '-' + file.originalname.split('.')[0],
     resource_type: 'auto',
   },
 });
@@ -41,18 +41,18 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage: storage });
 
 // Load service account key from environment variable
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://trimer-4081b-default-rtdb.firebaseio.com",
+  databaseURL: process.env.FIREBASE_DATABASE_URL,
 });
 
 const firebaseAuth = getAuth();
 const db = getDatabase();
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
@@ -61,20 +61,20 @@ app.use(express.json());
 
 // إعدادات الجلسة (session) الجديدة مع Firebase
 app.use(session({
-  secret: 'a-firebase-secret-key-is-better',
-  resave: false,
-  saveUninitialized: false,
-  proxy: true,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    sameSite: 'lax'
-  },
   store: new FirebaseStore({
-    database: db,
-    collection: 'sessions',
-    ttl: 3600
-  })
+    database: db.ref('sessions')
+  }),
+  name: '__session',
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    // هذه الإعدادات ضرورية لتطبيق Capacitor
+    sameSite: 'none',
+    secure: true,
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
 }));
 
 // ---------------- Authentication helper ----------------
@@ -85,119 +85,122 @@ function requireAuth(req, res, next) {
   
   // إذا كان المسار هو API، أرسل استجابة 401 Unauthorized بتنسيق JSON
   if (req.path.startsWith('/api/')) {
-    console.error('API call unauthorized. Session not found for user ID:', req.session.userId);
     return res.status(401).json({ error: 'Unauthorized', message: 'User session not found or expired.' });
   }
 
   // خلاف ذلك، أعد التوجيه إلى صفحة تسجيل الدخول
-  console.log('Redirecting to login. Path:', req.path);
-  return res.redirect('/login');
+  return res.redirect('/login.html');
 }
 
 // ---------------- Routes: pages ----------------
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'splash.html'));
-});
+app.use(express.static(path.join(__dirname, 'views')));
+app.get('/', (req, res) => res.redirect('/splash.html'));
 
-app.get('/check-status', (req, res) => {
-  if (req.session && req.session.userId) {
-    res.redirect('/chat_list');
-  } else {
-    res.redirect('/login');
-  }
-});
-
-app.get('/chat_list', requireAuth, (req, res) => {
+app.get('/chat_list.html', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'chat_list.html'));
 });
 
 app.get('/chat.html', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'chat.html'));
 });
-app.get('/chat', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'chat.html'));
-});
 
-app.get('/profile', requireAuth, (req, res) => {
+app.get('/profile.html', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'profile.html'));
 });
 
-app.get('/login', (req, res) => {
+app.get('/login.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
 
-app.get('/register', (req, res) => {
+app.get('/register.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'register.html'));
 });
 
 // ---------------- Auth Routes ----------------
 app.post('/login', async (req, res) => {
-  const { username } = req.body;
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان.' });
+  }
+
   try {
-    const email = `${username}@trimer.io`;
-    const userRecord = await firebaseAuth.getUserByEmail(email);
-    req.session.userId = userRecord.uid;
-    req.session.email = userRecord.email;
-    await req.session.save();
-    res.redirect('/chat_list');
+    const userSnapshot = await db.ref('profiles').orderByChild('username').equalTo(username.toLowerCase()).once('value');
+    if (!userSnapshot.exists()) {
+      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحين.' });
+    }
+
+    const userData = Object.values(userSnapshot.val())[0];
+    const user = await firebaseAuth.getUserByEmail(userData.email);
+
+    // التحقق من كلمة المرور
+    const userAuth = await firebaseAuth.signInWithEmailAndPassword(user.email, password);
+    
+    req.session.userId = userAuth.user.uid;
+    res.json({ success: true, user: { uid: userAuth.user.uid, username: userData.username } });
+
   } catch (error) {
-    console.error('Login error:', error.message);
-    const errorMessage = 'Invalid username or password.';
-    res.redirect('/login?error=' + encodeURIComponent(errorMessage));
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول. يرجى التأكد من بياناتك.' });
   }
 });
 
 app.post('/register', upload.single('profile_picture'), async (req, res) => {
-  const { username, password } = req.body;
-  let profile_picture_url = 'https://via.placeholder.com/150';
+  const { username, email, full_name, password } = req.body;
+  const profilePicture = req.file;
+
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: 'اسم المستخدم والبريد الإلكتروني وكلمة المرور مطلوبة.' });
+  }
 
   try {
-    if (!username || !password) {
-        return res.redirect('/register?error=' + encodeURIComponent('اسم المستخدم وكلمة المرور مطلوبان.'));
-    }
-
-    const email = `${username}@trimer.io`;
-
-    if (req.file) {
-      profile_picture_url = req.file.path;
-    }
-
     const userRecord = await firebaseAuth.createUser({
-      email: email,
-      password: password,
+      email,
+      password,
       displayName: username,
-      photoURL: profile_picture_url
     });
 
-    const profileData = {
-      id: userRecord.uid,
-      username: username,
-      full_name: username,
+    const uid = userRecord.uid;
+    const profile_picture_url = profilePicture ? profilePicture.path : 'https://res.cloudinary.com/duixjs8az/image/upload/v1/profile_pics/default_profile.png';
+    const creation_time = new Date().toISOString();
+
+    const newProfile = {
+      uid: uid,
+      username: username.toLowerCase(),
+      full_name: full_name || username,
       email: email,
       profile_picture_url: profile_picture_url,
-      is_online: false,
-      is_verified: false,
+      is_online: true,
+      creation_time: creation_time
     };
-    await db.ref('profiles/' + userRecord.uid).set(profileData);
 
-    req.session.userId = userRecord.uid;
-    req.session.email = email;
-    await req.session.save();
-    res.redirect('/chat_list');
+    await db.ref(`profiles/${uid}`).set(newProfile);
+    req.session.userId = uid;
+    res.status(201).json({ success: true, user: newProfile });
+
   } catch (error) {
-    console.error('Registration Error:', error.message);
-    res.redirect('/register?error=' + encodeURIComponent(error.message));
+    if (error.code === 'auth/email-already-in-use') {
+      return res.status(409).json({ error: 'هذا البريد الإلكتروني مستخدم بالفعل.' });
+    }
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'فشل إنشاء الحساب. يرجى المحاولة مرة أخرى.' });
   }
 });
 
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
-    res.clearCookie('connect.sid');
-    res.redirect('/login');
+    res.clearCookie('__session');
+    res.redirect('/login.html');
   });
 });
 
-// ---------------- API: Realtime Database backend ----------------
+// ---------------- API Routes ----------------
+app.get('/api/check-auth', (req, res) => {
+  if (req.session && req.session.userId) {
+    res.json({ authenticated: true });
+  } else {
+    res.status(401).json({ authenticated: false });
+  }
+});
 
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
@@ -499,7 +502,6 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
         full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
         profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
         is_online: !!profiles[uid].is_online,
-        is_verified: !!profiles[uid].is_online,
         is_verified: !!profiles[uid].is_verified
       };
     });
@@ -521,7 +523,6 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to search users' });
   }
 });
-
 
 app.get('/api/users', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
@@ -555,7 +556,6 @@ app.get('/api/users', requireAuth, async (req, res) => {
         full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
         profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
         is_online: !!profiles[uid].is_online,
-        is_verified: !!profiles[uid].is_online,
         is_verified: !!profiles[uid].is_verified
       };
     });
@@ -603,20 +603,19 @@ app.get('/api/debug/raw_users', requireAuth, async (req, res) => {
   }
 });
 
+
 // ---------------- Error handling middleware for Multer ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    // خطأ من Multer (مثل حجم الملف كبير جدًا)
-    console.error('Multer error:', err);
     return res.status(400).json({ error: 'Upload failed', message: err.message });
   } else if (err) {
-    // أي خطأ آخر
     console.error('General error:', err);
     return res.status(500).json({ error: 'Server error', message: err.message });
   }
   next();
 });
 
+// بدء الخادم
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`Server is running on port ${port}`);
 });
