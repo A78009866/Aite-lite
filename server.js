@@ -12,6 +12,7 @@ const { getDatabase } = require('firebase-admin/database');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cors = require('cors');
 
 // Cloudinary Configuration using Environment Variables
 cloudinary.config({
@@ -34,589 +35,352 @@ const storage = new CloudinaryStorage({
       return 'general';
     },
     public_id: (req, file) => Date.now() + '-' + file.originalname,
-    resource_type: 'auto',
   },
 });
-
 const upload = multer({ storage: storage });
 
-// Load service account key from environment variable
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
-
+// Firebase Admin SDK setup using environment variable
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  console.error('FIREBASE_SERVICE_ACCOUNT environment variable is not set.');
+  process.exit(1);
+}
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://trimer-4081b-default-rtdb.firebaseio.com",
+  databaseURL: process.env.FIREBASE_DATABASE_URL
 });
 
-const firebaseAuth = getAuth();
+const auth = getAuth();
 const db = getDatabase();
+const usersRef = db.ref('users');
+const profilesRef = db.ref('profiles');
+const messagesRef = db.ref('messages');
 
 const app = express();
-const port = 3000;
 
-// ---------------- Middleware ----------------
-app.set('trust proxy', 1);
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
-// إعدادات الجلسة (session) الجديدة مع Firebase
-app.use(session({
-  secret: 'a-firebase-secret-key-is-better',
-  resave: false,
-  saveUninitialized: false,
-  proxy: true,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    sameSite: 'lax'
-  },
-  store: new FirebaseStore({
-    database: db,
-    collection: 'sessions',
-    ttl: 3600
-  })
+// استخدام CORS للسماح بالطلبات من أي مصدر (مهم لتطبيق Capacitor)
+app.use(cors({
+  origin: true,
+  credentials: true
 }));
 
-// ---------------- Authentication helper ----------------
-function requireAuth(req, res, next) {
-  if (req.session && req.session.userId) {
-    return next();
-  }
-  
-  // إذا كان المسار هو API، أرسل استجابة 401 Unauthorized بتنسيق JSON
-  if (req.path.startsWith('/api/')) {
-    console.error('API call unauthorized. Session not found for user ID:', req.session.userId);
-    return res.status(401).json({ error: 'Unauthorized', message: 'User session not found or expired.' });
-  }
-
-  // خلاف ذلك، أعد التوجيه إلى صفحة تسجيل الدخول
-  console.log('Redirecting to login. Path:', req.path);
-  return res.redirect('/login');
-}
-
-// ---------------- Routes: pages ----------------
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'splash.html'));
+// إعداد الجلسة
+// Use FirebaseStore with the Firebase Admin SDK
+const store = new FirebaseStore({
+    database: db.ref('sessions')
 });
 
-app.get('/check-status', (req, res) => {
+app.use(session({
+  store: store,
+  secret: process.env.SESSION_SECRET || 'your-secret-key', // استخدم متغير بيئة
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production' ? true : 'auto', // استخدم 'auto' للتعامل مع بيئات Vercel
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 أيام
+  }
+}));
+
+// تحديد مسارات للملفات الثابتة
+app.use(express.static(path.join(__dirname, 'www')));
+
+// Middleware لإنشاء JSON و Form data
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Middleware للتحقق من المصادقة (Auth Middleware)
+const requireAuth = (req, res, next) => {
   if (req.session && req.session.userId) {
-    res.redirect('/chat_list');
+    next();
   } else {
-    res.redirect('/login');
+    res.status(401).json({ error: 'API call unauthorized. Session not found for user ID: ' + req.session.userId });
   }
+};
+
+// ---------------- API Routes ----------------
+
+// Route للتحقق من حالة المصادقة
+app.get('/api/check-auth', (req, res) => {
+    if (req.session && req.session.userId) {
+        res.status(200).json({ isAuthenticated: true, userId: req.session.userId });
+    } else {
+        res.status(401).json({ isAuthenticated: false });
+    }
 });
 
-app.get('/chat_list', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'chat_list.html'));
-});
-
-app.get('/chat.html', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'chat.html'));
-});
-app.get('/chat', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'chat.html'));
-});
-
-app.get('/profile', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'profile.html'));
-});
-
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'login.html'));
-});
-
-app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'register.html'));
-});
-
-// ---------------- Auth Routes ----------------
+// Route لتسجيل الدخول
 app.post('/login', async (req, res) => {
-  const { username } = req.body;
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان.' });
+  }
+
   try {
-    const email = `${username}@trimer.io`;
-    const userRecord = await firebaseAuth.getUserByEmail(email);
-    req.session.userId = userRecord.uid;
-    req.session.email = userRecord.email;
-    await req.session.save();
-    res.redirect('/chat_list');
-  } catch (error) {
-    console.error('Login error:', error.message);
-    const errorMessage = 'Invalid username or password.';
-    res.redirect('/login?error=' + encodeURIComponent(errorMessage));
+    const usersSnapshot = await usersRef.orderByChild('username').equalTo(username).once('value');
+    const userData = usersSnapshot.val();
+
+    if (!userData) {
+      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحين.' });
+    }
+
+    const userId = Object.keys(userData)[0];
+    const user = userData[userId];
+
+    if (user.password !== password) {
+      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحين.' });
+    }
+
+    // هنا يتم تعيين الجلسة
+    req.session.userId = userId;
+    res.json({ message: 'تم تسجيل الدخول بنجاح.', userId: userId });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'فشل في تسجيل الدخول. يرجى المحاولة لاحقاً.' });
   }
 });
 
+// Route لإنشاء حساب جديد
 app.post('/register', upload.single('profile_picture'), async (req, res) => {
   const { username, password } = req.body;
-  let profile_picture_url = 'https://via.placeholder.com/150';
+  let profilePictureUrl = req.file ? req.file.path : null;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان.' });
+  }
 
   try {
-    if (!username || !password) {
-        return res.redirect('/register?error=' + encodeURIComponent('اسم المستخدم وكلمة المرور مطلوبان.'));
+    const existingUser = await usersRef.orderByChild('username').equalTo(username).once('value');
+    if (existingUser.exists()) {
+      return res.status(409).json({ error: 'اسم المستخدم موجود بالفعل. يرجى اختيار اسم آخر.' });
     }
 
-    const email = `${username}@trimer.io`;
+    const newUserRef = usersRef.push();
+    const newProfileRef = profilesRef.child(newUserRef.key);
 
-    if (req.file) {
-      profile_picture_url = req.file.path;
-    }
-
-    const userRecord = await firebaseAuth.createUser({
-      email: email,
+    const newUser = {
+      username: username,
       password: password,
-      displayName: username,
-      photoURL: profile_picture_url
-    });
+      uid: newUserRef.key,
+      // ... أي بيانات مستخدم أخرى
+    };
 
-    const profileData = {
-      id: userRecord.uid,
+    const newProfile = {
       username: username,
       full_name: username,
-      email: email,
-      profile_picture_url: profile_picture_url,
-      is_online: false,
-      is_verified: false,
+      profile_picture_url: profilePictureUrl || 'https://res.cloudinary.com/duixjs8az/image/upload/v1/profile_pics/default_profile.png',
+      is_online: true,
+      last_seen: admin.database.ServerValue.TIMESTAMP,
+      uid: newUserRef.key
     };
-    await db.ref('profiles/' + userRecord.uid).set(profileData);
 
-    req.session.userId = userRecord.uid;
-    req.session.email = email;
-    await req.session.save();
-    res.redirect('/chat_list');
-  } catch (error) {
-    console.error('Registration Error:', error.message);
-    res.redirect('/register?error=' + encodeURIComponent(error.message));
+    await Promise.all([
+      newUserRef.set(newUser),
+      newProfileRef.set(newProfile)
+    ]);
+
+    req.session.userId = newUserRef.key;
+    res.status(201).json({ message: 'تم إنشاء الحساب بنجاح.', userId: newUserRef.key });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ error: 'فشل في إنشاء الحساب.' });
   }
 });
 
+// Route لتسجيل الخروج
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie('connect.sid');
-    res.redirect('/login');
+  req.session.destroy(err => {
+    if (err) {
+      return res.status(500).json({ error: 'فشل في تسجيل الخروج.' });
+    }
+    res.clearCookie('connect.sid'); // مسح الكوكيز
+    res.json({ message: 'تم تسجيل الخروج بنجاح.' });
   });
 });
 
-// ---------------- API: Realtime Database backend ----------------
+// ---------------- API Routes Requiring Auth ----------------
 
+// Route للحصول على الملف الشخصي
 app.get('/api/profile', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
-  const requestedUserId = req.query.user_id || currentUserId;
-  const defaultProfileUrl = 'https://via.placeholder.com/150';
-
-  try {
-    const [profileSnapshot, userSnapshot] = await Promise.all([
-      db.ref('profiles/' + requestedUserId).once('value'),
-      db.ref('users/' + requestedUserId).once('value')
-    ]);
-    
-    const profileData = profileSnapshot.val() || {};
-    const userData = userSnapshot.val() || {};
-
-    const fullProfile = {
-      id: requestedUserId,
-      username: profileData.username || userData.username || userData.displayName || '',
-      full_name: profileData.full_name || userData.full_name || userData.displayName || '',
-      email: profileData.email || userData.email || '',
-      profile_picture_url: profileData.profile_picture_url || userData.profile_picture_url || defaultProfileUrl,
-      is_online: !!(profileData.is_online || userData.is_online),
-      is_verified: !!(profileData.is_verified || userData.is_verified)
-    };
-
-    res.json(fullProfile);
-  } catch (error) {
-    console.error('Error fetching user profile:', error);
-    res.status(500).json({ error: 'Failed to fetch user profile' });
-  }
+    try {
+        const userId = req.query.user_id || req.session.userId;
+        const profileSnapshot = await profilesRef.child(userId).once('value');
+        if (!profileSnapshot.exists()) {
+            return res.status(404).json({ error: 'الملف الشخصي غير موجود.' });
+        }
+        res.json(profileSnapshot.val());
+    } catch (err) {
+        console.error('Profile fetch error:', err);
+        res.status(500).json({ error: 'فشل في جلب الملف الشخصي.' });
+    }
 });
 
+// Route لجلب قائمة المحادثات (بناءً على أحدث الرسائل)
 app.get('/api/chat_list', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
-  const defaultProfileUrl = 'https://via.placeholder.com/150';
-
   try {
-    const [profilesSnapshot, usersSnapshot, messagesSnapshot] = await Promise.all([
-      db.ref('profiles').once('value'),
-      db.ref('users').once('value'),
-      db.ref('messages').once('value')
-    ]);
+    const userId = req.session.userId;
+    const chatList = [];
+    const messagesByUser = {};
 
-    const profiles = profilesSnapshot.val() || {};
-    const users = usersSnapshot.val() || {};
-    const allMessages = messagesSnapshot.val() || {};
+    const messagesSnapshot = await messagesRef.orderByChild('timestamp').once('value');
+    messagesSnapshot.forEach(messageSnapshot => {
+      const message = messageSnapshot.val();
+      const otherId = message.sender_id === userId ? message.receiver_id : message.sender_id;
 
-    const map = {};
-
-    Object.keys(users).forEach(uid => {
-      map[uid] = {
-        id: uid,
-        username: users[uid].username || users[uid].displayName || '',
-        full_name: users[uid].full_name || users[uid].displayName || '',
-        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
-        is_online: !!users[uid].is_online,
-        is_verified: !!users[uid].is_verified
-      };
-    });
-
-    Object.keys(profiles).forEach(uid => {
-      map[uid] = {
-        id: uid,
-        username: profiles[uid].username || (map[uid] && map[uid].username) || '',
-        full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
-        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
-        is_online: !!profiles[uid].is_online,
-        is_verified: !!profiles[uid].is_verified
-      };
-    });
-
-    const results = [];
-    for (const uid of Object.keys(map)) {
-      if (uid === currentUserId) continue;
-
-      const p = map[uid];
-
-      let lastMessage = null;
-      Object.values(allMessages).forEach(msg => {
-        if (!msg) return;
-        if ((msg.sender_id === currentUserId && msg.receiver_id === uid) ||
-            (msg.sender_id === uid && msg.receiver_id === currentUserId)) {
-          if (!lastMessage || new Date(msg.created_at) > new Date(lastMessage.created_at)) {
-            lastMessage = msg;
-          }
-        }
-      });
-
-      const last = lastMessage;
-      let lastMessageText = 'بدء محادثة جديدة';
-      if (last) {
-        if (last.content) {
-            lastMessageText = last.content;
-        } else if (last.media_type === 'audio') {
-            lastMessageText = 'قام بارسال رسالة صوتية';
-        } else if (last.media_type === 'image') {
-            lastMessageText = 'قام بارسال صورة';
-        } else if (last.media_type === 'video') {
-            lastMessageText = 'قام بارسال فيديو';
-        } else if (last.media_url) {
-            lastMessageText = 'ملف مرفق';
-        }
+      if (!messagesByUser[otherId]) {
+        messagesByUser[otherId] = [];
       }
-      
-      const is_new = !!(last && last.sender_id !== currentUserId && !last.is_read);
+      messagesByUser[otherId].push(message);
+    });
 
-      results.push({
-        user: {
-          id: p.id,
-          username: p.username,
-          full_name: p.full_name || null,
-          profile_picture_url: p.profile_picture_url || defaultProfileUrl,
-          is_online: !!p.is_online,
-          is_verified: !!p.is_verified
-        },
-        last_message: lastMessageText,
-        last_time: last ? last.created_at : null,
-        is_new: is_new
-      });
+    const userIds = Object.keys(messagesByUser);
+    for (const otherId of userIds) {
+      const otherUserMessages = messagesByUser[otherId];
+      const latestMessage = otherUserMessages.sort((a, b) => b.timestamp - a.timestamp)[0];
+
+      const otherUserSnapshot = await profilesRef.child(otherId).once('value');
+      const otherUser = otherUserSnapshot.val();
+
+      if (otherUser) {
+        chatList.push({
+          user: otherUser,
+          last_message: latestMessage.content,
+          last_time: latestMessage.timestamp,
+          is_new: latestMessage.receiver_id === userId && !latestMessage.is_read
+        });
+      }
     }
 
-    results.sort((a, b) => {
-      if (a.is_new === b.is_new) {
-        const at = a.last_time ? new Date(a.last_time).getTime() : 0;
-        const bt = b.last_time ? new Date(b.last_time).getTime() : 0;
-        if (at === bt) {
-          const an = (a.user.username || '').toLowerCase();
-          const bn = (b.user.username || '').toLowerCase();
-          return an < bn ? -1 : (an > bn ? 1 : 0);
-        }
-        return bt - at;
-      }
-      return a.is_new ? -1 : 1;
-    });
-
-    res.json(results);
+    res.json(chatList);
   } catch (err) {
-    console.error('/api/chat_list error', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Chat list error:', err);
+    res.status(500).json({ error: 'فشل في جلب قائمة المحادثات.' });
   }
 });
 
+// Route لجلب رسائل محددة
 app.get('/api/messages/:other_id', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
-  const otherId = req.params.other_id;
-
   try {
-    const messagesSnapshot = await db.ref('messages').orderByChild('created_at').once('value');
-    const allMessages = messagesSnapshot.val() || {};
+    const { other_id } = req.params;
+    const userId = req.session.userId;
 
-    const chatMessages = Object.values(allMessages).filter(msg =>
-      (msg.sender_id === currentUserId && msg.receiver_id === otherId) ||
-      (msg.sender_id === otherId && msg.receiver_id === currentUserId)
-    );
+    // جلب جميع الرسائل بين المستخدمين
+    const messagesSnapshot = await messagesRef.once('value');
+    const messages = [];
 
-    res.json(chatMessages);
+    messagesSnapshot.forEach(childSnapshot => {
+      const message = childSnapshot.val();
+      const isBetweenUsers = (message.sender_id === userId && message.receiver_id === other_id) ||
+                             (message.sender_id === other_id && message.receiver_id === userId);
+      if (isBetweenUsers) {
+        messages.push(message);
+      }
+    });
+
+    // فرز الرسائل حسب الوقت
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+
+    res.json(messages);
+
   } catch (err) {
-    console.error('/api/messages/:other_id error', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Fetch messages error:', err);
+    res.status(500).json({ error: 'فشل في جلب الرسائل.' });
   }
 });
 
-app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, res) => {
-  console.log('API call to /api/messages/send received.');
-  const currentUserId = req.session.userId;
-  const { other_id, content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
-  let media_url = null;
-  let media_type = 'text';
-
-  // Check if session user ID is correct
-  console.log('Current User ID:', currentUserId);
-
+// Route لإرسال الرسائل
+app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, res) => {
   try {
-    if (req.file) {
-      media_url = req.file.path;
-      if (req.file.mimetype) {
-        if (req.file.mimetype.startsWith('audio/')) {
-          media_type = 'audio';
-        } else if (req.file.mimetype.startsWith('video/')) {
-          media_type = 'video';
-        } else if (req.file.mimetype.startsWith('image/')) {
-          media_type = 'image';
-        } else {
-          media_type = 'raw';
-        }
-      } else {
-        console.warn('File uploaded without mimetype. Setting to "raw".');
-        media_type = 'raw';
-      }
-      console.log('Media file received. Path:', media_url);
-    }
+    const { other_id, content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
+    const mediaUrl = req.file ? req.file.path : null;
+    const mediaType = req.file ? (req.file.mimetype.startsWith('image') ? 'image' : (req.file.mimetype.startsWith('audio') ? 'audio' : 'video')) : null;
 
-    if (!other_id || (!content && !media_url)) {
-      console.log('Missing other_id or content/media.');
-      return res.status(400).json({ error: 'other_id and content or media are required' });
-    }
-
-    const messagesRef = db.ref('messages');
     const newMessageRef = messagesRef.push();
-
-    const payload = {
+    const newMessage = {
       id: newMessageRef.key,
-      sender_id: currentUserId,
+      sender_id: req.session.userId,
       receiver_id: other_id,
-      content: content || '',
-      created_at: new Date().toISOString(),
+      content: content || null,
+      timestamp: admin.database.ServerValue.TIMESTAMP,
       is_read: false,
-      media_url: media_url,
-      media_type: media_type
+      media_url: mediaUrl,
+      media_type: mediaType,
+      replied_to_id: replied_to_id || null,
+      replied_to_content: replied_to_content || null,
+      replied_to_sender: replied_to_sender || null
     };
 
-    if (replied_to_id) {
-      payload.replied_to_id = replied_to_id;
-      payload.replied_to_content = replied_to_content;
-      payload.replied_to_sender = replied_to_sender;
-    }
+    await newMessageRef.set(newMessage);
 
-    console.log('Payload for message:', payload);
-    await newMessageRef.set(payload);
-    console.log('Message sent successfully. Responding with JSON.');
-    res.status(200).send(JSON.stringify({ ok: true, message: payload }));
+    res.status(201).json({ message: 'تم الإرسال بنجاح.', messageId: newMessageRef.key });
   } catch (err) {
-    console.error('/api/messages/send error:', err);
-    console.log('Responding with an error status.');
-    res.status(500).json({ error: 'Server error: ' + err.message });
+    console.error('Send message error:', err);
+    res.status(500).json({ error: 'فشل في إرسال الرسالة.' });
   }
 });
 
-app.post('/api/mark_read', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
-  const { other_id } = req.body;
-  if (!other_id) return res.status(400).json({ error: 'other_id is required' });
-
-  try {
-    const messagesSnapshot = await db.ref('messages').orderByChild('receiver_id').equalTo(currentUserId).once('value');
-    const messagesToUpdate = messagesSnapshot.val() || {};
-
-    const updates = {};
-    let updatedCount = 0;
-
-    Object.keys(messagesToUpdate).forEach(key => {
-      const msg = messagesToUpdate[key];
-      if (msg.sender_id === other_id && !msg.is_read) {
-        updates[`/messages/${key}/is_read`] = true;
-        updatedCount++;
-      }
-    });
-
-    if (updatedCount > 0) {
-      await db.ref().update(updates);
-    }
-
-    res.json({ ok: true, updated: updatedCount });
-  } catch (err) {
-    console.error('/api/mark_read error', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// New search endpoint
+// Route للبحث عن المستخدمين
 app.get('/api/users/search', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
-  const { query } = req.query;
+  const query = req.query.query;
   if (!query) {
-    return res.status(400).json({ error: 'Search query is required' });
+    return res.json([]);
   }
 
-  const searchQuery = query.toLowerCase();
-
-  const defaultProfileUrl = 'https://via.placeholder.com/150';
-  
   try {
-    const [profilesSnapshot, usersSnapshot] = await Promise.all([
-      db.ref('profiles').once('value'),
-      db.ref('users').once('value')
-    ]);
-    const profiles = profilesSnapshot.val() || {};
-    const users = usersSnapshot.val() || {};
+    const profilesSnapshot = await profilesRef.once('value');
+    const users = [];
 
-    const map = {};
-    const foundUsers = [];
-
-    // Combine data from 'users' and 'profiles'
-    Object.keys(users).forEach(uid => {
-      map[uid] = {
-        uid: uid,
-        username: users[uid].username || users[uid].displayName || '',
-        full_name: users[uid].full_name || users[uid].displayName || '',
-        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
-        is_online: !!users[uid].is_online,
-        is_verified: !!users[uid].is_verified
-      };
-    });
-
-    Object.keys(profiles).forEach(uid => {
-      map[uid] = {
-        uid: uid,
-        username: profiles[uid].username || (map[uid] && map[uid].username) || '',
-        full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
-        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
-        is_online: !!profiles[uid].is_online,
-        is_verified: !!profiles[uid].is_online,
-        is_verified: !!profiles[uid].is_verified
-      };
-    });
-
-    // Filter users based on search query
-    Object.values(map).forEach(user => {
-      if (user.uid === currentUserId) return;
-      if (
-        (user.username && user.username.toLowerCase().includes(searchQuery)) ||
-        (user.full_name && user.full_name.toLowerCase().includes(searchQuery))
-      ) {
-        foundUsers.push(user);
+    profilesSnapshot.forEach(profileSnapshot => {
+      const profile = profileSnapshot.val();
+      if (profile.username.includes(query) || (profile.full_name && profile.full_name.includes(query))) {
+        users.push({
+          uid: profile.uid,
+          username: profile.username,
+          full_name: profile.full_name,
+          profile_picture_url: profile.profile_picture_url
+        });
       }
     });
 
-    res.status(200).json(foundUsers);
-  } catch (error) {
-    console.error("Error searching users:", error);
-    res.status(500).json({ error: 'Failed to search users' });
+    res.json(users);
+  } catch (err) {
+    console.error('User search error:', err);
+    res.status(500).json({ error: 'فشل في البحث عن المستخدمين.' });
   }
 });
 
-
-app.get('/api/users', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
-  const defaultProfileUrl = 'https://via.placeholder.com/150';
-
+// Route لتمييز الرسائل كمقروءة
+app.post('/api/mark_read', requireAuth, async (req, res) => {
   try {
-    const [profilesSnapshot, usersSnapshot] = await Promise.all([
-      db.ref('profiles').once('value'),
-      db.ref('users').once('value')
-    ]);
-    const profiles = profilesSnapshot.val() || {};
-    const users = usersSnapshot.val() || {};
+    const { other_id } = req.body;
+    const userId = req.session.userId;
 
-    const map = {};
-
-    Object.keys(users).forEach(uid => {
-      map[uid] = {
-        uid: uid,
-        username: users[uid].username || users[uid].displayName || '',
-        full_name: users[uid].full_name || users[uid].displayName || '',
-        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
-        is_online: !!users[uid].is_online,
-        is_verified: !!users[uid].is_verified
-      };
+    const messagesSnapshot = await messagesRef.once('value');
+    messagesSnapshot.forEach(childSnapshot => {
+      const message = childSnapshot.val();
+      if (message.receiver_id === userId && message.sender_id === other_id && !message.is_read) {
+        childSnapshot.ref.update({ is_read: true });
+      }
     });
 
-    Object.keys(profiles).forEach(uid => {
-      map[uid] = {
-        uid: uid,
-        username: profiles[uid].username || (map[uid] && map[uid].username) || '',
-        full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
-        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
-        is_online: !!profiles[uid].is_online,
-        is_verified: !!profiles[uid].is_online,
-        is_verified: !!profiles[uid].is_verified
-      };
-    });
-
-    const usersList = Object.keys(map)
-      .filter(uid => uid !== currentUserId)
-      .map(uid => ({ uid, ...map[uid] }));
-
-    res.status(200).json(usersList);
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
-
-app.get('/api/debug/session', (req, res) => {
-  res.json({
-    ok: true,
-    hasSession: !!(req.session && req.session.userId),
-    userId: req.session.userId || null,
-    cookies: req.headers.cookie || null,
-    nodeEnv: process.env.NODE_ENV,
-    isSecure: req.secure,
-    proxySetting: app.get('trust proxy')
-  });
-});
-
-app.get('/api/debug/raw_profiles', requireAuth, async (req, res) => {
-  try {
-    const snap = await db.ref('profiles').once('value');
-    res.json({ ok: true, count: snap.numChildren(), data: snap.val() });
+    res.json({ message: 'تم تمييز الرسائل كمقروءة.' });
   } catch (err) {
-    console.error('raw_profiles error', err);
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('Mark read error:', err);
+    res.status(500).json({ error: 'فشل في تمييز الرسائل.' });
   }
 });
 
-app.get('/api/debug/raw_users', requireAuth, async (req, res) => {
-  try {
-    const snap = await db.ref('users').once('value');
-    res.json({ ok: true, count: snap.numChildren(), data: snap.val() });
-  } catch (err) {
-    console.error('raw_users error', err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// ---------------- Error handling middleware for Multer ----------------
+// Middleware for Multer error handling
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    // خطأ من Multer (مثل حجم الملف كبير جدًا)
-    console.error('Multer error:', err);
-    return res.status(400).json({ error: 'Upload failed', message: err.message });
-  } else if (err) {
-    // أي خطأ آخر
-    console.error('General error:', err);
-    return res.status(500).json({ error: 'Server error', message: err.message });
+    console.error('Multer Error:', err);
+    res.status(400).json({ error: `خطأ في تحميل الملف: ${err.message}` });
+  } else {
+    next(err);
   }
-  next();
 });
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
