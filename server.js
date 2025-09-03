@@ -8,6 +8,7 @@ const FirebaseStore = require('connect-session-firebase')(session);
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
+const cors = require('cors'); // تم إضافة هذا السطر
 
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
@@ -58,6 +59,7 @@ const port = 3000;
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cors()); // تم إضافة هذا السطر لتفعيل سياسة CORS
 
 // إعدادات الجلسة (session) الجديدة مع Firebase
 app.use(session({
