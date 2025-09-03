@@ -59,7 +59,15 @@ const port = 3000;
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(cors()); // تم إضافة هذا السطر لتفعيل سياسة CORS
+
+// قم بتحديد أصول (origins) محددة مسموح بها.
+const corsOptions = {
+  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
+  credentials: true, // مهم جداً للسماح بتبادل ملفات تعريف الارتباط
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions)); // تم تعديل هذا السطر
 
 // إعدادات الجلسة (session) الجديدة مع Firebase
 app.use(session({
