@@ -400,6 +400,11 @@
                 }
             }
 
+            // تحديد شكل زر الإعجاب الأولي بناءً على حالة الإعجاب (is_liked)
+            const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
+            const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
+
+
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
                     <div class="flex items-start justify-between mb-3">
@@ -426,8 +431,10 @@
                     </div>
 
                     <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
-                        <button class="flex items-center text-gray-400 hover:text-red-500 transition duration-300 w-full justify-center" onclick="handleLike('${post.postId}', this)">
-                            <i class="fas fa-thumbs-up ml-2"></i> إعجاب
+                        <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button" 
+                                data-is-liked="${post.is_liked}" 
+                                onclick="handleLike('${post.postId}', this)">
+                            <i class="${likeIconClass} ml-2 like-icon"></i> إعجاب
                         </button>
                         <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center" onclick="handleComment('${post.postId}')">
                             <i class="fas fa-comment-dots ml-2"></i> تعليق
@@ -478,6 +485,11 @@
         async function handleLike(postId, buttonElement) {
             console.log(`محاولة الإعجاب/إلغاء الإعجاب للمنشور: ${postId}`); 
             
+            const likeIcon = buttonElement.querySelector('.like-icon');
+            
+            // تعطيل الزر مؤقتاً لمنع النقر المتعدد
+            buttonElement.disabled = true;
+
             try {
                 const response = await fetch(`/api/posts/${postId}/like`, {
                     method: 'POST',
@@ -494,15 +506,19 @@
                     // تحديث النص وشكل الأيقونة
                     likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
                     
-                    // تغيير شكل الزر إذا أردنا تمييز الإعجاب
+                    // تحديث شكل زر الإعجاب: قلب أحمر مملوء / قلب رمادي فارغ
                     if (result.action === 'liked') {
-                        // استخدام قلب مُعبأ في حالة الإعجاب
-                        buttonElement.querySelector('i').classList.remove('fa-thumbs-up', 'text-gray-400');
-                        buttonElement.querySelector('i').classList.add('fa-heart', 'text-red-500');
+                        likeIcon.classList.remove('far', 'text-gray-400');
+                        likeIcon.classList.add('fas', 'text-red-500');
+                        buttonElement.classList.remove('text-gray-400');
+                        buttonElement.classList.add('text-red-500');
+                        buttonElement.dataset.isLiked = 'true';
                     } else {
-                        // استخدام إبهام مُرفع في حالة الإلغاء
-                        buttonElement.querySelector('i').classList.remove('fa-heart', 'text-red-500');
-                        buttonElement.querySelector('i').classList.add('fa-thumbs-up', 'text-gray-400');
+                        likeIcon.classList.remove('fas', 'text-red-500');
+                        likeIcon.classList.add('far', 'text-gray-400');
+                        buttonElement.classList.remove('text-red-500');
+                        buttonElement.classList.add('text-gray-400');
+                        buttonElement.dataset.isLiked = 'false';
                     }
                     
                 } else {
@@ -511,6 +527,9 @@
 
             } catch (error) {
                 console.error('Error during like operation:', error);
+            } finally {
+                // إعادة تفعيل الزر
+                buttonElement.disabled = false;
             }
         }
         
