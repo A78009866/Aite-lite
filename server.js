@@ -27,7 +27,7 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: (req, file) => {
-      // **تحديث: إضافة شرط لمسار إنشاء المنشورات**
+      // تحديد المجلد بناءً على المسار
       if (req.originalUrl.includes('/register')) {
         return 'profile_pics';
       } else if (req.originalUrl.includes('/messages/send')) {
@@ -96,13 +96,11 @@ function requireAuth(req, res, next) {
     return next();
   }
   
-  // إذا كان المسار هو API، أرسل استجابة 401 Unauthorized بتنسيق JSON
   if (req.path.startsWith('/api/')) {
     console.error('API call unauthorized. Session not found for user ID:', req.session.userId);
     return res.status(401).json({ error: 'Unauthorized', message: 'User session not found or expired.' });
   }
 
-  // خلاف ذلك، أعد التوجيه إلى صفحة تسجيل الدخول
   console.log('Redirecting to login. Path:', req.path);
   return res.redirect('/login');
 }
@@ -135,7 +133,7 @@ app.get('/profile', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'profile.html'));
 });
 
-// **جديد: مسار عرض صفحة إنشاء منشور**
+// مسار عرض صفحة إنشاء منشور
 app.get('/create-post', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'create_post.html'));
 });
@@ -215,31 +213,31 @@ app.get('/logout', (req, res) => {
   });
 });
 
-// ---------------- API: Realtime Database backend ----------------
+// ---------------- API: Posts ----------------
 
-// **جديد: نقطة وصول لإنشاء منشور جديد**
+// نقطة وصول لإنشاء منشور جديد
 app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
   const userId = req.session.userId;
   const content = req.body.content ? req.body.content.trim() : '';
   let mediaUrl = null;
   let mediaType = null;
 
-  // التحقق من وجود محتوى نصي أو ملف وسائط
+  // التحقق من وجود محتوى نصي أو ملف وسائط (تم تحقيق طلبك)
   if (content.length === 0 && !req.file) {
     return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
   }
 
-  // إذا تم رفع ملف بنجاح (بفضل Multer)، احصل على تفاصيله
+  // إذا تم رفع ملف بنجاح
   if (req.file) {
     mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
     
     // تحديد نوع الملف بناءً على MimeType
     const mimeType = req.file.mimetype;
-    if (mimeType.startsWith('image/')) {
+    if (mimeType && mimeType.startsWith('image/')) {
         mediaType = 'image';
-    } else if (mimeType.startsWith('video/')) {
+    } else if (mimeType && mimeType.startsWith('video/')) {
         mediaType = 'video';
-    } else if (mimeType.startsWith('audio/')) {
+    } else if (mimeType && mimeType.startsWith('audio/')) {
         mediaType = 'audio';
     } else {
         mediaType = 'raw';
@@ -279,10 +277,9 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   }
 });
 
-// **جديد: نقطة وصول لجلب المنشورات الأخيرة**
+// نقطة وصول لجلب المنشورات الأخيرة
 app.get('/api/posts', requireAuth, async (req, res) => {
   try {
-    // جلب آخر 50 منشوراً، مرتبة حسب الوقت الأحدث
     const postsSnap = await db.ref('posts')
       .orderByChild('timestamp')
       .limitToLast(50)
@@ -293,15 +290,12 @@ app.get('/api/posts', requireAuth, async (req, res) => {
       posts.push(childSnap.val());
     });
 
-    // عكس الترتيب لعرض الأحدث أولاً (لأن orderByChild('timestamp') يجلب الأقدم أولاً)
     posts.reverse(); 
 
-    // جلب معلومات البروفايل للمستخدمين الذين نشروا المنشورات
     const userIds = [...new Set(posts.map(p => p.userId))];
     const profiles = {};
     const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
 
-    // تنفيذ الـ promises بالتوازي لتحسين الأداء
     const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
     const profileSnapshots = await Promise.all(profilePromises);
 
@@ -309,7 +303,6 @@ app.get('/api/posts', requireAuth, async (req, res) => {
         profiles[userIds[index]] = snap.val();
     });
 
-    // دمج بيانات المستخدم مع كل منشور
     const finalPosts = posts.map(post => ({
       ...post,
       user: {
@@ -326,6 +319,49 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
+// نقطة وصول لحذف منشور (تم تحقيق طلبك)
+app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
+
+  if (!postId) {
+    return res.status(400).json({ ok: false, error: 'معرف المنشور مطلوب للحذف.' });
+  }
+
+  const postRef = db.ref(`posts/${postId}`);
+
+  try {
+    const postSnapshot = await postRef.once('value');
+    const postData = postSnapshot.val();
+
+    if (!postData) {
+      return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
+    }
+
+    // التحقق من أن المستخدم الحالي هو صاحب المنشور
+    if (postData.userId !== userId) {
+      return res.status(403).json({ ok: false, error: 'ليس لديك صلاحية لحذف هذا المنشور.' });
+    }
+
+    // حذف المنشور من قاعدة البيانات
+    await postRef.remove();
+    
+    // تحديث عداد المنشورات للمستخدم
+    const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
+    await userPostsCountRef.transaction((currentCount) => {
+      return (currentCount || 0) > 0 ? (currentCount - 1) : 0;
+    });
+
+    res.json({ ok: true, message: 'تم حذف المنشور بنجاح.' });
+
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف المنشور على الخادم.' });
+  }
+});
+
+
+// ---------------- API: Profile and User Operations ----------------
 
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
@@ -495,7 +531,6 @@ app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, 
   let media_url = null;
   let media_type = 'text';
 
-  // Check if session user ID is correct
   console.log('Current User ID:', currentUserId);
 
   try {
