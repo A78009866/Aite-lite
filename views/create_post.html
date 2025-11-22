@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إنشاء منشور جديد - Aite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #000000;
+            color: #e4e6eb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        /* تصميم شريط التمرير مخصص (للمحتوى داخل الصندوق) */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: #3b82f6; /* لون أزرق */
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background-color: #1f2937; /* لون رمادي داكن للخلفية */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-[#18191a] p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-2xl">
+        <h1 class="text-2xl sm:text-3xl font-bold mb-6 text-white text-center border-b border-gray-700 pb-4">
+            <i class="fas fa-feather-alt text-blue-500 ml-2"></i>
+            نشر فكرة جديدة
+        </h1>
+        
+        <form id="createPostForm" action="/api/posts/create" method="POST" enctype="multipart/form-data">
+            
+            <div class="mb-4">
+                <textarea id="postContent" name="content" rows="4" placeholder="شاركنا بما يدور في ذهنك اليوم..."
+                          class="custom-scroll w-full p-4 bg-[#242526] border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white placeholder-gray-500 resize-none transition duration-300"
+                          required></textarea>
+            </div>
+
+            <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="hidden">
+
+            <div id="mediaPreviewContainer" class="hidden mb-4 p-4 bg-[#242526] rounded-lg border border-dashed border-gray-600 relative">
+                <div class="flex justify-center items-center">
+                    <div id="filePreview" class="max-h-60 overflow-hidden rounded-lg w-full">
+                        </div>
+                </div>
+                <button type="button" id="removeMediaBtn" class="absolute top-2 left-2 text-white bg-red-600 hover:bg-red-700 rounded-full p-2 w-8 h-8 flex items-center justify-center transition duration-300">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+
+            <div class="flex justify-between items-center border-t border-gray-700 pt-4">
+                
+                <button type="button" id="addMediaBtn" class="text-gray-400 hover:text-blue-500 transition duration-300 flex items-center text-sm sm:text-base">
+                    <i class="fas fa-image text-lg ml-2"></i>
+                    أضف صورة/فيديو/صوت
+                </button>
+
+                <button type="submit" id="submitBtn" class="p-2.5 px-6 bg-blue-600 border-none rounded-lg text-white font-semibold cursor-pointer transition-all duration-300 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
+                    <span id="submitBtnText">نشر المنشور</span>
+                    <i id="loadingIndicator" class="fas fa-spinner fa-spin mr-2 hidden"></i>
+                </button>
+            </div>
+            
+            <div id="errorMessage" class="text-red-500 mt-3 text-center hidden"></div>
+
+        </form>
+    </div>
+
+    <script>
+        const form = document.getElementById('createPostForm');
+        const mediaFile = document.getElementById('mediaFile');
+        const addMediaBtn = document.getElementById('addMediaBtn');
+        const removeMediaBtn = document.getElementById('removeMediaBtn');
+        const mediaPreviewContainer = document.getElementById('mediaPreviewContainer');
+        const filePreview = document.getElementById('filePreview');
+        const postContent = document.getElementById('postContent');
+        const submitBtn = document.getElementById('submitBtn');
+        const submitBtnText = document.getElementById('submitBtnText');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // ************** وظيفة المعاينة **************
+        function setupPreview(file) {
+            const fileType = file.type.split('/')[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                let previewElement;
+                filePreview.innerHTML = ''; // تنظيف المعاينة السابقة
+
+                if (fileType === 'image') {
+                    previewElement = `<img src="${e.target.result}" alt="Media Preview" class="w-full h-full object-contain">`;
+                } else if (fileType === 'video') {
+                    previewElement = `<video src="${e.target.result}" controls class="rounded-lg mt-3 w-full max-h-60 object-contain"></video>`;
+                } else if (fileType === 'audio') {
+                    previewElement = `<audio src="${e.target.result}" controls class="rounded-lg mt-3 w-full"></audio>`;
+                } else {
+                    // في حالة نوع غير مدعوم أو ملف غير متوقع
+                    previewElement = `<div class="text-red-500">لا يمكن معاينة هذا النوع من الملفات.</div>`;
+                }
+
+                filePreview.innerHTML = previewElement;
+                mediaPreviewContainer.classList.remove('hidden');
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // ************** معالجة المدخلات والأزرار **************
+        function checkInputs() {
+            // تفعيل زر النشر إذا كان هناك محتوى نصي أو ملف وسائط
+            if (postContent.value.trim().length > 0 || mediaFile.files.length > 0) {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
+            }
+        }
+
+        // ربط الأحداث
+        addMediaBtn.addEventListener('click', () => mediaFile.click());
+
+        removeMediaBtn.addEventListener('click', () => {
+            mediaFile.value = ''; // مسح الملف المحدد
+            filePreview.innerHTML = '';
+            mediaPreviewContainer.classList.add('hidden');
+            checkInputs(); // فحص المدخلات بعد إزالة الملف
+        });
+
+        mediaFile.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                setupPreview(e.target.files[0]);
+            }
+            checkInputs(); // فحص المدخلات بعد اختيار ملف
+        });
+
+        postContent.addEventListener('input', checkInputs); // فحص المدخلات عند الكتابة
+        
+        // التحقق عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', checkInputs); 
+
+
+        // ************** معالجة إرسال النموذج **************
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            submitBtn.disabled = true;
+            submitBtnText.textContent = 'نشر...';
+            loadingIndicator.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    // نجاح النشر: التوجيه إلى الصفحة الرئيسية (chat_list)
+                    alert('تم النشر بنجاح!');
+                    window.location.href = '/chat_list';
+                } else {
+                    // فشل النشر: عرض رسالة خطأ
+                    errorMessage.textContent = result.error || 'حدث خطأ غير معروف أثناء النشر.';
+                    errorMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Network or client error:', error);
+                errorMessage.textContent = 'فشل الاتصال بالخادم. حاول مرة أخرى.';
+                errorMessage.classList.remove('hidden');
+            } finally {
+                // إعادة تفعيل الزر وإخفاء مؤشر التحميل
+                submitBtn.disabled = false;
+                submitBtnText.textContent = 'نشر المنشور';
+                loadingIndicator.classList.add('hidden');
+            }
+        });
+    </script>
+    
+</body>
+</html>
