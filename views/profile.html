@@ -1,201 +1,933 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>الملف الشخصي</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-  <style>
-    :root{
-      --bg:#0f1724;
-      --glass-bg: rgba(255,255,255,0.06);
-      --glass-border: rgba(255,255,255,0.12);
-      --accent: #7dd3fc;
-      --muted: #cbd5e1;
-    }
-    html,body{
-      height:100%;
-      margin:0;
-      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-      background: linear-gradient(180deg, #071426 0%, #0f1724 100%);
-      color:var(--muted);
-      -webkit-font-smoothing:antialiased;
-      -moz-osx-font-smoothing:grayscale;
-      direction: rtl;
-    }
-
-    .container{
-      max-width:980px;
-      margin:0 auto;
-      height:100%;
-      display: flex;
-      flex-direction: column;
-      padding:20px;
-      box-sizing:border-box;
-    }
-
-    .back-link{
-      text-decoration: none;
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 20px;
-    }
-
-    main{
-      flex:1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .profile-card{
-      background: var(--glass-bg);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      padding: 30px;
-      text-align: center;
-      max-width: 400px;
-      width: 100%;
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-    }
-    .profile-picture-container{
-      position:relative;
-      width:100px;
-      height:100px;
-      margin:0 auto 20px;
-    }
-    .profile-picture{
-      width:100%;
-      height:100%;
-      border-radius:50%;
-      object-fit:cover;
-      border:2px solid var(--accent);
-    }
-    .status-indicator{
-      position:absolute;
-      bottom:5px;
-      right:5px;
-      width:14px;
-      height:14px;
-      background-color:#4ade80; /* online color */
-      border-radius:50%;
-      border:2px solid var(--bg);
-      display:none; /* hidden by default */
-    }
-    h1{
-      font-size:24px;
-      font-weight:600;
-      color:#e6f0fb;
-      margin:0 0 5px;
-    }
-    .username{
-      font-size:16px;
-      color:#94a3b8;
-      margin:0 0 20px;
-    }
-    .info-item{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      margin-bottom:15px;
-      font-size:14px;
-      color:#cbd5e1;
-    }
-    .info-item svg{
-      color:var(--accent);
-      width:18px;
-      height:18px;
-    }
-    .verified-status{
-      display:none; /* hidden by default */
-      align-items:center;
-      gap:6px;
-      justify-content:center;
-      font-size:12px;
-      color: #7dd3fc;
-      margin-top:-10px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <a href="/chat_list" class="back-link">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
-      </svg>
-      عودة
-    </a>
-    <main>
-      <div id="profile-card" class="profile-card">
-        <div class="profile-picture-container">
-          <img id="profile-picture" src="https://res.cloudinary.com/duixjs8az/image/upload/v1/profile_pics/default_profile.png" alt="Profile Picture" class="profile-picture">
-          <span id="status-indicator" class="status-indicator"></span>
-        </div>
-        <h1 id="full-name">جارٍ التحميل...</h1>
-        <p id="username" class="username"></p>
-        <div id="info">
-          <div class="info-item">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-            </svg>
-            <span id="email"></span>
-          </div>
-          <div class="verified-status" id="verified-status">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            </svg>
-            <span class="small">موثق</span>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <script>
-    function getQuery(name) {
-      const params = new URLSearchParams(window.location.search);
-      return params.get(name);
-    }
-    
-    async function fetchUserProfile() {
-      try {
-        const userId = getQuery('user_id');
-        const url = userId ? `/api/profile?user_id=${userId}` : '/api/profile';
-        
-        const res = await fetch(url, { credentials: 'same-origin' });
-        if (res.status === 401) return window.location.href = '/login';
-        const user = await res.json();
-        
-        if (user) {
-          document.getElementById('profile-picture').src = escapeAttr(user.profile_picture_url);
-          document.getElementById('full-name').textContent = user.full_name || user.username;
-          document.getElementById('username').textContent = `@${user.username}`;
-          document.getElementById('email').textContent = user.email;
-
-          if (user.is_online) {
-            document.getElementById('status-indicator').style.display = 'block';
-          }
-          if (user.is_verified) {
-            document.getElementById('verified-status').style.display = 'flex';
-          }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aite - الملف الشخصي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+    <style>
+        body {
+            background-color: #000000;
+            color: #e4e6eb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding-bottom: 70px;
         }
-      } catch (err) {
-        console.error('Error fetching user profile:', err);
-        document.getElementById('profile-card').innerHTML = '<p style="color:red">حدث خطأ أثناء جلب الملف الشخصي.</p>';
-      }
-    }
 
-    function escapeAttr(s) {
-      if (!s && s !== 0) return '';
-      return String(s).replace(/[&<>"']/g, function(m) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-      });
-    }
+        .glass-navbar {
+            background-color: rgba(30, 30, 30, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .glass-bottom-nav {
+            background-color: rgba(30, 30, 30, 0.7);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* نمط بطاقة المنشور الزجاجية الجديدة */
+        .glass-post-card {
+            background-color: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* نمط خلفية البروفايل الزجاجية */
+        .glass-profile-bg {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* نمط المودال الزجاجي (للتعليقات والتعديل) */
+        .glass-modal-content {
+            background-color: rgba(0, 0, 0, 0.7); 
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
 
-    document.addEventListener('DOMContentLoaded', fetchUserProfile);
-  </script>
+        .glass-modal-bg {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+        }
+        
+        /* نمط WaveSurfer */
+        .waveform-post {
+            height: 60px; 
+            background-color: #0f172a; 
+            border-radius: 6px;
+        }
+
+        /* شريط التمرير مخصص للتعليقات */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <header class="sticky top-0 z-50 glass-navbar p-3">
+        <nav class="flex justify-between items-center max-w-6xl mx-auto">
+            
+            <a href="/chat_list" class="text-xl font-bold text-gray-400 hover:text-white transition duration-300">
+                <i class="fas fa-arrow-right"></i> </a>
+            
+            <div class="flex-grow flex justify-center">
+                <span class="text-3xl font-extrabold text-white tracking-widest">
+                    Aite
+                </span>
+            </div>
+            
+            <button onclick="logout()" class="text-gray-400 hover:text-red-400 transition duration-300">
+                <i class="fas fa-sign-out-alt text-xl"></i>
+            </button>
+        </nav>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-4">
+        
+        <div id="profileContainer" class="max-w-xl mx-auto">
+            
+            <div class="glass-profile-bg rounded-xl shadow-2xl overflow-hidden mb-4">
+                
+                <div id="coverPhotoWrapper" class="relative h-40 bg-gray-800">
+                    <img id="coverPhoto" src="https://via.placeholder.com/800x200/27272a/9ca3af?text=Cover+Photo" 
+                         alt="صورة الغلاف" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black opacity-30"></div>
+                </div>
+
+                <div class="p-6 pt-0 relative">
+                    
+                    <img id="profilePic" src="https://via.placeholder.com/150/3b82f6/ffffff?text=P" 
+                         alt="صورة الملف الشخصي" 
+                         class="w-32 h-32 rounded-full border-4 border-black object-cover absolute top-[-64px] right-6 shadow-xl hover:shadow-blue-500/50 transition duration-300">
+                    
+                    <div class="flex justify-end pt-2">
+                        <button id="editProfileBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-lg mt-3">
+                            <i class="fas fa-edit ml-2"></i>
+                            تعديل البروفايل
+                        </button>
+                        <a id="sendMessageBtn" href="#" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-lg mt-3 hidden">
+                            <i class="fas fa-comment-alt ml-2"></i>
+                            إرسال رسالة
+                        </a>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h1 id="fullNameDisplay" class="text-3xl font-bold text-white">اسم المستخدم الكامل</h1>
+                        <p id="usernameDisplay" class="text-gray-400 text-lg mb-3">@username</p>
+                        <p id="bioDisplay" class="text-gray-300 border-t border-gray-700 pt-3">
+                            أهلاً! هذه نبذة تعريفية قصيرة عني.
+                        </p>
+                    </div>
+
+                    <div class="flex justify-around text-center mt-4 border-t border-gray-700 pt-4">
+                        <div class="flex flex-col">
+                            <span id="postsCountDisplay" class="text-2xl font-bold text-blue-400">0</span>
+                            <span class="text-gray-400">منشور</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-2xl font-bold text-blue-400">0</span>
+                            <span class="text-gray-400">متابع</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-2xl font-bold text-blue-400">0</span>
+                            <span class="text-gray-400">يتابع</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-b border-gray-700 mb-4">
+                <h2 class="text-xl font-bold text-white inline-block border-b-2 border-blue-500 pb-2">منشوراتي</h2>
+            </div>
+            
+            <div id="postsFeed" class="space-y-4">
+                </div>
+            
+        </div>
+
+    </main>
+
+    <nav class="glass-bottom-nav fixed bottom-0 left-0 right-0 z-50 py-3">
+        <div class="max-w-md mx-auto flex justify-around items-center">
+            
+            <a href="/chat_list" class="flex flex-col items-center text-gray-400 hover:text-red-400 transition duration-300">
+                <i class="fas fa-home text-2xl"></i>
+                <span class="text-xs mt-1">الرئيسية</span>
+            </a>
+            
+            <a href="/users_list" class="flex flex-col items-center text-gray-400 hover:text-blue-400 transition duration-300">
+                <i class="fas fa-comment-dots text-2xl"></i>
+                <span class="text-xs mt-1">الرسائل</span>
+            </a>
+            
+            <a href="#" class="flex flex-col items-center text-gray-400 hover:text-yellow-400 transition duration-300">
+                <i class="fas fa-bell text-2xl"></i>
+                <span class="text-xs mt-1">الإشعارات</span>
+            </a>
+            
+            <a href="/profile" class="flex flex-col items-center text-green-400 transition duration-300">
+                <i class="fas fa-user-circle text-2xl"></i>
+                <span class="text-xs mt-1">حسابي</span>
+            </a>
+            
+        </div>
+    </nav>
+    
+    <div id="editProfileModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
+        <div class="glass-modal-content p-6 rounded-xl shadow-2xl max-w-lg w-full" onclick="event.stopPropagation()">
+            <h3 class="text-2xl font-bold text-white mb-4 border-b border-gray-700 pb-3">تعديل الملف الشخصي</h3>
+            
+            <form id="editProfileForm" enctype="multipart/form-data" class="space-y-4">
+                
+                <div>
+                    <label for="full_name" class="block text-sm font-medium text-gray-400 mb-1">الاسم الكامل</label>
+                    <input type="text" id="full_name" name="full_name" class="w-full p-3 bg-gray-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700" dir="rtl" maxlength="50">
+                </div>
+                
+                <div>
+                    <label for="bio" class="block text-sm font-medium text-gray-400 mb-1">النبذة (Bio)</label>
+                    <textarea id="bio" name="bio" rows="3" class="w-full p-3 bg-gray-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700" dir="rtl" maxlength="150"></textarea>
+                </div>
+                
+                <div>
+                    <label for="profile_picture" class="block text-sm font-medium text-gray-400 mb-1">تغيير صورة البروفايل</label>
+                    <input type="file" id="profile_picture" name="profile_picture" accept="image/*" class="w-full text-white bg-gray-800 rounded-lg border border-gray-700 p-2">
+                </div>
+                
+                <div>
+                    <label for="cover_photo" class="block text-sm font-medium text-gray-400 mb-1">تغيير صورة الغلاف</label>
+                    <input type="file" id="cover_photo" name="cover_photo" accept="image/*" class="w-full text-white bg-gray-800 rounded-lg border border-gray-700 p-2">
+                </div>
+                
+                <div id="updateMessage" class="text-center text-sm hidden"></div>
+
+                <div class="flex justify-end space-x-4 space-x-reverse pt-2">
+                    <button type="button" id="cancelEditBtn" class="py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition duration-300">إلغاء</button>
+                    <button type="submit" id="saveProfileBtn" class="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-300">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
+        <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
+            <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
+            <h3 class="text-xl font-bold text-white mb-2">تأكيد الحذف</h3>
+            <p class="text-gray-400 mb-6">هل أنت متأكد أنك تريد حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.</p>
+            <div class="flex justify-around space-x-4 space-x-reverse">
+                <button id="cancelDeleteBtn" class="p-2 w-full bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition duration-300">إلغاء</button>
+                <button id="confirmDeleteBtn" class="p-2 w-full bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-300">تأكيد الحذف</button>
+            </div>
+            <div id="deleteMessage" class="text-red-500 mt-3 hidden"></div>
+        </div>
+    </div>
+
+    <div id="mediaViewerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2 glass-modal-bg" onclick="closeMediaViewer(event)">
+        <button class="absolute top-4 left-4 text-white text-3xl z-50 p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition" onclick="closeMediaViewer(event)">
+            <i class="fas fa-times"></i>
+        </button>
+        <div id="mediaViewerContent" class="media-container flex items-center justify-center" onclick="event.stopPropagation()">
+        </div>
+    </div>
+    
+    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
+        <div class="glass-modal-content p-6 rounded-xl shadow-2xl max-w-lg w-full h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center pb-4 border-b border-gray-700">
+                <h3 class="text-2xl font-bold text-white">التعليقات</h3>
+                <button id="closeCommentModalBtn" class="text-gray-400 hover:text-white transition duration-300 text-3xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div id="commentsList" class="flex-grow overflow-y-auto py-4 space-y-4 custom-scrollbar">
+                </div>
+
+            <div class="pt-4 border-t border-gray-700 flex items-center">
+                <input type="text" id="newCommentInput" placeholder="أضف تعليقًا..." class="flex-grow p-3 bg-gray-800 text-white rounded-r-full focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700" dir="rtl">
+                <button id="postCommentBtn" class="p-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-l-full transition duration-300 flex-shrink-0">
+                    <i class="fas fa-paper-plane text-lg"></i>
+                </button>
+            </div>
+            <div id="commentError" class="text-red-500 mt-2 text-center hidden"></div>
+        </div>
+    </div>
+
+    <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
+        <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
+            <i class="fas fa-trash ml-3"></i>
+            حذف المنشور
+        </button>
+    </div>
+
+    <script>
+        let currentUserId = null;
+        let targetUserId = null; 
+        let activeWaveSurfer = null;
+        
+        // عناصر واجهة المستخدم للبروفايل
+        const profilePic = document.getElementById('profilePic');
+        const coverPhoto = document.getElementById('coverPhoto');
+        const fullNameDisplay = document.getElementById('fullNameDisplay');
+        const usernameDisplay = document.getElementById('usernameDisplay');
+        const bioDisplay = document.getElementById('bioDisplay');
+        const postsCountDisplay = document.getElementById('postsCountDisplay');
+        const editProfileBtn = document.getElementById('editProfileBtn');
+        const sendMessageBtn = document.getElementById('sendMessageBtn');
+
+        // مودال التعديل
+        const editProfileModal = document.getElementById('editProfileModal');
+        const editProfileForm = document.getElementById('editProfileForm');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const updateMessage = document.getElementById('updateMessage');
+        
+        // عناصر المنشورات
+        const postsFeed = document.getElementById('postsFeed');
+        const deleteModal = document.getElementById('deleteModal');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        const deleteMessage = document.getElementById('deleteMessage');
+        const postMenu = document.getElementById('postMenu');
+        const deleteOptionBtn = document.getElementById('deleteOptionBtn');
+        const mediaViewerModal = document.getElementById('mediaViewerModal');
+        const mediaViewerContent = document.getElementById('mediaViewerContent');
+        
+        // عناصر التعليقات
+        const commentModal = document.getElementById('commentModal');
+        const closeCommentModalBtn = document.getElementById('closeCommentModalBtn');
+        const commentsList = document.getElementById('commentsList');
+        const newCommentInput = document.getElementById('newCommentInput');
+        const postCommentBtn = document.getElementById('postCommentBtn');
+        const commentError = document.getElementById('commentError');
+        let currentPostIdForComments = null;
+        let currentPostIdToDelete = null;
+
+        // ******************** وظائف الدعم ********************
+        
+        function logout() {
+            window.location.href = '/logout';
+        }
+
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        // ******************** 1. وظائف عرض وتحديث البروفايل ********************
+        
+        async function fetchUserProfile(userId) {
+            // إضافة user_id كبارامتر إذا كان موجودًا لطلب ملف شخصي آخر
+            const url = userId ? `/api/profile?user_id=${userId}` : '/api/profile';
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    
+                    // المعرف الحالي هو معرف المستخدم الذي قام بتسجيل الدخول
+                    if (!currentUserId) {
+                        currentUserId = result.id;
+                    }
+                    
+                    // المعرف المستهدف هو إما من رابط URL أو المستخدم الحالي نفسه
+                    const urlUserId = getQueryParam('user_id');
+                    targetUserId = urlUserId || currentUserId;
+
+                    displayProfile(result, urlUserId);
+                    fetchAndDisplayUserPosts(targetUserId);
+
+                } else {
+                    alert('فشل في جلب بيانات الملف الشخصي: ' + (result.error || 'خطأ غير معروف'));
+                    console.error(result.error);
+                }
+            } catch (error) {
+                alert('حدث خطأ في الاتصال بالخادم.');
+                console.error(error);
+            }
+        }
+
+        function displayProfile(data, urlUserId) {
+            
+            // تحديث الواجهة
+            profilePic.src = data.profile_picture_url || 'https://via.placeholder.com/150/3b82f6/ffffff?text=P';
+            coverPhoto.src = data.cover_photo_url || 'https://via.placeholder.com/800x200/27272a/9ca3af?text=Cover+Photo';
+            fullNameDisplay.textContent = data.full_name || data.username || 'مستخدم Aite';
+            usernameDisplay.textContent = `@${data.username}`;
+            bioDisplay.textContent = data.bio || 'لم يتم إضافة نبذة بعد.';
+            postsCountDisplay.textContent = data.postsCount || 0;
+            
+            // تحديث مودال التعديل بالبيانات الحالية
+            document.getElementById('full_name').value = data.full_name || '';
+            document.getElementById('bio').value = data.bio || '';
+
+            // إظهار/إخفاء أزرار التفاعل/التعديل بناءً على المستخدم المعروض
+            const isCurrentUserProfile = !urlUserId || urlUserId === currentUserId;
+            
+            if (isCurrentUserProfile) {
+                editProfileBtn.classList.remove('hidden');
+                sendMessageBtn.classList.add('hidden');
+            } else {
+                editProfileBtn.classList.add('hidden');
+                sendMessageBtn.classList.remove('hidden');
+                sendMessageBtn.href = `/chat?contactId=${urlUserId}&contactName=${data.username}`;
+            }
+        }
+        
+        // ******************** 2. وظائف تعديل البروفايل (Modal) ********************
+
+        editProfileBtn.addEventListener('click', () => {
+            editProfileModal.classList.remove('hidden');
+            updateMessage.classList.add('hidden');
+        });
+
+        cancelEditBtn.addEventListener('click', () => {
+            editProfileModal.classList.add('hidden');
+        });
+        
+        editProfileModal.addEventListener('click', (e) => {
+             if (e.target.id === 'editProfileModal') {
+                editProfileModal.classList.add('hidden');
+            }
+        });
+
+
+        editProfileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(editProfileForm);
+            const saveBtn = document.getElementById('saveProfileBtn');
+            
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';
+            updateMessage.classList.add('hidden');
+            updateMessage.classList.remove('text-green-500', 'text-red-500');
+
+            try {
+                const response = await fetch('/api/profile/update', {
+                    method: 'POST',
+                    body: formData 
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    updateMessage.textContent = result.message;
+                    updateMessage.classList.add('text-green-500');
+                    updateMessage.classList.remove('hidden');
+                    
+                    // تحديث الواجهة مباشرةً
+                    if (result.updates.full_name) fullNameDisplay.textContent = result.updates.full_name;
+                    if (result.updates.bio) bioDisplay.textContent = result.updates.bio;
+                    // تحديث الصورة مع ضمان أن المتصفح يجلبها من جديد عبر إضافة timestamp وهمي
+                    if (result.updates.profile_picture_url) profilePic.src = result.updates.profile_picture_url + '?' + Date.now();
+                    if (result.updates.cover_photo_url) coverPhoto.src = result.updates.cover_photo_url + '?' + Date.now();
+                    
+                    // تحديث القيم في المودال أيضاً
+                    document.getElementById('full_name').value = result.updates.full_name || document.getElementById('full_name').value;
+                    document.getElementById('bio').value = result.updates.bio || document.getElementById('bio').value;
+
+                    // مسح حقول الملفات
+                    document.getElementById('profile_picture').value = '';
+                    document.getElementById('cover_photo').value = '';
+                    
+                    setTimeout(() => {
+                        editProfileModal.classList.add('hidden');
+                    }, 1500);
+
+                } else {
+                    updateMessage.textContent = result.error || 'فشل في حفظ التغييرات.';
+                    updateMessage.classList.add('text-red-500');
+                    updateMessage.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                updateMessage.textContent = 'حدث خطأ في الاتصال بالخادم.';
+                updateMessage.classList.add('text-red-500');
+                updateMessage.classList.remove('hidden');
+                console.error(error);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'حفظ التغييرات';
+            }
+        });
+
+        // ******************** 3. وظائف عرض المنشورات ********************
+        
+        async function fetchAndDisplayUserPosts(userId) {
+            postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
+            
+            try {
+                const response = await fetch(`/api/users/${userId}/posts`);
+                const result = await response.json();
+                
+                postsFeed.innerHTML = '';
+                
+                if (response.ok && result.ok) {
+                    if (result.posts.length === 0) {
+                        postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لم يقم هذا المستخدم بنشر أي شيء بعد.</div>';
+                        return;
+                    }
+                    
+                    const audioPostsToInit = [];
+
+                    result.posts.forEach(post => {
+                        postsFeed.innerHTML += createPostCard(post);
+                        
+                        if (post.media && post.media.type === 'audio') {
+                            audioPostsToInit.push({ postId: post.postId, url: post.media.url });
+                        }
+                    });
+                    
+                    audioPostsToInit.forEach(ap => {
+                        initializePostWaveSurfer(ap.postId, ap.url);
+                    });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
+            }
+        }
+        
+        // ******************** 4. وظائف المنشورات المشتركة ********************
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffInHours = (now - date) / (1000 * 60 * 60);
+
+            if (diffInHours < 24) {
+                return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            } else if (diffInHours < 7 * 24) {
+                return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+            } else {
+                return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+            }
+        }
+        
+        function createPostCard(post) {
+            let mediaContent = '';
+            
+            if (post.media) {
+                if (post.media.type === 'image') {
+                    mediaContent = `
+                        <div class="mt-3 cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)">
+                            <img src="${post.media.url}" alt="صورة المنشور" class="w-full max-h-96 object-cover rounded-lg">
+                        </div>
+                    `;
+                } else if (post.media.type === 'video') {
+                     mediaContent = `
+                        <div class="mt-3 relative cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'video', event)">
+                            <video src="${post.media.url}" class="w-full max-h-96 object-contain rounded-lg" poster="https://via.placeholder.com/600x400?text=Video+Loading" preload="metadata"></video>
+                            <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-lg pointer-events-none">
+                                <i class="fas fa-play text-white text-5xl opacity-80"></i>
+                            </div>
+                        </div>
+                    `;
+                } else if (post.media.type === 'audio') {
+                    mediaContent = `
+                        <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
+                            <button class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300 flex-shrink-0">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <div id="waveform-${post.postId}" class="waveform-post flex-grow"></div>
+                        </div>
+                    `;
+                }
+            }
+
+            const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
+            const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
+
+            // زر الحذف يظهر فقط إذا كان المنشور يعود للمستخدم الحالي في هذه الصفحة
+            const showDelete = post.userId === currentUserId && post.userId === targetUserId;
+
+            return `
+                <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center">
+                            <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
+                            <div>
+                                <a href="/profile?user_id=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username}</a>
+                                <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
+                            </div>
+                        </div>
+                        ${showDelete ? `<button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
+                                onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>` : ''}
+                    </div>
+
+                    <p class="text-gray-200 whitespace-pre-wrap">${post.content}</p>
+
+                    ${mediaContent}
+
+                    <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
+                        <span><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
+                        <span class="cursor-pointer hover:text-blue-400" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount} تعليق</span>
+                    </div>
+
+                    <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
+                        <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button" 
+                                data-is-liked="${post.is_liked}" 
+                                onclick="handleLike('${post.postId}', this)">
+                            <i class="${likeIconClass} ml-2 like-icon"></i> إعجاب
+                        </button>
+                        <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center" onclick="handleComment('${post.postId}')">
+                            <i class="far fa-comment-alt ml-2"></i> تعليق
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function openMediaViewer(url, type, event) {
+            event.stopPropagation();
+            if (type === 'audio') return;
+            
+            let mediaElement;
+            mediaViewerContent.innerHTML = '';
+            
+            if (type === 'image') {
+                mediaElement = `<img src="${url}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
+            } else if (type === 'video') {
+                mediaElement = `<video src="${url}" controls autoplay class="max-w-full max-h-full object-contain rounded-lg"></video>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-lg pointer-events-none">
+                        <i class="fas fa-play text-white text-5xl opacity-80"></i>
+                    </div>`;
+            } else {
+                return;
+            }
+
+            mediaViewerContent.innerHTML = mediaElement;
+            mediaViewerModal.classList.remove('hidden');
+        }
+
+        function closeMediaViewer(event) {
+            if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
+                const activeMedia = mediaViewerContent.querySelector('video, audio');
+                if (activeMedia) {
+                    activeMedia.pause();
+                }
+                mediaViewerModal.classList.add('hidden');
+                mediaViewerContent.innerHTML = '';
+            }
+        }
+        
+        function openDeleteModal(postId, event) {
+            event.stopPropagation();
+            currentPostIdToDelete = postId;
+            deleteMessage.classList.add('hidden');
+            deleteModal.classList.remove('hidden');
+            postMenu.classList.add('hidden');
+        }
+
+        cancelDeleteBtn.addEventListener('click', () => {
+            deleteModal.classList.add('hidden');
+            currentPostIdToDelete = null;
+        });
+        
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (!currentPostIdToDelete) return;
+
+            confirmDeleteBtn.disabled = true;
+            confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحذف';
+            deleteMessage.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`).remove();
+                    deleteModal.classList.add('hidden');
+                    postsCountDisplay.textContent = parseInt(postsCountDisplay.textContent) - 1;
+                } else {
+                    deleteMessage.textContent = result.error || 'فشل الحذف.';
+                    deleteMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                deleteMessage.textContent = 'حدث خطأ في الاتصال بالخادم.';
+                deleteMessage.classList.remove('hidden');
+            } finally {
+                confirmDeleteBtn.disabled = false;
+                confirmDeleteBtn.innerHTML = 'تأكيد الحذف';
+                currentPostIdToDelete = null;
+            }
+        });
+
+        function togglePostMenu(postId, userId, event, menuButton) {
+            event.stopPropagation();
+            
+            if (!postMenu.classList.contains('hidden') && postMenu.dataset.postId === postId) {
+                postMenu.classList.add('hidden');
+                return;
+            }
+            
+            const rect = menuButton.getBoundingClientRect();
+            postMenu.style.top = `${rect.bottom + 5}px`;
+            postMenu.style.left = `${rect.left}px`;
+            
+            postMenu.dataset.postId = postId;
+
+            if (userId === currentUserId) {
+                deleteOptionBtn.style.display = 'flex';
+                deleteOptionBtn.onclick = (e) => openDeleteModal(postId, e);
+            } else {
+                deleteOptionBtn.style.display = 'none';
+            }
+
+            postMenu.classList.remove('hidden');
+        }
+        
+        document.addEventListener('click', (event) => {
+            if (!postMenu.contains(event.target) && !event.target.closest('.post-menu-button')) {
+                postMenu.classList.add('hidden');
+            }
+        });
+
+        function initializePostWaveSurfer(postId, url) {
+            const container = document.getElementById(`waveform-${postId}`);
+            if (!container) return;
+
+            const ws = WaveSurfer.create({
+                container: container,
+                waveColor: '#4b5563',
+                progressColor: '#3b82f6',
+                cursorColor: '#10b981',
+                barWidth: 3,
+                barRadius: 3,
+                barGap: 1,
+                height: 60,
+                responsive: true,
+                mediaControls: false,
+            });
+
+            ws.load(url);
+
+            const playButton = container.closest('.glass-post-card').querySelector('.audio-play-button');
+            if (playButton) {
+                playButton.onclick = () => {
+                    if (activeWaveSurfer && activeWaveSurfer !== ws) {
+                        activeWaveSurfer.pause();
+                        const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
+                        otherPostCard.querySelector('.audio-play-button i').classList.remove('fa-pause');
+                        otherPostCard.querySelector('.audio-play-button i').classList.add('fa-play');
+                    }
+                    
+                    if (ws.isPlaying()) {
+                        ws.pause();
+                        playButton.querySelector('i').classList.remove('fa-pause');
+                        playButton.querySelector('i').classList.add('fa-play');
+                    } else {
+                        ws.play();
+                        playButton.querySelector('i').classList.remove('fa-play');
+                        playButton.querySelector('i').classList.add('fa-pause');
+                        activeWaveSurfer = ws;
+                    }
+                };
+
+                ws.on('finish', () => {
+                    playButton.querySelector('i').classList.remove('fa-pause');
+                    playButton.querySelector('i').classList.add('fa-play');
+                    activeWaveSurfer = null;
+                });
+            }
+        }
+        
+        async function handleLike(postId, buttonElement) {
+            const likeIcon = buttonElement.querySelector('.like-icon');
+            buttonElement.disabled = true;
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/like`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+                    const likesSpan = postCard.querySelector('.text-sm span:first-child');
+                    
+                    likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
+                    
+                    if (result.action === 'liked') {
+                        likeIcon.classList.remove('far', 'text-gray-400');
+                        likeIcon.classList.add('fas', 'text-red-500');
+                        buttonElement.classList.remove('text-gray-400');
+                        buttonElement.classList.add('text-red-500');
+                        buttonElement.dataset.isLiked = 'true';
+                    } else {
+                        likeIcon.classList.remove('fas', 'text-red-500');
+                        likeIcon.classList.add('far', 'text-gray-400');
+                        buttonElement.classList.remove('text-red-500');
+                        buttonElement.classList.add('text-gray-400');
+                        buttonElement.dataset.isLiked = 'false';
+                    }
+                    
+                }
+
+            } catch (error) {
+                console.error('Error during like operation:', error);
+            } finally {
+                buttonElement.disabled = false;
+            }
+        }
+        
+        async function handleComment(postId) { 
+            currentPostIdForComments = postId;
+            await fetchAndDisplayComments(postId);
+            commentModal.classList.remove('hidden'); 
+        }
+
+        closeCommentModalBtn.addEventListener('click', () => {
+            commentModal.classList.add('hidden');
+            currentPostIdForComments = null;
+            newCommentInput.value = '';
+            commentsList.innerHTML = '';
+        });
+
+        function createCommentHtml(comment) {
+            const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
+            return `
+                <div class="flex items-start">
+                    <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover ml-3 flex-shrink-0">
+                    <div class="flex-grow bg-gray-700 p-3 rounded-lg">
+                        <div class="flex justify-between items-center mb-1">
+                            <a href="/profile?user_id=${comment.userId}" class="text-white font-semibold text-sm hover:text-blue-400">${comment.user.username}</a>
+                            <span class="text-gray-400 text-xs">${commentDate}</span>
+                        </div>
+                        <p class="text-gray-200 whitespace-pre-wrap text-sm">${comment.content}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function fetchAndDisplayComments(postId) {
+            commentsList.innerHTML = '<div class="text-center text-gray-500 p-4">جاري تحميل التعليقات...</div>';
+            commentError.classList.add('hidden');
+            
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`);
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    commentsList.innerHTML = '';
+                    if (result.comments.length === 0) {
+                        commentsList.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد تعليقات حتى الآن.</div>';
+                    } else {
+                        result.comments.forEach(comment => {
+                            commentsList.innerHTML += createCommentHtml(comment);
+                        });
+                        commentsList.scrollTop = commentsList.scrollHeight;
+                    }
+                } else {
+                    commentError.textContent = result.error || 'فشل في جلب التعليقات.';
+                    commentError.classList.remove('hidden');
+                    commentsList.innerHTML = '';
+                }
+
+            } catch (error) {
+                commentError.textContent = 'حدث خطأ في الاتصال بالخادم.';
+                commentError.classList.remove('hidden');
+                commentsList.innerHTML = '';
+            }
+        }
+        
+        async function postComment() {
+            const content = newCommentInput.value.trim();
+            if (!content || !currentPostIdForComments) return;
+
+            postCommentBtn.disabled = true;
+            postCommentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            commentError.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/posts/${currentPostIdForComments}/comment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: content })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    if (commentsList.querySelector('.text-center.text-gray-500')) {
+                        commentsList.innerHTML = '';
+                    }
+                    commentsList.innerHTML += createCommentHtml(result.comment);
+                    newCommentInput.value = '';
+                    
+                    const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
+                    const commentsSpan = postCard.querySelector('.text-sm span:last-child');
+                    commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`;
+                    
+                    commentsList.scrollTop = commentsList.scrollHeight;
+
+                } else {
+                    commentError.textContent = result.error || 'فشل في إضافة التعليق.';
+                    commentError.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                commentError.textContent = 'فشل الاتصال بالخادم.';
+                commentError.classList.remove('hidden');
+            } finally {
+                postCommentBtn.disabled = false;
+                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
+            }
+        }
+        
+        postCommentBtn.addEventListener('click', postComment);
+        newCommentInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                postComment();
+            }
+        });
+
+
+        // ******************** تهيئة الصفحة ********************
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlUserId = getQueryParam('user_id');
+            if (urlUserId) {
+                fetchUserProfile(urlUserId);
+            } else {
+                fetchUserProfile();
+            }
+        });
+        
+    </script>
 </body>
 </html>
