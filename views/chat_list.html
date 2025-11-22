@@ -13,7 +13,8 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            /* تم إزالة: padding-bottom: 70px; لإزالة المسافة المخصصة لشريط التنقل السفلي */ 
+            /* إضافة مساحة سفلية لاستيعاب شريط التنقل */
+            padding-bottom: 70px; 
         }
 
         .glass-navbar {
@@ -23,7 +24,13 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        /* تم إزالة: .glass-bottom-nav { ... } لإزالة النمط الخاص بشريط التنقل السفلي */
+        /* النمط الجديد لشريط التنقل السفلي */
+        .glass-bottom-nav {
+            background-color: rgba(30, 30, 30, 0.7);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
         
         .glass-modal-bg {
             background-color: rgba(0, 0, 0, 0.9);
@@ -103,6 +110,31 @@
 
     </main>
     
+    <nav class="glass-bottom-nav fixed bottom-0 left-0 right-0 z-50 py-3">
+        <div class="max-w-md mx-auto flex justify-around items-center">
+            
+            <a href="/chat_list" class="flex flex-col items-center text-red-500 hover:text-red-400 transition duration-300">
+                <i class="fas fa-home text-2xl"></i>
+                <span class="text-xs mt-1">الرئيسية</span>
+            </a>
+            
+            <a href="/users_list" class="flex flex-col items-center text-gray-400 hover:text-blue-400 transition duration-300">
+                <i class="fas fa-comment-dots text-2xl"></i>
+                <span class="text-xs mt-1">الرسائل</span>
+            </a>
+            
+            <a href="#" class="flex flex-col items-center text-gray-400 hover:text-yellow-400 transition duration-300">
+                <i class="fas fa-bell text-2xl"></i>
+                <span class="text-xs mt-1">الإشعارات</span>
+            </a>
+            
+            <a href="/profile" class="flex flex-col items-center text-gray-400 hover:text-green-400 transition duration-300">
+                <i class="fas fa-user-circle text-2xl"></i>
+                <span class="text-xs mt-1">حسابي</span>
+            </a>
+            
+        </div>
+    </nav>
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
             <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
@@ -559,10 +591,9 @@
             const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
-            
-            // تم تغيير لون التمرير إلى لون حيادي (رمادي أغمق) عبر hover:bg-gray-600
+
             return `
-                <div class="flex items-start p-2 rounded-lg hover:bg-gray-600 transition duration-150"> 
+                <div class="flex items-start">
                     <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover ml-3 flex-shrink-0">
                     <div class="flex-grow bg-gray-700 p-3 rounded-lg">
                         <div class="flex justify-between items-center mb-1">
@@ -638,3 +669,45 @@
                     commentsSpan.innerHTML = `<i class="fas fa-comment ml-1"></i> ${result.newComments} تعليق`;
                     
                     // 3. التمرير إلى أسفل
+                    commentsList.scrollTop = commentsList.scrollHeight;
+
+                } else {
+                    commentError.textContent = result.error || 'فشل في إضافة التعليق.';
+                    commentError.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                commentError.textContent = 'فشل الاتصال بالخادم.';
+                commentError.classList.remove('hidden');
+            } finally {
+                postCommentBtn.disabled = false;
+                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+            }
+        }
+        
+        postCommentBtn.addEventListener('click', postComment);
+        newCommentInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // منع إضافة سطر جديد في الإدخال
+                postComment();
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/profile')
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const profilePicElement = document.getElementById('userProfilePic');
+                    if (data && data.profile_picture_url) {
+                        profilePicElement.src = data.profile_picture_url;
+                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                        currentUserId = data.id; // حفظ معرف المستخدم الحالي
+                    }
+                }).catch(console.error);
+                
+            fetchAndDisplayPosts();
+        });
+        
+    </script>
+</body>
+</html>
