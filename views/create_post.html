@@ -6,6 +6,7 @@
     <title>إنشاء منشور جديد - Aite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
     <style>
         body {
             background-color: #000000;
@@ -23,27 +24,21 @@
             background-color: #1f2937;
         }
 
-        /* تصميم الأعمدة الصوتية (Visualizer) - جديد */
-        .audio-visualizer-bars {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            width: 100%;
-            height: 40px;
-            padding: 0 10px;
-            background-color: #1f2937; 
+        /* نمط WaveSurfer لمنطقة المعاينة */
+        #waveform-preview {
+            height: 80px; 
+            background-color: #1f2937;
             border-radius: 6px;
-            overflow: hidden;
         }
-
-        .bar-preview {
-            width: 4px;
-            background-color: #3b82f6; 
-            margin: 0 1px;
-            transition: height 0.1s ease-out;
-            border-radius: 2px;
-            min-height: 2px;
-            height: 20%; /* ارتفاع أساسي */
+        
+        /* تأثير النبض على زر التسجيل أثناء التسجيل */
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .recording-pulse {
+            animation: pulse-red 1.5s infinite;
         }
     </style>
 </head>
@@ -70,7 +65,6 @@
             </div>
             
             <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="hidden">
-            <input type="hidden" name="audioFile" id="recordedAudioInput">
 
             <div id="mediaPreviewContainer" class="hidden mb-4 p-4 bg-[#242526] rounded-lg border border-dashed border-gray-600 relative">
                 <div class="flex justify-center items-center">
@@ -83,6 +77,8 @@
             </div>
 
             <div id="audioRecorderContainer" class="mb-4 p-4 bg-[#1f2937] border border-gray-700 rounded-lg flex flex-col items-center">
+                <h3 class="text-lg font-semibold text-white mb-4">تسجيل رسالة صوتية</h3>
+                
                 <div class="flex items-center space-x-4 space-x-reverse mb-3">
                     <button type="button" id="startRecordingBtn" class="p-3 bg-red-600 hover:bg-red-700 rounded-full text-white w-12 h-12 flex items-center justify-center transition disabled:opacity-50" title="بدء التسجيل">
                         <i class="fas fa-microphone"></i>
@@ -90,13 +86,18 @@
                     <button type="button" id="stopRecordingBtn" class="p-3 bg-gray-500 hover:bg-gray-600 rounded-full text-white w-12 h-12 flex items-center justify-center transition disabled:opacity-50" disabled title="إيقاف التسجيل">
                         <i class="fas fa-stop"></i>
                     </button>
-                    <span id="recordingStatus" class="text-white text-lg">جاهز للتسجيل</span>
                 </div>
+                
+                <span id="recordingStatus" class="text-white text-lg">جاهز للتسجيل</span>
 
-                <div id="audioVisualizer" class="audio-visualizer-bars hidden mt-2">
+                <div id="waveform-preview" class="w-full hidden mt-4">
                     </div>
 
-                <audio id="audioPlayback" controls class="w-full mt-4 hidden"></audio>
+                <div id="audioPlaybackContainer" class="w-full mt-4 hidden">
+                    <button id="playPausePreview" type="button" class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition duration-300 w-full">
+                        <i class="fas fa-play ml-2"></i> تشغيل / إيقاف المعاينة
+                    </button>
+                </div>
             </div>
             
             <div class="flex justify-between items-center border-t border-gray-700 pt-4">
@@ -132,19 +133,140 @@
         const errorMessage = document.getElementById('errorMessage');
         const audioRecorderContainer = document.getElementById('audioRecorderContainer');
         
-        // متغيرات تسجيل الصوت
+        // متغيرات تسجيل الصوت والـ WaveSurfer
         const startRecordingBtn = document.getElementById('startRecordingBtn');
         const stopRecordingBtn = document.getElementById('stopRecordingBtn');
         const recordingStatus = document.getElementById('recordingStatus');
-        const audioVisualizer = document.getElementById('audioVisualizer');
-        const audioPlayback = document.getElementById('audioPlayback');
-        const recordedAudioInput = document.getElementById('recordedAudioInput');
+        const waveformPreview = document.getElementById('waveform-preview'); 
+        const audioPlaybackContainer = document.getElementById('audioPlaybackContainer');
+        const playPausePreview = document.getElementById('playPausePreview');
         
         let mediaRecorder;
         let audioChunks = [];
         let audioBlob = null;
         let mediaStream = null;
-        let visualizationInterval;
+        let wavesurferPreview; 
+        
+        // ************** تهيئة WaveSurfer **************
+        function initializeWaveSurfer() {
+            if (wavesurferPreview) {
+                 wavesurferPreview.destroy();
+            }
+            wavesurferPreview = WaveSurfer.create({
+                container: '#waveform-preview',
+                waveColor: '#4f46e5', // Indigo-600
+                progressColor: '#3b82f6', // Blue-500
+                cursorColor: '#ef4444', // Red-500
+                barWidth: 3,
+                barRadius: 3,
+                responsive: true,
+                height: 80,
+                backend: 'MediaElement',
+                rtl: true,
+            });
+            
+            // ربط التحكم بالزر المخصص
+            playPausePreview.onclick = () => {
+                wavesurferPreview.playPause();
+            };
+
+            wavesurferPreview.on('play', () => {
+                playPausePreview.innerHTML = '<i class="fas fa-pause ml-2"></i> إيقاف مؤقت';
+            });
+            wavesurferPreview.on('pause', () => {
+                playPausePreview.innerHTML = '<i class="fas fa-play ml-2"></i> تشغيل / إيقاف المعاينة';
+            });
+            wavesurferPreview.on('finish', () => {
+                 playPausePreview.innerHTML = '<i class="fas fa-redo ml-2"></i> إعادة التشغيل';
+                 wavesurferPreview.seekTo(0); // العودة للبداية
+            });
+        }
+
+        // ************** وظائف تسجيل الصوت **************
+
+        async function startRecording() {
+            try {
+                // إخفاء المعاينة القديمة وتهيئة WaveSurfer
+                initializeWaveSurfer();
+                waveformPreview.classList.remove('hidden');
+                audioPlaybackContainer.classList.add('hidden');
+                
+                // طلب الوصول إلى الميكروفون
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(mediaStream);
+                audioChunks = [];
+                audioBlob = null;
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                
+                // عند الإيقاف
+                mediaRecorder.onstop = () => {
+                    // إزالة تأثير النبض
+                    startRecordingBtn.classList.remove('recording-pulse');
+                    
+                    audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // تحميل ملف الصوت في WaveSurfer لعرض الموجة ومعاينة التشغيل
+                    wavesurferPreview.load(audioUrl); 
+                    
+                    audioPlaybackContainer.classList.remove('hidden');
+                    
+                    // إعداد ملف الإرسال
+                    const recordedFile = new File([audioBlob], "recorded_audio.webm", { type: mediaRecorder.mimeType });
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(recordedFile);
+                    mediaFile.files = dataTransfer.files; 
+                    
+                    recordingStatus.textContent = 'تم التسجيل. اضغط للتشغيل.';
+                    checkInputs();
+                };
+
+                mediaRecorder.start();
+                
+                // تحديث واجهة المستخدم
+                startRecordingBtn.disabled = true;
+                stopRecordingBtn.disabled = false;
+                startRecordingBtn.classList.add('recording-pulse'); // إضافة تأثير النبض
+                recordingStatus.textContent = 'جاري التسجيل...';
+                
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                recordingStatus.textContent = 'فشل الوصول للميكروفون. تأكد من إعطاء الصلاحية.';
+                startRecordingBtn.disabled = false;
+                stopRecordingBtn.disabled = true;
+                startRecordingBtn.classList.remove('recording-pulse');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            startRecordingBtn.disabled = false;
+            stopRecordingBtn.disabled = true;
+            startRecordingBtn.classList.remove('recording-pulse');
+        }
+        
+        function resetAudioRecording() {
+            stopRecording();
+            if(wavesurferPreview) {
+                wavesurferPreview.empty();
+                wavesurferPreview.destroy();
+                wavesurferPreview = null;
+            }
+            audioPlaybackContainer.classList.add('hidden');
+            waveformPreview.classList.add('hidden');
+            recordingStatus.textContent = 'جاهز للتسجيل';
+            mediaFile.value = ''; // إزالة الملف الصوتي المسجل
+            audioBlob = null;
+            audioChunks = [];
+        }
 
         // ************** وظيفة المعاينة للملفات العادية **************
         function setupPreview(file) {
@@ -160,8 +282,8 @@
                 } else if (fileType === 'video') {
                     previewElement = `<video src="${e.target.result}" controls class="rounded-lg mt-3 w-full max-h-60 object-contain"></video>`;
                 } else if (fileType === 'audio') {
-                    // لا نعرض هنا مشغل الصوت العادي لأن لدينا مشغل مخصص
-                    previewElement = `<div class="bg-gray-700 p-3 rounded-lg flex items-center justify-center"><i class="fas fa-music text-blue-400 text-xl ml-2"></i> ملف صوتي جاهز للإرسال</div>`;
+                    // عرض ملف صوتي عادي كمعاينة إذا لم يكن ملفاً مسجلاً
+                    previewElement = `<div class="bg-gray-700 p-3 rounded-lg flex items-center justify-center"><i class="fas fa-music text-blue-400 text-xl ml-2"></i> ملف صوتي جاهز للإرسال: ${file.name}</div>`;
                 } else {
                     previewElement = `<div class="text-red-500">لا يمكن معاينة هذا النوع من الملفات.</div>`;
                 }
@@ -169,107 +291,12 @@
                 filePreview.innerHTML = previewElement;
                 mediaPreviewContainer.classList.remove('hidden');
                 
-                // إخفاء مسجل الصوت
+                // إخفاء مسجل الصوت وإعادة تهيئته لتجنب تضارب الملفات
                 audioRecorderContainer.classList.add('hidden');
-                resetAudioRecording();
+                resetAudioRecording(); 
             };
 
             reader.readAsDataURL(file);
-        }
-        
-        // ************** وظائف تسجيل الصوت **************
-
-        function setupVisualizer() {
-            audioVisualizer.innerHTML = Array.from({ length: 40 }).map(() => `<div class="bar-preview"></div>`).join('');
-        }
-
-        function animateVisualizer() {
-            if (mediaRecorder && mediaRecorder.state === "recording") {
-                audioVisualizer.querySelectorAll('.bar-preview').forEach(bar => {
-                    // توليد ارتفاعات عشوائية (محاكاة) لموجة الصوت
-                    const newHeight = Math.floor(Math.random() * 90) + 10; 
-                    bar.style.height = `${newHeight}%`;
-                    bar.style.backgroundColor = '#f87171'; // لون أحمر عند التسجيل
-                });
-            } else {
-                 audioVisualizer.querySelectorAll('.bar-preview').forEach(bar => {
-                    bar.style.height = `20%`;
-                    bar.style.backgroundColor = '#3b82f6'; // لون أزرق عند عدم التسجيل
-                });
-            }
-        }
-
-        async function startRecording() {
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(mediaStream);
-                audioChunks = [];
-                audioBlob = null;
-
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
-
-                mediaRecorder.onstop = () => {
-                    audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    audioPlayback.src = audioUrl;
-                    audioPlayback.classList.remove('hidden');
-                    
-                    // تحويل Blob إلى File وإضافته إلى FormData عند الإرسال
-                    // يجب أن يرسل كـ File وليس كـ URL
-                    // نستخدم الآن حقل 'mediaFile' كحقل للملف الصوتي المسجل
-                    const recordedFile = new File([audioBlob], "recorded_audio.webm", { type: "audio/webm" });
-                    
-                    // استخدام DataTransfer لحقن الملف في حقل الإدخال
-                    const dataTransfer = new DataTransfer();
-                    dataTransfer.items.add(recordedFile);
-                    mediaFile.files = dataTransfer.files;
-                    
-                    recordingStatus.textContent = 'تم التسجيل. جاهز للنشر.';
-                    checkInputs();
-                };
-
-                mediaRecorder.start();
-                
-                startRecordingBtn.disabled = true;
-                stopRecordingBtn.disabled = false;
-                audioVisualizer.classList.remove('hidden');
-                recordingStatus.textContent = 'جاري التسجيل...';
-                
-                // بدء المعاينة البصرية
-                visualizationInterval = setInterval(animateVisualizer, 100);
-
-            } catch (err) {
-                console.error('Error accessing microphone:', err);
-                recordingStatus.textContent = 'فشل الوصول للميكروفون.';
-                startRecordingBtn.disabled = false;
-                stopRecordingBtn.disabled = true;
-            }
-        }
-
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(track => track.stop());
-            }
-            clearInterval(visualizationInterval); // إيقاف تحديث الأعمدة
-            startRecordingBtn.disabled = false;
-            stopRecordingBtn.disabled = true;
-            animateVisualizer(); // إعادة تعيين الأعمدة
-        }
-        
-        function resetAudioRecording() {
-            stopRecording();
-            audioPlayback.src = '';
-            audioPlayback.classList.add('hidden');
-            audioVisualizer.classList.add('hidden');
-            recordingStatus.textContent = 'جاهز للتسجيل';
-            mediaFile.value = ''; // إزالة الملف الصوتي المسجل
-            audioBlob = null;
-            audioChunks = [];
         }
 
         // ************** معالجة المدخلات والأزرار **************
@@ -277,7 +304,6 @@
             const hasContent = postContent.value.trim().length > 0;
             const hasMediaFile = mediaFile.files.length > 0;
             
-            // تفعيل زر النشر إذا كان هناك محتوى نصي أو ملف وسائط (سواء كان مسجل أو مرفوع)
             if (hasContent || hasMediaFile) {
                 submitBtn.disabled = false;
             } else {
@@ -287,7 +313,7 @@
 
         // ربط الأحداث
         addMediaBtn.addEventListener('click', () => {
-            // إخفاء مسجل الصوت إذا تم اختيار ملف
+            // إخفاء مسجل الصوت عند اختيار ملف خارجي
             audioRecorderContainer.classList.add('hidden');
             resetAudioRecording();
             mediaFile.click();
@@ -298,7 +324,7 @@
             filePreview.innerHTML = '';
             mediaPreviewContainer.classList.add('hidden');
             // إعادة إظهار مسجل الصوت بعد إزالة الملف
-            audioRecorderContainer.classList.remove('hidden');
+            audioRecorderContainer.classList.remove('hidden'); 
             checkInputs(); 
         });
 
@@ -306,7 +332,7 @@
             if (e.target.files.length > 0) {
                 setupPreview(e.target.files[0]);
                 // عند اختيار ملف، نخفي أي معاينة صوتية سابقة
-                resetAudioRecording();
+                resetAudioRecording(); 
             }
             checkInputs(); 
         });
@@ -368,7 +394,6 @@
         
         document.addEventListener('DOMContentLoaded', () => {
             checkInputs(); 
-            setupVisualizer();
         });
     </script>
     
