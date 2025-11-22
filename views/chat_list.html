@@ -31,9 +31,17 @@
             width: auto;
         }
         
+        /* نمط بطاقة المنشور الزجاجية الجديدة */
+        .glass-post-card {
+            background-color: rgba(0, 0, 0, 0.3); /* خلفية سوداء شفافة */
+            backdrop-filter: blur(10px); /* تأثير زجاجي */
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1); /* حدود بيضاء خفيفة */
+        }
+
         /* نمط WaveSurfer لمنشورات الهوم */
         .waveform-post {
-            height: 60px; /* ارتفاع مناسب */
+            height: 60px; 
             background-color: #0f172a; 
             border-radius: 6px;
         }
@@ -119,12 +127,9 @@
         const mediaViewerModal = document.getElementById('mediaViewerModal');
         const mediaViewerContent = document.getElementById('mediaViewerContent');
         
-
         // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
         function openMediaViewer(url, type, event) {
             event.stopPropagation();
-            
-            // تجاهل ملفات الصوت هنا لأننا نستخدم WaveSurfer في البطاقة مباشرة
             if (type === 'audio') { 
                 return;
             } 
@@ -163,7 +168,6 @@
             
             if (!document.getElementById(containerId)) return;
 
-            // إيقاف أي WaveSurfer نشط حالي عند تحميل جديد
             if (activeWaveSurfer && activeWaveSurfer.isPlaying()) {
                 activeWaveSurfer.pause();
             }
@@ -177,14 +181,12 @@
                 barRadius: 2,
                 responsive: true,
                 height: 60,
-                rtl: true, // دعم من اليمين لليسار
+                rtl: true,
             });
 
             wavesurfer.load(audioUrl);
             
-            // ربط زر التشغيل/الإيقاف
             playPauseBtn.onclick = () => {
-                // إيقاف أي مشغل آخر إذا كان نشطًا
                 if (activeWaveSurfer && activeWaveSurfer !== wavesurfer && activeWaveSurfer.isPlaying()) {
                     activeWaveSurfer.pause();
                 }
@@ -192,7 +194,6 @@
                 activeWaveSurfer = wavesurfer;
             };
 
-            // تحديث حالة الزر
             wavesurfer.on('play', () => {
                 playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
                 activeWaveSurfer = wavesurfer;
@@ -220,13 +221,11 @@
             const rect = menuButton.getBoundingClientRect();
 
             postMenu.style.top = `${rect.bottom + window.scrollY + 5}px`;
-            // توجيه القائمة لتبدأ من يسار الزر (تفتح للداخل)
             postMenu.style.left = `${rect.left}px`; 
             
-            // تعديل: إظهار نافذة التأكيد الزجاجية مباشرة
             deleteOptionBtn.onclick = () => {
                 postMenu.classList.add('hidden');
-                openDeleteModal(postId); // إظهار النافذة مباشرة
+                openDeleteModal(postId); 
             };
 
             postMenu.classList.remove('hidden');
@@ -291,7 +290,7 @@
 
         function createPostCard(post, isOwner) { 
             let mediaHtml = '';
-            const postId = post.postId; // الحصول على ID المنشور
+            const postId = post.postId; 
             
             if (post.media) {
                 const url = post.media.url;
@@ -302,7 +301,6 @@
                 } else if (type === 'video') {
                     mediaHtml = `<video src="${url}" controls class="rounded-lg mt-3 w-full max-h-80 cursor-pointer" onclick="openMediaViewer('${url}', 'video', event)"></video>`;
                 } else if (type === 'audio') {
-                    // عرض WaveSurfer الجذاب
                     mediaHtml = `
                         <div class="mt-3 flex items-center bg-[#0f172a] rounded-lg p-2">
                             <button id="play-pause-btn-${postId}" class="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition duration-300 flex-shrink-0 w-12 h-12 flex items-center justify-center" title="تشغيل/إيقاف الصوت">
@@ -321,7 +319,6 @@
                 year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
             
-            // تم تغيير الموقع إلى left-4
             const optionsButtonHtml = isOwner ? `
                 <div class="absolute top-4 left-4"> 
                     <button class="text-gray-400 hover:text-white p-1 rounded-full transition duration-300" onclick="openPostMenu('${post.postId}', '${post.userId}', event)">
@@ -331,7 +328,7 @@
             ` : '';
 
             const postCard = `
-                <div class="bg-[#1f2937] p-4 rounded-xl shadow-lg border border-gray-700 relative" data-post-id="${post.postId}">
+                <div class="glass-post-card p-4 rounded-xl shadow-2xl relative" data-post-id="${post.postId}">
                     
                     ${optionsButtonHtml} 
 
@@ -339,7 +336,7 @@
                         <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover border-2 border-blue-500 ml-3">
                         <div>
                             <a href="/profile?user_id=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username}</a>
-                            <p class="text-gray-500 text-xs">${postDate}</p>
+                            <p class="text-gray-400 text-xs">${postDate}</p>
                         </div>
                     </div>
 
@@ -388,7 +385,7 @@
                     postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد منشورات حتى الآن. كن أول من ينشر!</div>';
                 } else {
                     postsFeed.innerHTML = '';
-                    const audioPostsToInit = []; // قائمة لتخزين المنشورات الصوتية لتهيئتها لاحقًا
+                    const audioPostsToInit = []; 
 
                     result.posts.forEach(post => {
                         const isOwner = post.userId === currentUserId;
@@ -399,7 +396,6 @@
                         }
                     });
                     
-                    // تهيئة WaveSurfer بعد إضافة العناصر إلى DOM
                     audioPostsToInit.forEach(ap => {
                         initializePostWaveSurfer(ap.postId, ap.url);
                     });
