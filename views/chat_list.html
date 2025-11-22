@@ -6,6 +6,7 @@
     <title>Aite - الصفحة الرئيسية</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
     <style>
         body {
             background-color: #000000;
@@ -29,29 +30,14 @@
             max-height: 80vh; 
             width: auto;
         }
-
-        /* تصميم الأعمدة الصوتية (Visualizer) */
-        .audio-visualizer {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            width: 100%;
-            height: 40px;
-            padding: 0 10px;
-            background-color: #0f172a; /* Dark background */
+        
+        /* نمط WaveSurfer لمنشورات الهوم */
+        .waveform-post {
+            height: 60px; /* ارتفاع مناسب */
+            background-color: #0f172a; 
             border-radius: 6px;
-            overflow: hidden;
-            border: 1px solid #374151;
         }
 
-        .bar {
-            width: 4px;
-            background-color: #3b82f6; /* Blue color */
-            margin: 0 1px;
-            transition: height 0.15s ease-out;
-            border-radius: 2px;
-            min-height: 2px;
-        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -130,6 +116,7 @@
     <script>
         let currentPostIdToDelete = null;
         let currentUserId = null; 
+        let activeWaveSurfer = null; // لتتبع مشغل WaveSurfer النشط
 
         const postsFeed = document.getElementById('postsFeed');
         const deleteModal = document.getElementById('deleteModal');
@@ -145,6 +132,12 @@
         // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
         function openMediaViewer(url, type, event) {
             event.stopPropagation();
+            
+            // تجاهل ملفات الصوت هنا لأننا نستخدم WaveSurfer في البطاقة مباشرة
+            if (type === 'audio') { 
+                return;
+            } 
+            
             let mediaElement;
             mediaViewerContent.innerHTML = '';
             
@@ -152,9 +145,6 @@
                 mediaElement = `<img src="${url}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
             } else if (type === 'video') {
                 mediaElement = `<video src="${url}" controls autoplay class="max-w-full max-h-full object-contain rounded-lg"></video>`;
-            } else if (type === 'audio') {
-                 // عرض مشغل صوت بسيط في نافذة المعاينة
-                mediaElement = `<audio src="${url}" controls autoplay class="w-full max-w-lg"></audio>`;
             } else {
                 return;
             }
@@ -173,8 +163,61 @@
                 mediaViewerContent.innerHTML = '';
             }
         }
+        
+        // ******************** 2. وظيفة تهيئة WaveSurfer للمنشور ********************
 
-        // ******************** 2. وظائف قائمة الحذف (Delete Menu) ********************
+        function initializePostWaveSurfer(postId, audioUrl) {
+            const containerId = `waveform-${postId}`;
+            const playPauseBtn = document.getElementById(`play-pause-btn-${postId}`);
+            
+            if (!document.getElementById(containerId)) return;
+
+            // إيقاف أي WaveSurfer نشط حالي عند تحميل جديد
+            if (activeWaveSurfer && activeWaveSurfer.isPlaying()) {
+                activeWaveSurfer.pause();
+            }
+            
+            const wavesurfer = WaveSurfer.create({
+                container: `#${containerId}`,
+                waveColor: '#4f46e5', // Indigo-600
+                progressColor: '#3b82f6', // Blue-500
+                cursorColor: '#ef4444', // Red-500
+                barWidth: 3,
+                barRadius: 2,
+                responsive: true,
+                height: 60,
+                rtl: true, // دعم من اليمين لليسار
+            });
+
+            wavesurfer.load(audioUrl);
+            
+            // ربط زر التشغيل/الإيقاف
+            playPauseBtn.onclick = () => {
+                // إيقاف أي مشغل آخر إذا كان نشطًا
+                if (activeWaveSurfer && activeWaveSurfer !== wavesurfer && activeWaveSurfer.isPlaying()) {
+                    activeWaveSurfer.pause();
+                }
+                wavesurfer.playPause();
+                activeWaveSurfer = wavesurfer;
+            };
+
+            // تحديث حالة الزر
+            wavesurfer.on('play', () => {
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                activeWaveSurfer = wavesurfer;
+            });
+            wavesurfer.on('pause', () => {
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            });
+            wavesurfer.on('finish', () => {
+                 playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            });
+            
+            // تدمير الموجة عند خروج العنصر من DOM لتجنب تسرب الذاكرة (غير مطبق هنا لتبسيط الكود)
+        }
+
+
+        // ******************** 3. وظائف قائمة الحذف (Delete Menu) ********************
 
         function openPostMenu(postId, postUserId, event) {
             event.stopPropagation();
@@ -255,10 +298,12 @@
         cancelDeleteBtn.addEventListener('click', closeDeleteModal);
         confirmDeleteBtn.addEventListener('click', deletePost);
 
-        // ******************** 3. وظيفة إنشاء بطاقة المنشور ********************
+        // ******************** 4. وظيفة إنشاء بطاقة المنشور ********************
 
         function createPostCard(post, isOwner) { 
             let mediaHtml = '';
+            const postId = post.postId; // الحصول على ID المنشور
+            
             if (post.media) {
                 const url = post.media.url;
                 const type = post.media.type;
@@ -268,16 +313,16 @@
                 } else if (type === 'video') {
                     mediaHtml = `<video src="${url}" controls class="rounded-lg mt-3 w-full max-h-80 cursor-pointer" onclick="openMediaViewer('${url}', 'video', event)"></video>`;
                 } else if (type === 'audio') {
-                    // عرض شريط صوتي جذاب (Visualizer)
+                    // عرض WaveSurfer الجذاب
                     mediaHtml = `
-                        <div class="mt-3">
-                            <audio src="${url}" controls class="w-full"></audio>
-                            <div class="audio-visualizer mt-2" data-audio-url="${url}" data-post-id="${post.postId}">
-                                ${Array.from({ length: 40 }).map(() => `<div class="bar" style="height: ${Math.floor(Math.random() * 80) + 20}%;"></div>`).join('')}
-                            </div>
+                        <div class="mt-3 flex items-center bg-[#0f172a] rounded-lg p-2">
+                            <button id="play-pause-btn-${postId}" class="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition duration-300 flex-shrink-0 w-12 h-12 flex items-center justify-center" title="تشغيل/إيقاف الصوت">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <div id="waveform-${postId}" class="waveform-post flex-grow mr-2">
+                                </div>
                         </div>
                     `;
-                    // ملاحظة: الأعمدة هنا ثابتة (وهمية) لغرض العرض في HTML. يمكن ربطها بمعالجة الصوت في JS للمؤثرات البصرية الحقيقية.
                 } else if (type === 'raw') {
                     mediaHtml = `<div class="bg-gray-800 p-3 rounded-lg mt-3 flex items-center"><i class="fas fa-file-alt ml-2 text-blue-400"></i> ملف مرفق: <a href="${url}" target="_blank" class="text-blue-400 hover:underline mr-1">تحميل</a></div>`;
                 }
@@ -331,7 +376,7 @@
             return postCard;
         }
 
-        // ******************** 4. وظيفة جلب وعرض المنشورات ********************
+        // ******************** 5. وظيفة جلب وعرض المنشورات ********************
         
         async function fetchAndDisplayPosts() {
             const loadingMessageHtml = '<div class="text-center text-gray-500 p-4">يتم تحميل المنشورات...</div>';
@@ -354,9 +399,20 @@
                     postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد منشورات حتى الآن. كن أول من ينشر!</div>';
                 } else {
                     postsFeed.innerHTML = '';
+                    const audioPostsToInit = []; // قائمة لتخزين المنشورات الصوتية لتهيئتها لاحقًا
+
                     result.posts.forEach(post => {
                         const isOwner = post.userId === currentUserId;
                         postsFeed.innerHTML += createPostCard(post, isOwner);
+                        
+                        if (post.media && post.media.type === 'audio') {
+                            audioPostsToInit.push({ postId: post.postId, url: post.media.url });
+                        }
+                    });
+                    
+                    // تهيئة WaveSurfer بعد إضافة العناصر إلى DOM
+                    audioPostsToInit.forEach(ap => {
+                        initializePostWaveSurfer(ap.postId, ap.url);
                     });
                 }
             } catch (error) {
@@ -365,7 +421,7 @@
             }
         }
 
-        // ******************** 5. وظائف نافذة النجاح المؤقتة ********************
+        // ******************** 6. وظائف نافذة النجاح المؤقتة ********************
         function closeTempSuccessModal() {
             tempSuccessModal.classList.add('hidden');
         }
@@ -399,27 +455,6 @@
             fetchAndDisplayPosts();
         });
         
-        // ******************** 6. محاكاة الأعمدة الصوتية (Visualizer) ********************
-        // هذه الوظيفة تحاكي تغير الأعمدة عند تشغيل الصوت في بطاقة المنشور
-        function animateVisualizers() {
-            document.querySelectorAll('.audio-visualizer').forEach(visualizer => {
-                const audio = visualizer.closest('div').querySelector('audio');
-                if (audio && !audio.paused) {
-                    visualizer.querySelectorAll('.bar').forEach(bar => {
-                        // تغيير عشوائي (محاكاة) لمستوى الصوت
-                        const newHeight = Math.floor(Math.random() * 80) + 20; 
-                        bar.style.height = `${newHeight}%`;
-                    });
-                } else if (audio && audio.paused) {
-                    // إعادة تعيين الأعمدة إلى حالة ثابتة (صغيرة) عند التوقف
-                    visualizer.querySelectorAll('.bar').forEach(bar => {
-                        bar.style.height = '20%';
-                    });
-                }
-            });
-        }
-        // تشغيل محاكاة الحركة كل 150 ميلي ثانية
-        setInterval(animateVisualizers, 150);
     </script>
 </body>
 </html>
