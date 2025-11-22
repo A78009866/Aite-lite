@@ -48,7 +48,7 @@
             
             <div class="flex items-center">
                 <a href="/profile" class="relative">
-                    <img src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300">
+                    <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300">
                 </a>
             </div>
 
@@ -64,6 +64,36 @@
         </div>
 
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const profilePicElement = document.getElementById('userProfilePic');
+            
+            // جلب بيانات البروفايل من الخادم عبر API
+            fetch('/api/profile')
+                .then(response => {
+                    // إذا لم يتم تسجيل الدخول، نترك الصورة الافتراضية
+                    if (!response.ok) {
+                        console.error('Failed to fetch profile. Status:', response.status);
+                        return;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // التحقق من وجود رابط الصورة
+                    if (data && data.profile_picture_url) {
+                        // تحديث مصدر الصورة (src) برابط صورة المستخدم الحقيقية
+                        profilePicElement.src = data.profile_picture_url;
+                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                    }
+                    // إذا لم يكن هناك رابط صورة، تبقى الصورة الافتراضية
+                })
+                .catch(error => {
+                    console.error('Error fetching user profile:', error);
+                    // في حالة وجود خطأ في الاتصال، نترك الصورة الافتراضية
+                });
+        });
+    </script>
     
 </body>
 </html>
