@@ -7,11 +7,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* خلفية سوداء بالكامل وخط أساسي داكن */
+        /* الخلفية والخطوط */
         body {
             background-color: #000000;
             color: #e4e6eb; /* لون نص فاتح للثيم الداكن */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
         }
 
         /* تأثير الزجاج (Glassmorphism) للنافبار */
@@ -21,11 +22,6 @@
             -webkit-backdrop-filter: blur(10px); /* دعم متصفحات الويب كيت */
             border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* خط فاصل خفيف */
         }
-
-        /* إخفاء شريط التمرير للصفحة الرئيسية */
-        .main-content {
-            overflow-y: hidden; 
-        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -34,10 +30,10 @@
         <nav class="flex justify-between items-center max-w-6xl mx-auto">
             
             <div class="flex items-center space-x-4 space-x-reverse">
-                <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center">
+                <a href="/create-post" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center">
                     <i class="fas fa-plus ml-2"></i>
                     إنشاء منشور
-                </button>
+                </a>
             </div>
             
             <div class="flex-grow flex justify-center">
@@ -55,45 +51,135 @@
         </nav>
     </header>
 
-    <main class="main-content max-w-6xl mx-auto p-4 flex flex-col items-center justify-start min-h-[calc(100vh-64px)]">
+    <main class="max-w-6xl mx-auto p-4">
         
-        <div class="text-center mt-20 p-8 rounded-xl max-w-lg">
-            <h1 class="text-4xl font-bold mb-4 text-gray-200">مرحباً بك في Aite!</h1>
-            <p class="text-gray-400 text-lg">هذا هو الجزء الرئيسي من الصفحة، وسنملؤه بالمحتوى لاحقاً.</p>
-            <i class="fas fa-hammer text-6xl text-blue-500 mt-6"></i>
+        <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
+            <div class="text-center text-gray-500 p-4" id="loadingMessage">يتم تحميل المنشورات...</div>
         </div>
 
     </main>
 
     <script>
+        // ******************** 1. جلب بيانات البروفايل ********************
         document.addEventListener('DOMContentLoaded', function() {
             const profilePicElement = document.getElementById('userProfilePic');
             
             // جلب بيانات البروفايل من الخادم عبر API
             fetch('/api/profile')
                 .then(response => {
-                    // إذا لم يتم تسجيل الدخول، نترك الصورة الافتراضية
                     if (!response.ok) {
-                        console.error('Failed to fetch profile. Status:', response.status);
                         return;
                     }
                     return response.json();
                 })
                 .then(data => {
-                    // التحقق من وجود رابط الصورة
                     if (data && data.profile_picture_url) {
                         // تحديث مصدر الصورة (src) برابط صورة المستخدم الحقيقية
                         profilePicElement.src = data.profile_picture_url;
                         profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
                     }
-                    // إذا لم يكن هناك رابط صورة، تبقى الصورة الافتراضية
                 })
                 .catch(error => {
                     console.error('Error fetching user profile:', error);
-                    // في حالة وجود خطأ في الاتصال، نترك الصورة الافتراضية
                 });
         });
+
+
+        // ******************** 2. جلب وعرض المنشورات ********************
+        const postsFeed = document.getElementById('postsFeed');
+
+        // وظيفة إنشاء بطاقة المنشور
+        function createPostCard(post) {
+            let mediaHtml = '';
+            if (post.media) {
+                const url = post.media.url;
+                const type = post.media.type;
+                
+                if (type === 'image') {
+                    mediaHtml = `<img src="${url}" alt="Post Media" class="rounded-lg mt-3 w-full object-cover max-h-80">`;
+                } else if (type === 'video') {
+                    mediaHtml = `<video src="${url}" controls class="rounded-lg mt-3 w-full max-h-80"></video>`;
+                } else if (type === 'audio') {
+                    mediaHtml = `<audio src="${url}" controls class="rounded-lg mt-3 w-full"></audio>`;
+                }
+            }
+
+            // تحويل timestamp إلى تنسيق عربي قابل للقراءة
+            const postDate = new Date(post.timestamp).toLocaleString('ar-EG', {
+                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
+            const postCard = `
+                <div class="bg-[#1f2937] p-4 rounded-xl shadow-lg border border-gray-700">
+                    
+                    <div class="flex items-center mb-3">
+                        <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover border-2 border-blue-500 ml-3">
+                        <div>
+                            <a href="/profile?user_id=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username}</a>
+                            <p class="text-gray-500 text-xs">${postDate}</p>
+                        </div>
+                    </div>
+
+                    <p class="text-gray-200 whitespace-pre-wrap mb-3">${post.content}</p>
+                    
+                    ${mediaHtml}
+
+                    <div class="flex justify-between items-center text-sm text-gray-400 mt-3 border-t border-gray-700 pt-3">
+                        <span><i class="fas fa-heart text-red-500 ml-1"></i> ${post.likes || 0} إعجاب</span>
+                        <span><i class="fas fa-comment ml-1"></i> ${post.commentsCount || 0} تعليق</span>
+                    </div>
+
+                    <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
+                        <button class="flex items-center text-gray-400 hover:text-red-500 transition duration-300 w-full justify-center" onclick="handleLike('${post.postId}')">
+                            <i class="fas fa-thumbs-up ml-2"></i> إعجاب
+                        </button>
+                        <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center" onclick="handleComment('${post.postId}')">
+                            <i class="fas fa-comment-dots ml-2"></i> تعليق
+                        </button>
+                    </div>
+                </div>
+            `;
+            return postCard;
+        }
+
+        // وظيفة جلب وعرض المنشورات
+        async function fetchAndDisplayPosts() {
+            const loadingMessage = document.getElementById('loadingMessage');
+            postsFeed.innerHTML = ''; 
+
+            try {
+                const response = await fetch('/api/posts');
+                if (!response.ok) {
+                    throw new Error('فشل جلب المنشورات من الخادم.');
+                }
+                const result = await response.json();
+
+                if (result.posts.length === 0) {
+                    postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد منشورات حتى الآن. كن أول من ينشر!</div>';
+                } else {
+                    result.posts.forEach(post => {
+                        postsFeed.innerHTML += createPostCard(post);
+                    });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات. تأكد من أن الخادم يعمل بشكل صحيح.</div>';
+            }
+        }
+
+        // وظائف وهمية للتفاعل (تحتاج إلى تطبيق API في server.js لاحقًا)
+        function handleLike(postId) {
+            console.log(`تم الإعجاب بالمنشور: ${postId}.`);
+            // يجب عليك استدعاء API لزيادة عداد الإعجابات هنا
+        }
+
+        function handleComment(postId) {
+            console.log(`تم الضغط على تعليق للمنشور: ${postId}.`);
+            // يجب عليك فتح واجهة التعليقات هنا
+        }
+
+        // عند تحميل الصفحة، ابدأ جلب المنشورات
+        document.addEventListener('DOMContentLoaded', fetchAndDisplayPosts);
     </script>
-    
 </body>
 </html>
