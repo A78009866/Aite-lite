@@ -23,6 +23,12 @@
         .custom-scroll::-webkit-scrollbar-track {
             background-color: #1f2937; /* لون رمادي داكن للخلفية */
         }
+        /* نافذة النجاح الزجاجية */
+        .glass-success-modal {
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -36,9 +42,8 @@
         <form id="createPostForm" action="/api/posts/create" method="POST" enctype="multipart/form-data">
             
             <div class="mb-4">
-                <textarea id="postContent" name="content" rows="4" placeholder="شاركنا بما يدور في ذهنك اليوم..."
-                          class="custom-scroll w-full p-4 bg-[#242526] border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white placeholder-gray-500 resize-none transition duration-300"
-                          required></textarea>
+                <textarea id="postContent" name="content" rows="4" placeholder="شاركنا بما يدور في ذهنك اليوم (اختياري)..."
+                          class="custom-scroll w-full p-4 bg-[#242526] border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white placeholder-gray-500 resize-none transition duration-300"></textarea>
             </div>
 
             <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="hidden">
@@ -46,7 +51,7 @@
             <div id="mediaPreviewContainer" class="hidden mb-4 p-4 bg-[#242526] rounded-lg border border-dashed border-gray-600 relative">
                 <div class="flex justify-center items-center">
                     <div id="filePreview" class="max-h-60 overflow-hidden rounded-lg w-full">
-                        </div>
+                    </div>
                 </div>
                 <button type="button" id="removeMediaBtn" class="absolute top-2 left-2 text-white bg-red-600 hover:bg-red-700 rounded-full p-2 w-8 h-8 flex items-center justify-center transition duration-300">
                     <i class="fas fa-times text-sm"></i>
@@ -70,6 +75,16 @@
 
         </form>
     </div>
+    
+    <div id="successModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-success-modal">
+        <div class="bg-[#1f2937] p-8 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center">
+            <i class="fas fa-check-circle text-green-500 text-5xl mb-4 animate-bounce"></i>
+            <h3 class="text-2xl font-bold text-white mb-2">تم بنجاح!</h3>
+            <p class="text-gray-400 mb-6">تم نشر فكرتك الجديدة بنجاح.</p>
+            <button id="goToHomeBtn" class="p-3 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-300">عرض المنشورات</button>
+        </div>
+    </div>
+
 
     <script>
         const form = document.getElementById('createPostForm');
@@ -83,6 +98,8 @@
         const submitBtnText = document.getElementById('submitBtnText');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const errorMessage = document.getElementById('errorMessage');
+        const successModal = document.getElementById('successModal');
+        const goToHomeBtn = document.getElementById('goToHomeBtn');
 
         // ************** وظيفة المعاينة **************
         function setupPreview(file) {
@@ -91,7 +108,7 @@
 
             reader.onload = function(e) {
                 let previewElement;
-                filePreview.innerHTML = ''; // تنظيف المعاينة السابقة
+                filePreview.innerHTML = ''; 
 
                 if (fileType === 'image') {
                     previewElement = `<img src="${e.target.result}" alt="Media Preview" class="w-full h-full object-contain">`;
@@ -100,7 +117,6 @@
                 } else if (fileType === 'audio') {
                     previewElement = `<audio src="${e.target.result}" controls class="rounded-lg mt-3 w-full"></audio>`;
                 } else {
-                    // في حالة نوع غير مدعوم أو ملف غير متوقع
                     previewElement = `<div class="text-red-500">لا يمكن معاينة هذا النوع من الملفات.</div>`;
                 }
 
@@ -113,7 +129,7 @@
 
         // ************** معالجة المدخلات والأزرار **************
         function checkInputs() {
-            // تفعيل زر النشر إذا كان هناك محتوى نصي أو ملف وسائط
+            // تفعيل زر النشر إذا كان هناك محتوى نصي أو ملف وسائط (تم تحقيق طلبك)
             if (postContent.value.trim().length > 0 || mediaFile.files.length > 0) {
                 submitBtn.disabled = false;
             } else {
@@ -125,24 +141,24 @@
         addMediaBtn.addEventListener('click', () => mediaFile.click());
 
         removeMediaBtn.addEventListener('click', () => {
-            mediaFile.value = ''; // مسح الملف المحدد
+            mediaFile.value = ''; 
             filePreview.innerHTML = '';
             mediaPreviewContainer.classList.add('hidden');
-            checkInputs(); // فحص المدخلات بعد إزالة الملف
+            checkInputs(); 
         });
 
         mediaFile.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 setupPreview(e.target.files[0]);
             }
-            checkInputs(); // فحص المدخلات بعد اختيار ملف
+            checkInputs(); 
         });
 
-        postContent.addEventListener('input', checkInputs); // فحص المدخلات عند الكتابة
-        
-        // التحقق عند تحميل الصفحة
-        document.addEventListener('DOMContentLoaded', checkInputs); 
-
+        postContent.addEventListener('input', checkInputs); 
+        document.addEventListener('DOMContentLoaded', checkInputs);
+        goToHomeBtn.addEventListener('click', () => {
+            window.location.href = '/chat_list';
+        });
 
         // ************** معالجة إرسال النموذج **************
         form.addEventListener('submit', async (e) => {
@@ -164,9 +180,9 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // نجاح النشر: التوجيه إلى الصفحة الرئيسية (chat_list)
-                    alert('تم النشر بنجاح!');
-                    window.location.href = '/chat_list';
+                    // نجاح النشر: إظهار النافذة الزجاجية
+                    successModal.classList.remove('hidden');
+                    // يمكنك أيضاً مسح النموذج هنا: form.reset();
                 } else {
                     // فشل النشر: عرض رسالة خطأ
                     errorMessage.textContent = result.error || 'حدث خطأ غير معروف أثناء النشر.';
@@ -177,10 +193,12 @@
                 errorMessage.textContent = 'فشل الاتصال بالخادم. حاول مرة أخرى.';
                 errorMessage.classList.remove('hidden');
             } finally {
-                // إعادة تفعيل الزر وإخفاء مؤشر التحميل
-                submitBtn.disabled = false;
-                submitBtnText.textContent = 'نشر المنشور';
-                loadingIndicator.classList.add('hidden');
+                // إعادة تفعيل الزر وإخفاء مؤشر التحميل (إذا لم ينجح النشر)
+                if (successModal.classList.contains('hidden')) {
+                    submitBtn.disabled = false;
+                    submitBtnText.textContent = 'نشر المنشور';
+                    loadingIndicator.classList.add('hidden');
+                }
             }
         });
     </script>
