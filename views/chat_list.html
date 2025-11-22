@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://unpkg.com/wavesurfer.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
     <style>
         body {
             background-color: #000000;
@@ -22,12 +25,20 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        /* النمط الجديد لشريط التنقل السفلي */
-        .glass-bottom-nav {
-            background-color: rgba(30, 30, 30, 0.7);
+        /* نمط الشعار الجديد */
+        .app-logo {
+            font-family: 'Montserrat', sans-serif; /* خط مودرن للشعار */
+            font-weight: 800;
+            /* يمكن تجربة خط Vibes إذا كان متاحاً ومتناسباً: font-family: 'Vibes', cursive; */
+        }
+
+        /* نمط نافذة الملف الشخصي الزجاجية */
+        .glass-dropdown {
+            background-color: rgba(30, 30, 30, 0.9);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000; /* للتأكد من أنها فوق كل شيء */
         }
         
         .glass-modal-bg {
@@ -77,24 +88,35 @@
 <body class="min-h-screen">
 
     <header class="sticky top-0 z-50 glass-navbar p-3">
-        <nav class="flex justify-between items-center max-w-6xl mx-auto">
+        <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
             
-            <div class="flex items-center space-x-4 space-x-reverse">
-                <a href="/create-post" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center">
-                    <i class="fas fa-plus ml-2"></i>
-                    إنشاء منشور
-                </a>
+            <div class="flex items-center">
+                <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
+                    <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                </button>
             </div>
             
             <div class="flex-grow flex justify-center">
-                <a href="/chat_list" class="text-3xl font-extrabold text-white tracking-widest hover:text-gray-300 transition duration-300">
+                <a href="/chat_list" class="text-3xl font-extrabold text-white tracking-widest hover:text-gray-300 transition duration-300 app-logo">
                     Aite
                 </a>
             </div>
             
-            <div class="flex items-center">
-                <a href="/profile" class="relative">
-                    <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300">
+            <div class="flex items-center space-x-4 space-x-reverse">
+                <a href="/create-post" class="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center border border-gray-700">
+                    <i class="fas fa-plus ml-2"></i>
+                    إنشاء منشور
+                </a>
+            </div>
+
+            <div id="profileDropdown" class="absolute top-14 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
+                <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
+                    <i class="fas fa-user-circle text-xl ml-3"></i>
+                    الملف الشخصي
+                </a>
+                <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 rounded-b-lg transition duration-200 border-t border-gray-700">
+                    <i class="fas fa-sign-out-alt text-xl ml-3"></i>
+                    تسجيل الخروج
                 </a>
             </div>
 
@@ -173,6 +195,8 @@
         const deleteOptionBtn = document.getElementById('deleteOptionBtn');
         const mediaViewerModal = document.getElementById('mediaViewerModal');
         const mediaViewerContent = document.getElementById('mediaViewerContent');
+        const profileDropdown = document.getElementById('profileDropdown'); // الإضافة الجديدة
+        const profileMenuButton = document.getElementById('profileMenuButton'); // الإضافة الجديدة
         
         // المتغيرات الجديدة للتعليقات
         const commentModal = document.getElementById('commentModal');
@@ -182,7 +206,21 @@
         const postCommentBtn = document.getElementById('postCommentBtn');
         const commentError = document.getElementById('commentError');
         let currentPostIdForComments = null; // لتتبع المنشور الحالي للتعليقات
+        
+        // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
+        function toggleProfileDropdown(event) {
+            event.stopPropagation();
+            profileDropdown.classList.toggle('hidden');
+        }
 
+        function closeProfileDropdownOnClickOutside(event) {
+            if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
+                profileDropdown.classList.add('hidden');
+            }
+        }
+
+        document.addEventListener('click', closeProfileDropdownOnClickOutside);
+        
         // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
         function openMediaViewer(url, type, event) {
             event.stopPropagation();
