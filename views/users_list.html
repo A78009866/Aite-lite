@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aite - بدء محادثة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #000000;
+            color: #e4e6eb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            /* إضافة مساحة سفلية لاستيعاب شريط التنقل */
+            padding-bottom: 70px;
+        }
+
+        .glass-navbar {
+            background-color: rgba(30, 30, 30, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* النمط الجديد لشريط التنقل السفلي */
+        .glass-bottom-nav {
+            background-color: rgba(30, 30, 30, 0.7);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .user-card {
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background-color 0.3s;
+        }
+        
+        .user-card:hover {
+            background-color: rgba(30, 30, 30, 0.5);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <header class="sticky top-0 z-50 glass-navbar p-3">
+        <nav class="flex justify-between items-center max-w-6xl mx-auto">
+            <h1 class="text-2xl font-bold text-white">قائمة المستخدمين</h1>
+            <a href="/profile" class="relative">
+                <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300">
+            </a>
+        </nav>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-4">
+        
+        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 space-y-3">
+            </div>
+
+    </main>
+    
+    <nav class="glass-bottom-nav fixed bottom-0 left-0 right-0 z-50 py-3">
+        <div class="max-w-md mx-auto flex justify-around items-center">
+            
+            <a href="/chat_list" class="flex flex-col items-center text-gray-400 hover:text-red-400 transition duration-300">
+                <i class="fas fa-home text-2xl"></i>
+                <span class="text-xs mt-1">الرئيسية</span>
+            </a>
+            
+            <a href="/users_list" class="flex flex-col items-center text-blue-500 hover:text-blue-400 transition duration-300">
+                <i class="fas fa-comment-dots text-2xl"></i>
+                <span class="text-xs mt-1">الرسائل</span>
+            </a>
+            
+            <a href="#" class="flex flex-col items-center text-gray-400 hover:text-yellow-400 transition duration-300">
+                <i class="fas fa-bell text-2xl"></i>
+                <span class="text-xs mt-1">الإشعارات</span>
+            </a>
+            
+            <a href="/profile" class="flex flex-col items-center text-gray-400 hover:text-green-400 transition duration-300">
+                <i class="fas fa-user-circle text-2xl"></i>
+                <span class="text-xs mt-1">حسابي</span>
+            </a>
+            
+        </div>
+    </nav>
+    <script>
+        const usersListContainer = document.getElementById('usersListContainer');
+
+        function createUserCard(user) {
+            return `
+                <a href="/chat?contact_id=${user.id}" class="user-card flex items-center p-3 rounded-xl cursor-pointer">
+                    <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover ml-3 border border-gray-600">
+                    <div class="flex-grow">
+                        <p class="text-white font-semibold text-lg">${user.username}</p>
+                        <p class="text-gray-400 text-sm">ابدأ محادثة</p>
+                    </div>
+                    <i class="fas fa-chevron-left text-gray-400"></i>
+                </a>
+            `;
+        }
+
+        async function fetchAndDisplayUsers() {
+            usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المستخدمين...</div>';
+            
+            try {
+                const response = await fetch('/api/users');
+                const result = await response.json();
+                
+                usersListContainer.innerHTML = '';
+                
+                if (response.ok && result.ok) {
+                    if (result.users.length === 0) {
+                        usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">لا يوجد مستخدمون آخرون لبدء محادثة معهم.</div>';
+                        return;
+                    }
+                    
+                    result.users.forEach(user => {
+                        usersListContainer.innerHTML += createUserCard(user);
+                    });
+                } else {
+                    usersListContainer.innerHTML = `<div class="text-center text-red-500 p-4">${result.error || 'فشل في جلب قائمة المستخدمين.'}</div>`;
+                }
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في الاتصال بالخادم.</div>';
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndDisplayUsers();
+            
+            // جلب صورة البروفايل للنافبار العلوي
+            fetch('/api/profile')
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const profilePicElement = document.getElementById('userProfilePic');
+                    if (data && data.profile_picture_url) {
+                        profilePicElement.src = data.profile_picture_url;
+                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                    }
+                }).catch(console.error);
+        });
+    </script>
+</body>
+</html>
