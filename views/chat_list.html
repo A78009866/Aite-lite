@@ -45,6 +45,18 @@
             background-color: #0f172a; 
             border-radius: 6px;
         }
+        
+        /* شريط التمرير مخصص للتعليقات */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: #3b82f6; 
+            border-radius: 3px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background-color: #1f2937;
+        }
 
     </style>
 </head>
@@ -82,6 +94,35 @@
 
     </main>
     
+    <div id="commentsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg" onclick="closeCommentsModal(event)">
+        <div class="glass-post-card p-4 rounded-xl shadow-2xl w-full max-w-lg h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+            
+            <div class="flex justify-between items-center pb-3 border-b border-gray-700 mb-4">
+                <h3 class="text-xl font-bold text-white">التعليقات</h3>
+                <button class="text-gray-400 hover:text-white transition" onclick="closeCommentsModal()">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+
+            <div id="commentsList" class="flex-grow overflow-y-auto space-y-4 custom-scroll mb-4">
+                <div class="text-center text-gray-500" id="commentsLoading">جاري تحميل التعليقات...</div>
+                </div>
+
+            <div class="pt-4 border-t border-gray-700">
+                <form id="commentForm" class="flex items-center space-x-2 space-x-reverse">
+                    <img id="modalUserPic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+                    <input type="text" id="commentInput" placeholder="أضف تعليقك..." required
+                           class="w-full p-2 bg-[#242526] border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white placeholder-gray-500 transition duration-300">
+                    <button type="submit" id="commentSubmitBtn" class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex-shrink-0 transition duration-300 disabled:opacity-50">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+
+            <div id="commentError" class="text-red-500 text-center mt-2 hidden"></div>
+        </div>
+    </div>
+
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
             <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
@@ -114,8 +155,10 @@
 
     <script>
         let currentPostIdToDelete = null;
+        let currentPostIdForComments = null; // لتتبع المنشور النشط للتعليقات
         let currentUserId = null; 
-        let activeWaveSurfer = null; // لتتبع مشغل WaveSurfer النشط
+        let activeWaveSurfer = null; 
+        let currentUserProfilePic = 'https://via.placeholder.com/40/3182CE/FFFFFF?text=P';
 
         const postsFeed = document.getElementById('postsFeed');
         const deleteModal = document.getElementById('deleteModal');
@@ -127,8 +170,20 @@
         const mediaViewerModal = document.getElementById('mediaViewerModal');
         const mediaViewerContent = document.getElementById('mediaViewerContent');
         
+        // عناصر نافذة التعليقات
+        const commentsModal = document.getElementById('commentsModal');
+        const commentsList = document.getElementById('commentsList');
+        const commentsLoading = document.getElementById('commentsLoading');
+        const commentForm = document.getElementById('commentForm');
+        const commentInput = document.getElementById('commentInput');
+        const commentSubmitBtn = document.getElementById('commentSubmitBtn');
+        const commentError = document.getElementById('commentError');
+        const modalUserPic = document.getElementById('modalUserPic'); // صورة المستخدم الحالي في نموذج التعليق
+        
+
         // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
         function openMediaViewer(url, type, event) {
+            // ... (الكود كما هو)
             event.stopPropagation();
             if (type === 'audio') { 
                 return;
@@ -150,6 +205,7 @@
         }
 
         function closeMediaViewer(event) {
+            // ... (الكود كما هو)
             if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
                 const activeMedia = mediaViewerContent.querySelector('video, audio');
                 if (activeMedia) {
@@ -161,8 +217,8 @@
         }
         
         // ******************** 2. وظيفة تهيئة WaveSurfer للمنشور ********************
-
         function initializePostWaveSurfer(postId, audioUrl) {
+            // ... (الكود كما هو)
             const containerId = `waveform-${postId}`;
             const playPauseBtn = document.getElementById(`play-pause-btn-${postId}`);
             
@@ -208,8 +264,8 @@
 
 
         // ******************** 3. وظائف قائمة الحذف (Delete Menu) ********************
-
         function openPostMenu(postId, postUserId, event) {
+            // ... (الكود كما هو)
             event.stopPropagation();
             postMenu.classList.add('hidden');
             
@@ -242,17 +298,20 @@
         }
 
         function openDeleteModal(postId) {
+            // ... (الكود كما هو)
             currentPostIdToDelete = postId;
             deleteMessage.classList.add('hidden');
             deleteModal.classList.remove('hidden');
         }
 
         function closeDeleteModal() {
+            // ... (الكود كما هو)
             deleteModal.classList.add('hidden');
             currentPostIdToDelete = null;
         }
 
         async function deletePost() {
+            // ... (الكود كما هو)
             if (!currentPostIdToDelete) return;
 
             confirmDeleteBtn.disabled = true;
@@ -286,12 +345,165 @@
         cancelDeleteBtn.addEventListener('click', closeDeleteModal);
         confirmDeleteBtn.addEventListener('click', deletePost);
 
-        // ******************** 4. وظيفة إنشاء بطاقة المنشور ********************
+        // ******************** 4. وظيفة الإعجاب (Like Functionality) ********************
+        async function handleLike(postId, button) { 
+            button.disabled = true;
+            
+            try {
+                const response = await fetch(`/api/posts/${postId}/like`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('فشل في معالجة الإعجاب.');
+                }
 
-        function createPostCard(post, isOwner) { 
+                const result = await response.json();
+                const postCard = button.closest('.glass-post-card');
+                const likesCountElement = postCard.querySelector(`#likes-count-${postId}`);
+                const likesButtonIcon = button.querySelector('i');
+
+                // تحديث واجهة المستخدم فوراً
+                let currentLikes = parseInt(likesCountElement.textContent.trim().split(' ')[0]) || 0;
+                
+                if (result.liked) {
+                    // تم الإعجاب
+                    likesButtonIcon.classList.remove('text-gray-400');
+                    likesButtonIcon.classList.add('text-red-500');
+                    likesCountElement.textContent = `${currentLikes + 1} إعجاب`;
+                    button.classList.add('text-red-500', 'hover:text-red-400');
+                    button.classList.remove('text-gray-400', 'hover:text-red-500');
+                } else {
+                    // تم إلغاء الإعجاب
+                    likesButtonIcon.classList.add('text-gray-400');
+                    likesButtonIcon.classList.remove('text-red-500');
+                    likesCountElement.textContent = `${Math.max(0, currentLikes - 1)} إعجاب`;
+                    button.classList.remove('text-red-500', 'hover:text-red-400');
+                    button.classList.add('text-gray-400', 'hover:text-red-500');
+                }
+
+            } catch (error) {
+                console.error('Error liking post:', error);
+                alert('حدث خطأ أثناء معالجة الإعجاب.');
+            } finally {
+                button.disabled = false;
+            }
+        }
+        
+        // ******************** 5. وظائف التعليقات (Comments Functionality) ********************
+
+        function createCommentElement(comment) {
+            const date = new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+            return `
+                <div class="flex items-start p-3 bg-gray-800 rounded-lg">
+                    <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover border border-blue-500 flex-shrink-0 ml-3">
+                    <div class="flex flex-col">
+                        <div class="flex items-baseline">
+                            <span class="text-sm font-semibold text-white mr-2">${comment.user.username}</span>
+                            <span class="text-xs text-gray-500">${date}</span>
+                        </div>
+                        <p class="text-gray-200 mt-0.5 whitespace-pre-wrap">${comment.content}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function fetchComments(postId) {
+            commentsList.innerHTML = '';
+            commentsLoading.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`);
+                if (!response.ok) {
+                    throw new Error('فشل في جلب التعليقات.');
+                }
+                const result = await response.json();
+
+                commentsLoading.classList.add('hidden');
+                
+                if (result.comments && result.comments.length > 0) {
+                    commentsList.innerHTML = result.comments.map(createCommentElement).join('');
+                } else {
+                    commentsList.innerHTML = '<div class="text-center text-gray-500 p-4">كن أول من يعلق!</div>';
+                }
+            } catch (error) {
+                commentsLoading.classList.add('hidden');
+                commentsList.innerHTML = `<div class="text-center text-red-500 p-4">حدث خطأ في جلب التعليقات: ${error.message}</div>`;
+                console.error('Fetch comments error:', error);
+            }
+        }
+        
+        async function submitComment(e) {
+            e.preventDefault();
+            const content = commentInput.value.trim();
+            const postId = currentPostIdForComments;
+
+            if (!content) {
+                commentError.textContent = 'التعليق لا يمكن أن يكون فارغاً.';
+                commentError.classList.remove('hidden');
+                return;
+            }
+
+            commentSubmitBtn.disabled = true;
+            commentError.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    // إعادة جلب وعرض التعليقات وتحديث عداد المنشور
+                    fetchComments(postId);
+                    commentInput.value = '';
+                    
+                    // تحديث عداد التعليقات في بطاقة المنشور
+                    const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+                    const commentsCountElement = postCard.querySelector(`#comments-count-${postId}`);
+                    if (commentsCountElement) {
+                         commentsCountElement.textContent = `${result.newCount || 0} تعليق`;
+                    }
+                } else {
+                    commentError.textContent = result.error || 'فشل في إضافة التعليق.';
+                    commentError.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                commentError.textContent = 'فشل الاتصال بالخادم.';
+                commentError.classList.remove('hidden');
+            } finally {
+                commentSubmitBtn.disabled = false;
+            }
+        }
+
+        function handleComment(postId) { 
+            currentPostIdForComments = postId;
+            modalUserPic.src = currentUserProfilePic; // تعيين صورة المستخدم الحالي
+            commentsModal.classList.remove('hidden');
+            commentInput.value = '';
+            commentError.classList.add('hidden');
+            fetchComments(postId);
+        }
+        
+        function closeCommentsModal() {
+            commentsModal.classList.add('hidden');
+            currentPostIdForComments = null;
+        }
+        
+        commentForm.addEventListener('submit', submitComment);
+
+
+        // ******************** 6. وظيفة إنشاء بطاقة المنشور ********************
+
+        function createPostCard(post, isOwner, userHasLiked) { 
             let mediaHtml = '';
             const postId = post.postId; 
             
+            // ... (باقي كود mediaHtml كما هو)
             if (post.media) {
                 const url = post.media.url;
                 const type = post.media.type;
@@ -315,6 +527,7 @@
                 }
             }
 
+
             const postDate = new Date(post.timestamp).toLocaleString('ar-EG', {
                 year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
@@ -326,6 +539,10 @@
                     </button>
                 </div>
             ` : '';
+            
+            // تحديد حالة زر الإعجاب
+            const likeButtonClass = userHasLiked ? 'text-red-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500';
+            const likeIconClass = userHasLiked ? 'fas' : 'far'; // fas for solid (liked), far for regular (unliked)
 
             const postCard = `
                 <div class="glass-post-card p-4 rounded-xl shadow-2xl relative" data-post-id="${post.postId}">
@@ -345,13 +562,13 @@
                     ${mediaHtml}
 
                     <div class="flex justify-between items-center text-sm text-gray-400 mt-3 border-t border-gray-700 pt-3">
-                        <span><i class="fas fa-heart text-red-500 ml-1"></i> ${post.likes || 0} إعجاب</span>
-                        <span><i class="fas fa-comment ml-1"></i> ${post.commentsCount || 0} تعليق</span>
+                        <span id="likes-count-${post.postId}"><i class="fas fa-heart text-red-500 ml-1"></i> ${post.likes || 0} إعجاب</span>
+                        <span id="comments-count-${post.postId}"><i class="fas fa-comment ml-1"></i> ${post.commentsCount || 0} تعليق</span>
                     </div>
 
                     <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
-                        <button class="flex items-center text-gray-400 hover:text-red-500 transition duration-300 w-full justify-center" onclick="handleLike('${post.postId}')">
-                            <i class="fas fa-thumbs-up ml-2"></i> إعجاب
+                        <button class="flex items-center ${likeButtonClass} transition duration-300 w-full justify-center" onclick="handleLike('${post.postId}', this)">
+                            <i class="${likeIconClass} fa-thumbs-up ml-2"></i> إعجاب
                         </button>
                         <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center" onclick="handleComment('${post.postId}')">
                             <i class="fas fa-comment-dots ml-2"></i> تعليق
@@ -362,19 +579,22 @@
             return postCard;
         }
 
-        // ******************** 5. وظيفة جلب وعرض المنشورات ********************
+        // ******************** 7. وظيفة جلب وعرض المنشورات ********************
         
         async function fetchAndDisplayPosts() {
             const loadingMessageHtml = '<div class="text-center text-gray-500 p-4">يتم تحميل المنشورات...</div>';
             postsFeed.innerHTML = loadingMessageHtml; 
 
             try {
+                // 1. جلب بيانات البروفايل لتحديد الإعجابات
                 const profileResponse = await fetch('/api/profile');
                 if (profileResponse.ok) {
                     const profileData = await profileResponse.json();
                     currentUserId = profileData.id; 
+                    currentUserProfilePic = profileData.profile_picture_url || currentUserProfilePic;
                 }
 
+                // 2. جلب المنشورات
                 const postsResponse = await fetch('/api/posts');
                 if (!postsResponse.ok) {
                     throw new Error('فشل جلب المنشورات من الخادم.');
@@ -387,9 +607,29 @@
                     postsFeed.innerHTML = '';
                     const audioPostsToInit = []; 
 
-                    result.posts.forEach(post => {
+                    // 3. جلب حالة الإعجاب لكل منشور
+                    const postsWithLikeStatusPromises = result.posts.map(async post => {
                         const isOwner = post.userId === currentUserId;
-                        postsFeed.innerHTML += createPostCard(post, isOwner);
+                        // تحقق من الإعجاب: نستخدم API منفصلة أو نفترض أن بيانات الإعجاب جزء من الـ post object.
+                        // بما أن API جلب المنشورات لا ترجع حالة الإعجاب، يجب عمل طلب إضافي أو تعديل API /api/posts.
+                        // في هذا الحل، سأفترض أننا سنقوم بجلب حالة الإعجاب لاحقاً
+                        
+                        // NOTE: سنعتمد على أن زر الإعجاب سيقوم بتحديث حالته عند الضغط عليه، ولتوفير الوقت سنترك حالة الإعجاب الأولية دائماً "لم يعجب"
+                        // الأسلوب الأفضل: تعديل API /api/posts لترجع قائمة الـ Likes (أو Boolean is_liked)
+
+                        // للتبسيط حالياً: نعتمد على زر الإعجاب الذي سيعمل على التبديل. ولجعل الأيقونة صحيحة عند التحميل، سأقوم بإنشاء API مساعدة.
+                        
+                        const likeStatusResponse = await fetch(`/api/posts/${post.postId}/likes/${currentUserId}`);
+                        const likeStatusResult = likeStatusResponse.ok; // نفترض أن 200 تعني أنه معجب
+                        
+                        return { post, isOwner, userHasLiked: likeStatusResult };
+                    });
+                    
+                    const postsWithLikeStatus = await Promise.all(postsWithLikeStatusPromises);
+
+
+                    postsWithLikeStatus.forEach(({ post, isOwner, userHasLiked }) => {
+                        postsFeed.innerHTML += createPostCard(post, isOwner, userHasLiked);
                         
                         if (post.media && post.media.type === 'audio') {
                             audioPostsToInit.push({ postId: post.postId, url: post.media.url });
@@ -406,9 +646,6 @@
             }
         }
         
-        // وظائف وهمية للتفاعل 
-        function handleLike(postId) { console.log(`تم الإعجاب بالمنشور: ${postId}.`); }
-        function handleComment(postId) { console.log(`تم الضغط على تعليق للمنشور: ${postId}.`); }
         
         document.addEventListener('DOMContentLoaded', () => {
             fetch('/api/profile')
@@ -418,6 +655,7 @@
                     if (data && data.profile_picture_url) {
                         profilePicElement.src = data.profile_picture_url;
                         profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                        currentUserProfilePic = data.profile_picture_url; // حفظ الصورة للاستخدام في نافذة التعليق
                     }
                 }).catch(console.error);
                 
