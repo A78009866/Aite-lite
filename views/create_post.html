@@ -12,26 +12,26 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        /* تصميم شريط التمرير مخصص (للمحتوى داخل الصندوق) */
         .custom-scroll::-webkit-scrollbar {
             width: 8px;
         }
         .custom-scroll::-webkit-scrollbar-thumb {
-            background-color: #3b82f6; /* لون أزرق */
+            background-color: #3b82f6; 
             border-radius: 4px;
         }
         .custom-scroll::-webkit-scrollbar-track {
-            background-color: #1f2937; /* لون رمادي داكن للخلفية */
-        }
-        /* نافذة النجاح الزجاجية */
-        .glass-success-modal {
-            background-color: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
+            background-color: #1f2937;
         }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="fixed top-4 right-4 z-40">
+        <a href="/chat_list" class="flex items-center text-blue-500 hover:text-blue-400 transition duration-300 bg-[#18191a] p-2 rounded-lg shadow-lg">
+            <i class="fas fa-arrow-right ml-2"></i>
+            العودة للرئيسية
+        </a>
+    </div>
 
     <div class="bg-[#18191a] p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-2xl">
         <h1 class="text-2xl sm:text-3xl font-bold mb-6 text-white text-center border-b border-gray-700 pb-4">
@@ -76,16 +76,6 @@
         </form>
     </div>
     
-    <div id="successModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-success-modal">
-        <div class="bg-[#1f2937] p-8 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center">
-            <i class="fas fa-check-circle text-green-500 text-5xl mb-4 animate-bounce"></i>
-            <h3 class="text-2xl font-bold text-white mb-2">تم بنجاح!</h3>
-            <p class="text-gray-400 mb-6">تم نشر فكرتك الجديدة بنجاح.</p>
-            <button id="goToHomeBtn" class="p-3 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-300">عرض المنشورات</button>
-        </div>
-    </div>
-
-
     <script>
         const form = document.getElementById('createPostForm');
         const mediaFile = document.getElementById('mediaFile');
@@ -98,8 +88,6 @@
         const submitBtnText = document.getElementById('submitBtnText');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const errorMessage = document.getElementById('errorMessage');
-        const successModal = document.getElementById('successModal');
-        const goToHomeBtn = document.getElementById('goToHomeBtn');
 
         // ************** وظيفة المعاينة **************
         function setupPreview(file) {
@@ -129,7 +117,7 @@
 
         // ************** معالجة المدخلات والأزرار **************
         function checkInputs() {
-            // تفعيل زر النشر إذا كان هناك محتوى نصي أو ملف وسائط (تم تحقيق طلبك)
+            // تفعيل زر النشر إذا كان هناك محتوى نصي أو ملف وسائط
             if (postContent.value.trim().length > 0 || mediaFile.files.length > 0) {
                 submitBtn.disabled = false;
             } else {
@@ -155,12 +143,10 @@
         });
 
         postContent.addEventListener('input', checkInputs); 
-        document.addEventListener('DOMContentLoaded', checkInputs);
-        goToHomeBtn.addEventListener('click', () => {
-            window.location.href = '/chat_list';
-        });
+        document.addEventListener('DOMContentLoaded', checkInputs); 
 
-        // ************** معالجة إرسال النموذج **************
+
+        // ************** معالجة إرسال النموذج (توجيه مباشر) **************
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -180,25 +166,30 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // نجاح النشر: إظهار النافذة الزجاجية
-                    successModal.classList.remove('hidden');
-                    // يمكنك أيضاً مسح النموذج هنا: form.reset();
+                    // 1. تخزين علامة النجاح في الـ sessionStorage
+                    sessionStorage.setItem('postSuccess', 'true');
+                    
+                    // 2. التوجيه مباشرة إلى الصفحة الرئيسية
+                    window.location.href = '/chat_list';
+                    
                 } else {
-                    // فشل النشر: عرض رسالة خطأ
                     errorMessage.textContent = result.error || 'حدث خطأ غير معروف أثناء النشر.';
                     errorMessage.classList.remove('hidden');
+                    
+                    // في حالة الفشل، يجب إعادة تفعيل الزر
+                    submitBtn.disabled = false;
+                    submitBtnText.textContent = 'نشر المنشور';
+                    loadingIndicator.classList.add('hidden');
                 }
             } catch (error) {
                 console.error('Network or client error:', error);
                 errorMessage.textContent = 'فشل الاتصال بالخادم. حاول مرة أخرى.';
                 errorMessage.classList.remove('hidden');
-            } finally {
-                // إعادة تفعيل الزر وإخفاء مؤشر التحميل (إذا لم ينجح النشر)
-                if (successModal.classList.contains('hidden')) {
-                    submitBtn.disabled = false;
-                    submitBtnText.textContent = 'نشر المنشور';
-                    loadingIndicator.classList.add('hidden');
-                }
+                
+                // في حالة فشل الاتصال، يجب إعادة تفعيل الزر
+                submitBtn.disabled = false;
+                submitBtnText.textContent = 'نشر المنشور';
+                loadingIndicator.classList.add('hidden');
             }
         });
     </script>
