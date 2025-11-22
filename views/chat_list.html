@@ -15,12 +15,21 @@
             min-height: 100vh;
         }
 
-        /* تأثير الزجاج (Glassmorphism) للنافبار */
+        /* تأثير الزجاج (Glassmorphism) للنافبار والـ Modals */
         .glass-navbar {
             background-color: rgba(30, 30, 30, 0.5); /* لون داكن مع شفافية */
             backdrop-filter: blur(10px); /* تأثير التمويه الزجاجي */
             -webkit-backdrop-filter: blur(10px); /* دعم متصفحات الويب كيت */
             border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* خط فاصل خفيف */
+        }
+        .glass-modal-bg {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+        }
+        .media-container {
+            max-height: 80vh; /* تحديد أقصى ارتفاع للمعاينة */
+            width: auto;
         }
     </style>
 </head>
@@ -58,60 +67,208 @@
         </div>
 
     </main>
+    
+    <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
+        <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center">
+            <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
+            <h3 class="text-xl font-bold text-white mb-2">تأكيد الحذف</h3>
+            <p class="text-gray-400 mb-6">هل أنت متأكد أنك تريد حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.</p>
+            <div class="flex justify-around space-x-4 space-x-reverse">
+                <button id="cancelDeleteBtn" class="p-2 w-full bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition duration-300">إلغاء</button>
+                <button id="confirmDeleteBtn" class="p-2 w-full bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-300">تأكيد الحذف</button>
+            </div>
+            <div id="deleteMessage" class="text-red-500 mt-3 hidden"></div>
+        </div>
+    </div>
+
+    <div id="mediaViewerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2 glass-modal-bg" onclick="closeMediaViewer(event)">
+        <button class="absolute top-4 left-4 text-white text-3xl z-50 p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition" onclick="closeMediaViewer(event)">
+            <i class="fas fa-times"></i>
+        </button>
+        <div id="mediaViewerContent" class="media-container flex items-center justify-center" onclick="event.stopPropagation()">
+            </div>
+    </div>
+
+
+    <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
+        <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
+            <i class="fas fa-trash ml-3"></i>
+            حذف المنشور
+        </button>
+    </div>
+
 
     <script>
-        // ******************** 1. جلب بيانات البروفايل ********************
-        document.addEventListener('DOMContentLoaded', function() {
-            const profilePicElement = document.getElementById('userProfilePic');
-            
-            // جلب بيانات البروفايل من الخادم عبر API
-            fetch('/api/profile')
-                .then(response => {
-                    if (!response.ok) {
-                        return;
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data && data.profile_picture_url) {
-                        // تحديث مصدر الصورة (src) برابط صورة المستخدم الحقيقية
-                        profilePicElement.src = data.profile_picture_url;
-                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching user profile:', error);
-                });
-        });
+        // متغيرات عالمية لحالة الحذف والعرض
+        let currentPostIdToDelete = null;
+        let currentUserId = null; 
 
-
-        // ******************** 2. جلب وعرض المنشورات ********************
+        // عناصر الـ DOM للـ Modals
         const postsFeed = document.getElementById('postsFeed');
+        const deleteModal = document.getElementById('deleteModal');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        const deleteMessage = document.getElementById('deleteMessage');
+        const postMenu = document.getElementById('postMenu');
+        const deleteOptionBtn = document.getElementById('deleteOptionBtn');
+        const mediaViewerModal = document.getElementById('mediaViewerModal');
+        const mediaViewerContent = document.getElementById('mediaViewerContent');
 
-        // وظيفة إنشاء بطاقة المنشور
-        function createPostCard(post) {
+
+        // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
+        function openMediaViewer(url, type, event) {
+            // منع انتقال النقر إلى البطاقة بأكملها
+            event.stopPropagation();
+
+            let mediaElement;
+            mediaViewerContent.innerHTML = '';
+            
+            if (type === 'image') {
+                mediaElement = `<img src="${url}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
+            } else if (type === 'video') {
+                mediaElement = `<video src="${url}" controls autoplay class="max-w-full max-h-full object-contain rounded-lg"></video>`;
+            } else if (type === 'audio') {
+                mediaElement = `<audio src="${url}" controls autoplay class="w-full max-w-lg"></audio>`;
+            } else {
+                return; // لا تفتح النافذة إذا لم يكن نوعاً مدعوماً
+            }
+
+            mediaViewerContent.innerHTML = mediaElement;
+            mediaViewerModal.classList.remove('hidden');
+        }
+
+        function closeMediaViewer(event) {
+            // التأكد من أن النقر حدث على الخلفية وليس على المحتوى
+            if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
+                // إيقاف أي فيديو أو صوت قيد التشغيل عند الإغلاق
+                const activeMedia = mediaViewerContent.querySelector('video, audio');
+                if (activeMedia) {
+                    activeMedia.pause();
+                }
+                mediaViewerModal.classList.add('hidden');
+                mediaViewerContent.innerHTML = '';
+            }
+        }
+
+        // ******************** 2. وظائف قائمة الحذف (Delete Menu) ********************
+
+        function openPostMenu(postId, postUserId, event) {
+            // منع النقر من الانتشار للنافذة المنبثقة إذا كانت مفتوحة
+            event.stopPropagation();
+            
+            postMenu.classList.add('hidden');
+            
+            if (currentUserId !== postUserId) {
+                return;
+            }
+
+            const menuButton = event.target.closest('button');
+            const rect = menuButton.getBoundingClientRect();
+
+            postMenu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            postMenu.style.right = `${window.innerWidth - rect.right}px`;
+            
+            deleteOptionBtn.onclick = () => {
+                postMenu.classList.add('hidden');
+                openDeleteModal(postId);
+            };
+
+            postMenu.classList.remove('hidden');
+
+            function hideMenuOnOutsideClick(event) {
+                if (!postMenu.contains(event.target) && !menuButton.contains(event.target)) {
+                    postMenu.classList.add('hidden');
+                    document.removeEventListener('click', hideMenuOnOutsideClick);
+                }
+            }
+            setTimeout(() => { 
+                document.addEventListener('click', hideMenuOnOutsideClick);
+            }, 10);
+        }
+
+        function openDeleteModal(postId) {
+            currentPostIdToDelete = postId;
+            deleteMessage.classList.add('hidden');
+            deleteModal.classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            deleteModal.classList.add('hidden');
+            currentPostIdToDelete = null;
+        }
+
+        async function deletePost() {
+            if (!currentPostIdToDelete) return;
+
+            confirmDeleteBtn.disabled = true;
+            confirmDeleteBtn.textContent = 'جاري الحذف...';
+            deleteMessage.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    // لا نستخدم Alert، بل نحدث الخلاصة ونغلق النافذة
+                    closeDeleteModal();
+                    fetchAndDisplayPosts(); 
+                } else {
+                    deleteMessage.textContent = result.error || 'فشل في حذف المنشور.';
+                    deleteMessage.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                deleteMessage.textContent = 'فشل الاتصال بالخادم.';
+                deleteMessage.classList.remove('hidden');
+            } finally {
+                confirmDeleteBtn.disabled = false;
+                confirmDeleteBtn.textContent = 'تأكيد الحذف';
+            }
+        }
+
+        // ربط أزرار النافذة المنبثقة
+        cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+        confirmDeleteBtn.addEventListener('click', deletePost);
+
+        // ******************** 3. وظيفة إنشاء بطاقة المنشور ********************
+
+        function createPostCard(post, isOwner) { 
             let mediaHtml = '';
             if (post.media) {
                 const url = post.media.url;
                 const type = post.media.type;
                 
                 if (type === 'image') {
-                    mediaHtml = `<img src="${url}" alt="Post Media" class="rounded-lg mt-3 w-full object-cover max-h-80">`;
+                    // إضافة onclick لفتح النافذة الزجاجية
+                    mediaHtml = `<img src="${url}" alt="Post Media" class="rounded-lg mt-3 w-full object-cover max-h-80 cursor-pointer" onclick="openMediaViewer('${url}', 'image', event)">`;
                 } else if (type === 'video') {
-                    mediaHtml = `<video src="${url}" controls class="rounded-lg mt-3 w-full max-h-80"></video>`;
+                    // إضافة onclick لفتح النافذة الزجاجية
+                    mediaHtml = `<video src="${url}" controls class="rounded-lg mt-3 w-full max-h-80 cursor-pointer" onclick="openMediaViewer('${url}', 'video', event)"></video>`;
                 } else if (type === 'audio') {
                     mediaHtml = `<audio src="${url}" controls class="rounded-lg mt-3 w-full"></audio>`;
                 }
             }
 
-            // تحويل timestamp إلى تنسيق عربي قابل للقراءة
             const postDate = new Date(post.timestamp).toLocaleString('ar-EG', {
                 year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
+            
+            const optionsButtonHtml = isOwner ? `
+                <div class="absolute top-4 left-4">
+                    <button class="text-gray-400 hover:text-white p-1 rounded-full transition duration-300" onclick="openPostMenu('${post.postId}', '${post.userId}', event)">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+            ` : '';
 
             const postCard = `
-                <div class="bg-[#1f2937] p-4 rounded-xl shadow-lg border border-gray-700">
+                <div class="bg-[#1f2937] p-4 rounded-xl shadow-lg border border-gray-700 relative" data-post-id="${post.postId}">
                     
+                    ${optionsButtonHtml} 
+
                     <div class="flex items-center mb-3">
                         <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover border-2 border-blue-500 ml-3">
                         <div>
@@ -120,7 +277,7 @@
                         </div>
                     </div>
 
-                    <p class="text-gray-200 whitespace-pre-wrap mb-3">${post.content}</p>
+                    ${post.content.trim().length > 0 ? `<p class="text-gray-200 whitespace-pre-wrap mb-3">${post.content}</p>` : ''}
                     
                     ${mediaHtml}
 
@@ -142,44 +299,61 @@
             return postCard;
         }
 
-        // وظيفة جلب وعرض المنشورات
+        // ******************** 4. وظيفة جلب وعرض المنشورات ********************
+        
         async function fetchAndDisplayPosts() {
             const loadingMessage = document.getElementById('loadingMessage');
             postsFeed.innerHTML = ''; 
+            loadingMessage.textContent = 'يتم تحميل المنشورات...';
 
             try {
-                const response = await fetch('/api/posts');
-                if (!response.ok) {
+                // جلب بيانات المستخدم الحالي لتعيين currentUserId
+                const profileResponse = await fetch('/api/profile');
+                if (profileResponse.ok) {
+                    const profileData = await profileResponse.json();
+                    currentUserId = profileData.id; 
+                }
+
+                // جلب المنشورات
+                const postsResponse = await fetch('/api/posts');
+                if (!postsResponse.ok) {
                     throw new Error('فشل جلب المنشورات من الخادم.');
                 }
-                const result = await response.json();
+                const result = await postsResponse.json();
 
                 if (result.posts.length === 0) {
                     postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد منشورات حتى الآن. كن أول من ينشر!</div>';
                 } else {
+                    postsFeed.innerHTML = '';
                     result.posts.forEach(post => {
-                        postsFeed.innerHTML += createPostCard(post);
+                        const isOwner = post.userId === currentUserId;
+                        postsFeed.innerHTML += createPostCard(post, isOwner);
                     });
                 }
             } catch (error) {
                 console.error('Error:', error);
-                postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات. تأكد من أن الخادم يعمل بشكل صحيح.</div>';
+                postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
             }
         }
 
-        // وظائف وهمية للتفاعل (تحتاج إلى تطبيق API في server.js لاحقًا)
-        function handleLike(postId) {
-            console.log(`تم الإعجاب بالمنشور: ${postId}.`);
-            // يجب عليك استدعاء API لزيادة عداد الإعجابات هنا
-        }
-
-        function handleComment(postId) {
-            console.log(`تم الضغط على تعليق للمنشور: ${postId}.`);
-            // يجب عليك فتح واجهة التعليقات هنا
-        }
-
-        // عند تحميل الصفحة، ابدأ جلب المنشورات
-        document.addEventListener('DOMContentLoaded', fetchAndDisplayPosts);
+        // وظائف وهمية للتفاعل 
+        function handleLike(postId) { console.log(`تم الإعجاب بالمنشور: ${postId}.`); }
+        function handleComment(postId) { console.log(`تم الضغط على تعليق للمنشور: ${postId}.`); }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+             // جلب صورة البروفايل في النافبار
+            fetch('/api/profile')
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const profilePicElement = document.getElementById('userProfilePic');
+                    if (data && data.profile_picture_url) {
+                        profilePicElement.src = data.profile_picture_url;
+                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                    }
+                }).catch(console.error);
+                
+            fetchAndDisplayPosts();
+        });
     </script>
 </body>
 </html>
