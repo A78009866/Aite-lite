@@ -171,31 +171,6 @@
 
     </main>
 
-    <nav class="glass-bottom-nav fixed bottom-0 left-0 right-0 z-50 py-3">
-        <div class="max-w-md mx-auto flex justify-around items-center">
-            
-            <a href="/chat_list" class="flex flex-col items-center text-gray-400 hover:text-red-400 transition duration-300">
-                <i class="fas fa-home text-2xl"></i>
-                <span class="text-xs mt-1">الرئيسية</span>
-            </a>
-            
-            <a href="/users_list" class="flex flex-col items-center text-gray-400 hover:text-blue-400 transition duration-300">
-                <i class="fas fa-comment-dots text-2xl"></i>
-                <span class="text-xs mt-1">الرسائل</span>
-            </a>
-            
-            <a href="#" class="flex flex-col items-center text-gray-400 hover:text-yellow-400 transition duration-300">
-                <i class="fas fa-bell text-2xl"></i>
-                <span class="text-xs mt-1">الإشعارات</span>
-            </a>
-            
-            <a href="/profile" class="flex flex-col items-center text-green-400 transition duration-300">
-                <i class="fas fa-user-circle text-2xl"></i>
-                <span class="text-xs mt-1">حسابي</span>
-            </a>
-            
-        </div>
-    </nav>
     
     <div id="editProfileModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="glass-modal-content p-6 rounded-xl shadow-2xl max-w-lg w-full" onclick="event.stopPropagation()">
@@ -395,7 +370,51 @@
                 sendMessageBtn.href = `/chat?contactId=${urlUserId}&contactName=${data.username}`;
             }
         }
-        
+        document.addEventListener('DOMContentLoaded', () => {
+    // 1. قراءة معرّف المستخدم المطلوب عرضه من عنوان URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedUserId = urlParams.get('userId'); 
+
+    // 2. بناء رابط API
+    let apiUrl = '/api/profile';
+    if (requestedUserId) {
+        apiUrl += `?userId=${requestedUserId}`;
+    }
+
+    const editButton = document.getElementById('editProfileButton'); // تأكد من وجود هذا الـ ID في زر التعديل
+
+    fetch(apiUrl)
+        .then(response => {
+            if (!response.ok) throw new Error('فشل جلب الملف الشخصي');
+            return response.json();
+        })
+        .then(data => {
+            // **تنفيذ طلب "إظهار/إخفاء زر التعديل"**
+            if (data.is_owner) {
+                editButton.style.display = 'block'; // إظهار زر التعديل لصاحب البروفيل
+            } else {
+                editButton.style.display = 'none'; // إخفاء زر التعديل للمستخدمين الآخرين
+            }
+            
+            // **تنفيذ طلب "عرض/إخفاء النبذة"**
+            const bioElement = document.getElementById('user-bio'); // تأكد من وجود هذا الـ ID لعنصر النبذة
+            if (data.bio && data.bio.trim().length > 0) {
+                bioElement.textContent = data.bio;
+                bioElement.style.display = 'block'; 
+            } else {
+                bioElement.style.display = 'none'; // إخفاء عنصر النبذة إذا كانت فارغة أو null
+            }
+            
+            // ... (هنا يتم تحديث باقي عناصر الصفحة مثل الصورة واسم المستخدم)
+            document.getElementById('username').textContent = data.username;
+            document.getElementById('profile-pic').src = data.profile_picture_url;
+
+        })
+        .catch(error => {
+            console.error('Error loading profile:', error);
+            // عرض رسالة خطأ مناسبة
+        });
+});
         // ******************** 2. وظائف تعديل البروفايل (Modal) ********************
 
         editProfileBtn.addEventListener('click', () => {
