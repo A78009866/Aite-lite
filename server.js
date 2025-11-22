@@ -8,7 +8,7 @@ const FirebaseStore = require('connect-session-firebase')(session);
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
-const cors = require('cors'); // تم إضافة هذا السطر
+const cors = require('cors'); 
 
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
@@ -27,10 +27,13 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: (req, file) => {
+      // **تحديث: إضافة شرط لمسار إنشاء المنشورات**
       if (req.originalUrl.includes('/register')) {
         return 'profile_pics';
       } else if (req.originalUrl.includes('/messages/send')) {
         return 'chat_media';
+      } else if (req.originalUrl.includes('/api/posts/create')) {
+        return 'post_media'; // مجلد مخصص لوسائط المنشورات
       }
       return 'general';
     },
@@ -63,11 +66,11 @@ app.use(express.json());
 // قم بتحديد أصول (origins) محددة مسموح بها.
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
-  credentials: true, // مهم جداً للسماح بتبادل ملفات تعريف الارتباط
+  credentials: true, 
   optionsSuccessStatus: 200
 };
 
-app.use(cors(corsOptions)); // تم تعديل هذا السطر
+app.use(cors(corsOptions)); 
 
 // إعدادات الجلسة (session) الجديدة مع Firebase
 app.use(session({
@@ -130,6 +133,11 @@ app.get('/chat', requireAuth, (req, res) => {
 
 app.get('/profile', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'profile.html'));
+});
+
+// **جديد: مسار عرض صفحة إنشاء منشور**
+app.get('/create-post', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'create_post.html'));
 });
 
 app.get('/login', (req, res) => {
@@ -208,6 +216,116 @@ app.get('/logout', (req, res) => {
 });
 
 // ---------------- API: Realtime Database backend ----------------
+
+// **جديد: نقطة وصول لإنشاء منشور جديد**
+app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
+  const userId = req.session.userId;
+  const content = req.body.content ? req.body.content.trim() : '';
+  let mediaUrl = null;
+  let mediaType = null;
+
+  // التحقق من وجود محتوى نصي أو ملف وسائط
+  if (content.length === 0 && !req.file) {
+    return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
+  }
+
+  // إذا تم رفع ملف بنجاح (بفضل Multer)، احصل على تفاصيله
+  if (req.file) {
+    mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
+    
+    // تحديد نوع الملف بناءً على MimeType
+    const mimeType = req.file.mimetype;
+    if (mimeType.startsWith('image/')) {
+        mediaType = 'image';
+    } else if (mimeType.startsWith('video/')) {
+        mediaType = 'video';
+    } else if (mimeType.startsWith('audio/')) {
+        mediaType = 'audio';
+    } else {
+        mediaType = 'raw';
+    }
+  }
+
+  try {
+    // 1. إنشاء المنشور الجديد في قاعدة البيانات
+    const newPostRef = db.ref('posts').push();
+    const postId = newPostRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const postData = {
+      postId: postId,
+      userId: userId,
+      content: content,
+      timestamp: timestamp,
+      likes: 0,
+      commentsCount: 0,
+      // حفظ بيانات الوسائط فقط إذا كانت موجودة
+      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
+    };
+
+    await newPostRef.set(postData);
+
+    // 2. تحديث عداد المنشورات للمستخدم (اختياري)
+    const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
+    await userPostsCountRef.transaction((currentCount) => {
+      return (currentCount || 0) + 1;
+    });
+
+    res.json({ ok: true, message: 'تم نشر المنشور بنجاح', postId: postId });
+
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء المنشور على الخادم.' });
+  }
+});
+
+// **جديد: نقطة وصول لجلب المنشورات الأخيرة**
+app.get('/api/posts', requireAuth, async (req, res) => {
+  try {
+    // جلب آخر 50 منشوراً، مرتبة حسب الوقت الأحدث
+    const postsSnap = await db.ref('posts')
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
+
+    const posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
+
+    // عكس الترتيب لعرض الأحدث أولاً (لأن orderByChild('timestamp') يجلب الأقدم أولاً)
+    posts.reverse(); 
+
+    // جلب معلومات البروفايل للمستخدمين الذين نشروا المنشورات
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
+
+    // تنفيذ الـ promises بالتوازي لتحسين الأداء
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+        profiles[userIds[index]] = snap.val();
+    });
+
+    // دمج بيانات المستخدم مع كل منشور
+    const finalPosts = posts.map(post => ({
+      ...post,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم غير معروف',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
+  }
+});
+
 
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
