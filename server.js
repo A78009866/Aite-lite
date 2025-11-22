@@ -34,11 +34,9 @@ const storage = new CloudinaryStorage({
       }
       return 'general';
     },
-    // **الكود المُعدَّل لحل خطأ TypeError**
+    // الكود المُعدَّل لحل خطأ TypeError (من الخطوة السابقة)
     public_id: (req, file) => {
-      // التأكد من وجود file و file.originalname لمنع TypeError: Received undefined
       const originalName = (file && file.originalname) ? file.originalname : 'unknown-file';
-      // تنظيف اسم الملف لضمان خلوه من محارف قد تسبب مشاكل
       const safeName = originalName.replace(/[^a-zA-Z0-9.\-]/g, '_'); 
       return Date.now() + '-' + safeName;
     },
@@ -216,6 +214,28 @@ app.get('/logout', (req, res) => {
 
 // ---------------- API: Realtime Database backend ----------------
 
+// المسار الجديد لجلب المنشورات (Posts) - تم إضافته لحل خطأ 404
+app.get('/api/posts', requireAuth, async (req, res) => {
+  try {
+    // جلب البيانات من عقدة 'posts' وترتيبها حسب 'created_at'
+    const postsSnapshot = await db.ref('posts').orderByChild('created_at').once('value');
+    const posts = [];
+    
+    // تحويل البيانات من Firebase Snapshot إلى مصفوفة (Array)
+    postsSnapshot.forEach(childSnapshot => {
+      posts.push(childSnapshot.val());
+    });
+
+    // يتم عكس الترتيب لضمان عرض أحدث المنشورات أولاً
+    posts.reverse(); 
+
+    res.json(posts);
+  } catch (err) {
+    console.error('/api/posts error:', err.message || err);
+    res.status(500).json({ error: 'Server error: Failed to fetch posts' });
+  }
+});
+
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   const requestedUserId = req.query.user_id || currentUserId;
@@ -352,8 +372,9 @@ app.get('/api/chat_list', requireAuth, async (req, res) => {
 
     res.json(results);
   } catch (err) {
-    console.error('/api/chat_list error', err);
-    res.status(500).json({ error: 'Server error' });
+    // تحسين رسالة الخطأ لتحديد ما إذا كانت مشكلة قواعد أمان Firebase (Security Rules)
+    console.error('/api/chat_list error:', err.message || err);
+    res.status(500).json({ error: 'Server error: Failed to fetch chat list or messages' });
   }
 });
 
@@ -362,18 +383,36 @@ app.get('/api/messages/:other_id', requireAuth, async (req, res) => {
   const otherId = req.params.other_id;
 
   try {
-    const messagesSnapshot = await db.ref('messages').orderByChild('created_at').once('value');
-    const allMessages = messagesSnapshot.val() || {};
+    // 1. جلب الرسائل المرسلة من المستخدم الحالي
+    const sentSnapshot = await db.ref('messages')
+      .orderByChild('sender_id')
+      .equalTo(currentUserId)
+      .once('value');
+    const sentMessages = sentSnapshot.val() || {};
 
-    const chatMessages = Object.values(allMessages).filter(msg =>
-      (msg.sender_id === currentUserId && msg.receiver_id === otherId) ||
-      (msg.sender_id === otherId && msg.receiver_id === currentUserId)
-    );
+    // 2. جلب الرسائل المستقبلة من المستخدم الحالي
+    const receivedSnapshot = await db.ref('messages')
+      .orderByChild('receiver_id')
+      .equalTo(currentUserId)
+      .once('value');
+    const receivedMessages = receivedSnapshot.val() || {};
+
+    // دمج الرسائل ذات الصلة (sent + received) وتصفيتها للمحادثة المحددة
+    const allRelevantMessages = { ...sentMessages, ...receivedMessages };
+    
+    const chatMessages = Object.values(allRelevantMessages).filter(msg => {
+      if (!msg) return false;
+      // التصفية للتأكد من أنها بين الطرفين فقط
+      return (
+        (msg.sender_id === currentUserId && msg.receiver_id === otherId) ||
+        (msg.sender_id === otherId && msg.receiver_id === currentUserId)
+      );
+    }).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // إعادة الترتيب حسب الوقت
 
     res.json(chatMessages);
   } catch (err) {
-    console.error('/api/messages/:other_id error', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('/api/messages/:other_id error:', err.message || err);
+    res.status(500).json({ error: 'Server error: Failed to fetch chat messages' });
   }
 });
 
