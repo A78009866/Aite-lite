@@ -8,7 +8,7 @@ const FirebaseStore = require('connect-session-firebase')(session);
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
-const cors = require('cors'); // تم إضافة هذا السطر
+const cors = require('cors'); 
 
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
@@ -27,12 +27,13 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: (req, file) => {
+      // تحديد المجلد بناءً على المسار
       if (req.originalUrl.includes('/register')) {
         return 'profile_pics';
       } else if (req.originalUrl.includes('/messages/send')) {
         return 'chat_media';
       } else if (req.originalUrl.includes('/api/posts/create')) {
-        return 'post_media'; // مسار جديد لملفات المنشورات
+        return 'post_media'; // مجلد مخصص لوسائط المنشورات
       }
       return 'general';
     },
@@ -41,389 +42,702 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // الحد الأقصى 10 ميجابايت 
+const upload = multer({ storage: storage });
+
+// Load service account key from environment variable
+const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://trimer-4081b-default-rtdb.firebaseio.com",
 });
 
-// Firebase Admin SDK Initialization
-if (!admin.apps.length) {
-  // استخدام متغير بيئة لتخزين بيانات الخدمة JSON مشفرة
-  const serviceAccount = JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('ascii'));
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.FIREBASE_DATABASE_URL
-  });
-}
-
+const firebaseAuth = getAuth();
 const db = getDatabase();
-const auth = getAuth();
+
 const app = express();
+const port = 3000;
 
-// استخدام cors للسماح بطلبات من نطاقات مختلفة في التطوير
-app.use(cors({
-    origin: (origin, callback) => {
-        // السماح بالطلبات بدون أصل (مثل تطبيقات الهاتف أو curl)
-        if (!origin) return callback(null, true);
-        // يمكنك هنا إضافة نطاقات محددة للسماح بها في بيئة الإنتاج
-        // مثل: if (allowedDomains.includes(origin)) { return callback(null, true); }
-        // في الوقت الحالي، سنسمح بالكل في بيئة التطوير
-        return callback(null, true);
-    },
-    credentials: true,
-}));
-
-// Session Middleware Configuration
-app.use(session({
-    store: new FirebaseStore({
-        database: db.ref('sessions')
-    }),
-    secret: process.env.SESSION_SECRET || 'a_very_secret_key',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
-    }
-}));
-
-
-// Middleware to parse JSON and URL-encoded bodies
-app.use(express.json());
+// ---------------- Middleware ----------------
+app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// ---------------- Helper Functions ----------------
-
-// Middleware to check if user is authenticated
-const requireAuth = (req, res, next) => {
-    if (req.session && req.session.userId) {
-        next();
-    } else {
-        // في حالة طلب واجهة API، نرد بـ 401
-        if (req.path.startsWith('/api')) {
-            return res.status(401).json({ ok: false, error: 'Unauthorized: Not logged in' });
-        }
-        // في حالة طلب صفحة HTML، نعيد التوجيه لصفحة تسجيل الدخول
-        res.redirect('/login');
-    }
+// قم بتحديد أصول (origins) محددة مسموح بها.
+const corsOptions = {
+  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
+  credentials: true, 
+  optionsSuccessStatus: 200
 };
 
-/**
- * دالة مساعدة لجلب تفاصيل ملف المستخدم
- * @param {string} userId - معرّف المستخدم
- * @returns {Promise<Object|null>}
- */
-async function getUserProfile(userId) {
-    if (!userId) return null;
-    try {
-        const snapshot = await db.ref(`profiles/${userId}`).once('value');
-        const profile = snapshot.val();
-        if (profile) {
-            return {
-                id: userId,
-                username: profile.username || 'مستخدم غير معروف',
-                profile_picture_url: profile.profile_picture_url || 'https://via.placeholder.com/40/3182CE/FFFFFF?text=P',
-            };
-        }
-        return null;
-    } catch (error) {
-        console.error("Error fetching user profile:", error);
-        return null;
-    }
+app.use(cors(corsOptions)); 
+
+// إعدادات الجلسة (session) الجديدة مع Firebase
+app.use(session({
+  secret: 'a-firebase-secret-key-is-better',
+  resave: false,
+  saveUninitialized: false,
+  proxy: true,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax'
+  },
+  store: new FirebaseStore({
+    database: db,
+    collection: 'sessions',
+    ttl: 3600
+  })
+}));
+
+// ---------------- Authentication helper ----------------
+function requireAuth(req, res, next) {
+  if (req.session && req.session.userId) {
+    return next();
+  }
+  
+  if (req.path.startsWith('/api/')) {
+    console.error('API call unauthorized. Session not found for user ID:', req.session.userId);
+    return res.status(401).json({ error: 'Unauthorized', message: 'User session not found or expired.' });
+  }
+
+  console.log('Redirecting to login. Path:', req.path);
+  return res.redirect('/login');
 }
 
-/**
- * دالة مساعدة لدمج تفاصيل المستخدم مع المنشورات
- * @param {Object} post - كائن المنشور من قاعدة البيانات
- * @param {string} postId - معرّف المنشور
- * @returns {Promise<Object>}
- */
-async function processPost(postId, post) {
-    const userProfile = await getUserProfile(post.userId);
-
-    // جلب عدد الإعجابات
-    const likesSnap = await db.ref(`posts/${postId}/likes`).once('value');
-    const likesCount = likesSnap.numChildren();
-    
-    // جلب عدد التعليقات
-    const commentsSnap = await db.ref(`posts/${postId}/comments`).once('value');
-    const commentsCount = commentsSnap.numChildren();
-
-    return {
-        postId: postId,
-        userId: post.userId,
-        content: post.content || '',
-        timestamp: post.timestamp,
-        media: post.media || null,
-        likes: likesCount,
-        commentsCount: commentsCount,
-        user: userProfile || { id: post.userId, username: 'مستخدم محذوف', profile_picture_url: 'https://via.placeholder.com/40/000000/FFFFFF?text=X' },
-    };
-}
-
-
-// ---------------- Routes for Authentication and Pages ----------------
-
-// Route for the login page
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'login.html'));
-});
-
-// Route for the registration page
-app.get('/register', (req, res) => {
-    res.sendFile(path.join(__dirname, 'register.html'));
-});
-
-// Route for the splash screen
-app.get('/splash', (req, res) => {
-    res.sendFile(path.join(__dirname, 'splash.html'));
-});
-
-// Route to check authentication status and redirect
-app.get('/check-status', (req, res) => {
-    if (req.session && req.session.userId) {
-        res.redirect('/chat_list');
-    } else {
-        res.redirect('/login');
-    }
-});
-
-// Route for the main home feed (requires authentication)
-app.get('/chat_list', requireAuth, (req, res) => {
-    res.sendFile(path.join(__dirname, 'chat_list.html'));
-});
-
-// Route for creating a new post (requires authentication)
-app.get('/create-post', requireAuth, (req, res) => {
-    res.sendFile(path.join(__dirname, 'create_post.html'));
-});
-
-// Root route redirects to splash
+// ---------------- Routes: pages ----------------
 app.get('/', (req, res) => {
-    res.redirect('/splash');
+  res.sendFile(path.join(__dirname, 'views', 'splash.html'));
 });
 
-// ---------------- API Routes for Posts and Profile ----------------
+app.get('/check-status', (req, res) => {
+  if (req.session && req.session.userId) {
+    res.redirect('/chat_list');
+  } else {
+    res.redirect('/login');
+  }
+});
 
-// API route to get user profile details
-app.get('/api/profile', requireAuth, async (req, res) => {
-    try {
-        const profile = await getUserProfile(req.session.userId);
-        if (!profile) {
-             return res.status(404).json({ ok: false, error: 'Profile not found' });
-        }
-        res.json(profile);
-    } catch (error) {
-        console.error('API Profile Error:', error);
-        res.status(500).json({ ok: false, error: 'Failed to fetch profile' });
+app.get('/chat_list', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'chat_list.html'));
+});
+
+app.get('/chat.html', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'chat.html'));
+});
+app.get('/chat', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'chat.html'));
+});
+
+app.get('/profile', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'profile.html'));
+});
+
+// مسار عرض صفحة إنشاء منشور
+app.get('/create-post', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'create_post.html'));
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'login.html'));
+});
+
+app.get('/register', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'register.html'));
+});
+
+// ---------------- Auth Routes ----------------
+app.post('/login', async (req, res) => {
+  const { username } = req.body;
+  try {
+    const email = `${username}@trimer.io`;
+    const userRecord = await firebaseAuth.getUserByEmail(email);
+    req.session.userId = userRecord.uid;
+    req.session.email = userRecord.email;
+    await req.session.save();
+    res.redirect('/chat_list');
+  } catch (error) {
+    console.error('Login error:', error.message);
+    const errorMessage = 'Invalid username or password.';
+    res.redirect('/login?error=' + encodeURIComponent(errorMessage));
+  }
+});
+
+app.post('/register', upload.single('profile_picture'), async (req, res) => {
+  const { username, password } = req.body;
+  let profile_picture_url = 'https://via.placeholder.com/150';
+
+  try {
+    if (!username || !password) {
+        return res.redirect('/register?error=' + encodeURIComponent('اسم المستخدم وكلمة المرور مطلوبان.'));
     }
+
+    const email = `${username}@trimer.io`;
+
+    if (req.file) {
+      profile_picture_url = req.file.path;
+    }
+
+    const userRecord = await firebaseAuth.createUser({
+      email: email,
+      password: password,
+      displayName: username,
+      photoURL: profile_picture_url
+    });
+
+    const profileData = {
+      id: userRecord.uid,
+      username: username,
+      full_name: username,
+      email: email,
+      profile_picture_url: profile_picture_url,
+      is_online: false,
+      is_verified: false,
+    };
+    await db.ref('profiles/' + userRecord.uid).set(profileData);
+
+    req.session.userId = userRecord.uid;
+    req.session.email = email;
+    await req.session.save();
+    res.redirect('/chat_list');
+  } catch (error) {
+    console.error('Registration Error:', error.message);
+    res.redirect('/register?error=' + encodeURIComponent(error.message));
+  }
 });
 
-// API route to create a new post
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid');
+    res.redirect('/login');
+  });
+});
+
+// ---------------- API: Posts ----------------
+
+// نقطة وصول لإنشاء منشور جديد
 app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
-    const userId = req.session.userId;
-    const { content } = req.body;
+  const userId = req.session.userId;
+  const content = req.body.content ? req.body.content.trim() : '';
+  let mediaUrl = null;
+  let mediaType = null;
+
+  // التحقق من وجود محتوى نصي أو ملف وسائط
+  if (content.length === 0 && !req.file) {
+    return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
+  }
+
+  // إذا تم رفع ملف بنجاح
+  if (req.file) {
+    mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
     
-    // التحقق من وجود محتوى أو ملف وسائط
-    if (!content && !req.file) {
-        return res.status(400).json({ ok: false, error: 'Post must contain content or media.' });
+    // تحديد نوع الملف بناءً على MimeType
+    const mimeType = req.file.mimetype;
+    if (mimeType && mimeType.startsWith('image/')) {
+        mediaType = 'image';
+    } else if (mimeType && mimeType.startsWith('video/')) {
+        mediaType = 'video';
+    } else if (mimeType && mimeType.startsWith('audio/')) {
+        mediaType = 'audio';
+    } else {
+        mediaType = 'raw';
     }
+  }
 
-    try {
-        const postData = {
-            userId: userId,
-            content: content || '',
-            timestamp: admin.database.ServerValue.TIMESTAMP,
-        };
+  try {
+    // 1. إنشاء المنشور الجديد في قاعدة البيانات
+    const newPostRef = db.ref('posts').push();
+    const postId = newPostRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
 
-        if (req.file) {
-            postData.media = {
-                url: req.file.path,
-                type: req.file.resource_type, // 'image', 'video', 'raw', 'audio'
-                format: req.file.format,
-            };
-        }
+    const postData = {
+      postId: postId,
+      userId: userId,
+      content: content,
+      timestamp: timestamp,
+      likes: 0,
+      commentsCount: 0,
+      // حفظ بيانات الوسائط فقط إذا كانت موجودة
+      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
+    };
 
-        const newPostRef = db.ref('posts').push();
-        await newPostRef.set(postData);
+    await newPostRef.set(postData);
 
-        res.json({ ok: true, message: 'Post created successfully', postId: newPostRef.key });
+    // 2. تحديث عداد المنشورات للمستخدم (اختياري)
+    const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
+    await userPostsCountRef.transaction((currentCount) => {
+      return (currentCount || 0) + 1;
+    });
 
-    } catch (error) {
-        console.error('Post Creation Error:', error);
-        res.status(500).json({ ok: false, error: 'Failed to create post' });
-    }
+    res.json({ ok: true, message: 'تم نشر المنشور بنجاح', postId: postId });
+
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء المنشور على الخادم.' });
+  }
 });
 
-// API route to fetch all posts
+// نقطة وصول لجلب المنشورات الأخيرة
 app.get('/api/posts', requireAuth, async (req, res) => {
-    try {
-        const postsSnap = await db.ref('posts').orderByChild('timestamp').once('value');
-        const postsData = postsSnap.val();
+  try {
+    const postsSnap = await db.ref('posts')
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
 
-        if (!postsData) {
-            return res.json({ ok: true, posts: [] });
-        }
+    const posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
 
-        const postKeys = Object.keys(postsData).reverse(); // عرض الأحدث أولاً
-        
-        // جلب جميع المنشورات ومعالجة بيانات المستخدمين والإعجابات والتعليقات بالتوازي
-        const processedPostsPromises = postKeys.map(key => processPost(key, postsData[key]));
-        const processedPosts = await Promise.all(processedPostsPromises);
+    posts.reverse(); 
 
-        res.json({ ok: true, posts: processedPosts });
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
 
-    } catch (error) {
-        console.error('Fetch Posts Error:', error);
-        res.status(500).json({ ok: false, error: 'Failed to fetch posts' });
-    }
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+        profiles[userIds[index]] = snap.val();
+    });
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم غير معروف',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
+  }
 });
 
-
-// API route to delete a post
+// نقطة وصول لحذف منشور
 app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
-    const { postId } = req.params;
-    const userId = req.session.userId;
+  const userId = req.session.userId;
+  const postId = req.params.postId;
 
-    try {
-        const postRef = db.ref(`posts/${postId}`);
-        const postSnap = await postRef.once('value');
-        const post = postSnap.val();
+  if (!postId) {
+    return res.status(400).json({ ok: false, error: 'معرف المنشور مطلوب للحذف.' });
+  }
 
-        if (!post) {
-            return res.status(404).json({ ok: false, error: 'Post not found.' });
-        }
+  const postRef = db.ref(`posts/${postId}`);
 
-        if (post.userId !== userId) {
-            return res.status(403).json({ ok: false, error: 'Forbidden: You do not own this post.' });
-        }
+  try {
+    const postSnapshot = await postRef.once('value');
+    const postData = postSnapshot.val();
 
-        // حذف المنشور و الإعجابات و التعليقات المرتبطة
-        await postRef.remove();
-        await db.ref(`posts/${postId}/likes`).remove();
-        await db.ref(`posts/${postId}/comments`).remove();
-
-        res.json({ ok: true, message: 'Post deleted successfully.' });
-
-    } catch (error) {
-        console.error('Post Deletion Error:', error);
-        res.status(500).json({ ok: false, error: 'Failed to delete post' });
+    if (!postData) {
+      return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
     }
+
+    // التحقق من أن المستخدم الحالي هو صاحب المنشور
+    if (postData.userId !== userId) {
+      return res.status(403).json({ ok: false, error: 'ليس لديك صلاحية لحذف هذا المنشور.' });
+    }
+
+    // حذف المنشور من قاعدة البيانات
+    await postRef.remove();
+    
+    // تحديث عداد المنشورات للمستخدم
+    const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
+    await userPostsCountRef.transaction((currentCount) => {
+      return (currentCount || 0) > 0 ? (currentCount - 1) : 0;
+    });
+
+    res.json({ ok: true, message: 'تم حذف المنشور بنجاح.' });
+
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف المنشور على الخادم.' });
+  }
 });
 
 
-// ---------------- NEW API Routes for LIKES AND COMMENTS ----------------
+// ---------------- API: Profile and User Operations ----------------
 
-// API to handle liking/unliking a post
-app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
-    const { postId } = req.params;
-    const userId = req.session.userId;
+app.get('/api/profile', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const requestedUserId = req.query.user_id || currentUserId;
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
 
-    try {
-        const likeRef = db.ref(`posts/${postId}/likes/${userId}`);
-        const likeSnap = await likeRef.once('value');
+  try {
+    const [profileSnapshot, userSnapshot] = await Promise.all([
+      db.ref('profiles/' + requestedUserId).once('value'),
+      db.ref('users/' + requestedUserId).once('value')
+    ]);
+    
+    const profileData = profileSnapshot.val() || {};
+    const userData = userSnapshot.val() || {};
 
-        if (likeSnap.exists()) {
-            // المستخدم أعجب بالمنشور بالفعل، نقوم بإلغاء الإعجاب
-            await likeRef.remove();
-            res.json({ ok: true, liked: false, message: 'Unliked post successfully.' });
+    const fullProfile = {
+      id: requestedUserId,
+      username: profileData.username || userData.username || userData.displayName || '',
+      full_name: profileData.full_name || userData.full_name || userData.displayName || '',
+      email: profileData.email || userData.email || '',
+      profile_picture_url: profileData.profile_picture_url || userData.profile_picture_url || defaultProfileUrl,
+      is_online: !!(profileData.is_online || userData.is_online),
+      is_verified: !!(profileData.is_verified || userData.is_verified)
+    };
+
+    res.json(fullProfile);
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
+
+app.get('/api/chat_list', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
+
+  try {
+    const [profilesSnapshot, usersSnapshot, messagesSnapshot] = await Promise.all([
+      db.ref('profiles').once('value'),
+      db.ref('users').once('value'),
+      db.ref('messages').once('value')
+    ]);
+
+    const profiles = profilesSnapshot.val() || {};
+    const users = usersSnapshot.val() || {};
+    const allMessages = messagesSnapshot.val() || {};
+
+    const map = {};
+
+    Object.keys(users).forEach(uid => {
+      map[uid] = {
+        id: uid,
+        username: users[uid].username || users[uid].displayName || '',
+        full_name: users[uid].full_name || users[uid].displayName || '',
+        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
+        is_online: !!users[uid].is_online,
+        is_verified: !!users[uid].is_verified
+      };
+    });
+
+    Object.keys(profiles).forEach(uid => {
+      map[uid] = {
+        id: uid,
+        username: profiles[uid].username || (map[uid] && map[uid].username) || '',
+        full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
+        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
+        is_online: !!profiles[uid].is_online,
+        is_verified: !!profiles[uid].is_verified
+      };
+    });
+
+    const results = [];
+    for (const uid of Object.keys(map)) {
+      if (uid === currentUserId) continue;
+
+      const p = map[uid];
+
+      let lastMessage = null;
+      Object.values(allMessages).forEach(msg => {
+        if (!msg) return;
+        if ((msg.sender_id === currentUserId && msg.receiver_id === uid) ||
+            (msg.sender_id === uid && msg.receiver_id === currentUserId)) {
+          if (!lastMessage || new Date(msg.created_at) > new Date(lastMessage.created_at)) {
+            lastMessage = msg;
+          }
+        }
+      });
+
+      const last = lastMessage;
+      let lastMessageText = 'بدء محادثة جديدة';
+      if (last) {
+        if (last.content) {
+            lastMessageText = last.content;
+        } else if (last.media_type === 'audio') {
+            lastMessageText = 'قام بارسال رسالة صوتية';
+        } else if (last.media_type === 'image') {
+            lastMessageText = 'قام بارسال صورة';
+        } else if (last.media_type === 'video') {
+            lastMessageText = 'قام بارسال فيديو';
+        } else if (last.media_url) {
+            lastMessageText = 'ملف مرفق';
+        }
+      }
+      
+      const is_new = !!(last && last.sender_id !== currentUserId && !last.is_read);
+
+      results.push({
+        user: {
+          id: p.id,
+          username: p.username,
+          full_name: p.full_name || null,
+          profile_picture_url: p.profile_picture_url || defaultProfileUrl,
+          is_online: !!p.is_online,
+          is_verified: !!p.is_verified
+        },
+        last_message: lastMessageText,
+        last_time: last ? last.created_at : null,
+        is_new: is_new
+      });
+    }
+
+    results.sort((a, b) => {
+      if (a.is_new === b.is_new) {
+        const at = a.last_time ? new Date(a.last_time).getTime() : 0;
+        const bt = b.last_time ? new Date(b.last_time).getTime() : 0;
+        if (at === bt) {
+          const an = (a.user.username || '').toLowerCase();
+          const bn = (b.user.username || '').toLowerCase();
+          return an < bn ? -1 : (an > bn ? 1 : 0);
+        }
+        return bt - at;
+      }
+      return a.is_new ? -1 : 1;
+    });
+
+    res.json(results);
+  } catch (err) {
+    console.error('/api/chat_list error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/messages/:other_id', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const otherId = req.params.other_id;
+
+  try {
+    const messagesSnapshot = await db.ref('messages').orderByChild('created_at').once('value');
+    const allMessages = messagesSnapshot.val() || {};
+
+    const chatMessages = Object.values(allMessages).filter(msg =>
+      (msg.sender_id === currentUserId && msg.receiver_id === otherId) ||
+      (msg.sender_id === otherId && msg.receiver_id === currentUserId)
+    );
+
+    res.json(chatMessages);
+  } catch (err) {
+    console.error('/api/messages/:other_id error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/messages/send', upload.single('media'), requireAuth, async (req, res) => {
+  console.log('API call to /api/messages/send received.');
+  const currentUserId = req.session.userId;
+  const { other_id, content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
+  let media_url = null;
+  let media_type = 'text';
+
+  console.log('Current User ID:', currentUserId);
+
+  try {
+    if (req.file) {
+      media_url = req.file.path;
+      if (req.file.mimetype) {
+        if (req.file.mimetype.startsWith('audio/')) {
+          media_type = 'audio';
+        } else if (req.file.mimetype.startsWith('video/')) {
+          media_type = 'video';
+        } else if (req.file.mimetype.startsWith('image/')) {
+          media_type = 'image';
         } else {
-            // المستخدم لم يعجب بالمنشور، نقوم بالإعجاب
-            await likeRef.set(true); // يمكن تخزين التاريخ هنا أيضاً
-            res.json({ ok: true, liked: true, message: 'Liked post successfully.' });
+          media_type = 'raw';
         }
-
-    } catch (error) {
-        console.error(`Like/Unlike Error for post ${postId}:`, error);
-        res.status(500).json({ ok: false, error: 'Failed to process like/unlike.' });
+      } else {
+        console.warn('File uploaded without mimetype. Setting to "raw".');
+        media_type = 'raw';
+      }
+      console.log('Media file received. Path:', media_url);
     }
+
+    if (!other_id || (!content && !media_url)) {
+      console.log('Missing other_id or content/media.');
+      return res.status(400).json({ error: 'other_id and content or media are required' });
+    }
+
+    const messagesRef = db.ref('messages');
+    const newMessageRef = messagesRef.push();
+
+    const payload = {
+      id: newMessageRef.key,
+      sender_id: currentUserId,
+      receiver_id: other_id,
+      content: content || '',
+      created_at: new Date().toISOString(),
+      is_read: false,
+      media_url: media_url,
+      media_type: media_type
+    };
+
+    if (replied_to_id) {
+      payload.replied_to_id = replied_to_id;
+      payload.replied_to_content = replied_to_content;
+      payload.replied_to_sender = replied_to_sender;
+    }
+
+    console.log('Payload for message:', payload);
+    await newMessageRef.set(payload);
+    console.log('Message sent successfully. Responding with JSON.');
+    res.status(200).send(JSON.stringify({ ok: true, message: payload }));
+  } catch (err) {
+    console.error('/api/messages/send error:', err);
+    console.log('Responding with an error status.');
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
 });
 
-// API to fetch comments for a post
-app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
-    const { postId } = req.params;
+app.post('/api/mark_read', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const { other_id } = req.body;
+  if (!other_id) return res.status(400).json({ error: 'other_id is required' });
 
-    try {
-        const commentsSnap = await db.ref(`posts/${postId}/comments`).orderByChild('timestamp').once('value');
-        const commentsData = commentsSnap.val();
+  try {
+    const messagesSnapshot = await db.ref('messages').orderByChild('receiver_id').equalTo(currentUserId).once('value');
+    const messagesToUpdate = messagesSnapshot.val() || {};
 
-        if (!commentsData) {
-            return res.json({ ok: true, comments: [] });
-        }
+    const updates = {};
+    let updatedCount = 0;
 
-        const commentsKeys = Object.keys(commentsData);
-        
-        const processedCommentsPromises = commentsKeys.map(async key => {
-            const comment = commentsData[key];
-            const userProfile = await getUserProfile(comment.userId);
-            
-            return {
-                commentId: key,
-                content: comment.content,
-                timestamp: comment.timestamp,
-                user: userProfile || { id: comment.userId, username: 'مستخدم محذوف', profile_picture_url: 'https://via.placeholder.com/40/000000/FFFFFF?text=X' }
-            };
-        });
+    Object.keys(messagesToUpdate).forEach(key => {
+      const msg = messagesToUpdate[key];
+      if (msg.sender_id === other_id && !msg.is_read) {
+        updates[`/messages/${key}/is_read`] = true;
+        updatedCount++;
+      }
+    });
 
-        const processedComments = await Promise.all(processedCommentsPromises);
-        
-        // عرض الأحدث أولاً
-        processedComments.sort((a, b) => b.timestamp - a.timestamp);
-
-        res.json({ ok: true, comments: processedComments });
-
-    } catch (error) {
-        console.error(`Fetch Comments Error for post ${postId}:`, error);
-        res.status(500).json({ ok: false, error: 'Failed to fetch comments.' });
+    if (updatedCount > 0) {
+      await db.ref().update(updates);
     }
+
+    res.json({ ok: true, updated: updatedCount });
+  } catch (err) {
+    console.error('/api/mark_read error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-// API to add a new comment to a post
-app.post('/api/posts/:postId/comments', requireAuth, async (req, res) => {
-    const { postId } = req.params;
-    const userId = req.session.userId;
-    const { content } = req.body;
+// New search endpoint
+app.get('/api/users/search', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const { query } = req.query;
+  if (!query) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
 
-    if (!content || content.trim() === '') {
-        return res.status(400).json({ ok: false, error: 'Comment content cannot be empty.' });
-    }
+  const searchQuery = query.toLowerCase();
 
-    try {
-        const commentData = {
-            userId: userId,
-            content: content.trim(),
-            timestamp: admin.database.ServerValue.TIMESTAMP,
-        };
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
+  
+  try {
+    const [profilesSnapshot, usersSnapshot] = await Promise.all([
+      db.ref('profiles').once('value'),
+      db.ref('users').once('value')
+    ]);
+    const profiles = profilesSnapshot.val() || {};
+    const users = usersSnapshot.val() || {};
 
-        const newCommentRef = db.ref(`posts/${postId}/comments`).push();
-        await newCommentRef.set(commentData);
-        
-        // جلب عدد التعليقات الجديد (اختياري)
-        const commentsSnap = await db.ref(`posts/${postId}/comments`).once('value');
-        const commentsCount = commentsSnap.numChildren();
+    const map = {};
+    const foundUsers = [];
 
+    // Combine data from 'users' and 'profiles'
+    Object.keys(users).forEach(uid => {
+      map[uid] = {
+        uid: uid,
+        username: users[uid].username || users[uid].displayName || '',
+        full_name: users[uid].full_name || users[uid].displayName || '',
+        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
+        is_online: !!users[uid].is_online,
+        is_verified: !!users[uid].is_verified
+      };
+    });
 
-        res.json({ 
-            ok: true, 
-            message: 'Comment added successfully.', 
-            commentId: newCommentRef.key,
-            newCount: commentsCount
-        });
+    Object.keys(profiles).forEach(uid => {
+      map[uid] = {
+        uid: uid,
+        username: profiles[uid].username || (map[uid] && map[uid].username) || '',
+        full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
+        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
+        is_online: !!profiles[uid].is_online,
+        is_verified: !!profiles[uid].is_online,
+        is_verified: !!profiles[uid].is_verified
+      };
+    });
 
-    } catch (error) {
-        console.error(`Add Comment Error for post ${postId}:`, error);
-        res.status(500).json({ ok: false, error: 'Failed to add comment.' });
-    }
+    // Filter users based on search query
+    Object.values(map).forEach(user => {
+      if (user.uid === currentUserId) return;
+      if (
+        (user.username && user.username.toLowerCase().includes(searchQuery)) ||
+        (user.full_name && user.full_name.toLowerCase().includes(searchQuery))
+      ) {
+        foundUsers.push(user);
+      }
+    });
+
+    res.status(200).json(foundUsers);
+  } catch (error) {
+    console.error("Error searching users:", error);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
 });
 
 
-// ---------------- Debug Routes ----------------
-app.get('/api/debug/session', requireAuth, (req, res) => {
+app.get('/api/users', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const defaultProfileUrl = 'https://via.placeholder.com/150';
+
+  try {
+    const [profilesSnapshot, usersSnapshot] = await Promise.all([
+      db.ref('profiles').once('value'),
+      db.ref('users').once('value')
+    ]);
+    const profiles = profilesSnapshot.val() || {};
+    const users = usersSnapshot.val() || {};
+
+    const map = {};
+
+    Object.keys(users).forEach(uid => {
+      map[uid] = {
+        uid: uid,
+        username: users[uid].username || users[uid].displayName || '',
+        full_name: users[uid].full_name || users[uid].displayName || '',
+        profile_picture_url: users[uid].profile_picture_url || users[uid].photoURL || defaultProfileUrl,
+        is_online: !!users[uid].is_online,
+        is_verified: !!users[uid].is_verified
+      };
+    });
+
+    Object.keys(profiles).forEach(uid => {
+      map[uid] = {
+        uid: uid,
+        username: profiles[uid].username || (map[uid] && map[uid].username) || '',
+        full_name: profiles[uid].full_name || (map[uid] && map[uid].full_name) || '',
+        profile_picture_url: profiles[uid].profile_picture_url || (map[uid] && map[uid].profile_picture_url) || defaultProfileUrl,
+        is_online: !!profiles[uid].is_online,
+        is_verified: !!profiles[uid].is_online,
+        is_verified: !!profiles[uid].is_verified
+      };
+    });
+
+    const usersList = Object.keys(map)
+      .filter(uid => uid !== currentUserId)
+      .map(uid => ({ uid, ...map[uid] }));
+
+    res.status(200).json(usersList);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.get('/api/debug/session', (req, res) => {
   res.json({
     ok: true,
-    sessionId: req.session.id,
-    isLoggedIn: !!(req.session && req.session.userId),
+    hasSession: !!(req.session && req.session.userId),
     userId: req.session.userId || null,
     cookies: req.headers.cookie || null,
     nodeEnv: process.env.NODE_ENV,
@@ -457,17 +771,15 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     // خطأ من Multer (مثل حجم الملف كبير جدًا)
     console.error('Multer error:', err);
-    return res.status(400).json({ ok: false, error: `Upload error: ${err.message}` });
+    return res.status(400).json({ error: 'Upload failed', message: err.message });
   } else if (err) {
-    // أخطاء أخرى غير متوقعة
-    console.error('General error during upload or processing:', err);
-    return res.status(500).json({ ok: false, error: 'An unknown error occurred during processing.' });
+    // أي خطأ آخر
+    console.error('General error:', err);
+    return res.status(500).json({ error: 'Server error', message: err.message });
   }
-  next(); // تمرير إلى المسارات التالية إذا لم يكن هناك خطأ
+  next();
 });
 
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
 });
