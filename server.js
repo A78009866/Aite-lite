@@ -122,6 +122,11 @@ app.get('/chat_list', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'chat_list.html'));
 });
 
+// مسار عرض صفحة قائمة المستخدمين الجديدة
+app.get('/users_list', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'users_list.html'));
+});
+
 app.get('/chat.html', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'chat.html'));
 });
@@ -404,7 +409,7 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
 });
 
 
-// نقطة وصول لجلب المنشورات الأخيرة (مُعدّلة لجلب حالة الإعجاب)
+// نقطة وصول لجلب المنشورات الأخيرة
 app.get('/api/posts', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId; // جلب معرف المستخدم الحالي
 
@@ -520,6 +525,29 @@ app.get('/api/profile', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching profile:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب بيانات الملف الشخصي.' });
+  }
+});
+
+// نقطة وصول جديدة: جلب قائمة بجميع المستخدمين باستثناء المستخدم الحالي
+app.get('/api/users', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+
+  try {
+    const profilesSnap = await db.ref('profiles').once('value');
+    const profiles = profilesSnap.val() || {};
+
+    // تصفية المستخدم الحالي من القائمة وتنسيق البيانات
+    const usersList = Object.values(profiles).filter(user => user.id !== currentUserId).map(user => ({
+      id: user.id,
+      username: user.username,
+      profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40/000000/FFFFFF?text=U'
+    }));
+
+    res.json({ ok: true, users: usersList });
+
+  } catch (error) {
+    console.error('Error fetching users list:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المستخدمين.' });
   }
 });
 
