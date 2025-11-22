@@ -7,20 +7,18 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* الخلفية والخطوط */
         body {
             background-color: #000000;
-            color: #e4e6eb; /* لون نص فاتح للثيم الداكن */
+            color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
         }
 
-        /* تأثير الزجاج (Glassmorphism) للنافبار والـ Modals */
         .glass-navbar {
-            background-color: rgba(30, 30, 30, 0.5); /* لون داكن مع شفافية */
-            backdrop-filter: blur(10px); /* تأثير التمويه الزجاجي */
-            -webkit-backdrop-filter: blur(10px); /* دعم متصفحات الويب كيت */
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* خط فاصل خفيف */
+            background-color: rgba(30, 30, 30, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         .glass-modal-bg {
             background-color: rgba(0, 0, 0, 0.9);
@@ -28,7 +26,7 @@
             -webkit-backdrop-filter: blur(15px);
         }
         .media-container {
-            max-height: 80vh; /* تحديد أقصى ارتفاع للمعاينة */
+            max-height: 80vh; 
             width: auto;
         }
     </style>
@@ -63,13 +61,12 @@
     <main class="max-w-6xl mx-auto p-4">
         
         <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
-            <div class="text-center text-gray-500 p-4" id="loadingMessage">يتم تحميل المنشورات...</div>
-        </div>
+            </div>
 
     </main>
     
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
-        <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center">
+        <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
             <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
             <h3 class="text-xl font-bold text-white mb-2">تأكيد الحذف</h3>
             <p class="text-gray-400 mb-6">هل أنت متأكد أنك تريد حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.</p>
@@ -86,7 +83,7 @@
             <i class="fas fa-times"></i>
         </button>
         <div id="mediaViewerContent" class="media-container flex items-center justify-center" onclick="event.stopPropagation()">
-            </div>
+        </div>
     </div>
 
 
@@ -97,13 +94,20 @@
         </button>
     </div>
 
+    <div id="tempSuccessModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg" onclick="closeTempSuccessModal()">
+        <div class="bg-[#1f2937] p-8 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
+            <i class="fas fa-check-circle text-green-500 text-5xl mb-4"></i>
+            <h3 class="text-2xl font-bold text-white mb-2">تم النشر بنجاح!</h3>
+            <p class="text-gray-400 mb-2">تم نشر محتواك، سيتم تحديث الخلاصة الآن.</p>
+            <p class="text-xs text-gray-500 mt-3">(سيختفي هذا الإشعار تلقائيًا)</p>
+        </div>
+    </div>
+
 
     <script>
-        // متغيرات عالمية لحالة الحذف والعرض
         let currentPostIdToDelete = null;
         let currentUserId = null; 
 
-        // عناصر الـ DOM للـ Modals
         const postsFeed = document.getElementById('postsFeed');
         const deleteModal = document.getElementById('deleteModal');
         const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
@@ -113,13 +117,12 @@
         const deleteOptionBtn = document.getElementById('deleteOptionBtn');
         const mediaViewerModal = document.getElementById('mediaViewerModal');
         const mediaViewerContent = document.getElementById('mediaViewerContent');
+        const tempSuccessModal = document.getElementById('tempSuccessModal'); // NEW
 
 
         // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
         function openMediaViewer(url, type, event) {
-            // منع انتقال النقر إلى البطاقة بأكملها
             event.stopPropagation();
-
             let mediaElement;
             mediaViewerContent.innerHTML = '';
             
@@ -130,7 +133,7 @@
             } else if (type === 'audio') {
                 mediaElement = `<audio src="${url}" controls autoplay class="w-full max-w-lg"></audio>`;
             } else {
-                return; // لا تفتح النافذة إذا لم يكن نوعاً مدعوماً
+                return;
             }
 
             mediaViewerContent.innerHTML = mediaElement;
@@ -138,9 +141,7 @@
         }
 
         function closeMediaViewer(event) {
-            // التأكد من أن النقر حدث على الخلفية وليس على المحتوى
             if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
-                // إيقاف أي فيديو أو صوت قيد التشغيل عند الإغلاق
                 const activeMedia = mediaViewerContent.querySelector('video, audio');
                 if (activeMedia) {
                     activeMedia.pause();
@@ -153,9 +154,7 @@
         // ******************** 2. وظائف قائمة الحذف (Delete Menu) ********************
 
         function openPostMenu(postId, postUserId, event) {
-            // منع النقر من الانتشار للنافذة المنبثقة إذا كانت مفتوحة
             event.stopPropagation();
-            
             postMenu.classList.add('hidden');
             
             if (currentUserId !== postUserId) {
@@ -166,7 +165,8 @@
             const rect = menuButton.getBoundingClientRect();
 
             postMenu.style.top = `${rect.bottom + window.scrollY + 5}px`;
-            postMenu.style.right = `${window.innerWidth - rect.right}px`;
+            // توجيه القائمة لتبدأ من يمين الزر (تفتح للداخل)
+            postMenu.style.right = `${window.innerWidth - rect.right}px`; 
             
             deleteOptionBtn.onclick = () => {
                 postMenu.classList.add('hidden');
@@ -212,8 +212,8 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // لا نستخدم Alert، بل نحدث الخلاصة ونغلق النافذة
                     closeDeleteModal();
+                    // تم تحسين fetchAndDisplayPosts لمنع ظهور الشاشة السوداء
                     fetchAndDisplayPosts(); 
                 } else {
                     deleteMessage.textContent = result.error || 'فشل في حذف المنشور.';
@@ -229,7 +229,6 @@
             }
         }
 
-        // ربط أزرار النافذة المنبثقة
         cancelDeleteBtn.addEventListener('click', closeDeleteModal);
         confirmDeleteBtn.addEventListener('click', deletePost);
 
@@ -242,10 +241,8 @@
                 const type = post.media.type;
                 
                 if (type === 'image') {
-                    // إضافة onclick لفتح النافذة الزجاجية
                     mediaHtml = `<img src="${url}" alt="Post Media" class="rounded-lg mt-3 w-full object-cover max-h-80 cursor-pointer" onclick="openMediaViewer('${url}', 'image', event)">`;
                 } else if (type === 'video') {
-                    // إضافة onclick لفتح النافذة الزجاجية
                     mediaHtml = `<video src="${url}" controls class="rounded-lg mt-3 w-full max-h-80 cursor-pointer" onclick="openMediaViewer('${url}', 'video', event)"></video>`;
                 } else if (type === 'audio') {
                     mediaHtml = `<audio src="${url}" controls class="rounded-lg mt-3 w-full"></audio>`;
@@ -256,8 +253,9 @@
                 year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
             
+            // تم تغيير الموقع إلى right-4
             const optionsButtonHtml = isOwner ? `
-                <div class="absolute top-4 left-4">
+                <div class="absolute top-4 right-4"> 
                     <button class="text-gray-400 hover:text-white p-1 rounded-full transition duration-300" onclick="openPostMenu('${post.postId}', '${post.userId}', event)">
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
@@ -299,22 +297,19 @@
             return postCard;
         }
 
-        // ******************** 4. وظيفة جلب وعرض المنشورات ********************
+        // ******************** 4. وظيفة جلب وعرض المنشورات (تم التحسين) ********************
         
         async function fetchAndDisplayPosts() {
-            const loadingMessage = document.getElementById('loadingMessage');
-            postsFeed.innerHTML = ''; 
-            loadingMessage.textContent = 'يتم تحميل المنشورات...';
+            const loadingMessageHtml = '<div class="text-center text-gray-500 p-4">يتم تحميل المنشورات...</div>';
+            postsFeed.innerHTML = loadingMessageHtml; // عرض رسالة التحميل فوراً لمنع الشاشة السوداء
 
             try {
-                // جلب بيانات المستخدم الحالي لتعيين currentUserId
                 const profileResponse = await fetch('/api/profile');
                 if (profileResponse.ok) {
                     const profileData = await profileResponse.json();
                     currentUserId = profileData.id; 
                 }
 
-                // جلب المنشورات
                 const postsResponse = await fetch('/api/posts');
                 if (!postsResponse.ok) {
                     throw new Error('فشل جلب المنشورات من الخادم.');
@@ -336,12 +331,27 @@
             }
         }
 
+        // ******************** 5. وظائف نافذة النجاح المؤقتة ********************
+        function closeTempSuccessModal() {
+            tempSuccessModal.classList.add('hidden');
+        }
+
+        function displaySuccessModal() {
+            const successFlag = sessionStorage.getItem('postSuccess');
+            if (successFlag) {
+                tempSuccessModal.classList.remove('hidden');
+                sessionStorage.removeItem('postSuccess'); 
+
+                // إغلاق النافذة تلقائياً بعد 3 ثوانٍ
+                setTimeout(closeTempSuccessModal, 3000); 
+            }
+        }
+        
         // وظائف وهمية للتفاعل 
         function handleLike(postId) { console.log(`تم الإعجاب بالمنشور: ${postId}.`); }
         function handleComment(postId) { console.log(`تم الضغط على تعليق للمنشور: ${postId}.`); }
         
         document.addEventListener('DOMContentLoaded', () => {
-             // جلب صورة البروفايل في النافبار
             fetch('/api/profile')
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
@@ -352,6 +362,7 @@
                     }
                 }).catch(console.error);
                 
+            displaySuccessModal(); // عرض رسالة النجاح إذا تم التوجيه من صفحة النشر
             fetchAndDisplayPosts();
         });
     </script>
