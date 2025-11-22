@@ -222,7 +222,7 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   let mediaUrl = null;
   let mediaType = null;
 
-  // التحقق من وجود محتوى نصي أو ملف وسائط (تم تحقيق طلبك)
+  // التحقق من وجود محتوى نصي أو ملف وسائط
   if (content.length === 0 && !req.file) {
     return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
   }
@@ -319,7 +319,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
-// نقطة وصول لحذف منشور (تم تحقيق طلبك)
+// نقطة وصول لحذف منشور
 app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
