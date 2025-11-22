@@ -34,6 +34,9 @@ const storage = new CloudinaryStorage({
         return 'chat_media';
       } else if (req.originalUrl.includes('/api/posts/create')) {
         return 'post_media'; // مجلد مخصص لوسائط المنشورات
+      } else if (req.originalUrl.includes('/api/profile/update')) {
+        if (file.fieldname === 'profile_picture') return 'profile_pics';
+        if (file.fieldname === 'cover_photo') return 'cover_photos'; // مجلد جديد لصور الغلاف
       }
       return 'general';
     },
@@ -467,6 +470,66 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
+// نقطة وصول لجلب منشورات مستخدم محدد فقط (مطلوبة لصفحة البروفايل)
+app.get('/api/users/:userId/posts', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const targetUserId = req.params.userId;
+
+  try {
+    // 1. جلب منشورات المستخدم المستهدف
+    const postsSnap = await db.ref('posts')
+      .orderByChild('userId')
+      .equalTo(targetUserId)
+      .once('value');
+
+    let posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
+
+    posts.reverse(); // اعكس الترتيب لعرض الأحدث أولاً
+
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
+
+    // 2. جلب ملفات المستخدمين
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+        profiles[userIds[index]] = snap.val();
+    });
+
+    // 3. جلب حالة إعجاب المستخدم الحالي لكل منشور
+    const likedStatuses = {};
+    const likePromises = posts.map(post => 
+      db.ref(`likes/${post.postId}/${currentUserId}`).once('value')
+    );
+    const likeSnapshots = await Promise.all(likePromises);
+
+    likeSnapshots.forEach((snap, index) => {
+        likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      is_liked: likedStatuses[post.postId] || false,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم غير معروف',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching user posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
+  }
+});
+
+
 // نقطة وصول لحذف منشور
 app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
@@ -510,10 +573,15 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
 
 // ---------------- API: Profile and User Operations ----------------
 app.get('/api/profile', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
+  // يمكن جلب ملف شخصي محدد عبر parameter 'user_id' أو الملف الشخصي للمستخدم الحالي
+  const targetUserId = req.query.user_id || req.session.userId;
+  
+  if (!targetUserId) {
+    return res.status(400).json({ ok: false, error: 'معرف المستخدم مطلوب.' });
+  }
 
   try {
-    const profileSnap = await db.ref(`profiles/${currentUserId}`).once('value');
+    const profileSnap = await db.ref(`profiles/${targetUserId}`).once('value');
     const profileData = profileSnap.val();
 
     if (!profileData) {
@@ -527,6 +595,47 @@ app.get('/api/profile', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'فشل في جلب بيانات الملف الشخصي.' });
   }
 });
+
+// نقطة وصول جديدة لتحديث بيانات الملف الشخصي (صورة، غلاف، اسم، نبذة)
+app.post('/api/profile/update', requireAuth, upload.fields([
+  { name: 'profile_picture', maxCount: 1 },
+  { name: 'cover_photo', maxCount: 1 }
+]), async (req, res) => {
+  const userId = req.session.userId;
+  const { full_name, bio } = req.body;
+  let updates = {};
+
+  try {
+    if (full_name) updates.full_name = full_name.trim();
+    if (bio) updates.bio = bio.trim();
+
+    // تحديث صورة الملف الشخصي
+    if (req.files && req.files.profile_picture) {
+      const pfpUrl = req.files.profile_picture[0].path;
+      updates.profile_picture_url = pfpUrl;
+      // تحديث photoURL في Firebase Auth أيضاً
+      await firebaseAuth.updateUser(userId, { photoURL: pfpUrl });
+    }
+
+    // تحديث صورة الغلاف
+    if (req.files && req.files.cover_photo) {
+      updates.cover_photo_url = req.files.cover_photo[0].path;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ ok: false, error: 'لم يتم توفير بيانات لتحديثها.' });
+    }
+
+    await db.ref(`profiles/${userId}`).update(updates);
+
+    res.json({ ok: true, message: 'تم تحديث الملف الشخصي بنجاح', updates: updates });
+
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تحديث الملف الشخصي على الخادم.' });
+  }
+});
+
 
 // نقطة وصول جديدة: جلب قائمة بجميع المستخدمين باستثناء المستخدم الحالي
 app.get('/api/users', requireAuth, async (req, res) => {
