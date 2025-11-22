@@ -404,15 +404,17 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
 });
 
 
-// نقطة وصول لجلب المنشورات الأخيرة
+// نقطة وصول لجلب المنشورات الأخيرة (مُعدّلة لجلب حالة الإعجاب)
 app.get('/api/posts', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId; // جلب معرف المستخدم الحالي
+
   try {
     const postsSnap = await db.ref('posts')
       .orderByChild('timestamp')
       .limitToLast(50)
       .once('value');
 
-    const posts = [];
+    let posts = [];
     postsSnap.forEach(childSnap => {
       posts.push(childSnap.val());
     });
@@ -423,15 +425,29 @@ app.get('/api/posts', requireAuth, async (req, res) => {
     const profiles = {};
     const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
 
+    // جلب ملفات المستخدمين
     const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
     const profileSnapshots = await Promise.all(profilePromises);
 
     profileSnapshots.forEach((snap, index) => {
         profiles[userIds[index]] = snap.val();
     });
+    
+    // جلب حالة إعجاب المستخدم الحالي لكل منشور
+    const likedStatuses = {};
+    const likePromises = posts.map(post => 
+      db.ref(`likes/${post.postId}/${currentUserId}`).once('value')
+    );
+    const likeSnapshots = await Promise.all(likePromises);
+    
+    likeSnapshots.forEach((snap, index) => {
+        likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+    // ----------------------------------------------------
 
     const finalPosts = posts.map(post => ({
       ...post,
+      is_liked: likedStatuses[post.postId] || false, // إضافة حالة الإعجاب
       user: {
         username: profiles[post.userId]?.username || 'مستخدم غير معروف',
         profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
