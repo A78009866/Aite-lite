@@ -42,7 +42,11 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ 
+    storage: storage,
+    // 💡 التعديل هنا: لضمان أن Multer يسمح بالملفات الكبيرة (50MB)
+    limits: { fileSize: 50 * 1024 * 1024 }
+});
 
 // Load service account key from environment variable
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
@@ -61,31 +65,21 @@ const port = 3000;
 // ---------------- Middleware ----------------
 // ✅ هام: يجب تفعيل trust proxy ليعمل secure: true و sameSite: 'none' بشكل صحيح في الإنتاج
 app.set('trust proxy', 1);
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
 
-// قم بتحديد أصول (origins) محددة مسموح بها.
-const corsOptions = {
-  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
-  credentials: true, 
-  optionsSuccessStatus: 200
-};
+// 💡 التعديل هنا: لرفع الحد الأقصى لحجم الطلب إلى 50 ميغابايت
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '50mb' })); 
 
 app.use(cors(corsOptions)); 
 
-// إعدادات الجلسة (session) الجديدة مع Firebase
+// ... (بقية ملف server.js بدون تغيير من هنا)
 app.use(session({
   secret: 'a-firebase-secret-key-is-better',
   resave: false,
   saveUninitialized: false,
-  // proxy: true, // تم إعداده بالفعل عبر app.set('trust proxy', 1)
   cookie: {
-    // 💡 التعديل لحل مشكلة استمرارية الجلسة (Session) عند تحديث الصفحة أو اختلاف النطاق
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    // يجب أن يكون 'none' في الإنتاج (مع secure: true) ليعمل مع العميل على نطاق مختلف.
-    // 'lax' جيد في التطوير المحلي (http://localhost) أو إذا كان العميل والخادم على نفس النطاق.
-    // نستخدم شرط بيئة التشغيل لضمان العمل على مختلف البيئات.
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   },
   store: new FirebaseStore({
@@ -766,7 +760,8 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     // خطأ من Multer (مثل حجم الملف كبير جدًا)
     console.error('Multer error:', err);
-    return res.status(413).json({ ok: false, error: `خطأ في تحميل الملف: ${err.message}` });
+    // 💡 يمكن تخصيص رسالة الخطأ هنا لإظهار الحد الأقصى المسموح به
+    return res.status(413).json({ ok: false, error: `خطأ في تحميل الملف: تجاوز الحد الأقصى المسموح به لحجم الملف.` });
   }
   if (err) {
     // أخطاء أخرى
