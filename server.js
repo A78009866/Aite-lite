@@ -42,19 +42,18 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ 
-    storage: storage,
-    // 💡 التعديل هنا: لضمان أن Multer يسمح بالملفات الكبيرة (50MB)
-    limits: { fileSize: 50 * 1024 * 1024 }
-});
+const upload = multer({ storage: storage });
 
 // Load service account key from environment variable
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://trimer-4081b-default-rtdb.firebaseio.com",
-});
+// 💡 التعديل هنا: التحقق من وجود تهيئة سابقة لمنع خطأ FirebaseAppError (app/duplicate-app)
+if (admin.apps.length === 0) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: "https://trimer-4081b-default-rtdb.firebaseio.com",
+    });
+}
 
 const firebaseAuth = getAuth();
 const db = getDatabase();
@@ -63,24 +62,29 @@ const app = express();
 const port = 3000;
 
 // ---------------- Middleware ----------------
-// ✅ هام: يجب تفعيل trust proxy ليعمل secure: true و sameSite: 'none' بشكل صحيح في الإنتاج
 app.set('trust proxy', 1);
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// 💡 التعديل هنا: لرفع الحد الأقصى لحجم الطلب إلى 50 ميغابايت
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.json({ limit: '50mb' })); 
+// قم بتحديد أصول (origins) محددة مسموح بها.
+const corsOptions = {
+  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
+  credentials: true, 
+  optionsSuccessStatus: 200
+};
 
 app.use(cors(corsOptions)); 
 
-// ... (بقية ملف server.js بدون تغيير من هنا)
+// إعدادات الجلسة (session) الجديدة مع Firebase
 app.use(session({
   secret: 'a-firebase-secret-key-is-better',
   resave: false,
   saveUninitialized: false,
+  proxy: true,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    sameSite: 'lax'
   },
   store: new FirebaseStore({
     database: db,
@@ -199,8 +203,6 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
       is_verified: false,
       // **تعديل: إضافة حقل النبذة (bio) لتمكين العرض المشروط**
       bio: '', 
-      // 💡 إضافة عداد المنشورات الافتراضي
-      postsCount: 0,
     };
     await db.ref('profiles/' + userRecord.uid).set(profileData);
 
@@ -226,7 +228,6 @@ app.get('/logout', (req, res) => {
 // نقطة وصول لإنشاء منشور جديد
 app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
   const userId = req.session.userId;
-  // 💡 تم تحسين قراءة المحتوى
   const content = req.body.content ? req.body.content.trim() : '';
   let mediaUrl = null;
   let mediaType = null;
@@ -240,7 +241,7 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   if (req.file) {
     mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
     
-    // 💡 تم تحسين منطق تحديد نوع الملف
+    // تحديد نوع الملف بناءً على MimeType
     const mimeType = req.file.mimetype;
     if (mimeType && mimeType.startsWith('image/')) {
         mediaType = 'image';
@@ -527,7 +528,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: 'ملف المستخدم غير موجود.' });
     }
 
-    // **تعديل: تصفية البيانات لإزالة إحصائيات المتابعة وإضافة حقل النبذة و postsCount**
+    // **تعديل: تصفية البيانات لإزالة إحصائيات المتابعة وإضافة حقل النبذة**
     const essentialProfileData = {
         id: profileData.id,
         username: profileData.username,
@@ -537,7 +538,6 @@ app.get('/api/profile', requireAuth, async (req, res) => {
         is_online: profileData.is_online,
         is_verified: profileData.is_verified,
         bio: profileData.bio || null, // حقل النبذة
-        postsCount: profileData.postsCount || 0, // 💡 تمت الإضافة هنا
     };
     
     // **إضافة حقل is_owner لتحديد ما إذا كان المستخدم الحالي هو صاحب الملف الشخصي المعروض**
@@ -760,8 +760,7 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     // خطأ من Multer (مثل حجم الملف كبير جدًا)
     console.error('Multer error:', err);
-    // 💡 يمكن تخصيص رسالة الخطأ هنا لإظهار الحد الأقصى المسموح به
-    return res.status(413).json({ ok: false, error: `خطأ في تحميل الملف: تجاوز الحد الأقصى المسموح به لحجم الملف.` });
+    return res.status(413).json({ ok: false, error: `خطأ في تحميل الملف: ${err.message}` });
   }
   if (err) {
     // أخطاء أخرى
