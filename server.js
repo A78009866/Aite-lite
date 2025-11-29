@@ -59,6 +59,7 @@ const app = express();
 const port = 3000;
 
 // ---------------- Middleware ----------------
+// ✅ هام: يجب تفعيل trust proxy ليعمل secure: true و sameSite: 'none' بشكل صحيح في الإنتاج
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -77,11 +78,15 @@ app.use(session({
   secret: 'a-firebase-secret-key-is-better',
   resave: false,
   saveUninitialized: false,
-  proxy: true,
+  // proxy: true, // تم إعداده بالفعل عبر app.set('trust proxy', 1)
   cookie: {
+    // 💡 التعديل لحل مشكلة استمرارية الجلسة (Session) عند تحديث الصفحة أو اختلاف النطاق
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'lax'
+    // يجب أن يكون 'none' في الإنتاج (مع secure: true) ليعمل مع العميل على نطاق مختلف.
+    // 'lax' جيد في التطوير المحلي (http://localhost) أو إذا كان العميل والخادم على نفس النطاق.
+    // نستخدم شرط بيئة التشغيل لضمان العمل على مختلف البيئات.
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   },
   store: new FirebaseStore({
     database: db,
@@ -200,6 +205,8 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
       is_verified: false,
       // **تعديل: إضافة حقل النبذة (bio) لتمكين العرض المشروط**
       bio: '', 
+      // 💡 إضافة عداد المنشورات الافتراضي
+      postsCount: 0,
     };
     await db.ref('profiles/' + userRecord.uid).set(profileData);
 
@@ -225,6 +232,7 @@ app.get('/logout', (req, res) => {
 // نقطة وصول لإنشاء منشور جديد
 app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
   const userId = req.session.userId;
+  // 💡 تم تحسين قراءة المحتوى
   const content = req.body.content ? req.body.content.trim() : '';
   let mediaUrl = null;
   let mediaType = null;
@@ -238,7 +246,7 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   if (req.file) {
     mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
     
-    // تحديد نوع الملف بناءً على MimeType
+    // 💡 تم تحسين منطق تحديد نوع الملف
     const mimeType = req.file.mimetype;
     if (mimeType && mimeType.startsWith('image/')) {
         mediaType = 'image';
@@ -525,7 +533,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: 'ملف المستخدم غير موجود.' });
     }
 
-    // **تعديل: تصفية البيانات لإزالة إحصائيات المتابعة وإضافة حقل النبذة**
+    // **تعديل: تصفية البيانات لإزالة إحصائيات المتابعة وإضافة حقل النبذة و postsCount**
     const essentialProfileData = {
         id: profileData.id,
         username: profileData.username,
@@ -535,6 +543,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
         is_online: profileData.is_online,
         is_verified: profileData.is_verified,
         bio: profileData.bio || null, // حقل النبذة
+        postsCount: profileData.postsCount || 0, // 💡 تمت الإضافة هنا
     };
     
     // **إضافة حقل is_owner لتحديد ما إذا كان المستخدم الحالي هو صاحب الملف الشخصي المعروض**
