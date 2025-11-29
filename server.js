@@ -262,8 +262,7 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
       userId: userId,
       content: content,
       timestamp: timestamp,
-      totalReactions: 0, 
-      reactions: {},     
+      likes: 0,
       commentsCount: 0,
       // حفظ بيانات الوسائط فقط إذا كانت موجودة
       media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
@@ -285,123 +284,56 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   }
 });
 
-// نقطة النهاية الجديدة لمعالجة التفاعلات (أحببته، أدعمه، ممل، حكيم)
-app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
-    const { postId } = req.params;
-    const userId = req.session.userId;
-    // reactionType يمكن أن تكون 'love', 'support', 'boring', 'wise' أو null للإزالة
-    const { reactionType } = req.body; 
+// نقطة وصول للإعجاب بمنشور
+app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
 
-    if (!postId || !userId) {
-        return res.status(400).json({ ok: false, error: 'Post ID and user ID are required.' });
+  if (!postId) {
+    return res.status(400).json({ ok: false, error: 'معرف المنشور مطلوب.' });
+  }
+
+  const postRef = db.ref(`posts/${postId}`);
+  const userLikeRef = db.ref(`likes/${postId}/${userId}`);
+
+  try {
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) {
+      return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
     }
 
-    const postRef = db.ref(`posts/${postId}`);
-    const allowedReactions = ['love', 'support', 'boring', 'wise'];
-
-    try {
-        let action; // 'added', 'removed', or 'changed'
-        let newReactionType = reactionType; // التفاعل الجديد أو null
-        let totalReactions = 0;
-        let allReactionCounts = {};
-        
-        // التحقق من صلاحية نوع التفاعل قبل بدء المعاملة
-        if (newReactionType && !allowedReactions.includes(newReactionType)) {
-             return res.status(400).json({ ok: false, error: 'نوع التفاعل غير صالح.' });
-        }
-
-        // استخدام Transaction لضمان سلامة البيانات
-        // **تم حذف كلمة 'async' من هنا لإصلاح مشكلة الـ transaction**
-        const resultRoot = await db.ref().transaction((root) => { 
-            
-            // 1. تحقق من وجود المنشور
-            if (root === null || !root.posts || !root.posts[postId]) {
-                 return; // Abort transaction if post doesn't exist
-            }
-            
-            const postData = root.posts[postId];
-            
-            // 2. تهيئة بنية التفاعلات
-            if (!root.reactions) { root.reactions = {}; }
-            if (!root.reactions[postId]) { root.reactions[postId] = {}; }
-            
-            const currentReactionData = root.reactions[postId][userId];
-            const currentReactionType = currentReactionData ? currentReactionData.type : null;
-            
-            const postReactions = postData.reactions || {};
-            
-            let finalReactionType = newReactionType;
-            let transactionAction = 'no_change'; 
-
-            // **منطق التفاعل المصحح والمبسط:**
-            
-            // أ. معالجة الإزالة (إنقاص عدد التفاعل القديم وإزالته من سجل المستخدمين)
-            if (currentReactionType) {
-                postReactions[currentReactionType] = (postReactions[currentReactionType] || 1) - 1;
-                if (postReactions[currentReactionType] <= 0) {
-                    delete postReactions[currentReactionType];
-                }
-                delete root.reactions[postId][userId];
-                transactionAction = 'removed'; 
-            }
-            
-            // ب. معالجة الإضافة (إذا كان التفاعل المطلوب جديداً ومختلفاً عن السابق)
-            if (newReactionType && currentReactionType !== newReactionType) {
-                // إضافة التفاعل الجديد
-                root.reactions[postId][userId] = { type: newReactionType, timestamp: admin.database.ServerValue.TIMESTAMP };
-                postReactions[newReactionType] = (postReactions[newReactionType] || 0) + 1;
-                
-                transactionAction = (currentReactionType) ? 'changed' : 'added';
-                finalReactionType = newReactionType;
-            } else {
-                 // إذا كان newReactionType هو null أو يساوي currentReactionType (مما يعني إلغاء التفاعل)
-                 finalReactionType = null;
-                 if (!currentReactionType) transactionAction = 'no_change';
-            }
-            
-            // 3. تحديث البيانات على المنشور
-            postData.reactions = postReactions;
-            postData.totalReactions = Object.values(postReactions).reduce((sum, count) => sum + count, 0);
-            
-            // تحديث المنشور في الجذر
-            root.posts[postId] = postData;
-            
-            // حفظ القيم للرد قبل الخروج من الـ transaction
-            totalReactions = postData.totalReactions;
-            allReactionCounts = postReactions;
-            newReactionType = finalReactionType; 
-            action = transactionAction; // تعيين قيمة الرد
-
-            return root; // تمرير القيمة الجديدة للمنشور
-
-        }, (error, committed, snapshot) => {
-            if (error) {
-                console.error('Transaction failed: ', error);
-                throw new Error('Transaction failed');
-            }
-            // إذا لم تلتزم (Committed)، فإن المنشور غير موجود على الأرجح (تم التحقق منه أعلاه)
-        });
-
-        // إذا فشلت المعاملة بسبب عدم وجود المنشور
-        if (!resultRoot) {
-            return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
-        }
-        
-        // الرد بالبيانات الجديدة التي تم تحديثها داخل المعاملة
-        return res.json({ 
-            ok: true, 
-            action: action || 'no_change', 
-            reaction: newReactionType,
-            newReactionsCount: totalReactions || 0,
-            allReactionCounts: allReactionCounts || {}
-        });
-
-    } catch (error) {
-        console.error('Reaction error:', error.message);
-        res.status(500).json({ ok: false, error: 'فشل في معالجة التفاعل.' });
+    const likeSnapshot = await userLikeRef.once('value');
+    const isLiked = likeSnapshot.val();
+    let likesUpdate = 0;
+    let action = '';
+    
+    // عملية الإعجاب/إلغاء الإعجاب
+    if (isLiked) {
+      // إلغاء الإعجاب
+      await userLikeRef.remove();
+      likesUpdate = -1;
+      action = 'unliked';
+    } else {
+      // إعجاب
+      await userLikeRef.set(admin.database.ServerValue.TIMESTAMP);
+      likesUpdate = 1;
+      action = 'liked';
     }
+
+    // تحديث عداد الإعجابات في المنشور
+    let newLikesCount = 0;
+    await postRef.child('likes').transaction((currentCount) => {
+      newLikesCount = (currentCount || 0) + likesUpdate;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    res.json({ ok: true, action: action, newLikes: newLikesCount });
+
+  } catch (error) {
+    console.error('Error handling like:', error);
+    res.status(500).json({ ok: false, error: 'فشل في معالجة الإعجاب على الخادم.' });
+  }
 });
-
 
 // نقطة وصول لإضافة تعليق جديد
 app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
@@ -438,6 +370,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
         profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/40/000000/FFFFFF?text=A'
       }
     };
+
     await newCommentRef.set(commentData);
 
     // تحديث عداد التعليقات في المنشور
@@ -458,6 +391,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
 // نقطة وصول لجلب جميع التعليقات لمنشور
 app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
   const postId = req.params.postId;
+
   try {
     const commentsSnap = await db.ref(`comments/${postId}`)
       .orderByChild('timestamp')
@@ -469,40 +403,103 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
     });
 
     res.json({ ok: true, comments: comments });
+
   } catch (error) {
     console.error('Error fetching comments:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
   }
 });
 
-// نقطة وصول لحذف المنشور
+
+// نقطة وصول لجلب المنشورات الأخيرة
+app.get('/api/posts', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId; // جلب معرف المستخدم الحالي
+
+  try {
+    const postsSnap = await db.ref('posts')
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
+
+    let posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
+
+    posts.reverse(); 
+
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
+
+    // جلب ملفات المستخدمين
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+        profiles[userIds[index]] = snap.val();
+    });
+    
+    // جلب حالة إعجاب المستخدم الحالي لكل منشور
+    const likedStatuses = {};
+    const likePromises = posts.map(post => 
+      db.ref(`likes/${post.postId}/${currentUserId}`).once('value')
+    );
+    const likeSnapshots = await Promise.all(likePromises);
+    
+    likeSnapshots.forEach((snap, index) => {
+        likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+    // ----------------------------------------------------
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      is_liked: likedStatuses[post.postId] || false, // إضافة حالة الإعجاب
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم غير معروف',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
+  }
+});
+
+// نقطة وصول لحذف منشور
 app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
 
+  if (!postId) {
+    return res.status(400).json({ ok: false, error: 'معرف المنشور مطلوب للحذف.' });
+  }
+
+  const postRef = db.ref(`posts/${postId}`);
+  
   try {
-    const postRef = db.ref(`posts/${postId}`);
     const postSnapshot = await postRef.once('value');
     const postData = postSnapshot.val();
 
-    if (!postSnapshot.exists()) {
+    if (!postData) {
       return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
     }
 
+    // التحقق من أن المستخدم الحالي هو صاحب المنشور
     if (postData.userId !== userId) {
-      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا المنشور.' });
+      return res.status(403).json({ ok: false, error: 'ليس لديك صلاحية لحذف هذا المنشور.' });
     }
 
-    // 1. حذف المنشور
+    // حذف المنشور من قاعدة البيانات
     await postRef.remove();
-    // 2. حذف التعليقات والتفاعلات المرتبطة (اختياري، لضمان النظافة)
-    await db.ref(`comments/${postId}`).remove();
-    await db.ref(`reactions/${postId}`).remove(); // حذف التفاعلات
 
-    // 3. تحديث عداد المنشورات للمستخدم (اختياري)
+    // تحديث عداد المنشورات للمستخدم
     const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
     await userPostsCountRef.transaction((currentCount) => {
-      return Math.max(0, (currentCount || 1) - 1);
+      return (currentCount || 0) > 0 ? (currentCount - 1) : 0;
     });
 
     res.json({ ok: true, message: 'تم حذف المنشور بنجاح.' });
@@ -513,126 +510,220 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   }
 });
 
-// نقطة وصول لجلب المنشورات الأخيرة (MODIFIED to handle reactions)
-app.get('/api/posts', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId; 
-
-  try {
-    // 1. جلب المنشورات
-    const postsSnap = await db.ref('posts')
-      .orderByChild('timestamp')
-      .limitToLast(50)
-      .once('value');
-
-    let posts = [];
-    postsSnap.forEach(childSnap => {
-      posts.push(childSnap.val());
-    });
-    posts.reverse(); // لعرض الأحدث أولاً
-
-    // 2. تجميع معرفات المستخدمين
-    const userIds = [...new Set(posts.map(p => p.userId))];
-    const profiles = {};
-    const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
-
-    // 3. جلب ملفات المستخدمين
-    const profilePromises = userIds.map(userId => 
-      db.ref(`profiles/${userId}`).once('value').then(snap => {
-        profiles[userId] = snap.val();
-      })
-    );
-    await Promise.all(profilePromises);
-
-    // 4. جلب جميع التفاعلات من قاعدة البيانات
-    const reactionsSnap = await db.ref('reactions').once('value');
-    const allReactions = reactionsSnap.val() || {}; 
-
-    // 5. بناء مصفوفة المنشورات النهائية مع بيانات التفاعل وملف المستخدم
-    const postsArray = [];
-    posts.forEach(post => {
-        // جلب تفاعل المستخدم الحالي
-        const userReactionData = allReactions[post.postId] && allReactions[post.postId][currentUserId] 
-                                ? allReactions[post.postId][currentUserId] 
-                                : null;
-        
-        // إضافة بيانات التفاعل إلى المنشور
-        post.userReaction = userReactionData ? userReactionData.type : null;
-        post.reactionsCount = post.totalReactions || 0; // العدد الإجمالي للتفاعلات
-        post.allReactionCounts = post.reactions || {}; // أعداد كل نوع تفاعل
-        
-        // إزالة الخصائص القديمة (likes و is_liked)
-        delete post.is_liked; 
-        delete post.likes;
-
-        // إضافة بيانات المستخدم إلى المنشور
-        const userProfile = profiles[post.userId] || { username: 'مستخدم محذوف', profile_picture_url: defaultProfileUrl };
-        post.user = {
-            id: post.userId,
-            username: userProfile.username,
-            profile_picture_url: userProfile.profile_picture_url,
-        };
-
-        postsArray.push(post);
-    });
-
-    res.json({ ok: true, posts: postsArray });
-
-  } catch (error) {
-    console.error('Error fetching posts:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
-  }
-});
-
-
-// ---------------- API: Users & Profile ----------------
-
-// نقطة وصول لجلب ملف المستخدم الحالي
+// ---------------- API: Profile and User Operations ----------------
 app.get('/api/profile', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
+  const currentUserId = req.session.userId;
+  // **التعديل: جلب معرّف الملف الشخصي المطلوب عرضه من الاستعلام، أو استخدام معرّف المستخدم الحالي**
+  const requestedUserId = req.query.userId || currentUserId; 
+
   try {
-    const profileSnap = await db.ref('profiles/' + userId).once('value');
-    const profile = profileSnap.val();
-    if (profile) {
-      res.json(profile);
-    } else {
-      res.status(404).json({ error: 'Profile not found' });
+    // استخدام معرّف الملف الشخصي المطلوب
+    const profileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
+    const profileData = profileSnap.val();
+
+    if (!profileData) {
+      return res.status(404).json({ ok: false, error: 'ملف المستخدم غير موجود.' });
     }
+
+    // **تعديل: تصفية البيانات لإزالة إحصائيات المتابعة وإضافة حقل النبذة**
+    const essentialProfileData = {
+        id: profileData.id,
+        username: profileData.username,
+        full_name: profileData.full_name,
+        email: profileData.email,
+        profile_picture_url: profileData.profile_picture_url,
+        is_online: profileData.is_online,
+        is_verified: profileData.is_verified,
+        bio: profileData.bio || null, // حقل النبذة
+    };
+    
+    // **إضافة حقل is_owner لتحديد ما إذا كان المستخدم الحالي هو صاحب الملف الشخصي المعروض**
+    const isOwner = requestedUserId === currentUserId;
+
+    res.json({ ok: true, ...essentialProfileData, is_owner: isOwner });
+
   } catch (error) {
     console.error('Error fetching profile:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ ok: false, error: 'فشل في جلب بيانات الملف الشخصي.' });
   }
 });
 
-// نقطة وصول لجلب جميع المستخدمين (لصفحة users_list)
+// نقطة وصول جديدة: جلب قائمة بجميع المستخدمين باستثناء المستخدم الحالي
 app.get('/api/users', requireAuth, async (req, res) => {
-    try {
-        const usersSnap = await db.ref('profiles').once('value');
-        const users = [];
-        usersSnap.forEach(childSnap => {
-            const user = childSnap.val();
-            // تصفية المعلومات الحساسة قبل الإرسال
-            users.push({
-                id: user.id,
-                username: user.username,
-                profile_picture_url: user.profile_picture_url,
-                bio: user.bio,
-                is_online: user.is_online,
-            });
-        });
-        res.json({ ok: true, users: users });
-    } catch (error) {
-        console.error('Error fetching users list:', error);
-        res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المستخدمين.' });
-    }
+  const currentUserId = req.session.userId;
+
+  try {
+    const profilesSnap = await db.ref('profiles').once('value');
+    const profiles = profilesSnap.val() || {};
+
+    // تصفية المستخدم الحالي من القائمة وتنسيق البيانات
+    const usersList = Object.values(profiles).filter(user => user.id !== currentUserId).map(user => ({
+      id: user.id,
+      username: user.username,
+      profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40/000000/FFFFFF?text=U'
+    }));
+
+    res.json({ ok: true, users: usersList });
+
+  } catch (error) {
+    console.error('Error fetching users list:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المستخدمين.' });
+  }
 });
 
 
-// ---------------- Debug/Info Routes ----------------
+// ---------------- API: Chat List and Messages ----------------
+app.get('/api/chats', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
 
-app.get('/api/debug/info', requireAuth, (req, res) => {
+  try {
+    const chatRefs = db.ref(`chats/${userId}`);
+    const chatSnap = await chatRefs.once('value');
+    const chats = [];
+    const contactIds = [];
+
+    chatSnap.forEach(childSnap => {
+      const chat = childSnap.val();
+      chats.push(chat);
+      contactIds.push(chat.contact_id);
+    });
+
+    const profiles = {};
+    const profilePromises = contactIds.map(id => db.ref(`profiles/${id}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+      profiles[contactIds[index]] = snap.val();
+    });
+
+    const finalChats = chats.map(chat => ({
+      ...chat,
+      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم غير معروف', profile_picture_url: 'https://via.placeholder.com/40' }
+    }));
+
+    res.json({ ok: true, chats: finalChats });
+    
+  } catch (error) {
+    console.error('Error fetching chat list:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المحادثات.' });
+  }
+});
+
+// نقطة وصول لجلب الرسائل في محادثة محددة
+app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const contactId = req.params.contactId;
+  const { limit = 50 } = req.query; // يمكن تحديد عدد الرسائل المُراد جلبها
+
+  if (!contactId) {
+    return res.status(400).json({ ok: false, error: 'معرف جهة الاتصال مطلوب.' });
+  }
+
+  // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
+  const chatRoomId = [userId, contactId].sort().join('_');
+  const messagesRef = db.ref(`messages/${chatRoomId}`);
+
+  try {
+    const messagesSnap = await messagesRef
+      .orderByChild('timestamp')
+      .limitToLast(Number(limit))
+      .once('value');
+
+    const messages = [];
+    messagesSnap.forEach(childSnap => {
+      messages.push(childSnap.val());
+    });
+
+    res.json({ ok: true, messages: messages.reverse() }); // اعكس الترتيب لعرض الأحدث في الأسفل
+
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الرسائل.' });
+  }
+});
+
+
+// نقطة وصول لإرسال رسالة جديدة (نص أو وسائط)
+app.post('/api/messages/send/:contactId', requireAuth, upload.single('media'), async (req, res) => {
+  const senderId = req.session.userId;
+  const contactId = req.params.contactId;
+  const { content } = req.body;
+  
+  let mediaUrl = null;
+  let mediaType = null;
+  const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+  // التحقق من وجود محتوى نصي أو ملف وسائط
+  if ((!content || content.trim().length === 0) && !req.file) {
+    return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
+  }
+
+  // إذا تم رفع ملف بنجاح
+  if (req.file) {
+    mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
+    
+    const mimeType = req.file.mimetype;
+    if (mimeType && mimeType.startsWith('image/')) {
+        mediaType = 'image';
+    } else if (mimeType && mimeType.startsWith('video/')) {
+        mediaType = 'video';
+    } else if (mimeType && mimeType.startsWith('audio/')) {
+        mediaType = 'audio';
+    } else {
+        mediaType = 'raw';
+    }
+  }
+
+  try {
+    // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
+    const chatRoomId = [senderId, contactId].sort().join('_');
+    const messagesRef = db.ref(`messages/${chatRoomId}`).push();
+    const messageId = messagesRef.key;
+
+    const messageData = {
+      messageId: messageId,
+      senderId: senderId,
+      content: content || null,
+      timestamp: timestamp,
+      // حفظ بيانات الوسائط فقط إذا كانت موجودة
+      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
+      is_read: false,
+    };
+
+    await messagesRef.set(messageData);
+
+    // تحديث بيانات المحادثات (last_message_content) لكلا المستخدمين
+    const lastMessageContent = content || `[${mediaType === 'image' ? 'صورة' : mediaType === 'video' ? 'فيديو' : mediaType === 'audio' ? 'مقطع صوتي' : 'ملف وسائط'}]`;
+
+    // تحديث محادثة المرسل
+    await db.ref(`chats/${senderId}/${contactId}`).update({
+        last_message_content: lastMessageContent,
+        last_message_timestamp: timestamp,
+        contact_id: contactId,
+    });
+
+    // تحديث محادثة المُستقبِل
+    await db.ref(`chats/${contactId}/${senderId}`).update({
+        last_message_content: lastMessageContent,
+        last_message_timestamp: timestamp,
+        contact_id: senderId,
+    });
+
+    res.json({ ok: true, message: 'تم إرسال الرسالة بنجاح', messageData: messageData });
+
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إرسال الرسالة.' });
+  }
+});
+
+
+// ---------------- Debug Routes (for development purposes) ----------------
+app.get('/api/debug/session', requireAuth, (req, res) => {
   res.json({
     ok: true,
-    message: 'Debug info for authenticated user.',
+    message: 'Session is active.',
+    isAuthenticated: !!(req.session && req.session.userId),
     userId: req.session.userId || null,
     cookies: req.headers.cookie || null,
     nodeEnv: process.env.NODE_ENV,
@@ -667,15 +758,16 @@ app.use((err, req, res, next) => {
     // خطأ من Multer (مثل حجم الملف كبير جدًا)
     console.error('Multer error:', err);
     return res.status(413).json({ ok: false, error: `خطأ في تحميل الملف: ${err.message}` });
-  } else if (err) {
-    // أخطاء أخرى غير متوقعة
-    console.error('Unknown error:', err);
+  }
+  if (err) {
+    // أخطاء أخرى
+    console.error('General error:', err);
     return res.status(500).json({ ok: false, error: 'حدث خطأ غير متوقع على الخادم.' });
   }
   next();
 });
 
-
+// ---------------- Server Start ----------------
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`Server listening at http://localhost:${port}`);
 });
