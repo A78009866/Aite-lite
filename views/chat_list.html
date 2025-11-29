@@ -189,10 +189,20 @@
     </div>
 
 
-    <script>
+<script>
     // متغيرات عامة
     let currentUserId = null;
-    let activeWaveSurfer = null; // لتتبع مشغل WaveSurfer النشط
+    let activeWaveSurfer = null;
+
+    // خريطة التفاعلات الجديدة
+    const REACTIONS_MAP = {
+        love: { arabic: 'أحببته', icon: 'fa-heart', color: 'text-red-500' },
+        support: { arabic: 'أدعمه', icon: 'fa-handshake', color: 'text-green-500' },
+        boring: { arabic: 'ممل', icon: 'fa-face-rolling-eyes', color: 'text-yellow-500' },
+        wise: { arabic: 'حكيم', icon: 'fa-graduation-cap', color: 'text-blue-500' },
+    };
+
+    const ALL_REACTION_TYPES = Object.keys(REACTIONS_MAP);
 
     // ----------------- Video Control Functions -----------------
     /**
@@ -200,12 +210,8 @@
      * @param {HTMLVideoElement} videoElement 
      */
     function togglePlay(videoElement) {
-        // لتحديد أيقونة التشغيل/الإيقاف بشكل صحيح
         const wrapper = videoElement.closest('.video-wrapper');
         if (!wrapper) return;
-        
-        const centerIcon = wrapper.querySelector('.play-pause-btn-center i');
-        const bottomIcon = wrapper.querySelector('.play-pause-btn-bottom i');
         
         if (videoElement.paused || videoElement.ended) {
             videoElement.play();
@@ -222,17 +228,17 @@
         if (!document.fullscreenElement) {
             if (element.requestFullscreen) {
                 element.requestFullscreen();
-            } else if (element.webkitRequestFullscreen) { /* Safari */
+            } else if (element.webkitRequestFullscreen) {
                 element.webkitRequestFullscreen();
-            } else if (element.msRequestFullscreen) { /* IE11 */
+            } else if (element.msRequestFullscreen) {
                 element.msRequestFullscreen();
             }
         } else {
             if (document.exitFullscreen) {
                 document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) { /* Safari */
+            } else if (document.webkitExitFullscreen) {
                 document.webkitExitFullscreen();
-            } else if (document.msExitFullscreen) { /* IE11 */
+            } else if (document.msExitFullscreen) {
                 document.msExitFullscreen();
             }
         }
@@ -268,10 +274,9 @@
 
         ws.load(url);
 
-        const playButton = container.closest('.post-card-container').querySelector('.audio-play-button'); // Added class 'post-card-container'
+        const playButton = container.closest('.post-card-container').querySelector('.audio-play-button');
         if (playButton) {
             playButton.onclick = () => {
-                // إيقاف تشغيل أي مشغل صوتي آخر
                 if (activeWaveSurfer && activeWaveSurfer !== ws) {
                     activeWaveSurfer.pause();
                     const otherPostCard = activeWaveSurfer.container.closest('.post-card-container');
@@ -299,14 +304,58 @@
         }
     }
 
-    // ----------------- Post Rendering (MODIFIED) -----------------
+    // ----------------- Reaction UI Update Helper -----------------
 
     /**
-     * إنشاء عنصر واجهة المستخدم (UI) لمنشور واحد.
-     * تم تعديل هذه الدالة لتحسين عرض الفيديو.
-     * @param {object} post - بيانات المنشور
-     * @returns {HTMLElement}
+     * تحديث واجهة المستخدم للتفاعلات بعد استجابة الخادم
      */
+    function updateReactionUI(postElement, newReactionType, totalCount, allCounts) {
+        const mainBtn = postElement.querySelector('.main-reaction-btn');
+        const mainIcon = postElement.querySelector('.main-reaction-icon');
+        const mainText = postElement.querySelector('.main-reaction-text');
+        const countDisplay = postElement.querySelector('.reactions-count-display');
+        const summaryIcons = postElement.querySelector('.reaction-icons-summary');
+        
+        const type = newReactionType || 'none';
+        
+        // 1. تحديث حالة زر التفاعل الرئيسي
+        mainBtn.dataset.currentReaction = type;
+
+        // إزالة جميع الألوان السابقة
+        Object.values(REACTIONS_MAP).forEach(map => mainIcon.classList.remove(map.color));
+        mainIcon.classList.remove('fas', 'far'); // إزالة فئة الحالة
+        
+        if (type !== 'none') {
+            const reactionData = REACTIONS_MAP[type];
+            // تحديث الأيقونة والنص واللون
+            mainIcon.className = `fas ${reactionData.icon} ml-2 main-reaction-icon ${reactionData.color}`;
+            mainText.textContent = reactionData.arabic;
+            mainBtn.classList.remove('text-gray-400');
+            mainBtn.classList.add(reactionData.color);
+
+        } else {
+            // العودة إلى الحالة الافتراضية
+            mainIcon.className = 'far fa-heart ml-2 main-reaction-icon text-gray-400';
+            mainText.textContent = 'تفاعل';
+            Object.values(REACTIONS_MAP).forEach(map => mainBtn.classList.remove(map.color));
+            mainBtn.classList.add('text-gray-400');
+        }
+        
+        // 2. تحديث عدد التفاعلات الإجمالي
+        countDisplay.textContent = totalCount;
+        
+        // 3. تحديث أيقونات الملخص (Top 3 Reactions)
+        const topReactions = Object.entries(allCounts)
+            .sort(([, countA], [, countB]) => countB - countA)
+            .slice(0, 3)
+            .filter(([, count]) => count > 0)
+            .map(([type]) => REACTIONS_MAP[type] ? `<i class="fas ${REACTIONS_MAP[type].icon} ${REACTIONS_MAP[type].color} ml-0.5"></i>` : '');
+
+        summaryIcons.innerHTML = topReactions.join('');
+    }
+
+    // ----------------- Post Rendering (MODIFIED) -----------------
+
     function createPostElement(post) {
         const postElement = document.createElement('div');
         postElement.className = 'glass-post-card p-4 rounded-xl shadow-lg post-card-container';
@@ -331,7 +380,7 @@
         `;
         postElement.innerHTML = header;
         
-        // 2. Media Content
+        // 2. Media Content (Video/Audio/Image logic... kept for completeness)
         if (post.media && post.media.url) {
             const mediaContainer = document.createElement('div');
             mediaContainer.className = 'mt-3 mb-4';
@@ -339,7 +388,6 @@
             if (post.media.type === 'image') {
                 mediaContainer.innerHTML = `<img src="${post.media.url}" alt="صورة المنشور" class="w-full rounded-lg object-contain max-h-96">`;
             } else if (post.media.type === 'video') {
-                // ------------------ Video Enhancement Start ------------------
                 const videoWrapper = document.createElement('div');
                 videoWrapper.className = 'video-wrapper relative rounded-lg overflow-hidden w-full bg-black/50';
                 videoWrapper.id = `video-wrapper-${post.postId}`;
@@ -348,13 +396,11 @@
                     <video id="video-${post.postId}" class="post-video w-full" src="${post.media.url}" preload="metadata" style="max-height: 500px;"></video>
                     
                     <div id="overlay-${post.postId}" class="controls-overlay absolute inset-0 flex flex-col justify-between items-center opacity-100 transition-opacity duration-300 bg-black/30 cursor-pointer">
-                        
                         <div class="flex-grow flex items-center justify-center w-full h-full">
                             <button class="play-pause-btn-center text-white text-6xl hover:scale-110 transition-transform p-4 rounded-full bg-black/60 shadow-xl">
                                 <i class="fas fa-play"></i>
                             </button>
                         </div>
-
                         <div class="bottom-bar w-full p-3 bg-black/80 flex justify-between items-center text-white text-sm">
                             <div class="flex items-center space-x-2 space-x-reverse">
                                 <button class="play-pause-btn-bottom text-xl hover:text-blue-400">
@@ -364,7 +410,6 @@
                                 <span class="text-gray-400">/</span>
                                 <span class="video-duration">0:00</span>
                             </div>
-                            
                             <button class="zoom-btn text-xl hover:text-blue-400">
                                 <i class="fas fa-expand"></i>
                             </button>
@@ -375,7 +420,6 @@
                 mediaContainer.appendChild(videoWrapper);
                 postElement.appendChild(mediaContainer);
 
-                // Add Event Listeners AFTER mounting the HTML elements
                 setTimeout(() => {
                     const video = document.getElementById(`video-${post.postId}`);
                     const overlay = document.getElementById(`overlay-${post.postId}`);
@@ -386,84 +430,29 @@
                     const currentTimeSpan = wrapper.querySelector('.video-current-time');
                     const durationSpan = wrapper.querySelector('.video-duration');
 
-                    // Play/Pause Logic (Clicking the center button or the video itself)
-                    centerBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        togglePlay(video);
-                    });
-                    
-                    bottomBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        togglePlay(video);
-                    });
-                    
-                    // Click on the video itself also toggles play/pause
-                    video.addEventListener('click', () => {
-                        togglePlay(video);
+                    const updateIconsTo = (state) => {
+                        wrapper.querySelector('.play-pause-btn-center i').className = `fas fa-${state}`;
+                        wrapper.querySelector('.play-pause-btn-bottom i').className = `fas fa-${state}`;
+                    };
+
+                    centerBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(video); });
+                    bottomBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(video); });
+                    video.addEventListener('click', () => { togglePlay(video); });
+
+                    video.addEventListener('play', () => { overlay.style.opacity = '0'; updateIconsTo('pause'); });
+                    video.addEventListener('pause', () => { overlay.style.opacity = '1'; updateIconsTo('play'); });
+                    video.addEventListener('loadedmetadata', () => { durationSpan.textContent = formatTime(video.duration); });
+                    video.addEventListener('timeupdate', () => { currentTimeSpan.textContent = formatTime(video.currentTime); });
+                    zoomBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleFullScreen(wrapper); });
+                    video.addEventListener('ended', () => { 
+                        overlay.style.opacity = '1'; 
+                        updateIconsTo('play');
+                        video.currentTime = 0; 
                     });
 
-                    // Hide/Show overlay on play/pause
-                    video.addEventListener('play', () => {
-                        overlay.style.opacity = '0';
-                        // إخفاء الـ overlay بعد ثوانٍ قليلة عند التشغيل
-                        wrapper.dataset.hideTimeout = setTimeout(() => {
-                            overlay.style.opacity = '0';
-                        }, 500);
-                        // تحديث الأيقونات إلى إيقاف
-                        wrapper.querySelector('.play-pause-btn-center i').className = 'fas fa-pause';
-                        wrapper.querySelector('.play-pause-btn-bottom i').className = 'fas fa-pause';
-                    });
-                    
-                    video.addEventListener('pause', () => {
-                        clearTimeout(wrapper.dataset.hideTimeout);
-                        overlay.style.opacity = '1';
-                        // تحديث الأيقونات إلى تشغيل
-                        wrapper.querySelector('.play-pause-btn-center i').className = 'fas fa-play';
-                        wrapper.querySelector('.play-pause-btn-bottom i').className = 'fas fa-play';
-                    });
-                    
-                    // Show controls on mouse hover
-                    wrapper.addEventListener('mouseover', () => {
-                         overlay.style.opacity = '1';
-                    });
-                    
-                    wrapper.addEventListener('mouseleave', () => {
-                        if (!video.paused) {
-                            overlay.style.opacity = '0';
-                        }
-                    });
-
-
-                    // Initial duration setup
-                    video.addEventListener('loadedmetadata', () => {
-                        durationSpan.textContent = formatTime(video.duration);
-                    });
-
-                    // Time update
-                    video.addEventListener('timeupdate', () => {
-                        currentTimeSpan.textContent = formatTime(video.currentTime);
-                    });
-
-                    // Full Screen Logic
-                    zoomBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        toggleFullScreen(wrapper);
-                    });
-                    
-                    // Re-show overlay on end
-                    video.addEventListener('ended', () => {
-                        overlay.style.opacity = '1';
-                        wrapper.querySelector('.play-pause-btn-center i').className = 'fas fa-play';
-                        wrapper.querySelector('.play-pause-btn-bottom i').className = 'fas fa-play';
-                        video.currentTime = 0; // إرجاع الفيديو للبداية
-                    });
-
-                }, 0); // استخدم setTimeout لتأكيد إضافة العناصر إلى DOM
-                
-                // ------------------ Video Enhancement End ------------------
+                }, 0);
 
             } else if (post.media.type === 'audio') {
-                // Audio Player Logic (using WaveSurfer structure from original file)
                 mediaContainer.innerHTML = `
                     <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
                         <button class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300 flex-shrink-0">
@@ -477,21 +466,58 @@
             postElement.appendChild(mediaContainer);
         }
         
-        // 3. Post Footer (Likes/Comments)
-        const likeIconClass = post.is_liked ? 'fas fa-heart' : 'far fa-heart';
-        const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
+        // 3. Post Footer (Reactions/Comments)
+        
+        // البيانات الجديدة للتفاعلات
+        const userReactionType = post.userReaction || 'none';
+        const totalReactions = post.reactionsCount || 0;
+        const allReactionCounts = post.allReactionCounts || {}; 
+
+        // تحديد التفاعلات الأكثر شيوعاً للعرض في الملخص
+        const topReactions = Object.entries(allReactionCounts)
+            .sort(([, countA], [, countB]) => countB - countA)
+            .slice(0, 3)
+            .filter(([, count]) => count > 0)
+            .map(([type]) => REACTIONS_MAP[type] ? `<i class="fas ${REACTIONS_MAP[type].icon} ${REACTIONS_MAP[type].color} ml-0.5"></i>` : '');
+
+        const topReactionsHtml = topReactions.join('');
+        
+        // إعداد الأيقونة والنص لزر التفاعل الرئيسي
+        const mainReactionData = REACTIONS_MAP[userReactionType] || { icon: 'fa-heart', color: 'text-gray-400', arabic: 'تفاعل' };
+        const mainIconClass = userReactionType !== 'none' ? `fas ${mainReactionData.icon} ${mainReactionData.color}` : 'far fa-heart text-gray-400';
+        const mainBtnColorClass = userReactionType !== 'none' ? mainReactionData.color : 'text-gray-400';
+        const mainTextContent = userReactionType !== 'none' ? mainReactionData.arabic : 'تفاعل';
 
         const footer = `
             <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
-                <span><i class="fas fa-heart ml-1"></i> <span class="likes-count">${post.likes || 0}</span> إعجاب</span>
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <div class="flex items-center -space-x-1.5 space-x-reverse reaction-icons-summary">
+                        ${topReactionsHtml}
+                    </div>
+                    <span><span class="reactions-count-display">${totalReactions}</span> تفاعل</span>
+                </div>
                 <span class="cursor-pointer hover:text-blue-400 comment-btn" data-post-id="${post.postId}"><i class="far fa-comment-dots ml-1"></i> <span class="comments-count">${post.commentsCount || 0}</span> تعليق</span>
             </div>
 
-            <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
-                <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center like-btn" 
-                        data-post-id="${post.postId}">
-                    <i class="${likeIconClass} ml-2 like-icon"></i> إعجاب
+            <div class="flex justify-around border-t border-gray-700 mt-3 pt-3 relative reaction-buttons-container">
+                
+                <div class="absolute bottom-full mb-2 p-2 bg-gray-800 rounded-full shadow-lg border border-gray-700 reaction-panel hidden" id="reaction-panel-${post.postId}">
+                    ${ALL_REACTION_TYPES.map(type => `
+                        <button class="reaction-button p-2 text-2xl hover:scale-110 transition duration-150 ${REACTIONS_MAP[type].color} mx-1" 
+                                data-reaction-type="${type}" 
+                                data-post-id="${post.postId}"
+                                title="${REACTIONS_MAP[type].arabic}">
+                            <i class="fas ${REACTIONS_MAP[type].icon}"></i>
+                        </button>
+                    `).join('')}
+                </div>
+                
+                <button class="flex items-center hover:text-blue-500 transition duration-300 w-full justify-center main-reaction-btn ${mainBtnColorClass}" 
+                        data-post-id="${post.postId}" data-current-reaction="${userReactionType}">
+                    <i class="${mainIconClass} ml-2 main-reaction-icon"></i> 
+                    <span class="main-reaction-text">${mainTextContent}</span>
                 </button>
+
                 <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center comment-btn-footer" 
                         data-post-id="${post.postId}">
                     <i class="far fa-comment-alt ml-2"></i> تعليق
@@ -500,9 +526,41 @@
         `;
         postElement.innerHTML += footer;
 
-        // Attach listeners for likes and comments after creating element
-        postElement.querySelector('.like-btn').addEventListener('click', (e) => handleLikeEvent(post.postId, postElement.querySelector('.like-btn')));
-        // Use the modal function from the original file for consistency
+        // إرفاق مستمعي الأحداث لأزرار التفاعل الجديدة
+        postElement.querySelectorAll('.reaction-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation(); // منع إغلاق اللوحة مباشرة
+                const type = e.currentTarget.dataset.reactionType;
+                handleReactionEvent(post.postId, type, postElement);
+                // إخفاء اللوحة بعد الاختيار
+                document.getElementById(`reaction-panel-${post.postId}`).classList.add('hidden');
+            });
+        });
+
+        // مستمع للزر الرئيسي لفتح لوحة التفاعلات
+        postElement.querySelector('.main-reaction-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const panel = document.getElementById(`reaction-panel-${post.postId}`);
+            // إغلاق أي لوحات أخرى مفتوحة
+            document.querySelectorAll('.reaction-panel').forEach(p => {
+                 if (p !== panel) p.classList.add('hidden');
+            });
+            panel.classList.toggle('hidden');
+        });
+
+        // إغلاق لوحة التفاعلات عند النقر في أي مكان آخر
+        document.addEventListener('click', (e) => {
+            document.querySelectorAll('.reaction-panel').forEach(panel => {
+                if (!panel.classList.contains('hidden') && !e.target.closest('.reaction-buttons-container')) {
+                    panel.classList.add('hidden');
+                }
+            });
+        });
+        
+        // إرفاق مستمعي الأحداث القديمة
+        if (post.media && post.media.type === 'audio') {
+             setTimeout(() => initializePostWaveSurfer(post.postId, post.media.url), 0);
+        }
         postElement.querySelector('.comment-btn').addEventListener('click', () => handleComment(post.postId));
         postElement.querySelector('.comment-btn-footer').addEventListener('click', () => handleComment(post.postId));
 
@@ -510,11 +568,8 @@
         return postElement;
     }
     
-    // ----------------- Data Fetching and Initialization -----------------
+    // ----------------- Data Fetching (Need to support new reaction data) -----------------
 
-    /**
-     * جلب وعرض المنشورات
-     */
     async function fetchAndDisplayPosts() {
         const postsContainer = document.getElementById('postsFeed');
         postsContainer.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-2xl"></i> جاري تحميل المنشورات...</div>';
@@ -529,15 +584,15 @@
                 const audioPostsToInit = [];
 
                 result.posts.forEach(post => {
+                    // post.userReaction, post.reactionsCount, post.allReactionCounts 
+                    // يتم إرجاعها الآن من الخادم
                     postsContainer.appendChild(createPostElement(post));
                     
-                    // جمع منشورات الصوت لتهيئة WaveSurfer
                     if (post.media && post.media.type === 'audio') {
                         audioPostsToInit.push({ postId: post.postId, url: post.media.url });
                     }
                 });
                 
-                // Audio initialization
                 audioPostsToInit.forEach(ap => {
                     initializePostWaveSurfer(ap.postId, ap.url);
                 });
@@ -545,7 +600,7 @@
             } else if (result.posts.length === 0) {
                 postsContainer.innerHTML = '<p class="text-center text-gray-500 py-10">لا توجد منشورات لعرضها حالياً.</p>';
             } else {
-                postsContainer.innerHTML = '<p class="text-center text-red-400 py-10">فشل في جلب المنشورات.</p>';
+                postsContainer.innerHTML = `<p class="text-center text-red-400 py-10">فشل في جلب المنشورات. ${result.error || ''}</p>`;
             }
 
         } catch (error) {
@@ -554,8 +609,51 @@
         }
     }
     
-    // ----------------- MODAL and OLD LOGIC (Re-included for feature parity) -----------------
+    // ----------------- Reaction Logic (REPLACED toggleLike) -----------------
     
+    /**
+     * معالجة حدث التفاعل وإرساله إلى الخادم
+     * @param {string} postId - معرف المنشور
+     * @param {string|null} reactionType - نوع التفاعل الجديد ('love', 'support', إلخ) أو null للإزالة
+     * @param {HTMLElement} postElement - عنصر المنشور
+     */
+    async function handleReactionEvent(postId, reactionType, postElement) {
+        const mainBtn = postElement.querySelector('.main-reaction-btn');
+        const currentReaction = mainBtn.dataset.currentReaction;
+        let newReactionType = reactionType;
+        
+        // إذا نقر المستخدم على نفس التفاعل، فهذا يعني أنه يريد إزالته (عدم التفاعل)
+        if (currentReaction === reactionType) {
+            newReactionType = null; // إرسال null لإزالة التفاعل
+        }
+        
+        // تعطيل الزر أثناء الاتصال بـ API
+        mainBtn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/posts/${postId}/react`, { // نقطة API الجديدة
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reactionType: newReactionType })
+            });
+            
+            const result = await response.json();
+
+            if (response.ok && result.ok) {
+                // تحديث الواجهة بناءً على الاستجابة
+                updateReactionUI(postElement, result.reaction, result.newReactionsCount, result.allReactionCounts);
+            } else {
+                alert(result.error || 'فشل في معالجة التفاعل.');
+            }
+        } catch (error) {
+            console.error('Reaction error:', error);
+            alert('فشل الاتصال بالخادم.');
+        } finally {
+            mainBtn.disabled = false;
+        }
+    }
+
+    // ----------------- Other Logic (kept as is for comment/delete/profile) -----------------
     let currentPostIdToDelete = null;
     const deleteModal = document.getElementById('deleteModal');
     const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
@@ -566,7 +664,6 @@
     const profileDropdown = document.getElementById('profileDropdown'); 
     const profileMenuButton = document.getElementById('profileMenuButton'); 
     
-    // المتغيرات الجديدة للتعليقات
     const commentModal = document.getElementById('commentModal');
     const closeCommentModalBtn = document.getElementById('closeCommentModalBtn');
     const commentsList = document.getElementById('commentsList');
@@ -576,7 +673,6 @@
     let currentPostIdForComments = null; 
 
     
-    // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
     function toggleProfileDropdown(event) {
         event.stopPropagation();
         profileDropdown.classList.toggle('hidden');
@@ -590,14 +686,11 @@
 
     document.addEventListener('click', closeProfileDropdownOnClickOutside);
     
-    // ******************** 1. وظائف عرض الوسائط (Media Viewer) - EMPTY/ADAPTED ********************
-    
     function closeMediaViewer(event) {
-        // The modal is still in the HTML, so this is needed to close it.
         const mediaViewerModal = document.getElementById('mediaViewerModal');
         const mediaViewerContent = document.getElementById('mediaViewerContent');
         if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
-            const activeMedia = mediaViewerContent.querySelector('video, audio, img'); // Check for any media
+            const activeMedia = mediaViewerContent.querySelector('video, audio, img');
             if (activeMedia && (activeMedia.tagName === 'VIDEO' || activeMedia.tagName === 'AUDIO')) {
                 activeMedia.pause();
             }
@@ -606,8 +699,6 @@
         }
     }
     
-    // ******************** 2. وظائف حذف المنشور ********************
-
     function openDeleteModal(postId, event) {
         event.stopPropagation();
         currentPostIdToDelete = postId;
@@ -653,8 +744,6 @@
         }
     });
 
-    // ******************** 3. وظائف قائمة خيارات المنشور ********************
-
     function togglePostMenu(postId, userId, event, menuButton) {
         event.stopPropagation();
         
@@ -669,7 +758,7 @@
         
         postMenu.dataset.postId = postId;
 
-        if (userId == currentUserId) { // Use loose comparison since one is string and the other is expected to be null/number.
+        if (userId == currentUserId) {
             deleteOptionBtn.style.display = 'flex';
             deleteOptionBtn.onclick = (e) => openDeleteModal(postId, e);
         } else {
@@ -679,7 +768,6 @@
         postMenu.classList.remove('hidden');
     }
 
-    // إغلاق القائمة عند النقر خارجها
     document.addEventListener('click', (event) => {
         if (!postMenu.contains(event.target) && !event.target.closest('.post-menu-button')) {
             postMenu.classList.add('hidden');
@@ -687,55 +775,6 @@
         }
     });
     
-    // ******************** 4. وظائف الإعجاب والتعليق (MODAL) ********************
-    
-    async function handleLikeEvent(postId, buttonElement) {
-        
-        const postCard = buttonElement.closest('.post-card-container');
-        if (!postCard) return;
-
-        const likeIcon = postCard.querySelector('.like-icon');
-        const likesCountSpan = postCard.querySelector('.likes-count');
-        const likesTotalSpan = postCard.querySelector('.text-sm span:first-child .likes-count');
-
-        buttonElement.disabled = true;
-
-        try {
-            const response = await fetch(`/api/posts/${postId}/like`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.ok) {
-                
-                if (result.action === 'liked') {
-                    likeIcon.classList.remove('far', 'text-gray-400');
-                    likeIcon.classList.add('fas', 'text-red-500');
-                    buttonElement.classList.remove('text-gray-400');
-                    buttonElement.classList.add('text-red-500');
-                } else {
-                    likeIcon.classList.remove('fas', 'text-red-500');
-                    likeIcon.classList.add('far', 'text-gray-400');
-                    buttonElement.classList.remove('text-red-500');
-                    buttonElement.classList.add('text-gray-400');
-                }
-                
-                likesCountSpan.textContent = result.newLikes;
-                if (likesTotalSpan) likesTotalSpan.textContent = result.newLikes;
-
-
-            } else {
-                console.error('Like failed:', result.error);
-            }
-
-        } catch (error) {
-            console.error('Error during like operation:', error);
-        } finally {
-            buttonElement.disabled = false;
-        }
-    }
     
     async function handleComment(postId) { 
         currentPostIdForComments = postId;
@@ -749,8 +788,6 @@
         newCommentInput.value = '';
         commentsList.innerHTML = '';
     });
-
-    // ******************** 5. وظائف التعليقات ********************
 
     function createCommentHtml(comment) {
         const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
@@ -787,7 +824,6 @@
                     result.comments.forEach(comment => {
                         commentsList.innerHTML += createCommentHtml(comment);
                     });
-                    // التمرير إلى أسفل بعد التحميل
                     commentsList.scrollTop = commentsList.scrollHeight;
                 }
             } else {
@@ -821,21 +857,18 @@
             const result = await response.json();
 
             if (response.ok && result.ok) {
-                // 1. تحديث قائمة التعليقات مباشرةً
                 if (commentsList.querySelector('.text-center.text-gray-500')) {
-                    commentsList.innerHTML = ''; // إزالة رسالة "لا توجد تعليقات"
+                    commentsList.innerHTML = '';
                 }
                 commentsList.innerHTML += createCommentHtml(result.comment);
                 newCommentInput.value = '';
                 
-                // 2. تحديث عداد التعليقات في بطاقة المنشور
                 const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
                 if (postCard) {
                     const commentsCountSpan = postCard.querySelector('.comments-count');
                     commentsCountSpan.textContent = result.newComments;
                 }
                 
-                // 3. التمرير إلى أسفل
                 commentsList.scrollTop = commentsList.scrollHeight;
 
             } else {
@@ -860,10 +893,7 @@
         }
     });
 
-    // ----------------- Initialization -----------------
-    
     document.addEventListener('DOMContentLoaded', () => {
-        // جلب صورة الملف الشخصي وحفظ الـ ID للمستخدم الحالي
         fetch('/api/profile')
             .then(response => response.ok ? response.json() : null)
             .then(data => {
@@ -871,12 +901,13 @@
                 if (data && data.profile_picture_url) {
                     profilePicElement.src = data.profile_picture_url;
                     profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                    currentUserId = data.id; // حفظ معرف المستخدم الحالي
+                    currentUserId = data.id;
                 }
             }).catch(console.error);
             
         fetchAndDisplayPosts();
     });
 </script>
+
 </body>
 </html>
