@@ -24,877 +24,735 @@
             -webkit-backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
-        /* نمط الشعار الجديد */
-        .app-logo {
-            font-family: 'Montserrat', sans-serif; /* خط مودرن للشعار */
-            font-weight: 800;
-            /* يمكن تجربة خط Vibes إذا كان متاحاً ومتناسباً: font-family: 'Vibes', cursive; */
+
+        .post-card {
+            background-color: #18191a;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
-        /* نمط نافذة الملف الشخصي الزجاجية */
-        .glass-dropdown {
-            background-color: rgba(30, 30, 30, 0.9);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1000; /* للتأكد من أنها فوق كل شيء */
+        .reaction-menu {
+            display: none;
+            position: absolute;
+            bottom: 40px; /* فوق زر التفاعل */
+            right: 0;
+            background-color: #3a3b3c;
+            padding: 5px;
+            border-radius: 50px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            z-index: 10;
         }
 
-        /* نمط نافذة التعليقات الزجاجية الجديدة */
-        .glass-comment-modal-content {
-            background-color: rgba(0, 0, 0, 0.7); /* خلفية سوداء شفافة */
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .glass-modal-bg {
-            background-color: rgba(0, 0, 0, 0.9);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-        }
-        .media-container {
-            max-height: 80vh; 
-            width: auto;
-        }
-        
-        /* نمط بطاقة المنشور الزجاجية الجديدة */
-        .glass-post-card {
-            background-color: rgba(0, 0, 0, 0.3); /* خلفية سوداء شفافة */
-            backdrop-filter: blur(10px); /* تأثير زجاجي */
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1); /* حدود بيضاء خفيفة */
+        .reaction-menu button {
+            transition: transform 0.2s;
         }
 
-        /* نمط WaveSurfer لمنشورات الهوم */
-        .waveform-post {
-            height: 60px; 
-            background-color: #0f172a; 
-            border-radius: 6px;
+        .reaction-menu button:hover {
+            transform: scale(1.2);
         }
 
-        /* شريط التمرير مخصص للتعليقات */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
+        /* تخصيص مؤشر الصوت WaveSurfer */
+        .wavesurfer-post-container wave {
+            display: block;
+        }
+        .wavesurfer-post-container .wave-progress {
+            background-color: #6366f1 !important; /* لون تقدم الموجة */
+        }
+        .wavesurfer-post-container .wave-progress-mask {
+            background-color: #4b4d53 !important; /* لون خلفية الموجة */
         }
 
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #1f2937;
+        /* Animation for reaction */
+        @keyframes pop-in {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
         }
 
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
+        .reaction-menu button {
+            animation: pop-in 0.2s ease-out;
         }
     </style>
 </head>
-<body class="min-h-screen">
+<body>
 
-    <header class="sticky top-0 z-50 glass-navbar p-3">
-        <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
-            
-            <div class="flex items-center">
-                <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
-                    <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+    <div class="fixed top-0 left-0 right-0 z-50 glass-navbar p-3 shadow-lg">
+        <div class="max-w-3xl mx-auto flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-indigo-400" style="font-family: 'Montserrat', sans-serif;">Aite</h1>
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button class="text-xl text-gray-300 hover:text-white transition duration-200">
+                    <i class="fas fa-bell"></i>
                 </button>
+                <button class="text-xl text-gray-300 hover:text-white transition duration-200" id="createPostButton">
+                    <i class="fas fa-plus-square"></i>
+                </button>
+                <img id="userProfilePic" src="/images/default_profile.png" alt="صورة بروفايل" class="w-10 h-10 rounded-full cursor-pointer object-cover">
             </div>
-            
-            <div class="flex-grow flex justify-center">
-                <a href="/chat_list" class="text-3xl font-extrabold text-white tracking-widest hover:text-gray-300 transition duration-300 app-logo">
-                    Aite
-                </a>
-            </div>
-            
-            <div class="flex items-center space-x-4 space-x-reverse">
-                <a href="/create-post" class="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center border border-gray-700">
-                    <i class="fas fa-plus ml-2"></i>
-                    إنشاء منشور
-                </a>
-            </div>
-
-            <div id="profileDropdown" class="absolute top-14 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
-                <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
-                    <i class="fas fa-user-circle text-xl ml-3"></i>
-                    الملف الشخصي
-                </a>
-                <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 rounded-b-lg transition duration-200 border-t border-gray-700">
-                    <i class="fas fa-sign-out-alt text-xl ml-3"></i>
-                    تسجيل الخروج
-                </a>
-            </div>
-
-        </nav>
-    </header>
-
-    <main class="max-w-6xl mx-auto p-4">
-        
-        <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
-            </div>
-
-    </main>
-    
-    <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
-        <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
-            <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
-            <h3 class="text-xl font-bold text-white mb-2">تأكيد الحذف</h3>
-            <p class="text-gray-400 mb-6">هل أنت متأكد أنك تريد حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.</p>
-            <div class="flex justify-around space-x-4 space-x-reverse">
-                <button id="cancelDeleteBtn" class="p-2 w-full bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition duration-300">إلغاء</button>
-                <button id="confirmDeleteBtn" class="p-2 w-full bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-300">تأكيد الحذف</button>
-            </div>
-            <div id="deleteMessage" class="text-red-500 mt-3 hidden"></div>
         </div>
     </div>
 
-    <div id="mediaViewerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2 glass-modal-bg" onclick="closeMediaViewer(event)">
-        <button class="absolute top-4 left-4 text-white text-3xl z-50 p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition" onclick="closeMediaViewer(event)">
-            <i class="fas fa-times"></i>
-        </button>
-        <div id="mediaViewerContent" class="media-container flex items-center justify-center" onclick="event.stopPropagation()">
-        </div>
-    </div>
-    
-    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
-        <div class="glass-comment-modal-content p-6 rounded-xl shadow-2xl max-w-lg w-full h-[90vh] flex flex-col" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center pb-4 border-b border-gray-700">
-                <h3 class="text-2xl font-bold text-white">التعليقات</h3>
-                <button id="closeCommentModalBtn" class="text-gray-400 hover:text-white transition duration-300 text-3xl">
+    <main class="max-w-3xl mx-auto pt-20 pb-5">
+
+        <div id="createPostModal" class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex justify-center items-start pt-10">
+            <div class="bg-gray-800 p-6 rounded-lg w-full max-w-lg shadow-2xl relative">
+                <h2 class="text-xl font-semibold mb-4 text-white">إنشاء منشور جديد</h2>
+                <button class="absolute top-3 left-3 text-gray-400 hover:text-white text-2xl" id="closePostModal">
                     <i class="fas fa-times"></i>
                 </button>
-            </div>
-            
-            <div id="commentsList" class="flex-grow overflow-y-auto py-4 space-y-4 custom-scrollbar">
-                </div>
+                
+                <form id="createPostForm" enctype="multipart/form-data" class="space-y-4">
+                    <textarea id="postContent" name="content" rows="4" placeholder="ماذا يدور في ذهنك؟" class="w-full p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-white placeholder-gray-400"></textarea>
+                    
+                    <div class="flex items-center justify-between">
+                        <label for="postMedia" class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300">
+                            <i class="fas fa-image mr-2"></i> إضافة وسائط
+                            <input type="file" id="postMedia" name="media" accept="image/*,video/*,audio/*" class="hidden">
+                        </label>
+                        <div id="fileNameDisplay" class="text-gray-400 text-sm italic"></div>
+                    </div>
 
-            <div class="pt-4 border-t border-gray-700 flex items-center">
-                <input type="text" id="newCommentInput" placeholder="أضف تعليقًا..." class="flex-grow p-3 bg-gray-800 text-white rounded-r-full focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700" dir="rtl">
-                <button id="postCommentBtn" class="p-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-l-full transition duration-300 flex-shrink-0">
-                    <i class="fas fa-paper-plane text-lg"></i>
-                </button>
+                    <div id="postError" class="text-red-400 hidden"></div>
+                    
+                    <button type="submit" id="submitPostButton" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-300 disabled:opacity-50">
+                        نشر
+                    </button>
+                </form>
             </div>
-            <div id="commentError" class="text-red-500 mt-2 text-center hidden"></div>
         </div>
-    </div>
-
-    <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
-        <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
-            <i class="fas fa-trash ml-3"></i>
-            حذف المنشور
-        </button>
-    </div>
-
-
+        
+        <div id="postsContainer" class="space-y-4">
+            <div class="text-center text-gray-500 p-10" id="loadingMessage">جاري تحميل المنشورات...</div>
+        </div>
+        
+        <div id="loadMore" class="text-center mt-5">
+            <button id="loadMoreButton" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-full hidden">تحميل المزيد</button>
+        </div>
+        
+    </main>
+    
 <script>
-    // متغيرات عامة
+    let lastPostTimestamp = null;
     let currentUserId = null;
-    let activeWaveSurfer = null;
-
-    // خريطة التفاعلات الجديدة
-    const REACTIONS_MAP = {
-        love: { arabic: 'أحببته', icon: 'fa-heart', color: 'text-red-500' },
-        support: { arabic: 'أدعمه', icon: 'fa-handshake', color: 'text-green-500' },
-        boring: { arabic: 'ممل', icon: 'fa-face-rolling-eyes', color: 'text-yellow-500' },
-        wise: { arabic: 'حكيم', icon: 'fa-graduation-cap', color: 'text-blue-500' },
-    };
-
-    const ALL_REACTION_TYPES = Object.keys(REACTIONS_MAP);
-
-    // ----------------- Video Control Functions -----------------
-    /**
-     * تشغيل/إيقاف الفيديو والتبديل بين أيقونة التشغيل/الإيقاف
-     * @param {HTMLVideoElement} videoElement 
-     */
-    function togglePlay(videoElement) {
-        const wrapper = videoElement.closest('.video-wrapper');
-        if (!wrapper) return;
-        
-        if (videoElement.paused || videoElement.ended) {
-            videoElement.play();
-        } else {
-            videoElement.pause();
-        }
-    }
-
-    /**
-     * تفعيل أو إلغاء وضع ملء الشاشة (التكبير)
-     * @param {HTMLElement} element 
-     */
-    function toggleFullScreen(element) {
-        if (!document.fullscreenElement) {
-            if (element.requestFullscreen) {
-                element.requestFullscreen();
-            } else if (element.webkitRequestFullscreen) {
-                element.webkitRequestFullscreen();
-            } else if (element.msRequestFullscreen) {
-                element.msRequestFullscreen();
-            }
-        } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            } else if (document.msExitFullscreen) {
-                document.msExitFullscreen();
-            }
-        }
-    }
-
-    /**
-     * تحويل الثواني إلى تنسيق M:SS
-     * @param {number} seconds 
-     */
-    function formatTime(seconds) {
-        const minutes = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
-    }
-
-    // ----------------- Audio Control Functions (WaveSurfer) -----------------
+    const postsContainer = document.getElementById('postsContainer');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const loadMoreButton = document.getElementById('loadMoreButton');
+    
+    // تعريفات WaveSurfer (مكتبة الصوت)
+    const wavesurferInstances = {};
+    
     function initializePostWaveSurfer(postId, url) {
-        const container = document.getElementById(`waveform-${postId}`);
-        if (!container) return;
+        const wavesurferContainer = document.getElementById(`wavesurfer-${postId}`);
+        if (!wavesurferContainer) return;
 
+        // تهيئة WaveSurfer
         const ws = WaveSurfer.create({
-            container: container,
-            waveColor: '#4b5563',
-            progressColor: '#3b82f6',
-            cursorColor: '#10b981',
+            container: wavesurferContainer,
+            waveColor: '#4b4d53',
+            progressColor: '#6366f1',
+            cursorColor: '#ffffff',
             barWidth: 3,
-            barRadius: 3,
-            barGap: 1,
-            height: 60,
+            height: 50,
             responsive: true,
-            mediaControls: false,
+            hideScrollbar: true,
+            // تحديد مسار الملف
+            url: url
         });
 
-        ws.load(url);
+        wavesurferInstances[postId] = ws;
 
-        const playButton = container.closest('.post-card-container').querySelector('.audio-play-button');
-        if (playButton) {
-            playButton.onclick = () => {
-                if (activeWaveSurfer && activeWaveSurfer !== ws) {
-                    activeWaveSurfer.pause();
-                    const otherPostCard = activeWaveSurfer.container.closest('.post-card-container');
-                    otherPostCard.querySelector('.audio-play-button i').classList.remove('fa-pause');
-                    otherPostCard.querySelector('.audio-play-button i').classList.add('fa-play');
-                }
-                
-                if (ws.isPlaying()) {
-                    ws.pause();
-                    playButton.querySelector('i').classList.remove('fa-pause');
-                    playButton.querySelector('i').classList.add('fa-play');
-                } else {
-                    ws.play();
-                    playButton.querySelector('i').classList.remove('fa-play');
-                    playButton.querySelector('i').classList.add('fa-pause');
-                    activeWaveSurfer = ws;
-                }
+        // ربط زر التشغيل
+        const playPauseBtn = document.getElementById(`play-pause-${postId}`);
+        const loadingIndicator = document.getElementById(`loading-audio-${postId}`);
+        
+        // إخفاء مؤشر التحميل عند الجاهزية
+        ws.on('ready', () => {
+             if(loadingIndicator) loadingIndicator.classList.add('hidden');
+             if(playPauseBtn) playPauseBtn.classList.remove('hidden');
+        });
+        
+        ws.on('loading', (percents) => {
+            if (percents < 100) {
+                 if(loadingIndicator) loadingIndicator.classList.remove('hidden');
+                 if(playPauseBtn) playPauseBtn.classList.add('hidden');
+            }
+        });
+
+        // تحديث أيقونة الزر عند التشغيل والإيقاف
+        ws.on('play', () => {
+            if(playPauseBtn) playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+        });
+        
+        ws.on('pause', () => {
+            if(playPauseBtn) playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+        });
+
+        if(playPauseBtn) {
+            playPauseBtn.onclick = () => {
+                ws.playPause();
             };
-
-            ws.on('finish', () => {
-                playButton.querySelector('i').classList.remove('fa-pause');
-                playButton.querySelector('i').classList.add('fa-play');
-                activeWaveSurfer = null;
-            });
         }
     }
 
-    // ----------------- Reaction UI Update Helper -----------------
 
     /**
-     * تحديث واجهة المستخدم للتفاعلات بعد استجابة الخادم
+     * تحديث واجهة مستخدم التفاعل على المنشور
+     * @param {HTMLElement} postElement - عنصر المنشور
+     * @param {string|null} userReactionType - نوع تفاعل المستخدم الحالي ('love', 'boring', إلخ)
+     * @param {number} totalReactions - العدد الإجمالي للتفاعلات
+     * @param {object} allReactionCounts - أعداد كل نوع تفاعل ({love: 5, boring: 1})
      */
-    function updateReactionUI(postElement, newReactionType, totalCount, allCounts) {
-        const mainBtn = postElement.querySelector('.main-reaction-btn');
-        const mainIcon = postElement.querySelector('.main-reaction-icon');
-        const mainText = postElement.querySelector('.main-reaction-text');
-        const countDisplay = postElement.querySelector('.reactions-count-display');
-        const summaryIcons = postElement.querySelector('.reaction-icons-summary');
-        
-        const type = newReactionType || 'none';
-        
-        // 1. تحديث حالة زر التفاعل الرئيسي
-        mainBtn.dataset.currentReaction = type;
+    function updateReactionUI(postElement, userReactionType, totalReactions, allReactionCounts) {
+        const reactionButton = postElement.querySelector('.main-reaction-button');
+        const reactionIcon = reactionButton.querySelector('.reaction-icon');
+        const reactionText = reactionButton.querySelector('.reaction-text');
+        const countElement = postElement.querySelector('.reactions-count');
+        const reactionSummary = postElement.querySelector('.reaction-summary');
 
-        // إزالة جميع الألوان السابقة
-        Object.values(REACTIONS_MAP).forEach(map => mainIcon.classList.remove(map.color));
-        mainIcon.classList.remove('fas', 'far'); // إزالة فئة الحالة
-        
-        if (type !== 'none') {
-            const reactionData = REACTIONS_MAP[type];
-            // تحديث الأيقونة والنص واللون
-            mainIcon.className = `fas ${reactionData.icon} ml-2 main-reaction-icon ${reactionData.color}`;
-            mainText.textContent = reactionData.arabic;
-            mainBtn.classList.remove('text-gray-400');
-            mainBtn.classList.add(reactionData.color);
+        const reactionMap = {
+            'love': { icon: '<i class="fas fa-heart text-red-500"></i>', text: 'أحببته' },
+            'support': { icon: '<i class="fas fa-hands-clapping text-green-500"></i>', text: 'أدعمه' },
+            'boring': { icon: '<i class="fas fa-meh-blank text-gray-400"></i>', text: 'ممل' },
+            'wise': { icon: '<i class="fas fa-brain text-yellow-500"></i>', text: 'حكيم' }
+        };
 
+        // 1. تحديث زر التفاعل الرئيسي
+        if (userReactionType && reactionMap[userReactionType]) {
+            const { icon, text } = reactionMap[userReactionType];
+            reactionIcon.innerHTML = icon;
+            reactionText.textContent = text;
+            reactionButton.classList.remove('text-gray-400', 'hover:bg-gray-700');
+            reactionButton.classList.add('font-bold');
         } else {
-            // العودة إلى الحالة الافتراضية
-            mainIcon.className = 'far fa-heart ml-2 main-reaction-icon text-gray-400';
-            mainText.textContent = 'تفاعل';
-            Object.values(REACTIONS_MAP).forEach(map => mainBtn.classList.remove(map.color));
-            mainBtn.classList.add('text-gray-400');
+            // حالة عدم وجود تفاعل
+            reactionIcon.innerHTML = '<i class="fas fa-thumbs-up text-gray-400"></i>';
+            reactionText.textContent = 'تفاعل';
+            reactionButton.classList.add('text-gray-400', 'hover:bg-gray-700');
+            reactionButton.classList.remove('font-bold');
         }
         
+        // حفظ حالة التفاعل الحالية على عنصر المنشور
+        postElement.setAttribute('data-user-reaction', userReactionType || '');
+
         // 2. تحديث عدد التفاعلات الإجمالي
-        countDisplay.textContent = totalCount;
-        
-        // 3. تحديث أيقونات الملخص (Top 3 Reactions)
-        const topReactions = Object.entries(allCounts)
-            .sort(([, countA], [, countB]) => countB - countA)
-            .slice(0, 3)
-            .filter(([, count]) => count > 0)
-            .map(([type]) => REACTIONS_MAP[type] ? `<i class="fas ${REACTIONS_MAP[type].icon} ${REACTIONS_MAP[type].color} ml-0.5"></i>` : '');
+        countElement.textContent = totalReactions > 0 ? totalReactions : '';
+        countElement.classList.toggle('hidden', totalReactions === 0);
 
-        summaryIcons.innerHTML = topReactions.join('');
-    }
+        // 3. تحديث ملخص التفاعلات (الأيقونات والأعداد)
+        reactionSummary.innerHTML = '';
+        if (totalReactions > 0) {
+            let summaryHTML = '';
+            // ترتيب التفاعلات حسب العدد تنازلياً
+            const sortedReactions = Object.entries(allReactionCounts)
+                .sort(([, a], [, b]) => b - a);
 
-    // ----------------- Post Rendering (MODIFIED) -----------------
-
-    function createPostElement(post) {
-        const postElement = document.createElement('div');
-        postElement.className = 'glass-post-card p-4 rounded-xl shadow-lg post-card-container';
-        postElement.dataset.postId = post.postId;
-        
-        // 1. Post Header
-        const header = `
-            <div class="flex items-start justify-between mb-3">
-                <div class="flex items-center">
-                    <img src="${post.user.profile_picture_url}" alt="صورة ${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-blue-500">
-                    <div>
-                        <a href="/profile?user_id=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username}</a>
-                        <p class="text-xs text-gray-400">${new Date(post.timestamp).toLocaleString('ar-EG')}</p>
-                    </div>
-                </div>
-                <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
-                        onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)">
-                    <i class="fas fa-ellipsis-v"></i>
-                </button>
-            </div>
-            <p class="text-gray-200 mb-3 whitespace-pre-wrap">${post.content}</p>
-        `;
-        postElement.innerHTML = header;
-        
-        // 2. Media Content (Video/Audio/Image logic... kept for completeness)
-        if (post.media && post.media.url) {
-            const mediaContainer = document.createElement('div');
-            mediaContainer.className = 'mt-3 mb-4';
-
-            if (post.media.type === 'image') {
-                mediaContainer.innerHTML = `<img src="${post.media.url}" alt="صورة المنشور" class="w-full rounded-lg object-contain max-h-96">`;
-            } else if (post.media.type === 'video') {
-                const videoWrapper = document.createElement('div');
-                videoWrapper.className = 'video-wrapper relative rounded-lg overflow-hidden w-full bg-black/50';
-                videoWrapper.id = `video-wrapper-${post.postId}`;
-                
-                videoWrapper.innerHTML = `
-                    <video id="video-${post.postId}" class="post-video w-full" src="${post.media.url}" preload="metadata" style="max-height: 500px;"></video>
-                    
-                    <div id="overlay-${post.postId}" class="controls-overlay absolute inset-0 flex flex-col justify-between items-center opacity-100 transition-opacity duration-300 bg-black/30 cursor-pointer">
-                        <div class="flex-grow flex items-center justify-center w-full h-full">
-                            <button class="play-pause-btn-center text-white text-6xl hover:scale-110 transition-transform p-4 rounded-full bg-black/60 shadow-xl">
-                                <i class="fas fa-play"></i>
-                            </button>
-                        </div>
-                        <div class="bottom-bar w-full p-3 bg-black/80 flex justify-between items-center text-white text-sm">
-                            <div class="flex items-center space-x-2 space-x-reverse">
-                                <button class="play-pause-btn-bottom text-xl hover:text-blue-400">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                <span class="video-current-time">0:00</span>
-                                <span class="text-gray-400">/</span>
-                                <span class="video-duration">0:00</span>
-                            </div>
-                            <button class="zoom-btn text-xl hover:text-blue-400">
-                                <i class="fas fa-expand"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                
-                mediaContainer.appendChild(videoWrapper);
-                postElement.appendChild(mediaContainer);
-
-                setTimeout(() => {
-                    const video = document.getElementById(`video-${post.postId}`);
-                    const overlay = document.getElementById(`overlay-${post.postId}`);
-                    const wrapper = document.getElementById(`video-wrapper-${post.postId}`);
-                    const centerBtn = wrapper.querySelector('.play-pause-btn-center');
-                    const bottomBtn = wrapper.querySelector('.play-pause-btn-bottom');
-                    const zoomBtn = wrapper.querySelector('.zoom-btn');
-                    const currentTimeSpan = wrapper.querySelector('.video-current-time');
-                    const durationSpan = wrapper.querySelector('.video-duration');
-
-                    const updateIconsTo = (state) => {
-                        wrapper.querySelector('.play-pause-btn-center i').className = `fas fa-${state}`;
-                        wrapper.querySelector('.play-pause-btn-bottom i').className = `fas fa-${state}`;
-                    };
-
-                    centerBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(video); });
-                    bottomBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(video); });
-                    video.addEventListener('click', () => { togglePlay(video); });
-
-                    video.addEventListener('play', () => { overlay.style.opacity = '0'; updateIconsTo('pause'); });
-                    video.addEventListener('pause', () => { overlay.style.opacity = '1'; updateIconsTo('play'); });
-                    video.addEventListener('loadedmetadata', () => { durationSpan.textContent = formatTime(video.duration); });
-                    video.addEventListener('timeupdate', () => { currentTimeSpan.textContent = formatTime(video.currentTime); });
-                    zoomBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleFullScreen(wrapper); });
-                    video.addEventListener('ended', () => { 
-                        overlay.style.opacity = '1'; 
-                        updateIconsTo('play');
-                        video.currentTime = 0; 
-                    });
-
-                }, 0);
-
-            } else if (post.media.type === 'audio') {
-                mediaContainer.innerHTML = `
-                    <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
-                        <button class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300 flex-shrink-0">
-                            <i class="fas fa-play"></i>
-                        </button>
-                        <div id="waveform-${post.postId}" class="waveform-post flex-grow"></div>
-                    </div>
-                `;
-            }
-            
-            postElement.appendChild(mediaContainer);
-        }
-        
-        // 3. Post Footer (Reactions/Comments)
-        
-        // البيانات الجديدة للتفاعلات
-        const userReactionType = post.userReaction || 'none';
-        const totalReactions = post.reactionsCount || 0;
-        const allReactionCounts = post.allReactionCounts || {}; 
-
-        // تحديد التفاعلات الأكثر شيوعاً للعرض في الملخص
-        const topReactions = Object.entries(allReactionCounts)
-            .sort(([, countA], [, countB]) => countB - countA)
-            .slice(0, 3)
-            .filter(([, count]) => count > 0)
-            .map(([type]) => REACTIONS_MAP[type] ? `<i class="fas ${REACTIONS_MAP[type].icon} ${REACTIONS_MAP[type].color} ml-0.5"></i>` : '');
-
-        const topReactionsHtml = topReactions.join('');
-        
-        // إعداد الأيقونة والنص لزر التفاعل الرئيسي
-        const mainReactionData = REACTIONS_MAP[userReactionType] || { icon: 'fa-heart', color: 'text-gray-400', arabic: 'تفاعل' };
-        const mainIconClass = userReactionType !== 'none' ? `fas ${mainReactionData.icon} ${mainReactionData.color}` : 'far fa-heart text-gray-400';
-        const mainBtnColorClass = userReactionType !== 'none' ? mainReactionData.color : 'text-gray-400';
-        const mainTextContent = userReactionType !== 'none' ? mainReactionData.arabic : 'تفاعل';
-
-        const footer = `
-            <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
-                <div class="flex items-center space-x-2 space-x-reverse">
-                    <div class="flex items-center -space-x-1.5 space-x-reverse reaction-icons-summary">
-                        ${topReactionsHtml}
-                    </div>
-                    <span><span class="reactions-count-display">${totalReactions}</span> تفاعل</span>
-                </div>
-                <span class="cursor-pointer hover:text-blue-400 comment-btn" data-post-id="${post.postId}"><i class="far fa-comment-dots ml-1"></i> <span class="comments-count">${post.commentsCount || 0}</span> تعليق</span>
-            </div>
-
-            <div class="flex justify-around border-t border-gray-700 mt-3 pt-3 relative reaction-buttons-container">
-                
-                <div class="absolute bottom-full mb-2 p-2 bg-gray-800 rounded-full shadow-lg border border-gray-700 reaction-panel hidden" id="reaction-panel-${post.postId}">
-                    ${ALL_REACTION_TYPES.map(type => `
-                        <button class="reaction-button p-2 text-2xl hover:scale-110 transition duration-150 ${REACTIONS_MAP[type].color} mx-1" 
-                                data-reaction-type="${type}" 
-                                data-post-id="${post.postId}"
-                                title="${REACTIONS_MAP[type].arabic}">
-                            <i class="fas ${REACTIONS_MAP[type].icon}"></i>
-                        </button>
-                    `).join('')}
-                </div>
-                
-                <button class="flex items-center hover:text-blue-500 transition duration-300 w-full justify-center main-reaction-btn ${mainBtnColorClass}" 
-                        data-post-id="${post.postId}" data-current-reaction="${userReactionType}">
-                    <i class="${mainIconClass} ml-2 main-reaction-icon"></i> 
-                    <span class="main-reaction-text">${mainTextContent}</span>
-                </button>
-
-                <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center comment-btn-footer" 
-                        data-post-id="${post.postId}">
-                    <i class="far fa-comment-alt ml-2"></i> تعليق
-                </button>
-            </div>
-        `;
-        postElement.innerHTML += footer;
-
-        // إرفاق مستمعي الأحداث لأزرار التفاعل الجديدة
-        postElement.querySelectorAll('.reaction-button').forEach(button => {
-            button.addEventListener('click', (e) => {
-                e.stopPropagation(); // منع إغلاق اللوحة مباشرة
-                const type = e.currentTarget.dataset.reactionType;
-                handleReactionEvent(post.postId, type, postElement);
-                // إخفاء اللوحة بعد الاختيار
-                document.getElementById(`reaction-panel-${post.postId}`).classList.add('hidden');
-            });
-        });
-
-        // مستمع للزر الرئيسي لفتح لوحة التفاعلات
-        postElement.querySelector('.main-reaction-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            const panel = document.getElementById(`reaction-panel-${post.postId}`);
-            // إغلاق أي لوحات أخرى مفتوحة
-            document.querySelectorAll('.reaction-panel').forEach(p => {
-                 if (p !== panel) p.classList.add('hidden');
-            });
-            panel.classList.toggle('hidden');
-        });
-
-        // إغلاق لوحة التفاعلات عند النقر في أي مكان آخر
-        document.addEventListener('click', (e) => {
-            document.querySelectorAll('.reaction-panel').forEach(panel => {
-                if (!panel.classList.contains('hidden') && !e.target.closest('.reaction-buttons-container')) {
-                    panel.classList.add('hidden');
+            sortedReactions.slice(0, 3).forEach(([type, count]) => {
+                if (reactionMap[type]) {
+                     summaryHTML += `<span class="inline-flex items-center ml-2 text-sm">
+                                        ${reactionMap[type].icon}
+                                        <span class="mr-1 text-gray-400">${count}</span>
+                                     </span>`;
                 }
             });
-        });
-        
-        // إرفاق مستمعي الأحداث القديمة
-        if (post.media && post.media.type === 'audio') {
-             setTimeout(() => initializePostWaveSurfer(post.postId, post.media.url), 0);
-        }
-        postElement.querySelector('.comment-btn').addEventListener('click', () => handleComment(post.postId));
-        postElement.querySelector('.comment-btn-footer').addEventListener('click', () => handleComment(post.postId));
-
-        // **الإصلاح: تطبيق حالة التفاعل الأولية لضمان ثبات التفاعل بعد تحديث الصفحة**
-        // نستخدم البيانات التي تم جلبها من الخادم لتهيئة حالة التفاعل وأيقونات الملخص
-        updateReactionUI(postElement, userReactionType, totalReactions, allReactionCounts);
-
-        return postElement;
-    }
-    
-    // ----------------- Data Fetching (Need to support new reaction data) -----------------
-
-    async function fetchAndDisplayPosts() {
-        const postsContainer = document.getElementById('postsFeed');
-        postsContainer.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-2xl"></i> جاري تحميل المنشورات...</div>';
-        
-        try {
-            const response = await fetch('/api/posts');
-            const result = await response.json();
-
-            postsContainer.innerHTML = ''; 
-            
-            if (result.ok && result.posts.length > 0) {
-                const audioPostsToInit = [];
-
-                result.posts.forEach(post => {
-                    // post.userReaction, post.reactionsCount, post.allReactionCounts 
-                    // يتم إرجاعها الآن من الخادم
-                    postsContainer.appendChild(createPostElement(post));
-                    
-                    if (post.media && post.media.type === 'audio') {
-                        audioPostsToInit.push({ postId: post.postId, url: post.media.url });
-                    }
-                });
-                
-                audioPostsToInit.forEach(ap => {
-                    initializePostWaveSurfer(ap.postId, ap.url);
-                });
-                
-            } else if (result.posts.length === 0) {
-                postsContainer.innerHTML = '<p class="text-center text-gray-500 py-10">لا توجد منشورات لعرضها حالياً.</p>';
-            } else {
-                postsContainer.innerHTML = `<p class="text-center text-red-400 py-10">فشل في جلب المنشورات. ${result.error || ''}</p>`;
-            }
-
-        } catch (error) {
-            console.error('Fetch posts error:', error);
-            postsContainer.innerHTML = '<p class="text-center text-red-400 py-10">فشل الاتصال بالخادم لجلب المنشورات.</p>';
+            reactionSummary.innerHTML = summaryHTML;
+            reactionSummary.classList.remove('hidden');
+        } else {
+            reactionSummary.classList.add('hidden');
         }
     }
-    
-    // ----------------- Reaction Logic (REPLACED toggleLike) -----------------
-    
+
+
     /**
-     * معالجة حدث التفاعل وإرساله إلى الخادم
-     * @param {string} postId - معرف المنشور
-     * @param {string|null} reactionType - نوع التفاعل الجديد ('love', 'support', إلخ) أو null للإزالة
-     * @param {HTMLElement} postElement - عنصر المنشور
+     * معالجة إرسال التفاعل إلى الخادم وتحديث واجهة المستخدم
      */
-    async function handleReactionEvent(postId, reactionType, postElement) {
-        const mainBtn = postElement.querySelector('.main-reaction-btn');
-        const currentReaction = mainBtn.dataset.currentReaction;
-        let newReactionType = reactionType;
-        
+    function handleReactionEvent(postId, reactionType, postElement) {
+        const currentReaction = postElement.getAttribute('data-user-reaction');
+        let newReactionType = reactionType; 
+
         // إذا نقر المستخدم على نفس التفاعل، فهذا يعني أنه يريد إزالته (عدم التفاعل)
         if (currentReaction === reactionType) {
             newReactionType = null; // إرسال null لإزالة التفاعل
         }
         
-        // تعطيل الزر أثناء الاتصال بـ API
-        mainBtn.disabled = true;
+        // إظهار حالة التحميل على الزر (اختياري)
+        const reactionButton = postElement.querySelector('.main-reaction-button');
+        reactionButton.disabled = true;
+        
+        fetch(`/api/posts/${postId}/react`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ reactionType: newReactionType })
+        })
+        // ----------------- [ الجزء المُعدّل لمعالجة الأخطاء ] -----------------
+        .then(response => {
+            if (!response.ok) {
+                // محاولة قراءة رسالة الخطأ من JSON
+                return response.json().then(errorData => {
+                    throw new Error(errorData.error || `فشل الخادم برمز: ${response.status}.`);
+                }).catch(() => {
+                     // في حال لم يكن الرد بصيغة JSON (مثل أخطاء 401 أو 500 خام)
+                     throw new Error(`فشل الخادم برمز: ${response.status}. الرجاء التأكد من تسجيل الدخول.`);
+                });
+            }
+            return response.json();
+        })
+        // ----------------- [ نهاية الجزء المُعدّل ] -----------------
+        .then(result => {
+            if (result.ok) {
+                // تحديث واجهة المستخدم بناءً على استجابة الخادم
+                updateReactionUI(
+                    postElement, 
+                    result.reaction, // التفاعل الجديد أو null
+                    result.newReactionsCount, 
+                    result.allReactionCounts
+                );
 
-        try {
-            const response = await fetch(`/api/posts/${postId}/react`, { // نقطة API الجديدة
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reactionType: newReactionType })
-            });
-            
-            const result = await response.json();
-
-            if (response.ok && result.ok) {
-                // تحديث الواجهة بناءً على الاستجابة
-                updateReactionUI(postElement, result.reaction, result.newReactionsCount, result.allReactionCounts);
             } else {
-                alert(result.error || 'فشل في معالجة التفاعل.');
+                alert(result.error || 'فشل في تطبيق التفاعل.');
             }
-        } catch (error) {
-            console.error('Reaction error:', error);
-            alert('فشل الاتصال بالخادم.');
-        } finally {
-            mainBtn.disabled = false;
-        }
-    }
-
-    // ----------------- Other Logic (kept as is for comment/delete/profile) -----------------
-    let currentPostIdToDelete = null;
-    const deleteModal = document.getElementById('deleteModal');
-    const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
-    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-    const deleteMessage = document.getElementById('deleteMessage');
-    const postMenu = document.getElementById('postMenu');
-    const deleteOptionBtn = document.getElementById('deleteOptionBtn');
-    const profileDropdown = document.getElementById('profileDropdown'); 
-    const profileMenuButton = document.getElementById('profileMenuButton'); 
-    
-    const commentModal = document.getElementById('commentModal');
-    const closeCommentModalBtn = document.getElementById('closeCommentModalBtn');
-    const commentsList = document.getElementById('commentsList');
-    const newCommentInput = document.getElementById('newCommentInput');
-    const postCommentBtn = document.getElementById('postCommentBtn');
-    const commentError = document.getElementById('commentError');
-    let currentPostIdForComments = null; 
-
-    
-    function toggleProfileDropdown(event) {
-        event.stopPropagation();
-        profileDropdown.classList.toggle('hidden');
-    }
-
-    function closeProfileDropdownOnClickOutside(event) {
-        if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
-            profileDropdown.classList.add('hidden');
-        }
-    }
-
-    document.addEventListener('click', closeProfileDropdownOnClickOutside);
-    
-    function closeMediaViewer(event) {
-        const mediaViewerModal = document.getElementById('mediaViewerModal');
-        const mediaViewerContent = document.getElementById('mediaViewerContent');
-        if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
-            const activeMedia = mediaViewerContent.querySelector('video, audio, img');
-            if (activeMedia && (activeMedia.tagName === 'VIDEO' || activeMedia.tagName === 'AUDIO')) {
-                activeMedia.pause();
-            }
-            mediaViewerModal.classList.add('hidden');
-            mediaViewerContent.innerHTML = '';
-        }
-    }
-    
-    function openDeleteModal(postId, event) {
-        event.stopPropagation();
-        currentPostIdToDelete = postId;
-        deleteMessage.classList.add('hidden');
-        deleteModal.classList.remove('hidden');
-        postMenu.classList.add('hidden');
-    }
-
-    cancelDeleteBtn.addEventListener('click', () => {
-        deleteModal.classList.add('hidden');
-        currentPostIdToDelete = null;
-    });
-
-    confirmDeleteBtn.addEventListener('click', async () => {
-        if (!currentPostIdToDelete) return;
-
-        confirmDeleteBtn.disabled = true;
-        confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحذف';
-        deleteMessage.classList.add('hidden');
-
-        try {
-            const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.ok) {
-                document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`).remove();
-                deleteModal.classList.add('hidden');
-            } else {
-                deleteMessage.textContent = result.error || 'فشل الحذف.';
-                deleteMessage.classList.remove('hidden');
-            }
-        } catch (error) {
-            deleteMessage.textContent = 'حدث خطأ في الاتصال بالخادم.';
-            deleteMessage.classList.remove('hidden');
-        } finally {
-            confirmDeleteBtn.disabled = false;
-            confirmDeleteBtn.innerHTML = 'تأكيد الحذف';
-            currentPostIdToDelete = null;
-        }
-    });
-
-    function togglePostMenu(postId, userId, event, menuButton) {
-        event.stopPropagation();
-        
-        if (!postMenu.classList.contains('hidden') && postMenu.dataset.postId === postId) {
-            postMenu.classList.add('hidden');
-            return;
-        }
-        
-        const rect = menuButton.getBoundingClientRect();
-        postMenu.style.top = `${rect.bottom + 5}px`;
-        postMenu.style.left = `${rect.left}px`;
-        
-        postMenu.dataset.postId = postId;
-
-        if (userId == currentUserId) {
-            deleteOptionBtn.style.display = 'flex';
-            deleteOptionBtn.onclick = (e) => openDeleteModal(postId, e);
-        } else {
-            deleteOptionBtn.style.display = 'none';
-        }
-
-        postMenu.classList.remove('hidden');
-    }
-
-    document.addEventListener('click', (event) => {
-        if (!postMenu.contains(event.target) && !event.target.closest('.post-menu-button')) {
-            postMenu.classList.add('hidden');
-            deleteModal.classList.add('hidden');
-        }
-    });
-    
-    
-    async function handleComment(postId) { 
-        currentPostIdForComments = postId;
-        await fetchAndDisplayComments(postId);
-        commentModal.classList.remove('hidden'); 
-    }
-
-    closeCommentModalBtn.addEventListener('click', () => {
-        commentModal.classList.add('hidden');
-        currentPostIdForComments = null;
-        newCommentInput.value = '';
-        commentsList.innerHTML = '';
-    });
-
-    function createCommentHtml(comment) {
-        const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        })
+        .catch(error => {
+            console.error('فشل في إرسال التفاعل:', error);
+            // عرض رسالة الخطأ المُحسّنة للمستخدم
+            alert(`فشل في إرسال التفاعل: ${error.message}`); 
+        })
+        .finally(() => {
+            reactionButton.disabled = false;
         });
+    }
 
-        return `
-            <div class="flex items-start">
-                <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover ml-3 flex-shrink-0">
-                <div class="flex-grow bg-gray-700 p-3 rounded-lg">
-                    <div class="flex justify-between items-center mb-1">
-                        <a href="/profile?user_id=${comment.userId}" class="text-white font-semibold text-sm hover:text-blue-400">${comment.user.username}</a>
-                        <span class="text-gray-400 text-xs">${commentDate}</span>
+    /**
+     * بناء عنصر المنشور في DOM
+     */
+    function createPostElement(post) {
+        const postElement = document.createElement('div');
+        postElement.className = 'post-card p-4 mb-4';
+        postElement.setAttribute('data-post-id', post.postId);
+        // حفظ حالة تفاعل المستخدم على المنشور
+        postElement.setAttribute('data-user-reaction', post.userReaction || ''); 
+
+        let mediaHTML = '';
+        if (post.media) {
+            if (post.media.type === 'image') {
+                mediaHTML = `<img src="${post.media.url}" alt="صورة المنشور" class="w-full rounded-lg my-3 object-cover max-h-96">`;
+            } else if (post.media.type === 'video') {
+                mediaHTML = `<video controls src="${post.media.url}" class="w-full rounded-lg my-3" preload="metadata"></video>`;
+            } else if (post.media.type === 'audio') {
+                 // عرض مشغل Wavesurfer
+                 mediaHTML = `
+                    <div class="wavesurfer-post-container flex items-center bg-gray-700 p-2 rounded-lg my-3">
+                        <button id="play-pause-${post.postId}" class="text-white text-xl p-2 bg-indigo-600 rounded-full hover:bg-indigo-700 transition hidden">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div id="loading-audio-${post.postId}" class="text-gray-400 text-sm p-2">جاري التحميل...</div>
+                        <div id="wavesurfer-${post.postId}" class="flex-grow mr-2"></div>
                     </div>
-                    <p class="text-gray-200 whitespace-pre-wrap text-sm">${comment.content}</p>
+                 `;
+            }
+        }
+        
+        postElement.innerHTML = `
+            <div class="flex items-start justify-between">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <img src="${post.profilePic || '/images/default_profile.png'}" alt="صورة المستخدم" class="w-10 h-10 rounded-full object-cover">
+                    <div>
+                        <p class="font-semibold text-white">${post.username || 'مستخدم مجهول'}</p>
+                        <p class="text-sm text-gray-500">${new Date(post.timestamp).toLocaleString('ar-EG')}</p>
+                    </div>
+                </div>
+                <button class="text-gray-400 hover:text-white"><i class="fas fa-ellipsis-h"></i></button>
+            </div>
+
+            <p class="mt-3 text-gray-200 whitespace-pre-wrap">${post.content}</p>
+
+            ${mediaHTML}
+
+            <div class="flex justify-between items-center text-gray-400 text-sm mt-3 border-t border-b border-gray-700 py-2">
+                <div class="flex items-center reaction-summary">
+                    </div>
+                <span class="reactions-count ml-auto">${post.reactionsCount || ''}</span>
+                <span class="ml-4">${post.totalComments || 0} تعليق</span>
+            </div>
+
+            <div class="flex justify-around mt-2">
+                
+                <div class="relative group">
+                    <button class="flex items-center justify-center space-x-2 space-x-reverse p-2 rounded-lg transition duration-200 main-reaction-button w-28" 
+                            data-post-id="${post.postId}">
+                        <span class="reaction-icon"></span>
+                        <span class="reaction-text"></span>
+                    </button>
+
+                    <div class="reaction-menu absolute">
+                        <button class="text-3xl p-2 hover:bg-gray-600 rounded-full" title="أحببته" data-reaction-type="love">
+                            <i class="fas fa-heart text-red-500"></i>
+                        </button>
+                        <button class="text-3xl p-2 hover:bg-gray-600 rounded-full" title="أدعمه" data-reaction-type="support">
+                            <i class="fas fa-hands-clapping text-green-500"></i>
+                        </button>
+                        <button class="text-3xl p-2 hover:bg-gray-600 rounded-full" title="ممل" data-reaction-type="boring">
+                            <i class="fas fa-meh-blank text-gray-400"></i>
+                        </button>
+                        <button class="text-3xl p-2 hover:bg-gray-600 rounded-full" title="حكيم" data-reaction-type="wise">
+                             <i class="fas fa-brain text-yellow-500"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button class="flex items-center space-x-2 space-x-reverse text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-700 transition duration-200"
+                        onclick="showCommentsModal('${post.postId}')">
+                    <i class="fas fa-comment"></i>
+                    <span>تعليق</span>
+                </button>
+            </div>
+            
+            <script>
+                // لابد من إضافة معالج الأحداث هنا داخل إنشاء العنصر لأن العنصر ديناميكي
+                const reactionContainer = postElement.querySelector('.relative.group');
+                const reactionButton = reactionContainer.querySelector('.main-reaction-button');
+                const reactionMenu = reactionContainer.querySelector('.reaction-menu');
+
+                // إظهار وإخفاء القائمة عند النقر على الزر الرئيسي
+                reactionButton.addEventListener('click', (e) => {
+                    e.stopPropagation(); // لمنع إغلاق القائمة فوراً
+                    reactionMenu.style.display = reactionMenu.style.display === 'flex' ? 'none' : 'flex';
+                });
+
+                // إغلاق القائمة عند النقر خارجها
+                document.addEventListener('click', (e) => {
+                    if (reactionMenu.style.display === 'flex' && !reactionContainer.contains(e.target)) {
+                        reactionMenu.style.display = 'none';
+                    }
+                });
+
+                // إضافة معالج أحداث لجميع أزرار التفاعل داخل القائمة
+                reactionMenu.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const postId = postElement.getAttribute('data-post-id');
+                        const reactionType = btn.getAttribute('data-reaction-type');
+                        handleReactionEvent(postId, reactionType, postElement);
+                        reactionMenu.style.display = 'none'; // إغلاق القائمة بعد الاختيار
+                    });
+                });
+            </script>
+        `;
+        
+        // **تهيئة الواجهة الأولية للتفاعلات بناءً على بيانات الخادم**
+        updateReactionUI(postElement, post.userReaction, post.reactionsCount, post.allReactionCounts);
+
+        return postElement;
+    }
+
+
+    // ---------------- وظائف جلب المنشورات ----------------
+    
+    async function fetchAndDisplayPosts() {
+        loadingMessage.classList.remove('hidden');
+        loadMoreButton.classList.add('hidden');
+
+        try {
+            let url = '/api/posts';
+            if (lastPostTimestamp) {
+                url += `?lastTimestamp=${lastPostTimestamp}`;
+            }
+
+            const response = await fetch(url);
+            
+            // تحقق من التوثيق أولاً
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('فشل في جلب المنشورات من الخادم.');
+            }
+
+            const result = await response.json();
+            
+            if (result.ok) {
+                const audioPostsToInit = []; // لتخزين منشورات الصوت لتهيئة WaveSurfer
+                
+                if (result.posts.length > 0) {
+                    
+                    result.posts.forEach(post => {
+                        postsContainer.appendChild(createPostElement(post));
+                        
+                        // تجميع معلومات منشورات الصوت
+                        if (post.media && post.media.type === 'audio') {
+                            audioPostsToInit.push({ postId: post.postId, url: post.media.url });
+                        }
+                    });
+                    
+                    // تحديث آخر مؤشر زمني
+                    lastPostTimestamp = result.posts[result.posts.length - 1].timestamp;
+
+                    // تفعيل زر "تحميل المزيد" إذا كان هناك ما يكفي من المنشورات
+                    if (result.posts.length === 20) {
+                        loadMoreButton.classList.remove('hidden');
+                    } else {
+                        loadMoreButton.classList.add('hidden');
+                    }
+                    
+                    // **تهيئة WaveSurfer بعد إضافة العناصر إلى DOM**
+                    audioPostsToInit.forEach(ap => {
+                        initializePostWaveSurfer(ap.postId, ap.url);
+                    });
+
+                } else if (!lastPostTimestamp) {
+                    // إذا لم تكن هناك منشورات على الإطلاق
+                    postsContainer.innerHTML = '<div class="text-center text-gray-500 p-10">لا توجد منشورات حتى الآن. كن أول من ينشر!</div>';
+                }
+            } else {
+                alert(result.error || 'فشل غير معروف في جلب المنشورات.');
+            }
+
+        } catch (error) {
+            console.error('Network or fetch error:', error);
+            postsContainer.innerHTML = `<div class="text-center text-red-500 p-10">فشل الاتصال بالخادم. ${error.message}</div>`;
+        } finally {
+            loadingMessage.classList.add('hidden');
+        }
+    }
+    
+    // ---------------- وظائف التعليقات ----------------
+
+    function createCommentElement(comment) {
+        // بناء عنصر التعليق
+        const commentDiv = document.createElement('div');
+        commentDiv.className = 'flex items-start space-x-3 space-x-reverse mb-3 p-2 bg-gray-700 rounded-lg';
+        commentDiv.innerHTML = `
+            <img src="${comment.profilePic}" alt="صورة" class="w-8 h-8 rounded-full object-cover">
+            <div class="flex-grow">
+                <p class="text-sm font-semibold text-white">${comment.username}</p>
+                <p class="text-gray-300 text-sm whitespace-pre-wrap">${comment.content}</p>
+                <p class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG')}</p>
+            </div>
+        `;
+        return commentDiv;
+    }
+
+    async function showCommentsModal(postId) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center';
+        modal.innerHTML = `
+            <div class="bg-gray-800 p-6 rounded-lg w-full max-w-xl h-3/4 flex flex-col shadow-2xl relative">
+                <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">التعليقات</h2>
+                <button class="absolute top-3 left-3 text-gray-400 hover:text-white text-2xl close-comments-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+                
+                <div id="commentsList" class="flex-grow overflow-y-auto space-y-3 mb-4 pr-3">
+                    <div class="text-center text-gray-500 p-5">جاري تحميل التعليقات...</div>
+                </div>
+
+                <div class="border-t border-gray-700 pt-4">
+                    <div id="commentError" class="text-red-400 text-sm mb-2 hidden"></div>
+                    <div class="flex space-x-2 space-x-reverse">
+                        <input type="text" id="newCommentInput" placeholder="اكتب تعليقك..." class="flex-grow p-2 bg-gray-700 rounded-lg border border-gray-600 text-white focus:border-indigo-500">
+                        <button id="postCommentBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
+                            <i class="fas fa-paper-plane text-lg"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
-    }
+        document.body.appendChild(modal);
 
-    async function fetchAndDisplayComments(postId) {
-        commentsList.innerHTML = '<div class="text-center text-gray-500 p-4">جاري تحميل التعليقات...</div>';
-        commentError.classList.add('hidden');
+        const commentsList = modal.querySelector('#commentsList');
+        const newCommentInput = modal.querySelector('#newCommentInput');
+        const postCommentBtn = modal.querySelector('#postCommentBtn');
+        const commentError = modal.querySelector('#commentError');
         
+        // إغلاق النافذة
+        modal.querySelector('.close-comments-modal').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+
+        // جلب التعليقات وعرضها
         try {
             const response = await fetch(`/api/posts/${postId}/comments`);
-            const result = await response.json();
-
-            if (response.ok && result.ok) {
-                commentsList.innerHTML = '';
-                if (result.comments.length === 0) {
-                    commentsList.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد تعليقات حتى الآن.</div>';
-                } else {
-                    result.comments.forEach(comment => {
-                        commentsList.innerHTML += createCommentHtml(comment);
-                    });
-                    commentsList.scrollTop = commentsList.scrollHeight;
+            if (!response.ok) {
+                 if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
                 }
-            } else {
-                commentError.textContent = result.error || 'فشل في جلب التعليقات.';
-                commentError.classList.remove('hidden');
-                commentsList.innerHTML = '';
+                throw new Error('فشل جلب التعليقات.');
             }
-
-        } catch (error) {
-            commentError.textContent = 'حدث خطأ في الاتصال بالخادم.';
-            commentError.classList.remove('hidden');
+            const result = await response.json();
+            
             commentsList.innerHTML = '';
-        }
-    }
-    
-    async function postComment() {
-        const content = newCommentInput.value.trim();
-        if (!content || !currentPostIdForComments) return;
-
-        postCommentBtn.disabled = true;
-        postCommentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        commentError.classList.add('hidden');
-
-        try {
-            const response = await fetch(`/api/posts/${currentPostIdForComments}/comment`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: content })
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.ok) {
-                if (commentsList.querySelector('.text-center.text-gray-500')) {
-                    commentsList.innerHTML = '';
-                }
-                commentsList.innerHTML += createCommentHtml(result.comment);
-                newCommentInput.value = '';
-                
-                const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
-                if (postCard) {
-                    const commentsCountSpan = postCard.querySelector('.comments-count');
-                    commentsCountSpan.textContent = result.newComments;
-                }
-                
-                commentsList.scrollTop = commentsList.scrollHeight;
-
+            if (result.ok && result.comments.length > 0) {
+                result.comments.forEach(comment => {
+                    commentsList.appendChild(createCommentElement(comment));
+                });
             } else {
-                commentError.textContent = result.error || 'فشل في إضافة التعليق.';
-                commentError.classList.remove('hidden');
+                 commentsList.innerHTML = '<div class="text-center text-gray-500 p-5">لا توجد تعليقات حتى الآن.</div>';
             }
+            commentsList.scrollTop = commentsList.scrollHeight;
 
         } catch (error) {
-            commentError.textContent = 'فشل الاتصال بالخادم.';
-            commentError.classList.remove('hidden');
-        } finally {
-            postCommentBtn.disabled = false;
-            postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>'; 
+            commentsList.innerHTML = `<div class="text-center text-red-500 p-5">فشل الاتصال بالخادم: ${error.message}</div>`;
         }
+
+        // دالة إرسال التعليق
+        const postComment = async () => {
+            const content = newCommentInput.value.trim();
+            if (!content) return;
+
+            postCommentBtn.disabled = true;
+            postCommentBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-lg"></i>';
+            commentError.classList.add('hidden');
+            commentError.textContent = '';
+            
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: content })
+                });
+
+                if (!response.ok) {
+                    throw new Error('فشل الخادم في إضافة التعليق.');
+                }
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    commentsList.appendChild(createCommentElement(result.comment));
+                    newCommentInput.value = '';
+                    
+                    // تحديث عدد التعليقات على المنشور الأصلي في الواجهة
+                    const postElement = document.querySelector(`[data-post-id="${postId}"]`);
+                    if (postElement) {
+                        const totalCommentsElement = postElement.querySelector('.ml-4');
+                        const currentCommentsText = totalCommentsElement.textContent;
+                        let currentComments = parseInt(currentCommentsText.match(/\d+/)[0] || 0);
+                        currentComments++;
+                        totalCommentsElement.textContent = `${currentComments} تعليق`;
+                    }
+                    
+                    commentsList.scrollTop = commentsList.scrollHeight;
+
+                } else {
+                    commentError.textContent = result.error || 'فشل في إضافة التعليق.';
+                    commentError.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                commentError.textContent = 'فشل الاتصال بالخادم.';
+                commentError.classList.remove('hidden');
+            } finally {
+                postCommentBtn.disabled = false;
+                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>'; 
+            }
+        }
+        
+        postCommentBtn.addEventListener('click', postComment);
+        newCommentInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); 
+                postComment();
+            }
+        });
     }
+
+    // ---------------- وظائف إنشاء منشور ----------------
+
+    const createPostButton = document.getElementById('createPostButton');
+    const createPostModal = document.getElementById('createPostModal');
+    const closePostModal = document.getElementById('closePostModal');
+    const createPostForm = document.getElementById('createPostForm');
+    const postMediaInput = document.getElementById('postMedia');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const postErrorElement = document.getElementById('postError');
+    const submitPostButton = document.getElementById('submitPostButton');
+
+    createPostButton.addEventListener('click', () => {
+        createPostModal.classList.remove('hidden');
+    });
+
+    closePostModal.addEventListener('click', () => {
+        createPostModal.classList.add('hidden');
+        createPostForm.reset();
+        fileNameDisplay.textContent = '';
+        postErrorElement.classList.add('hidden');
+    });
     
-    postCommentBtn.addEventListener('click', postComment);
-    newCommentInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault(); 
-            postComment();
+    postMediaInput.addEventListener('change', () => {
+        if (postMediaInput.files.length > 0) {
+            fileNameDisplay.textContent = `تم اختيار: ${postMediaInput.files[0].name}`;
+        } else {
+            fileNameDisplay.textContent = '';
         }
     });
+
+    createPostForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        submitPostButton.disabled = true;
+        submitPostButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
+        postErrorElement.classList.add('hidden');
+        postErrorElement.textContent = '';
+
+        const formData = new FormData(createPostForm);
+        
+        // التحقق من أن المحتوى أو الملف موجود
+        if (!formData.get('content') && (!postMediaInput.files || postMediaInput.files.length === 0)) {
+            postErrorElement.textContent = 'المنشور لا يمكن أن يكون فارغاً.';
+            postErrorElement.classList.remove('hidden');
+            submitPostButton.disabled = false;
+            submitPostButton.innerHTML = 'نشر';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/posts/create', {
+                method: 'POST',
+                body: formData, // FormData يتم إرسالها مباشرة دون تعيين Content-Type
+            });
+
+            if (response.status === 401) {
+                 window.location.href = '/login';
+                 return;
+            }
+
+            const result = await response.json();
+
+            if (result.ok) {
+                // إضافة المنشور الجديد في بداية القائمة
+                const newPostElement = createPostElement(result.post);
+                postsContainer.insertBefore(newPostElement, postsContainer.firstChild);
+
+                // تهيئة WaveSurfer إذا كان المنشور صوتاً
+                if (result.post.media && result.post.media.type === 'audio') {
+                    initializePostWaveSurfer(result.post.postId, result.post.media.url);
+                }
+
+                // إغلاق المودال وإعادة التعيين
+                createPostModal.classList.add('hidden');
+                createPostForm.reset();
+                fileNameDisplay.textContent = '';
+                
+            } else {
+                postErrorElement.textContent = result.error || 'فشل في إنشاء المنشور.';
+                postErrorElement.classList.remove('hidden');
+            }
+
+        } catch (error) {
+            console.error('Create post error:', error);
+            postErrorElement.textContent = 'فشل الاتصال بالخادم: ' + error.message;
+            postErrorElement.classList.remove('hidden');
+        } finally {
+            submitPostButton.disabled = false;
+            submitPostButton.innerHTML = 'نشر';
+        }
+    });
+    
+    // ---------------- جلب البيانات عند تحميل الصفحة ----------------
+
+    loadMoreButton.addEventListener('click', fetchAndDisplayPosts);
 
     document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/profile')
