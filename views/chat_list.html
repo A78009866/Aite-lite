@@ -331,6 +331,7 @@
             mainIcon.className = `fas ${reactionData.icon} ml-2 main-reaction-icon ${reactionData.color}`;
             mainText.textContent = reactionData.arabic;
             mainBtn.classList.remove('text-gray-400');
+            mainBtn.classList.remove(...Object.values(REACTIONS_MAP).map(r => r.color)); // إزالة الألوان القديمة من الزر
             mainBtn.classList.add(reactionData.color);
 
         } else {
@@ -631,6 +632,10 @@
         }
         
         // تعطيل الزر أثناء الاتصال بـ API
+        // إظهار حالة التحميل على أيقونة التفاعل
+        const reactionIcon = mainBtn.querySelector('.main-reaction-icon');
+        const originalIconClass = reactionIcon.className;
+        reactionIcon.className = 'fas fa-spinner fa-spin ml-2';
         mainBtn.disabled = true;
 
         try {
@@ -652,7 +657,17 @@
             console.error('Reaction error:', error);
             alert('فشل الاتصال بالخادم.');
         } finally {
+            // إعادة الأيقونة الأصلية
             mainBtn.disabled = false;
+            reactionIcon.className = originalIconClass; // يتم إعادة تعيينها بشكل صحيح بواسطة updateReactionUI لاحقا
+            // لضمان العرض الصحيح في حال الخطأ نعتمد على استدعاء updateReactionUI
+            if (!mainBtn.disabled) {
+                const currentReactionTypeAfterAction = mainBtn.dataset.currentReaction;
+                const postData = (await fetch('/api/posts').then(r => r.json())).posts.find(p => p.postId === postId);
+                if (postData) {
+                     updateReactionUI(postElement, postData.userReaction, postData.reactionsCount, postData.allReactionCounts);
+                }
+            }
         }
     }
 
