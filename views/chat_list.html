@@ -316,13 +316,19 @@
         const countDisplay = postElement.querySelector('.reactions-count-display');
         const summaryIcons = postElement.querySelector('.reaction-icons-summary');
         
+        // **الإصلاح الحاسم: التحقق من وجود العناصر لتجنب خطأ null**
+        if (!mainBtn || !mainIcon || !mainText || !countDisplay || !summaryIcons) {
+             console.warn("Reaction UI update aborted: required UI elements not found. Post likely deleted or re-rendered.");
+             return; 
+        }
+
         const type = newReactionType || 'none';
         
         // 1. تحديث حالة زر التفاعل الرئيسي
         mainBtn.dataset.currentReaction = type;
 
         // إزالة جميع الألوان السابقة
-        Object.values(REACTIONS_MAP).forEach(map => mainIcon.classList.remove(map.color));
+        Object.values(REACTIONS_MAP).forEach(map => mainIcon.classList.remove(map.color)); 
         mainIcon.classList.remove('fas', 'far'); // إزالة فئة الحالة
         
         if (type !== 'none') {
@@ -631,8 +637,12 @@
         }
         
         const reactionIcon = mainBtn.querySelector('.main-reaction-icon');
-        const originalIconClass = reactionIcon.className; // <-- تخزين حالة الأيقونة قبل التحميل
-        reactionIcon.className = 'fas fa-spinner fa-spin ml-2';
+        // تأكد من وجود الأيقونة قبل محاولة تخزين حالتها
+        const originalIconClass = reactionIcon ? reactionIcon.className : null; 
+        
+        if (reactionIcon) {
+            reactionIcon.className = 'fas fa-spinner fa-spin ml-2';
+        }
         mainBtn.disabled = true;
 
         try {
@@ -651,18 +661,21 @@
                 // API FAILURE PATH (مثل status 400 أو result.ok === false)
                 alert(result.error || 'فشل في معالجة التفاعل.'); 
                 // إعادة الأيقونة الأصلية
-                reactionIcon.className = originalIconClass;
+                if (reactionIcon && originalIconClass) {
+                    reactionIcon.className = originalIconClass;
+                }
             }
         } catch (error) {
             console.error('Reaction error:', error);
             // هذا هو التنبيه الذي كان يظهر للمستخدم
-            alert('فشل الاتصال بالخادم. (تم استرجاع الأيقونة، يرجى التأكد من حالة المنشور)'); 
+            alert('فشل في تسجيل التفاعل. يرجى مراجعة اتصال الشبكة.'); 
             // إعادة الأيقونة الأصلية
-            reactionIcon.className = originalIconClass; 
+            if (reactionIcon && originalIconClass) {
+                reactionIcon.className = originalIconClass;
+            }
         } finally {
             // تنظيف بسيط: دائماً قم بإعادة تفعيل الزر
             mainBtn.disabled = false;
-            // تم إزالة المنطق المعقد لإعادة الجلب من هنا
         }
     }
 
