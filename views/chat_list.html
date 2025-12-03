@@ -626,15 +626,12 @@
         const currentReaction = mainBtn.dataset.currentReaction;
         let newReactionType = reactionType;
         
-        // إذا نقر المستخدم على نفس التفاعل، فهذا يعني أنه يريد إزالته (عدم التفاعل)
         if (currentReaction === reactionType) {
-            newReactionType = null; // إرسال null لإزالة التفاعل
+            newReactionType = null; 
         }
         
-        // تعطيل الزر أثناء الاتصال بـ API
-        // إظهار حالة التحميل على أيقونة التفاعل
         const reactionIcon = mainBtn.querySelector('.main-reaction-icon');
-        const originalIconClass = reactionIcon.className;
+        const originalIconClass = reactionIcon.className; // <-- تخزين حالة الأيقونة قبل التحميل
         reactionIcon.className = 'fas fa-spinner fa-spin ml-2';
         mainBtn.disabled = true;
 
@@ -648,26 +645,24 @@
             const result = await response.json();
 
             if (response.ok && result.ok) {
-                // تحديث الواجهة بناءً على الاستجابة
+                // SUCCESS PATH: تحديث الواجهة
                 updateReactionUI(postElement, result.reaction, result.newReactionsCount, result.allReactionCounts);
             } else {
-                alert(result.error || 'فشل في معالجة التفاعل.');
+                // API FAILURE PATH (مثل status 400 أو result.ok === false)
+                alert(result.error || 'فشل في معالجة التفاعل.'); 
+                // إعادة الأيقونة الأصلية
+                reactionIcon.className = originalIconClass;
             }
         } catch (error) {
             console.error('Reaction error:', error);
-            alert('فشل الاتصال بالخادم.');
-        } finally {
+            // هذا هو التنبيه الذي كان يظهر للمستخدم
+            alert('فشل الاتصال بالخادم. (تم استرجاع الأيقونة، يرجى التأكد من حالة المنشور)'); 
             // إعادة الأيقونة الأصلية
+            reactionIcon.className = originalIconClass; 
+        } finally {
+            // تنظيف بسيط: دائماً قم بإعادة تفعيل الزر
             mainBtn.disabled = false;
-            reactionIcon.className = originalIconClass; // يتم إعادة تعيينها بشكل صحيح بواسطة updateReactionUI لاحقا
-            // لضمان العرض الصحيح في حال الخطأ نعتمد على استدعاء updateReactionUI
-            if (!mainBtn.disabled) {
-                const currentReactionTypeAfterAction = mainBtn.dataset.currentReaction;
-                const postData = (await fetch('/api/posts').then(r => r.json())).posts.find(p => p.postId === postId);
-                if (postData) {
-                     updateReactionUI(postElement, postData.userReaction, postData.reactionsCount, postData.allReactionCounts);
-                }
-            }
+            // تم إزالة المنطق المعقد لإعادة الجلب من هنا
         }
     }
 
