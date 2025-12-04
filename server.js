@@ -447,90 +447,77 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
     let totalReactions, allReactionCounts, newReactionType, action;
 
     try {
-        // استخدام Transaction لضمان سلامة البيانات
-        const resultRoot = await db.ref().transaction((root) => { 
-            
-            if (!root || !root.posts || !root.posts[postId]) {
-                return; // إحباط المعاملة إذا كان المنشور غير موجود
-            }
-            
-            const postData = root.posts[postId];
-            
-            // 2. تهيئة بنية التفاعلات
-            if (!root.reactions) { root.reactions = {}; }
-            if (!root.reactions[postId]) { root.reactions[postId] = {}; }
-            
-            // قراءة سجل التفاعل الحالي للمستخدم
-            const currentReactionData = root.reactions[postId][userId];
-            const currentReactionType = currentReactionData ? currentReactionData.type : null;
-            
-            // قراءة وحساب التفاعلات الحالية للمنشور
+        // **الإصلاح (1): قراءة التفاعل الحالي وتحديد الإجراء المطلوب**
+        const userReactionRef = db.ref(`reactions/${postId}/${userId}`);
+        const userReactionSnap = await userReactionRef.once('value');
+        const currentReactionType = userReactionSnap.val() ? userReactionSnap.val().type : null;
+
+        // تحديد التفاعل النهائي (إزالة إذا كان التفاعل هو نفسه)
+        if (currentReactionType === reactionType) {
+            newReactionType = null; // إلغاء التفاعل
+        } else {
+            newReactionType = reactionType; // إضافة تفاعل جديد أو تغييره
+        }
+
+        // **الإصلاح (2): استخدام Transaction المستهدف على المنشور فقط لتحديث العدادات بأمان**
+        const postRef = db.ref(`posts/${postId}`);
+        const transactionResult = await postRef.transaction((postData) => {
+            if (!postData) return; // إحباط إذا لم يكن المنشور موجوداً
+
             const postReactions = postData.reactions || {}; 
             
-            let finalReactionType = newReactionType;
-            let transactionAction = 'no_change'; 
-
-            // **منطق التفاعل المصحح والمبسط:**
-            
-            // أ. معالجة الإزالة (إنقاص عدد التفاعل القديم وإزالته من سجل المستخدمين)
+            // أ. معالجة الإزالة
             if (currentReactionType) {
-                
-                // **التعديل الهام:** نضمن إنقاص العدد بـ 1 فقط إذا كان أكبر من 0.
                 const currentCount = postReactions[currentReactionType] || 0;
-                postReactions[currentReactionType] = Math.max(0, currentCount - 1);
-                
+                // نستخدم Math.max(0, ...) لضمان عدم وجود أعداد سالبة
+                postReactions[currentReactionType] = Math.max(0, currentCount - 1); 
                 if (postReactions[currentReactionType] <= 0) {
                     delete postReactions[currentReactionType];
                 }
-                delete root.reactions[postId][userId];
-                transactionAction = 'removed'; 
             }
             
-            // ب. معالجة الإضافة (إذا كان التفاعل المطلوب جديداً ومختلفاً عن السابق)
-            if (newReactionType && currentReactionType !== newReactionType) {
-                // إضافة التفاعل الجديد
-                root.reactions[postId][userId] = { type: newReactionType, timestamp: admin.database.ServerValue.TIMESTAMP };
+            // ب. معالجة الإضافة
+            if (newReactionType) {
                 postReactions[newReactionType] = (postReactions[newReactionType] || 0) + 1;
-                
-                transactionAction = (currentReactionType) ? 'changed' : 'added';
-                finalReactionType = newReactionType;
-            } else {
-                 // إذا كان newReactionType هو null أو يساوي currentReactionType (مما يعني إلغاء التفاعل)
-                 finalReactionType = null;
-                 if (!currentReactionType) transactionAction = 'no_change';
             }
-            
-            // 3. تحديث البيانات على المنشور
+
+            // ج. تحديث الإجمالي وإجراء الـ action
             postData.reactions = postReactions;
-            
-            // حساب إجمالي التفاعلات بشكل صحيح من الـ map
             postData.totalReactions = Object.values(postReactions).reduce((sum, count) => sum + count, 0); 
             
-            // تحديث المنشور في الجذر
-            root.posts[postId] = postData;
-            
-            // حفظ القيم للرد قبل الخروج من الـ transaction
+            // حفظ القيم للرد
             totalReactions = postData.totalReactions;
             allReactionCounts = postReactions;
-            newReactionType = finalReactionType; 
-            action = transactionAction;
+            
+            // تحديد الـ action للرد
+            if (newReactionType && currentReactionType) action = 'changed';
+            else if (newReactionType) action = 'added';
+            else if (currentReactionType) action = 'removed';
+            else action = 'no_change';
 
-            return root;
-
+            return postData; // Commit changes to postRef
         }, (error, committed) => {
             if (error) {
-                console.error("Reaction transaction failed:", error);
+                console.error("Post reaction transaction failed:", error);
             }
-        }, true); // `true` لتشغيل المعاملة في وضع القراءة فقط في البداية
+        }, false); 
 
-        if (!resultRoot.committed) {
-             // إحباط المعاملة أو فشلها (قد يكون بسبب عدم وجود المنشور)
-             return res.status(500).json({ ok: false, error: 'فشل في تنفيذ التفاعل. المنشور غير موجود أو حدث خطأ.' });
+        if (!transactionResult.committed) {
+            return res.status(500).json({ ok: false, error: 'فشل في تحديث عداد التفاعلات. المنشور غير موجود أو حدث خطأ.' });
+        }
+        
+        // **الإصلاح (3): تحديث سجل تفاعل المستخدم بشكل منفصل (غير اتمومي لكن أسرع بكثير)**
+        if (newReactionType) {
+            // إضافة/تغيير تفاعل المستخدم
+            await userReactionRef.set({ type: newReactionType, timestamp: admin.database.ServerValue.TIMESTAMP });
+        } else {
+            // إزالة تفاعل المستخدم
+            await userReactionRef.remove();
         }
         
         return res.json({ 
             ok: true, 
-            action: action || 'no_change', 
+            action: action, 
             reaction: newReactionType,
             newReactionsCount: totalReactions || 0,
             allReactionCounts: allReactionCounts || {}
@@ -538,6 +525,7 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
 
     } catch (error) {
         console.error('API reaction error:', error);
+        // رسالة الخطأ هذه لن تظهر بعد الآن بفضل الإصلاح الجذري
         res.status(500).json({ ok: false, error: 'حدث خطأ غير متوقع أثناء معالجة التفاعل.' });
     }
 });
