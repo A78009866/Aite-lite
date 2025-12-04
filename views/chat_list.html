@@ -316,29 +316,21 @@
         const countDisplay = postElement.querySelector('.reactions-count-display');
         const summaryIcons = postElement.querySelector('.reaction-icons-summary');
         
-        // الإصلاح الحاسم: التحقق من وجود العناصر لتجنب خطأ null
-        if (!mainBtn || !mainIcon || !mainText || !countDisplay || !summaryIcons) {
-             console.warn("Reaction UI update aborted: required UI elements not found. Post likely deleted or re-rendered.");
-             return; 
-        }
-
         const type = newReactionType || 'none';
         
         // 1. تحديث حالة زر التفاعل الرئيسي
         mainBtn.dataset.currentReaction = type;
 
         // إزالة جميع الألوان السابقة
-        Object.values(REACTIONS_MAP).forEach(map => mainIcon.classList.remove(map.color)); 
+        Object.values(REACTIONS_MAP).forEach(map => mainIcon.classList.remove(map.color));
         mainIcon.classList.remove('fas', 'far'); // إزالة فئة الحالة
         
         if (type !== 'none') {
             const reactionData = REACTIONS_MAP[type];
             // تحديث الأيقونة والنص واللون
-            // ملاحظة: هذا الإجراء يقوم بإعادة تعيين className بالكامل، مما يزيل المؤشر
             mainIcon.className = `fas ${reactionData.icon} ml-2 main-reaction-icon ${reactionData.color}`;
             mainText.textContent = reactionData.arabic;
             mainBtn.classList.remove('text-gray-400');
-            mainBtn.classList.remove(...Object.values(REACTIONS_MAP).map(r => r.color)); // إزالة الألوان القديمة من الزر
             mainBtn.classList.add(reactionData.color);
 
         } else {
@@ -572,9 +564,6 @@
         postElement.querySelector('.comment-btn').addEventListener('click', () => handleComment(post.postId));
         postElement.querySelector('.comment-btn-footer').addEventListener('click', () => handleComment(post.postId));
 
-        // **الإصلاح: تطبيق حالة التفاعل الأولية لضمان ثبات التفاعل بعد تحديث الصفحة**
-        // نستخدم البيانات التي تم جلبها من الخادم لتهيئة حالة التفاعل وأيقونات الملخص
-        updateReactionUI(postElement, userReactionType, totalReactions, allReactionCounts);
 
         return postElement;
     }
@@ -633,19 +622,12 @@
         const currentReaction = mainBtn.dataset.currentReaction;
         let newReactionType = reactionType;
         
+        // إذا نقر المستخدم على نفس التفاعل، فهذا يعني أنه يريد إزالته (عدم التفاعل)
         if (currentReaction === reactionType) {
-            newReactionType = null; 
+            newReactionType = null; // إرسال null لإزالة التفاعل
         }
         
-        const reactionIcon = mainBtn.querySelector('.main-reaction-icon');
-        // تأكد من وجود الأيقونة قبل محاولة تخزين حالتها
-        const originalIconClass = reactionIcon ? reactionIcon.className : null; 
-        
-        if (reactionIcon) {
-            // **الإصلاح: نحتفظ بفئة 'main-reaction-icon' وفئة 'ml-2' أثناء عرض المؤشر**
-            // لضمان أن دالة updateReactionUI يمكنها العثور على العنصر وتحديثه.
-            reactionIcon.className = 'fas fa-spinner fa-spin ml-2 main-reaction-icon'; 
-        }
+        // تعطيل الزر أثناء الاتصال بـ API
         mainBtn.disabled = true;
 
         try {
@@ -658,26 +640,15 @@
             const result = await response.json();
 
             if (response.ok && result.ok) {
-                // SUCCESS PATH: تحديث الواجهة
+                // تحديث الواجهة بناءً على الاستجابة
                 updateReactionUI(postElement, result.reaction, result.newReactionsCount, result.allReactionCounts);
             } else {
-                // API FAILURE PATH (مثل status 400 أو result.ok === false)
-                alert(result.error || 'فشل في معالجة التفاعل.'); 
-                // إعادة الأيقونة الأصلية
-                if (reactionIcon && originalIconClass) {
-                    reactionIcon.className = originalIconClass;
-                }
+                alert(result.error || 'فشل في معالجة التفاعل.');
             }
         } catch (error) {
             console.error('Reaction error:', error);
-            // هذا هو التنبيه الذي كان يظهر للمستخدم
-            alert('فشل في تسجيل التفاعل. يرجى مراجعة اتصال الشبكة.'); 
-            // إعادة الأيقونة الأصلية
-            if (reactionIcon && originalIconClass) {
-                reactionIcon.className = originalIconClass;
-            }
+            alert('فشل الاتصال بالخادم.');
         } finally {
-            // تنظيف بسيط: دائماً قم بإعادة تفعيل الزر
             mainBtn.disabled = false;
         }
     }
