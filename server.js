@@ -285,11 +285,11 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   }
 });
 
-// نقطة النهاية الجديدة لمعالجة التفاعلات (أحببته، أدعمه، ممل، حكيم)
+// نقطة النهاية الجديدة لمعالجة التفاعلات (القلب فقط)
 app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
     const { postId } = req.params;
     const userId = req.session.userId;
-    // reactionType يمكن أن تكون 'love', 'support', 'boring', 'wise' أو null للإزالة
+    // reactionType يمكن أن تكون 'love' أو null للإزالة
     const { reactionType } = req.body; 
 
     if (!postId || !userId) {
@@ -297,7 +297,8 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
     }
 
     const postRef = db.ref(`posts/${postId}`);
-    const allowedReactions = ['love', 'support', 'boring', 'wise'];
+    // **التعديل: السماح بتفاعل واحد فقط**
+    const allowedReactions = ['love']; 
 
     try {
         let action; // 'added', 'removed', or 'changed'
@@ -307,7 +308,7 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
         
         // التحقق من صلاحية نوع التفاعل قبل بدء المعاملة
         if (newReactionType && !allowedReactions.includes(newReactionType)) {
-             return res.status(400).json({ ok: false, error: 'نوع التفاعل غير صالح.' });
+             return res.status(400).json({ ok: false, error: 'نوع التفاعل غير صالح. التفاعل الوحيد المسموح به هو "love".' });
         }
 
         // استخدام Transaction لضمان سلامة البيانات
