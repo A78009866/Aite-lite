@@ -194,15 +194,12 @@
     let currentUserId = null;
     let activeWaveSurfer = null;
 
-    // خريطة التفاعلات الجديدة
+    // **التعديل: خريطة التفاعلات الجديدة تحتوي على 'love' فقط**
     const REACTIONS_MAP = {
         love: { arabic: 'أحببته', icon: 'fa-heart', color: 'text-red-500' },
-        support: { arabic: 'أدعمه', icon: 'fa-handshake', color: 'text-green-500' },
-        boring: { arabic: 'ممل', icon: 'fa-face-rolling-eyes', color: 'text-yellow-500' },
-        wise: { arabic: 'حكيم', icon: 'fa-graduation-cap', color: 'text-blue-500' },
     };
 
-    const ALL_REACTION_TYPES = Object.keys(REACTIONS_MAP);
+    const ALL_REACTION_TYPES = Object.keys(REACTIONS_MAP); // ستكون ['love']
 
     // ----------------- Video Control Functions -----------------
     /**
@@ -324,9 +321,11 @@
         // إزالة جميع الألوان السابقة
         Object.values(REACTIONS_MAP).forEach(map => mainIcon.classList.remove(map.color));
         mainIcon.classList.remove('fas', 'far'); // إزالة فئة الحالة
-        
-        if (type !== 'none') {
-            const reactionData = REACTIONS_MAP[type];
+        mainBtn.classList.remove(...Object.values(REACTIONS_MAP).map(map => map.color)); // إزالة اللون من الزر
+
+        // **التعديل: التحقق من 'love' فقط وتغيير النص الافتراضي**
+        if (type === 'love') {
+            const reactionData = REACTIONS_MAP.love;
             // تحديث الأيقونة والنص واللون
             mainIcon.className = `fas ${reactionData.icon} ml-2 main-reaction-icon ${reactionData.color}`;
             mainText.textContent = reactionData.arabic;
@@ -334,24 +333,20 @@
             mainBtn.classList.add(reactionData.color);
 
         } else {
-            // العودة إلى الحالة الافتراضية
+            // العودة إلى الحالة الافتراضية (غير متفاعل)
             mainIcon.className = 'far fa-heart ml-2 main-reaction-icon text-gray-400';
-            mainText.textContent = 'تفاعل';
-            Object.values(REACTIONS_MAP).forEach(map => mainBtn.classList.remove(map.color));
+            mainText.textContent = 'أحببته'; // **النص الافتراضي هو 'أحببته'**
             mainBtn.classList.add('text-gray-400');
         }
         
         // 2. تحديث عدد التفاعلات الإجمالي
         countDisplay.textContent = totalCount;
         
-        // 3. تحديث أيقونات الملخص (Top 3 Reactions)
-        const topReactions = Object.entries(allCounts)
-            .sort(([, countA], [, countB]) => countB - countA)
-            .slice(0, 3)
-            .filter(([, count]) => count > 0)
-            .map(([type]) => REACTIONS_MAP[type] ? `<i class="fas ${REACTIONS_MAP[type].icon} ${REACTIONS_MAP[type].color} ml-0.5"></i>` : '');
-
-        summaryIcons.innerHTML = topReactions.join('');
+        // 3. تحديث أيقونات الملخص (Top 3 Reactions) - **التعديل: للقلب فقط**
+        summaryIcons.innerHTML = '';
+        if (allCounts.love && allCounts.love > 0) {
+             summaryIcons.innerHTML = `<i class="fas ${REACTIONS_MAP.love.icon} ${REACTIONS_MAP.love.color} ml-0.5"></i>`;
+        }
     }
 
     // ----------------- Post Rendering (MODIFIED) -----------------
@@ -473,20 +468,18 @@
         const totalReactions = post.reactionsCount || 0;
         const allReactionCounts = post.allReactionCounts || {}; 
 
-        // تحديد التفاعلات الأكثر شيوعاً للعرض في الملخص
+        // تحديد التفاعلات الأكثر شيوعاً للعرض في الملخص - **التعديل: للقلب فقط**
         const topReactions = Object.entries(allReactionCounts)
-            .sort(([, countA], [, countB]) => countB - countA)
-            .slice(0, 3)
-            .filter(([, count]) => count > 0)
+            .filter(([type, count]) => type === 'love' && count > 0)
             .map(([type]) => REACTIONS_MAP[type] ? `<i class="fas ${REACTIONS_MAP[type].icon} ${REACTIONS_MAP[type].color} ml-0.5"></i>` : '');
 
         const topReactionsHtml = topReactions.join('');
         
-        // إعداد الأيقونة والنص لزر التفاعل الرئيسي
-        const mainReactionData = REACTIONS_MAP[userReactionType] || { icon: 'fa-heart', color: 'text-gray-400', arabic: 'تفاعل' };
+        // إعداد الأيقونة والنص لزر التفاعل الرئيسي - **التعديل: النص الافتراضي 'أحببته'**
+        const mainReactionData = REACTIONS_MAP[userReactionType] || { icon: 'fa-heart', color: 'text-gray-400', arabic: 'أحببته' };
         const mainIconClass = userReactionType !== 'none' ? `fas ${mainReactionData.icon} ${mainReactionData.color}` : 'far fa-heart text-gray-400';
         const mainBtnColorClass = userReactionType !== 'none' ? mainReactionData.color : 'text-gray-400';
-        const mainTextContent = userReactionType !== 'none' ? mainReactionData.arabic : 'تفاعل';
+        const mainTextContent = userReactionType !== 'none' ? mainReactionData.arabic : 'أحببته';
 
         const footer = `
             <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
@@ -500,17 +493,6 @@
             </div>
 
             <div class="flex justify-around border-t border-gray-700 mt-3 pt-3 relative reaction-buttons-container">
-                
-                <div class="absolute bottom-full mb-2 p-2 bg-gray-800 rounded-full shadow-lg border border-gray-700 reaction-panel hidden" id="reaction-panel-${post.postId}">
-                    ${ALL_REACTION_TYPES.map(type => `
-                        <button class="reaction-button p-2 text-2xl hover:scale-110 transition duration-150 ${REACTIONS_MAP[type].color} mx-1" 
-                                data-reaction-type="${type}" 
-                                data-post-id="${post.postId}"
-                                title="${REACTIONS_MAP[type].arabic}">
-                            <i class="fas ${REACTIONS_MAP[type].icon}"></i>
-                        </button>
-                    `).join('')}
-                </div>
                 
                 <button class="flex items-center hover:text-blue-500 transition duration-300 w-full justify-center main-reaction-btn ${mainBtnColorClass}" 
                         data-post-id="${post.postId}" data-current-reaction="${userReactionType}">
@@ -526,36 +508,14 @@
         `;
         postElement.innerHTML += footer;
 
-        // إرفاق مستمعي الأحداث لأزرار التفاعل الجديدة
-        postElement.querySelectorAll('.reaction-button').forEach(button => {
-            button.addEventListener('click', (e) => {
-                e.stopPropagation(); // منع إغلاق اللوحة مباشرة
-                const type = e.currentTarget.dataset.reactionType;
-                handleReactionEvent(post.postId, type, postElement);
-                // إخفاء اللوحة بعد الاختيار
-                document.getElementById(`reaction-panel-${post.postId}`).classList.add('hidden');
-            });
-        });
-
-        // مستمع للزر الرئيسي لفتح لوحة التفاعلات
+        // **التعديل: ربط الزر الرئيسي مباشرةً بمنطق التفاعل**
         postElement.querySelector('.main-reaction-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            const panel = document.getElementById(`reaction-panel-${post.postId}`);
-            // إغلاق أي لوحات أخرى مفتوحة
-            document.querySelectorAll('.reaction-panel').forEach(p => {
-                 if (p !== panel) p.classList.add('hidden');
-            });
-            panel.classList.toggle('hidden');
+            // نوع التفاعل المطلوب هو 'love' دائمًا عند الضغط على الزر الرئيسي
+            handleReactionEvent(post.postId, 'love', postElement); 
         });
 
-        // إغلاق لوحة التفاعلات عند النقر في أي مكان آخر
-        document.addEventListener('click', (e) => {
-            document.querySelectorAll('.reaction-panel').forEach(panel => {
-                if (!panel.classList.contains('hidden') && !e.target.closest('.reaction-buttons-container')) {
-                    panel.classList.add('hidden');
-                }
-            });
-        });
+        // تم حذف مستمعي الأحداث المتعلقة بلوحة التفاعلات
         
         // إرفاق مستمعي الأحداث القديمة
         if (post.media && post.media.type === 'audio') {
@@ -614,7 +574,7 @@
     /**
      * معالجة حدث التفاعل وإرساله إلى الخادم
      * @param {string} postId - معرف المنشور
-     * @param {string|null} reactionType - نوع التفاعل الجديد ('love', 'support', إلخ) أو null للإزالة
+     * @param {string|null} reactionType - نوع التفاعل الجديد ('love') أو null للإزالة
      * @param {HTMLElement} postElement - عنصر المنشور
      */
     async function handleReactionEvent(postId, reactionType, postElement) {
