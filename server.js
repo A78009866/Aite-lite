@@ -744,7 +744,38 @@ app.get('/api/debug/raw_profiles', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+// نقطة وصول جديدة لجلب ملف شخصي واحد بمعرّف المستخدم
+app.get('/api/profile/:userId', requireAuth, async (req, res) => {
+    const { userId } = req.params;
+    
+    try {
+        if (!userId) {
+            return res.status(400).json({ ok: false, error: "معرّف المستخدم مفقود." });
+        }
+        
+        // جلب الملف الشخصي مباشرة من قاعدة بيانات Firebase باستخدام userId
+        const profileSnap = await db.ref('profiles').child(userId).once('value');
+        const profile = profileSnap.val();
 
+        if (!profile) {
+            return res.status(404).json({ ok: false, error: "الملف الشخصي غير موجود." });
+        }
+
+        // إرجاع البيانات المطلوبة لـ chat.html
+        const publicProfile = {
+            id: profile.id,
+            username: profile.username,
+            full_name: profile.full_name,
+            profile_picture_url: profile.profile_picture_url
+        };
+
+        res.json(publicProfile);
+
+    } catch (error) {
+        console.error('Error fetching single profile:', error);
+        res.status(500).json({ ok: false, error: "خطأ داخلي في الخادم." });
+    }
+});
 app.get('/api/debug/raw_users', requireAuth, async (req, res) => {
   try {
     const snap = await db.ref('users').once('value');
