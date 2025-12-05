@@ -647,10 +647,14 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
 
 
 // نقطة وصول لإرسال رسالة جديدة (نص أو وسائط)
-app.post('/api/messages/send/:contactId', requireAuth, upload.single('media'), async (req, res) => {
+// ✅ التعديل: تغيير المسار من '/api/messages/send/:contactId' إلى '/api/messages/send' 
+// وجلب معرّف جهة الاتصال من req.body لحل مشكلة 404.
+app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, res) => {
   const senderId = req.session.userId;
-  const contactId = req.params.contactId;
-  const { content } = req.body;
+  // ✅ التعديل: جلب معرّف جهة الاتصال من body بدلاً من params
+  const contactId = req.body.other_id; 
+  // 💡 إضافة حقول الرد المحتملة لتمكين ميزة الرد في chat.html
+  const { content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
   
   let mediaUrl = null;
   let mediaType = null;
@@ -659,6 +663,10 @@ app.post('/api/messages/send/:contactId', requireAuth, upload.single('media'), a
   // التحقق من وجود محتوى نصي أو ملف وسائط
   if ((!content || content.trim().length === 0) && !req.file) {
     return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
+  }
+
+  if (!contactId) {
+    return res.status(400).json({ ok: false, error: 'معرّف جهة الاتصال (other_id) مفقود في الطلب.' });
   }
 
   // إذا تم رفع ملف بنجاح
@@ -691,6 +699,10 @@ app.post('/api/messages/send/:contactId', requireAuth, upload.single('media'), a
       // حفظ بيانات الوسائط فقط إذا كانت موجودة
       media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
       is_read: false,
+      // ✅ إضافة حقول الرد
+      replied_to_id: replied_to_id || null, 
+      replied_to_content: replied_to_content || null, 
+      replied_to_sender: replied_to_sender || null, 
     };
 
     await messagesRef.set(messageData);
@@ -718,6 +730,46 @@ app.post('/api/messages/send/:contactId', requireAuth, upload.single('media'), a
     console.error('Error sending message:', error);
     res.status(500).json({ ok: false, error: 'فشل في إرسال الرسالة.' });
   }
+});
+
+
+// نقطة وصول جديدة لتعليم الرسائل كمقروءة (حل مشكلة 404 POST /api/mark_read)
+app.post('/api/mark_read', requireAuth, async (req, res) => {
+    const userId = req.session.userId;
+    const { other_id } = req.body; 
+
+    if (!other_id) {
+        return res.status(400).json({ ok: false, error: 'معرف جهة الاتصال (other_id) مفقود.' });
+    }
+
+    // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
+    const chatRoomId = [userId, other_id].sort().join('_');
+    const messagesRef = db.ref(`messages/${chatRoomId}`);
+
+    try {
+        // جلب الرسائل التي أرسلها الطرف الآخر (other_id)
+        const messagesSnap = await messagesRef
+            .orderByChild('senderId')
+            .equalTo(other_id)
+            .once('value');
+        
+        const updatePromises = [];
+        messagesSnap.forEach(childSnap => {
+            const message = childSnap.val();
+            // تحديث فقط الرسائل التي لم تُقرأ بعد والتي أرسلها other_id
+            if (message.is_read === false && message.senderId === other_id) { 
+                updatePromises.push(childSnap.ref.child('is_read').set(true));
+            }
+        });
+
+        await Promise.all(updatePromises);
+        
+        res.json({ ok: true, message: 'تم تعليم الرسائل كمقروءة بنجاح.' });
+
+    } catch (error) {
+        console.error('Error marking messages read:', error);
+        res.status(500).json({ ok: false, error: 'فشل في تعليم الرسائل كمقروءة.' });
+    }
 });
 
 
