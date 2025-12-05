@@ -285,11 +285,11 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   }
 });
 
-// نقطة النهاية الجديدة لمعالجة التفاعلات (القلب فقط)
+// نقطة النهاية الجديدة لمعالجة التفاعلات (أحببته، أدعمه، ممل، حكيم)
 app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
     const { postId } = req.params;
     const userId = req.session.userId;
-    // reactionType يمكن أن تكون 'love' أو null للإزالة
+    // reactionType يمكن أن تكون 'love', 'support', 'boring', 'wise' أو null للإزالة
     const { reactionType } = req.body; 
 
     if (!postId || !userId) {
@@ -297,102 +297,103 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
     }
 
     const postRef = db.ref(`posts/${postId}`);
-    // **التعديل: السماح بتفاعل واحد فقط**
-    const allowedReactions = ['love']; 
+    const reactionUserRef = db.ref(`reactions/${postId}/${userId}`); // المسار المخصص لتفاعل المستخدم
+    const allowedReactions = ['love', 'support', 'boring', 'wise'];
 
     try {
         let action; // 'added', 'removed', or 'changed'
-        let newReactionType = reactionType; // التفاعل الجديد أو null
         let totalReactions = 0;
         let allReactionCounts = {};
         
-        // التحقق من صلاحية نوع التفاعل قبل بدء المعاملة
-        if (newReactionType && !allowedReactions.includes(newReactionType)) {
-             return res.status(400).json({ ok: false, error: 'نوع التفاعل غير صالح. التفاعل الوحيد المسموح به هو "love".' });
+        if (reactionType && !allowedReactions.includes(reactionType)) {
+             return res.status(400).json({ ok: false, error: 'نوع التفاعل غير صالح.' });
+        }
+        
+        // 1. جلب التفاعل الحالي للمستخدم (خارج المعاملة لتحسين الأداء)
+        const currentReactionSnap = await reactionUserRef.once('value');
+        const currentReactionData = currentReactionSnap.val();
+        const currentReactionType = currentReactionData ? currentReactionData.type : null;
+        
+        let finalReactionType = reactionType; // التفاعل المراد تنفيذه (إضافة/تغيير)
+        
+        // منطق تحديد الإجراء المطلوب: إذا نقر المستخدم على نفس التفاعل، يجب إزالته
+        if (reactionType === currentReactionType) {
+            finalReactionType = null; // إزالة
         }
 
-        // استخدام Transaction لضمان سلامة البيانات
-        // **تم حذف كلمة 'async' من هنا لإصلاح مشكلة الـ transaction**
-        const resultRoot = await db.ref().transaction((root) => { 
+        // 2. تحديث سجل التفاعلات للمستخدم (في مسار reactions)
+        if (finalReactionType === null) {
+            // إزالة التفاعل
+            await reactionUserRef.remove();
+            action = currentReactionType ? 'removed' : 'no_change';
+        } else if (finalReactionType !== currentReactionType) {
+            // إضافة أو تغيير التفاعل
+            const newReactionData = { type: finalReactionType, timestamp: admin.database.ServerValue.TIMESTAMP };
+            await reactionUserRef.set(newReactionData);
+            action = currentReactionType ? 'changed' : 'added';
+        } else {
+             action = 'no_change';
+        }
+
+
+        // 3. المعاملة لتحديث عدادات المنشور (Atomic Update)
+        // يتم استخدام معاملة على مسار المنشور لتحديث أعداد التفاعلات بشكل ذري
+        const postResult = await postRef.transaction((postData) => { 
             
-            // 1. تحقق من وجود المنشور
-            if (root === null || !root.posts || !root.posts[postId]) {
-                 return; // Abort transaction if post doesn't exist
+            if (postData === null) {
+                 return; // المنشور غير موجود
             }
-            
-            const postData = root.posts[postId];
-            
-            // 2. تهيئة بنية التفاعلات
-            if (!root.reactions) { root.reactions = {}; }
-            if (!root.reactions[postId]) { root.reactions[postId] = {}; }
-            
-            const currentReactionData = root.reactions[postId][userId];
-            const currentReactionType = currentReactionData ? currentReactionData.type : null;
             
             const postReactions = postData.reactions || {};
             
-            let finalReactionType = newReactionType;
-            let transactionAction = 'no_change'; 
-
-            // **منطق التفاعل المصحح والمبسط:**
-            
-            // أ. معالجة الإزالة (إنقاص عدد التفاعل القديم وإزالته من سجل المستخدمين)
+            // أ. معالجة الإزالة (إنقاص عدد التفاعل القديم)
             if (currentReactionType) {
                 postReactions[currentReactionType] = (postReactions[currentReactionType] || 1) - 1;
                 if (postReactions[currentReactionType] <= 0) {
                     delete postReactions[currentReactionType];
                 }
-                delete root.reactions[postId][userId];
-                transactionAction = 'removed'; 
             }
             
-            // ب. معالجة الإضافة (إذا كان التفاعل المطلوب جديداً ومختلفاً عن السابق)
-            if (newReactionType && currentReactionType !== newReactionType) {
-                // إضافة التفاعل الجديد
-                root.reactions[postId][userId] = { type: newReactionType, timestamp: admin.database.ServerValue.TIMESTAMP };
-                postReactions[newReactionType] = (postReactions[newReactionType] || 0) + 1;
-                
-                transactionAction = (currentReactionType) ? 'changed' : 'added';
-                finalReactionType = newReactionType;
-            } else {
-                 // إذا كان newReactionType هو null أو يساوي currentReactionType (مما يعني إلغاء التفاعل)
-                 finalReactionType = null;
-                 if (!currentReactionType) transactionAction = 'no_change';
+            // ب. معالجة الإضافة/التغيير (زيادة عدد التفاعل الجديد)
+            if (finalReactionType) {
+                postReactions[finalReactionType] = (postReactions[finalReactionType] || 0) + 1;
             }
             
-            // 3. تحديث البيانات على المنشور
+            // 4. تحديث البيانات على المنشور
             postData.reactions = postReactions;
             postData.totalReactions = Object.values(postReactions).reduce((sum, count) => sum + count, 0);
-            
-            // تحديث المنشور في الجذر
-            root.posts[postId] = postData;
             
             // حفظ القيم للرد قبل الخروج من الـ transaction
             totalReactions = postData.totalReactions;
             allReactionCounts = postReactions;
-            newReactionType = finalReactionType; 
-            action = transactionAction; // تعيين قيمة الرد
-
-            return root; // تمرير القيمة الجديدة للمنشور
+            
+            return postData; // إرجاع القيمة الجديدة للمسار postRef
 
         }, (error, committed, snapshot) => {
             if (error) {
-                console.error('Transaction failed: ', error);
-                throw new Error('Transaction failed');
+                console.error('Post Count Transaction failed: ', error);
             }
-            // إذا لم تلتزم (Committed)، فإن المنشور غير موجود على الأرجح (تم التحقق منه أعلاه)
         });
 
         // إذا فشلت المعاملة بسبب عدم وجود المنشور
-        if (!resultRoot) {
-            return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
+        if (!postResult.committed) {
+             const postExistsSnap = await postRef.once('value');
+             if (!postExistsSnap.exists()) {
+                // محاولة إزالة سجل التفاعل الذي تم إضافته في الخطوة 2 إذا فشلت المعاملة
+                if (action === 'added' || action === 'changed') {
+                     reactionUserRef.remove().catch(console.error);
+                }
+                return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
+             }
+             // إذا لم تلتزم لسبب آخر، عاملها كخطأ عام
+             throw new Error('Transaction could not be committed.');
         }
         
         // الرد بالبيانات الجديدة التي تم تحديثها داخل المعاملة
         return res.json({ 
             ok: true, 
             action: action || 'no_change', 
-            reaction: newReactionType,
+            reaction: finalReactionType, // إرجاع null إذا تم الإزالة
             newReactionsCount: totalReactions || 0,
             allReactionCounts: allReactionCounts || {}
         });
