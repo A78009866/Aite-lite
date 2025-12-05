@@ -40,10 +40,10 @@ align-items: center;
 gap: 6px;
 justify-content: space-between;
 padding: 6px 10px;
-position: fixed; /* Changed from sticky to fixed */
+position: fixed;
 top: 0;
-left: 0; /* Added for fixed positioning */
-right: 0; /* Added for fixed positioning */
+left: 0;
+right: 0;
 background: var(--bg);
 z-index: 200;
 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -115,7 +115,7 @@ gap: 8px;
 padding: 12px;
 padding-bottom: 80px;
 scroll-behavior: smooth;
-margin-top: 50px; /* Added margin to prevent content from hiding under the fixed header */
+margin-top: 50px;
 }
 .msg {
 max-width: 80%;
@@ -475,7 +475,7 @@ function getQuery(name) {
 const params = new URLSearchParams(window.location.search);
 return params.get(name);
 }
-// 💡 التعديل هنا: استخدام 'contactId' بدلاً من 'other_id'
+// ✅ التعديل الأول: استخدام 'contactId' ليتطابق مع الرابط
 const otherId = getQuery('contactId'); 
 if (!otherId) {
 alert('معرف المستخدم غير موجود في الرابط.');
@@ -507,27 +507,41 @@ let myId;
 let activeAudioPlayer = null;
 let replyToMessage = null;
 otherProfileLink.href = `/profile?user_id=${otherId}`;
+
 function scrollToBottom() {
 messagesEl.scrollTop = messagesEl.scrollHeight;
 }
+
+// ✅ التعديل الثاني: استخدام نقطة API الجديدة لجلب ملف شخصي واحد
 async function fetchOtherProfile() {
-try {
-const res = await fetch('/api/users', { credentials: 'same-origin' });
-if (res.status === 401) return window.location.href = '/login';
-const list = await res.json();
-const other = Array.isArray(list) ? list.find(u => u.uid === otherId || u.id === otherId) : null;
-if (other) {
-otherAvatar.src = other.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1/profile_pics/default_profile.png';
-otherName.textContent = other.full_name || other.username || 'مستخدم';
-otherUsername.textContent = other.username ? ('@' + other.username) : '';
-} else {
-otherName.textContent = 'مستخدم';
-otherUsername.textContent = otherId;
+    try {
+        const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
+        
+        if (res.status === 401) return window.location.href = '/login';
+        
+        if (!res.ok) {
+            otherName.textContent = 'مستخدم غير موجود';
+            otherUsername.textContent = 'غير متوفر';
+            return;
+        }
+
+        const other = await res.json(); 
+        
+        if (other) {
+            otherAvatar.src = other.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1/profile_pics/default_profile.png';
+            otherName.textContent = other.full_name || other.username || 'مستخدم';
+            otherUsername.textContent = other.username ? ('@' + other.username) : '';
+        } else {
+            otherName.textContent = 'مستخدم';
+            otherUsername.textContent = otherId;
+        }
+    } catch (err) {
+        console.error('fetchOtherProfile error:', err);
+        otherName.textContent = 'خطأ في الاتصال';
+    }
 }
-} catch (err) {
-console.error('fetchOtherProfile', err);
-}
-}
+
+
 let lastMessages = [];
 async function fetchMessages() {
 try {
@@ -711,7 +725,7 @@ if (replyToMessage) {
 if (uploadedFile) {
 formData.append('media', uploadedFile);
 } else if (audioChunks.length > 0) {
-const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); // تعديل هنا
+const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
 formData.append('media', audioBlob, 'recording.webm');
 }
 try {
@@ -780,7 +794,7 @@ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m
 async function startRecording() {
 try {
 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); // تعديل هنا
+mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 audioChunks = [];
 mediaRecorder.ondataavailable = event => {
 audioChunks.push(event.data);
@@ -822,7 +836,6 @@ const reader = new FileReader();
 reader.onload = (e) => {
 filePreview.innerHTML = '';
 let previewElement;
-// ✅ تعديل هنا للتحقق من أنواع الصوت والفيديو بشكل أكثر دقة
 const isAudio = file.type.startsWith('audio/');
 const isVideo = file.type.startsWith('video/');
 if (file.type.startsWith('image/')) {
