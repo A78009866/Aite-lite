@@ -9,10 +9,11 @@
            1. CSS Reset & Global
            --------------------------------- */
         :root {
-            --glass-bg: rgba(0, 0, 0, 0.4); /* خلفية شبه شفافة سوداء */
+            --glass-bg: rgba(0, 0, 0, 0.45); /* خلفية شبه شفافة سوداء أغمق */
             --glass-border: rgba(255, 255, 255, 0.1); /* إطار فاتح */
             --main-text: #f0f0f0;
             --accent-color: #00bcd4; /* لون التمييز - سماوي */
+            --cover-placeholder: linear-gradient(135deg, #1f1c2c, #4a2c4a); /* غلاف افتراضي */
         }
         * {
             box-sizing: border-box;
@@ -27,81 +28,121 @@
             align-items: center;
             min-height: 100vh;
             color: var(--main-text);
+            padding: 20px;
         }
 
         /* ---------------------------------
-           2. Glassmorphism Card Style
+           2. Glassmorphism Card & Structure
            --------------------------------- */
         .profile-card {
             width: 90%;
-            max-width: 400px;
-            padding: 30px;
+            max-width: 500px;
             border-radius: 20px;
             background: var(--glass-bg);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); /* ظل كبير */
-            backdrop-filter: blur(10px); /* تأثير الزجاج */
-            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5); /* ظل كبير وأغمق */
+            backdrop-filter: blur(15px); /* تأثير زجاج أقوى */
+            -webkit-backdrop-filter: blur(15px);
             border: 1px solid var(--glass-border);
             text-align: center;
-            animation: fadeIn 0.8s ease-out;
+            overflow: hidden; /* لحصر الصورة داخل حدود الكارد */
         }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        
+        .card-content {
+            padding: 20px;
         }
 
         /* ---------------------------------
-           3. Profile Elements
+           3. Cover Photo Area
            --------------------------------- */
-        .profile-picture {
+        .cover-area {
+            position: relative;
+            height: 150px;
+            background: var(--cover-placeholder);
+            background-size: cover;
+            background-position: center;
+        }
+        .cover-area.has-image {
+             /* يتم تحديد الصورة الفعلي بواسطة JS عند التحميل */
+        }
+
+        /* ---------------------------------
+           4. Profile Picture Area
+           --------------------------------- */
+        .profile-pic-container {
             width: 120px;
             height: 120px;
             border-radius: 50%;
+            border: 4px solid var(--glass-bg); /* إطار يدمجها مع الخلفية الزجاجية */
+            margin: -60px auto 10px; /* سحب الصورة للأعلى لتظهر على الغلاف */
+            position: relative;
+            background-color: #333;
+        }
+        .profile-picture {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
             object-fit: cover;
             border: 4px solid var(--accent-color);
-            margin-bottom: 20px;
-            box-shadow: 0 0 15px rgba(0, 188, 212, 0.5); /* ظل لوني */
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
         }
 
+        /* ---------------------------------
+           5. Text Information
+           --------------------------------- */
         .username {
             font-size: 2em;
             margin-bottom: 5px;
             color: var(--main-text);
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
         }
-
         .full-name {
             font-size: 1.1em;
             color: var(--accent-color);
             margin-bottom: 15px;
         }
-        
         .bio {
             font-style: italic;
             color: #b0b0b0;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             padding: 0 10px;
         }
-        
-        .stats-grid {
+
+        /* ---------------------------------
+           6. Edit Overlays (لصاحب البروفايل فقط)
+           --------------------------------- */
+        .edit-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
             display: flex;
-            justify-content: space-around;
-            border-top: 1px solid var(--glass-border);
-            padding-top: 20px;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+            cursor: pointer;
+        }
+        .cover-area:hover .edit-overlay,
+        .profile-pic-container:hover .edit-overlay {
+            opacity: 1;
+        }
+        
+        .edit-overlay span {
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            background: rgba(0, 188, 212, 0.7);
+            font-weight: bold;
+            font-size: 0.9em;
         }
 
-        .stat-item h3 {
-            font-size: 1.5em;
-            color: var(--accent-color);
-        }
-        .stat-item p {
-            font-size: 0.9em;
-            color: var(--main-text);
-            margin-top: 5px;
+        .hidden-input {
+            display: none; /* إخفاء حقل تحميل الملف الأصلي */
         }
 
         .loading-text {
+            padding: 50px;
             color: var(--accent-color);
         }
     </style>
@@ -113,29 +154,64 @@
         </div>
     </div>
 
+    <input type="file" id="cover-photo-input" class="hidden-input" accept="image/*">
+    <input type="file" id="profile-photo-input" class="hidden-input" accept="image/*">
+
     <script>
         const profileDataContainer = document.getElementById('profile-data');
-        const defaultPic = 'https://via.placeholder.com/150/444444/FFFFFF?text=P'; // صورة افتراضية
+        const defaultPic = 'https://via.placeholder.com/120/444444/FFFFFF?text=P';
+        const defaultCover = ''; // لا يوجد صورة غلاف افتراضية
 
+        // تعريف دالة لجلب البيانات وعرضها
         async function fetchUserProfile() {
             try {
-                // استخدام المسار الذي أنشأته في server.js لجلب بيانات المستخدم
-                const response = await fetch('/api/profile'); 
+                // جلب بيانات المستخدم من API (سواء لنفسه أو لغيره)
+                const urlParams = new URLSearchParams(window.location.search);
+                const requestedUserId = urlParams.get('userId'); // للبروفايل العام
+                
+                // يتم إرسال is_owner = true إذا كان المستخدم هو صاحب البروفايل
+                const apiURL = requestedUserId ? `/api/profile?userId=${requestedUserId}` : '/api/profile';
+                
+                const response = await fetch(apiURL); 
                 const data = await response.json();
 
                 if (data.ok) {
-                    const profile = data; // البيانات مباشرة في الكائن الجذري
-
-                    // التحقق من وجود postsCount في ملفك
-                    const postsCount = profile.postsCount || 0; 
+                    const profile = data;
+                    const isOwner = profile.is_owner; // تحديد ما إذا كان هو صاحب البروفايل
                     
+                    // يتم افتراض وجود حقل cover_photo_url، إن لم يكن موجوداً استخدم الخلفية الافتراضية
+                    const coverPhotoURL = profile.cover_photo_url || defaultCover; 
+
                     profileDataContainer.innerHTML = `
-                        <img src="${profile.profile_picture_url || defaultPic}" alt="صورة الملف الشخصي" class="profile-picture">
-                        <h1 class="username">@${profile.username || 'N/A'}</h1>
-                        <h2 class="full-name">${profile.full_name || 'غير متوفر'}</h2>
-                        <p class="bio">${profile.bio || 'لم يقم المستخدم بإضافة سيرة ذاتية بعد.'}</p>
-                        
+                        <div class="cover-area" id="cover-area" style="background-image: url('${coverPhotoURL}'); background-color: ${coverPhotoURL ? 'transparent' : '#333'}">
+                            ${isOwner ? `
+                                <label for="cover-photo-input" class="edit-overlay">
+                                    <span>تغيير الغلاف</span>
+                                </label>
+                            ` : ''}
+                        </div>
+
+                        <div class="card-content">
+                            <div class="profile-pic-container">
+                                <img src="${profile.profile_picture_url || defaultPic}" alt="صورة الملف الشخصي" class="profile-picture" id="profile-picture">
+                                ${isOwner ? `
+                                    <label for="profile-photo-input" class="edit-overlay">
+                                        <span>تغيير الصورة</span>
+                                    </label>
+                                ` : ''}
+                            </div>
+                            
+                            <h1 class="username">@${profile.username || 'N/A'}</h1>
+                            <h2 class="full-name">${profile.full_name || 'غير متوفر'}</h2>
+                            <p class="bio">${profile.bio || 'لم يقم المستخدم بإضافة سيرة ذاتية بعد.'}</p>
+                        </div>
                     `;
+
+                    // ربط مدخلات الملفات بالـ Uploader
+                    if (isOwner) {
+                        setupImageUploadEvents(profile.id);
+                    }
+                    
                 } else {
                     profileDataContainer.innerHTML = '<p style="color: red;">تعذر جلب البيانات: المستخدم غير مصرح له أو غير موجود.</p>';
                 }
@@ -144,6 +220,46 @@
                 console.error('Error:', error);
                 profileDataContainer.innerHTML = '<p style="color: red;">حدث خطأ في الاتصال بالخادم.</p>';
             }
+        }
+
+        // دالة لمعالجة حدث تغيير الصورة
+        function setupImageUploadEvents(userId) {
+            const coverInput = document.getElementById('cover-photo-input');
+            const profileInput = document.getElementById('profile-photo-input');
+            const profileImg = document.getElementById('profile-picture');
+            const coverArea = document.getElementById('cover-area');
+            
+            // تغيير صورة البروفايل
+            profileInput.addEventListener('change', (event) => {
+                if (event.target.files && event.target.files[0]) {
+                    const file = event.target.files[0];
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        profileImg.src = e.target.result; // عرض الصورة الجديدة
+                        // **ملاحظة:** هنا يجب استدعاء API لرفع الملف وتحديث حقل Firebase
+                        alert('تم اختيار صورة البروفايل. (تحتاج إلى تطبيق API لرفعها وتحديثها)');
+                        // مثال: callApiToUpload(file, 'profile_picture');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // تغيير صورة الغلاف
+            coverInput.addEventListener('change', (event) => {
+                if (event.target.files && event.target.files[0]) {
+                    const file = event.target.files[0];
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        coverArea.style.backgroundImage = `url('${e.target.result}')`; // عرض الصورة الجديدة
+                        // **ملاحظة:** هنا يجب استدعاء API لرفع الملف وتحديث حقل Firebase
+                        alert('تم اختيار صورة الغلاف. (تحتاج إلى تطبيق API لرفعها وتحديثها)');
+                        // مثال: callApiToUpload(file, 'cover_photo');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
         }
 
         fetchUserProfile();
