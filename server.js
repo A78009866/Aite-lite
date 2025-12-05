@@ -324,8 +324,12 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
         // 2. تحديث سجل التفاعلات للمستخدم (في مسار reactions)
         if (finalReactionType === null) {
             // إزالة التفاعل
-            await reactionUserRef.remove();
-            action = currentReactionType ? 'removed' : 'no_change';
+            if (currentReactionType) {
+                await reactionUserRef.remove();
+                action = 'removed';
+            } else {
+                 action = 'no_change';
+            }
         } else if (finalReactionType !== currentReactionType) {
             // إضافة أو تغيير التفاعل
             const newReactionData = { type: finalReactionType, timestamp: admin.database.ServerValue.TIMESTAMP };
@@ -372,21 +376,25 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
         }, (error, committed, snapshot) => {
             if (error) {
                 console.error('Post Count Transaction failed: ', error);
+                // لا نرمي خطأ هنا، نعتمد على postResult.committed
             }
         });
 
-        // إذا فشلت المعاملة بسبب عدم وجود المنشور
+        // إذا لم يتم الالتزام بالمعاملة، تحقق مما إذا كان المنشور غير موجود
         if (!postResult.committed) {
              const postExistsSnap = await postRef.once('value');
+             
              if (!postExistsSnap.exists()) {
-                // محاولة إزالة سجل التفاعل الذي تم إضافته في الخطوة 2 إذا فشلت المعاملة
+                // المنشور غير موجود: نحاول إزالة سجل التفاعل (إذا تم إضافته) ونرد بحالة 404
                 if (action === 'added' || action === 'changed') {
                      reactionUserRef.remove().catch(console.error);
                 }
                 return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
+             } else {
+                 // فشل لسبب آخر: نرد بخطأ 500 هنا
+                 console.error('Transaction failed to commit for an unknown reason.');
+                 return res.status(500).json({ ok: false, error: 'فشل في تحديث عداد المنشور.' });
              }
-             // إذا لم تلتزم لسبب آخر، عاملها كخطأ عام
-             throw new Error('Transaction could not be committed.');
         }
         
         // الرد بالبيانات الجديدة التي تم تحديثها داخل المعاملة
@@ -399,6 +407,7 @@ app.post('/api/posts/:postId/react', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
+        // يتم التقاط أي خطأ آخر هنا
         console.error('Reaction error:', error.message);
         res.status(500).json({ ok: false, error: 'فشل في معالجة التفاعل.' });
     }
