@@ -1,3 +1,5 @@
+// server.js
+
 // تشغيل مكتبة dotenv لقراءة متغيرات البيئة من ملف .env محلياً
 require('dotenv').config();
 
@@ -647,89 +649,85 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
 
 
 // نقطة وصول لإرسال رسالة جديدة (نص أو وسائط)
-// ✅ التعديل: تغيير المسار من '/api/messages/send/:contactId' إلى '/api/messages/send' 
-// وجلب معرّف جهة الاتصال من req.body لحل مشكلة 404.
+// ✅ التعديل: تغيير المسار إلى '/api/messages/send' فقط
 app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, res) => {
-  const senderId = req.session.userId;
-  // ✅ التعديل: جلب معرّف جهة الاتصال من body بدلاً من params
-  const contactId = req.body.other_id; 
-  // 💡 إضافة حقول الرد المحتملة لتمكين ميزة الرد في chat.html
-  const { content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
-  
-  let mediaUrl = null;
-  let mediaType = null;
-  const timestamp = admin.database.ServerValue.TIMESTAMP;
-
-  // التحقق من وجود محتوى نصي أو ملف وسائط
-  if ((!content || content.trim().length === 0) && !req.file) {
-    return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
-  }
-
-  if (!contactId) {
-    return res.status(400).json({ ok: false, error: 'معرّف جهة الاتصال (other_id) مفقود في الطلب.' });
-  }
-
-  // إذا تم رفع ملف بنجاح
-  if (req.file) {
-    mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
+    const senderId = req.session.userId;
+    // ✅ التعديل: جلب contactId من جسم الطلب (FormData)
+    const contactId = req.body.other_id; 
+    const { content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
     
-    const mimeType = req.file.mimetype;
-    if (mimeType && mimeType.startsWith('image/')) {
-        mediaType = 'image';
-    } else if (mimeType && mimeType.startsWith('video/')) {
-        mediaType = 'video';
-    } else if (mimeType && mimeType.startsWith('audio/')) {
-        mediaType = 'audio';
-    } else {
-        mediaType = 'raw';
+    let mediaUrl = null;
+    let mediaType = null;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    // التحقق من أن هناك محتوى أو ملف
+    if (!contactId || (!content && !req.file && !req.body.is_audio)) { 
+      return res.status(400).json({ ok: false, error: 'معرّف جهة الاتصال أو محتوى الرسالة مفقود.' });
     }
-  }
+    
+    // إذا تم رفع ملف بنجاح
+    if (req.file) {
+      mediaUrl = req.file.path;
+      const mimeType = req.file.mimetype;
+      if (mimeType && mimeType.startsWith('image/')) {
+          mediaType = 'image';
+      } else if (mimeType && mimeType.startsWith('video/')) {
+          mediaType = 'video';
+      } else if (mimeType && mimeType.startsWith('audio/')) {
+          mediaType = 'audio';
+      } else {
+          mediaType = 'raw';
+      }
+    }
 
-  try {
-    // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
-    const chatRoomId = [senderId, contactId].sort().join('_');
-    const messagesRef = db.ref(`messages/${chatRoomId}`).push();
-    const messageId = messagesRef.key;
+    try {
+        // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
+        const chatRoomId = [senderId, contactId].sort().join('_');
+        const messagesRef = db.ref(`messages/${chatRoomId}`).push();
+        const messageId = messagesRef.key;
 
-    const messageData = {
-      messageId: messageId,
-      senderId: senderId,
-      content: content || null,
-      timestamp: timestamp,
-      // حفظ بيانات الوسائط فقط إذا كانت موجودة
-      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
-      is_read: false,
-      // ✅ إضافة حقول الرد
-      replied_to_id: replied_to_id || null, 
-      replied_to_content: replied_to_content || null, 
-      replied_to_sender: replied_to_sender || null, 
-    };
+        const messageData = {
+            messageId: messageId,
+            senderId: senderId,
+            content: content || null,
+            timestamp: timestamp,
+            media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
+            is_read: false,
+            // إضافة بيانات الرد إذا كانت موجودة
+            replied_to_id: replied_to_id || null,
+            replied_to_content: replied_to_content || null,
+            replied_to_sender: replied_to_sender || null
+        };
 
-    await messagesRef.set(messageData);
+        await messagesRef.set(messageData);
 
-    // تحديث بيانات المحادثات (last_message_content) لكلا المستخدمين
-    const lastMessageContent = content || `[${mediaType === 'image' ? 'صورة' : mediaType === 'video' ? 'فيديو' : mediaType === 'audio' ? 'مقطع صوتي' : 'ملف وسائط'}]`;
+        // تحديث بيانات المحادثات (last_message_content) لكلا المستخدمين
+        const lastMessageContent = content || `[${mediaType === 'image' ? 'صورة' : mediaType === 'video' ? 'فيديو' : mediaType === 'audio' ? 'تسجيل صوتي' : 'ملف وسائط'}]`;
 
-    // تحديث محادثة المرسل
-    await db.ref(`chats/${senderId}/${contactId}`).update({
-        last_message_content: lastMessageContent,
-        last_message_timestamp: timestamp,
-        contact_id: contactId,
-    });
+        // تحديث المحادثة للمستخدم المستقبل (contactId)
+        await db.ref(`chats/${contactId}/${senderId}`).update({
+            last_message_content: lastMessageContent,
+            last_message_timestamp: messageData.timestamp,
+            contact_id: senderId, 
+            // 💡 إضافة: زيادة العداد للمستقبل
+            unread_count: admin.database.ServerValue.increment(1) 
+        });
 
-    // تحديث محادثة المُستقبِل
-    await db.ref(`chats/${contactId}/${senderId}`).update({
-        last_message_content: lastMessageContent,
-        last_message_timestamp: timestamp,
-        contact_id: senderId,
-    });
+        // تحديث المحادثة للمستخدم المُرسل (senderId)
+        await db.ref(`chats/${senderId}/${contactId}`).update({
+            last_message_content: lastMessageContent,
+            last_message_timestamp: messageData.timestamp,
+            contact_id: contactId, 
+            unread_count: 0 // يجب أن يكون 0 للمُرسل
+        });
+        
+        // ✅ إرجاع messageData لـ chat.html لتمكينه من العرض الفوري
+        res.json({ ok: true, message: 'تم إرسال الرسالة بنجاح', messageData: messageData });
 
-    res.json({ ok: true, message: 'تم إرسال الرسالة بنجاح', messageData: messageData });
-
-  } catch (error) {
-    console.error('Error sending message:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إرسال الرسالة.' });
-  }
+    } catch (error) {
+        console.error('Error sending message:', error);
+        res.status(500).json({ ok: false, error: 'فشل في إرسال الرسالة على الخادم.' });
+    }
 });
 
 
