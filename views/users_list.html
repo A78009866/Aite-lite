@@ -53,25 +53,20 @@
             -webkit-backdrop-filter: blur(5px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        /* 🌟 نمط الرسائل غير المقروءة */
-        .glass-user-card.unread {
-            border-right: 4px solid #0d9488; /* شريط أخضر لتمييز الدردشة */
-            background-color: rgba(13, 148, 136, 0.1); /* خلفية خفيفة */
-        }
         
-        /* 🌟 نمط بادج الرسائل غير المقروءة */
-        .unread-badge {
-            background-color: #0d9488; /* لون أخضر/فيروزي */
+        /* 🌟 نمط بادج الإشعارات الجديدة في النافبار السفلي */
+        .notification-badge {
+            background-color: #ef4444; /* لون أحمر */
             color: white;
             font-size: 10px;
             font-weight: bold;
-            padding: 3px 8px;
-            border-radius: 9999px; /* شكل حبة دواء */
-            min-width: 24px;
+            padding: 0;
+            height: 18px; /* أصغر قليلاً */
+            min-width: 18px;
+            border-radius: 9999px; 
             text-align: center;
-            line-height: 1;
-            flex-shrink: 0;
+            line-height: 18px; 
+            z-index: 10;
         }
     </style>
 </head>
@@ -123,9 +118,12 @@
                 <span class="text-xs mt-1">الرئيسية</span>
             </a>
             
-            <a href="/users_list" class="flex flex-col items-center justify-center p-2 text-blue-400">
+            <a href="/users_list" id="chatsLink" class="relative flex flex-col items-center justify-center p-2 text-blue-400">
                 <i class="fas fa-comment-dots text-xl"></i>
                 <span class="text-xs mt-1">الدردشات</span>
+                <span id="unreadBadge" class="notification-badge absolute top-1 right-1 hidden transform translate-x-1/2 -translate-y-1/2">
+                    0
+                </span>
             </a>
             
             
@@ -137,8 +135,7 @@
         const usersListContainer = document.getElementById('usersListContainer');
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
-        let currentUserId = null; // لتخزين ID المستخدم الحالي
-
+        
         // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
         function toggleProfileDropdown(event) {
             event.stopPropagation();
@@ -153,43 +150,20 @@
 
         document.addEventListener('click', closeProfileDropdownOnClickOutside);
         
-        // ******************** وظائف عرض قائمة المستخدمين (مُحدَّثة) ********************
+        // ******************** وظائف عرض قائمة المستخدمين ********************
 
-        function createUserCard(user, currentUserId) {
+        function createUserCard(user) {
+            // توجيه المستخدم إلى صفحة الدردشة مع المستخدم المحدد
             const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
-            const unreadCount = user.unread_count || 0;
-            const isUnread = unreadCount > 0;
-            let lastMessageText = '<p class="text-gray-400 text-sm">ابدأ المحادثة...</p>';
-
-            // بناء محتوى الرسالة الأخيرة
-            if (user.last_message) {
-                // الرسالة قد تكون نصية أو وسائط
-                let content = user.last_message.content 
-                            ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
-                            : '[ملف مرفق]';
-                            
-                const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
-                
-                // إضافة فئة max-w-full و text-ellipsis لضمان أن النص لا يخرج عن حد البطاقة
-                lastMessageText = `
-                    <p class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
-                        ${senderPrefix}${content}
-                    </p>
-                `;
-            }
-
+            
             return `
-                <a href="${chatLink}" 
-                   class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
-                    <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover ml-4 border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
-                    <div class="flex-grow min-w-0">
+                <a href="${chatLink}" class="glass-user-card flex items-center p-3 rounded-xl hover:bg-white/10 transition duration-300 cursor-pointer">
+                    <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover ml-4 border-2 border-gray-600">
+                    <div class="flex-grow">
                         <p class="text-white font-semibold text-lg">${user.username}</p>
-                        ${lastMessageText}
+                        <p class="text-gray-400 text-sm">ابدأ الدردشة...</p>
                     </div>
-                    <div class="flex flex-col items-end justify-center ml-2 h-12">
-                        ${isUnread ? `<span class="unread-badge mb-1">${unreadCount}</span>` : ''}
-                        <i class="fas fa-chevron-left text-gray-400 text-base ${isUnread ? 'mt-auto' : ''}"></i>
-                    </div>
+                    <i class="fas fa-chevron-left text-gray-400"></i>
                 </a>
             `;
         }
@@ -198,47 +172,19 @@
             usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المستخدمين...</div>';
 
             try {
-                // 1. جلب ID المستخدم الحالي
-                const myProfileResponse = await fetch('/api/profile');
-                if (myProfileResponse.ok) {
-                    const myProfile = await myProfileResponse.json();
-                    currentUserId = myProfile.id;
-                } 
-
-                // 2. جلب قائمة المستخدمين (يجب أن يوفر الخادم الآن الرسالة الأخيرة وعدد غير المقروء)
                 const response = await fetch('/api/users');
                 const result = await response.json();
                 
                 usersListContainer.innerHTML = ''; // مسح رسالة التحميل
                 
                 if (response.ok && result.ok) {
-                    let users = result.users || [];
-                    
-                    if (users.length === 0) {
+                    if (result.users.length === 0) {
                         usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد حسابات مستخدمين أخرى للعرض.</div>';
                         return;
                     }
                     
-                    // 3. ترتيب المستخدمين: غير المقروء أولاً، ثم حسب وقت آخر رسالة (الأحدث أولاً)
-                    users.sort((a, b) => {
-                        const aUnread = a.unread_count || 0;
-                        const bUnread = b.unread_count || 0;
-
-                        // الأولوية 1: الرسائل غير المقروءة (تنازلي)
-                        if (aUnread !== bUnread) {
-                            return bUnread - aUnread; 
-                        }
-
-                        // الأولوية 2: وقت آخر رسالة (الأحدث أولاً)
-                        const aTime = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
-                        const bTime = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
-
-                        return bTime - aTime; 
-                    });
-
-                    // 4. العرض
-                    users.forEach(user => {
-                        usersListContainer.innerHTML += createUserCard(user, currentUserId);
+                    result.users.forEach(user => {
+                        usersListContainer.innerHTML += createUserCard(user);
                     });
                     
                 } else {
@@ -249,6 +195,30 @@
                 usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في الاتصال بالخادم.</div>';
             }
         }
+        
+        // ******************** دالة جلب عدد الرسائل غير المقروءة (جديد) ********************
+        async function fetchUnreadCount() {
+            try {
+                const response = await fetch('/api/chats');
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    const totalUnread = result.chats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0);
+                    const badgeElement = document.getElementById('unreadBadge');
+                    
+                    if (totalUnread > 0) {
+                        badgeElement.textContent = totalUnread > 99 ? '99+' : totalUnread;
+                        badgeElement.classList.remove('hidden');
+                    } else {
+                        badgeElement.classList.add('hidden');
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching unread count:', error);
+            }
+        }
+        // ******************** نهاية دالة جلب عدد الرسائل غير المقروءة ********************
+
         
         // جلب صورة الملف الشخصي للمستخدم الحالي في النافبار
         document.addEventListener('DOMContentLoaded', () => {
@@ -264,8 +234,10 @@
                 
             fetchAndDisplayUsers();
             
-            // تحديث قائمة المستخدمين كل 10 ثواني (أثناء التواجد في الصفحة)
-            setInterval(fetchAndDisplayUsers, 10000);
+            // 🌟 جلب عدد الرسائل غير المقروءة عند التحميل
+            fetchUnreadCount();
+            // تحديث عدد الرسائل غير المقروءة كل 10 ثواني 
+            setInterval(fetchUnreadCount, 10000); 
         });
         
     </script>
