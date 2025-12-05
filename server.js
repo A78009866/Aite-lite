@@ -291,7 +291,9 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
             last_message_timestamp: timestamp,
             contact_id: senderId, 
             // زيادة العداد فقط للمستقبل
-            unread_count: admin.database.ServerValue.increment(1) 
+            unread_count: admin.database.ServerValue.increment(1),
+            // ✅ إضافة مهمة: تخزين مرسل الرسالة لتسهيل الواجهة الأمامية
+            last_message_sender_id: senderId 
         });
 
         // تحديث ملخص الدردشة للمرسل (العداد يبقى 0 أو لا يتم زيادته)
@@ -299,7 +301,9 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
             last_message_content: previewText,
             last_message_timestamp: timestamp,
             contact_id: contactId,
-            unread_count: 0 // الرسالة المرسلة منك تكون مقروءة دائماً
+            unread_count: 0, // الرسالة المرسلة منك تكون مقروءة دائماً
+            // ✅ إضافة مهمة: تخزين مرسل الرسالة لتسهيل الواجهة الأمامية
+            last_message_sender_id: senderId
         });
         
         messageData.timestamp = Date.now(); 
@@ -339,7 +343,7 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
     }
 });
 
-// ---------------- API: Users & Profile (المسار المُحدَّث) ----------------
+// ---------------- API: Users & Profile (المسار المُحدَّث والمُحسَّن) ----------------
 app.get('/api/users', requireAuth, async (req, res) => {
     const currentUserId = req.session.userId;
     try {
@@ -349,15 +353,15 @@ app.get('/api/users', requireAuth, async (req, res) => {
         // جلب جميع المستخدمين باستثناء المستخدم الحالي
         const allUsers = Object.values(profiles).filter(user => user.id !== currentUserId);
         
-        // جلب ملخص الدردشة (آخر رسالة وعدد غير المقروء) لكل مستخدم
+        // جلب ملخص الدردشة (آخر رسالة وعدد غير المقروء) لكل مستخدم بشكل متوازي وأكثر أماناً
         const usersWithSummaryPromises = allUsers.map(async (user) => {
             const contactId = user.id;
             
-            // 1. جلب ملخص الدردشة (للحصول على unread_count)
+            // 1. جلب ملخص الدردشة (للحصول على unread_count - سريع)
             const chatSummarySnap = await db.ref(`chats/${currentUserId}/${contactId}`).once('value');
             const chatSummary = chatSummarySnap.val() || {};
             
-            // 2. جلب آخر رسالة حقيقية (للحصول على المحتوى الفعلي و senderId والوقت للترتيب)
+            // 2. جلب آخر رسالة حقيقية (للحصول على المحتوى الفعلي و senderId والوقت - قد يكون أبطأ)
             let lastMessageData = null;
             const chatRoomId = [currentUserId, contactId].sort().join('_');
             const lastMsgSnap = await db.ref(`messages/${chatRoomId}`)
@@ -365,9 +369,12 @@ app.get('/api/users', requireAuth, async (req, res) => {
                 .limitToLast(1)
                 .once('value');
             
-            lastMsgSnap.forEach(childSnap => {
-                lastMessageData = childSnap.val(); 
-            });
+            // 💡 طريقة استخراج الرسالة الواحدة أكثر أماناً
+            const messagesObject = lastMsgSnap.val();
+            if (messagesObject) {
+                const messageKey = Object.keys(messagesObject)[0];
+                lastMessageData = messagesObject[messageKey];
+            }
 
             return {
                 id: user.id,
@@ -377,11 +384,13 @@ app.get('/api/users', requireAuth, async (req, res) => {
                 
                 // البيانات التي يتوقعها users_list.html
                 last_message: lastMessageData ? {
+                    // إذا كان هناك محتوى، استخدمه، وإلا استخدم نوع الميديا كـ preview
                     content: lastMessageData.content || (lastMessageData.media?.type ? `[${lastMessageData.media.type}]` : '[ملف مرفق]'),
                     timestamp: lastMessageData.timestamp,
                     senderId: lastMessageData.senderId
                 } : null,
                 
+                // الاعتماد على unread_count المخزن في ملخص الدردشة
                 unread_count: chatSummary.unread_count || 0
             };
         });
@@ -391,8 +400,9 @@ app.get('/api/users', requireAuth, async (req, res) => {
         res.json({ ok: true, users: usersList });
         
     } catch (error) {
-        console.error('Error fetching users with summary:', error);
-        res.status(500).json({ ok: false, error: 'Failed to fetch users list.' });
+        // طباعة الخطأ للمطور للمساعدة في Debugging
+        console.error('CRITICAL ERROR in /api/users:', error); 
+        res.status(500).json({ ok: false, error: 'Failed to fetch users list. See server logs for details.' });
     }
 });
 
@@ -651,8 +661,4 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
 
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
-  next(err);
-});
-
-app
+  if (err instanceof multer
