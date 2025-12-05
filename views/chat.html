@@ -697,63 +697,94 @@ async function fetchMessages() {
     }
 }
 
-// ✅ تم تعديل هذه الدالة لتصحيح رابط الإرسال وإرسال other_id في body (حل مشكلة 404 POST /api/messages/send)
+// chat.html
+
+
+// ✅ دالة إرسال الرسالة (معدلة للعرض الفوري وقراءة بيانات الرد)
 async function sendMessage() {
     let content = msgInput.value.trim();
+    
+    // إذا لم يكن هناك محتوى أو ملف أو تسجيل صوتي، لا ترسل
     if (!content && !uploadedFile && audioChunks.length === 0) return;
-
+    
     sendBtn.disabled = true;
     sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" class="spin"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12 6v6l4 2-1 2-5-3.01V6z"/></svg>';
 
     const formData = new FormData();
-    // ✅ إرسال other_id في body لتستخدمه نقطة الوصول المعدلة في server.js
+    // ✅ إرسال other_id في body بدلاً من URL
     formData.append('other_id', otherId); 
-    formData.append('content', content);
+    
+    if (content) {
+        formData.append('content', content);
+    }
+    if (uploadedFile) {
+        formData.append('media', uploadedFile);
+    }
 
+    // إذا كان هناك تسجيل صوتي، قم بإرساله كملف
+    if (audioChunks.length > 0) {
+        // إذا كان هناك تسجيل صوتي لم يتم إرساله بعد
+        const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+        formData.append('media', audioBlob, 'audio.mp3');
+    }
+    
+    // إضافة بيانات الرد
     if (replyToMessage) {
         formData.append('replied_to_id', replyToMessage.id);
         formData.append('replied_to_content', replyToMessage.content);
         formData.append('replied_to_sender', replyToMessage.senderName);
     }
-
-    if (uploadedFile) {
-        formData.append('media', uploadedFile);
-    } else if (audioChunks.length > 0) {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        formData.append('media', audioBlob, 'recording.webm');
-    }
-
+    
     try {
-        // ✅ تصحيح رابط الإرسال
+        // ✅ رابط الإرسال المصحح
         const res = await fetch('/api/messages/send', {
             method: 'POST',
             credentials: 'same-origin',
             body: formData
         });
-        
-        const result = await res.json();
 
-        if (res.ok && result.ok) {
+        // قراءة الاستجابة كـ JSON
+        const result = await res.json();
+        
+        // ✅ التحقق من النجاح ووجود بيانات الرسالة الجديدة
+        if (res.ok && result.ok && result.messageData) { 
+            
+            const newMessageData = result.messageData; 
+            
+            // 1. إنشاء عنصر الرسالة وإضافته فوراً (العرض الفوري)
+            const el = createMessageElement(newMessageData, myId);
+            messagesEl.appendChild(el); 
+
+            // 2. مسح الحقول وحالة الرد
             msgInput.value = '';
             uploadedFile = null;
-            audioChunks = [];
+            audioChunks = []; // مسح مقاطع التسجيل الصوتي
             filePreview.style.display = 'none';
             filePreview.innerHTML = '';
-            replyToMessage = null;
+            
+            // مسح حالة الرد وإخفاء الكتلة
+            replyToMessage = null; 
             replyContainer.style.display = 'none';
-            await fetchMessages();
+            
+            // 3. التمرير إلى أسفل
             scrollToBottom();
+            
+            // 💡 ملاحظة: لم نعد نحتاج إلى إعادة تحميل جميع الرسائل (fetchMessages) 
+            // لأننا أضفنا الرسالة مباشرة.
+
         } else {
-            console.error('send failed with status:', res.status, 'Response:', await res.text());
-            alert('فشل في إرسال الرسالة');
+            console.error('Send message failed. Status:', res.status, 'Error:', result.error || 'Unknown error');
+            alert('فشل في إرسال الرسالة: ' + (result.error || 'خطأ غير معروف'));
         }
+
     } catch (err) {
         console.error('sendMessage error', err);
-        alert('حدث خطأ أثناء الإرسال');
+        alert('حدث خطأ في الاتصال بالخادم. حاول مرة أخرى.');
     } finally {
         sendBtn.disabled = false;
         sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
     }
+}
 }
 
 // ✅ دالة تعليم الرسائل كمقروءة (حل مشكلة 404 POST /api/mark_read)
