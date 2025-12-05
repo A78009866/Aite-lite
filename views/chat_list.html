@@ -77,6 +77,21 @@
             -webkit-backdrop-filter: blur(10px);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
+        
+        /* 🌟 نمط بادج الإشعارات الجديدة في النافبار السفلي */
+        .notification-badge {
+            background-color: #ef4444; /* لون أحمر */
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 0;
+            height: 18px; /* أصغر قليلاً */
+            min-width: 18px;
+            border-radius: 9999px; 
+            text-align: center;
+            line-height: 18px; 
+            z-index: 10;
+        }
         /* ************************************** */
 
 
@@ -158,13 +173,17 @@
                 <span class="text-xs mt-1">الرئيسية</span>
             </a>
             
-            <a href="/users_list" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
+            <a href="/users_list" id="chatsLink" class="relative flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
                 <i class="fas fa-comment-dots text-xl"></i>
                 <span class="text-xs mt-1">الدردشات</span>
+                <span id="unreadBadge" class="notification-badge absolute top-1 right-1 hidden transform translate-x-1/2 -translate-y-1/2">
+                    0
+                </span>
             </a>
         
         </nav>
     </div>
+    
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
             <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
@@ -930,6 +949,29 @@
             }
         });
         
+        // ******************** 8. دالة جلب عدد الرسائل غير المقروءة (جديد) ********************
+        async function fetchUnreadCount() {
+            try {
+                const response = await fetch('/api/chats');
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    const totalUnread = result.chats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0);
+                    const badgeElement = document.getElementById('unreadBadge');
+                    
+                    if (totalUnread > 0) {
+                        badgeElement.textContent = totalUnread > 99 ? '99+' : totalUnread; // عرض 99+ للعدد الكبير
+                        badgeElement.classList.remove('hidden');
+                    } else {
+                        badgeElement.classList.add('hidden');
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching unread count:', error);
+            }
+        }
+        // ******************** نهاية دالة جلب عدد الرسائل غير المقروءة ********************
+
         document.addEventListener('DOMContentLoaded', () => {
             fetch('/api/profile')
                 .then(response => response.ok ? response.json() : null)
@@ -943,6 +985,11 @@
                 }).catch(console.error);
                 
             fetchAndDisplayPosts();
+            
+            // 🌟 جلب عدد الرسائل غير المقروءة عند التحميل
+            fetchUnreadCount();
+            // تحديث عدد الرسائل غير المقروءة كل 10 ثواني 
+            setInterval(fetchUnreadCount, 10000); 
         });
         
     </script>
