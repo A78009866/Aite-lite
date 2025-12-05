@@ -6,6 +6,7 @@
 <title>المحادثة</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
+/* نفس التنسيقات السابقة تماماً لضمان عدم تكسر التصميم */
 :root {
 --bg: #000;
 --glass-bg: rgba(255, 255, 255, 0.05);
@@ -147,6 +148,7 @@ max-width: 100%;
 height: auto;
 display: block;
 border-radius: 6px;
+margin-top: 6px;
 }
 .msg-audio-player {
 display: flex;
@@ -158,6 +160,7 @@ border-radius: 10px;
 padding: 6px;
 backdrop-filter: blur(10px);
 -webkit-backdrop-filter: blur(10px);
+margin-top: 4px;
 }
 .incoming .msg-audio-player {
 background: rgba(255, 255, 255, 0.05);
@@ -198,6 +201,10 @@ font-size: 10px;
 color: #9fb3c8;
 margin-top: 4px;
 text-align: left;
+display: flex;
+align-items: center;
+justify-content: flex-end;
+gap: 4px;
 }
 .composer {
 display: flex;
@@ -372,7 +379,6 @@ display: flex;
 align-items: center;
 justify-content: center;
 }
-/* New CSS for reply block inside messages */
 .reply-block {
   padding: 6px 10px;
   margin-bottom: 6px;
@@ -382,12 +388,10 @@ justify-content: center;
   display: flex;
   flex-direction: column;
 }
-
 .incoming .reply-block {
   background: rgba(255, 255, 255, 0.05);
   border-right: 3px solid #cbd5e1;
 }
-
 .reply-block-sender {
   font-weight: 600;
   color: var(--accent);
@@ -396,11 +400,9 @@ justify-content: center;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .incoming .reply-block-sender {
   color: #cbd5e1;
 }
-
 .reply-block-text {
   font-size: 11px;
   color: var(--muted);
@@ -507,7 +509,6 @@ let mediaRecorder;
 let audioChunks = [];
 let activeAudioPlayer = null;
 
-
 function escapeHtml(s) {
     if (!s && s !== 0) return '';
     return String(s).replace(/&/g, '&amp;')
@@ -517,12 +518,19 @@ function escapeHtml(s) {
                     .replace(/'/g, '&#39;');
 }
 
+function escapeAttr(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/"/g, '&quot;');
+}
+
 function scrollToBottom() {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    // استخدام requestAnimationFrame لضمان التمرير بعد رسم العناصر
+    requestAnimationFrame(() => {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
 }
 
 function createAudioPlayer(src, isIncoming) {
-    // تنسيق الـ HTML لمشغل الصوت
     return `
         <div class="msg-audio-player" onclick="event.stopPropagation()">
             <button class="audio-play-btn" type="button" data-src="${escapeAttr(src)}" data-is-incoming="${isIncoming}" data-player>
@@ -534,11 +542,6 @@ function createAudioPlayer(src, isIncoming) {
     `;
 }
 
-function escapeAttr(s) {
-    if (!s && s !== 0) return '';
-    return String(s).replace(/"/g, '&quot;');
-}
-
 function createMessageElement(msg, myId) {
     const isIncoming = (msg.senderId !== myId);
     const el = document.createElement('div');
@@ -546,14 +549,12 @@ function createMessageElement(msg, myId) {
     el.dataset.messageId = msg.messageId;
     el.title = 'انقر للرد';
     
-    // إضافة مستمع حدث الرد
     el.addEventListener('click', () => {
         setReplyTo(msg);
     });
 
     let contentHtml = '';
 
-    // التحقق وعرض كتلة الرد إذا كانت موجودة
     if (msg.replied_to_id) {
         const repliedSender = msg.replied_to_sender || 'مستخدم';
         const repliedContent = msg.replied_to_content || 'رسالة محذوفة';
@@ -565,19 +566,19 @@ function createMessageElement(msg, myId) {
         `;
     }
 
-    // عرض الوسائط والمحتوى النصي
-    const isWebmAudio = msg.media && msg.media.url && msg.media.url.endsWith('.webm');
-    
     if (msg.media && msg.media.url) {
         const mediaUrl = msg.media.url;
-        const mediaType = msg.media.type;
+        const mediaType = msg.media.type || 'raw';
 
         if (mediaType.startsWith('image')) {
-            contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة">`;
-        } else if (mediaType.startsWith('audio') || isWebmAudio) {
+            // إضافة onload للتمرير عند اكتمال تحميل الصورة
+            contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة" onload="scrollToBottom()">`;
+        } else if (mediaType.startsWith('audio') || mediaUrl.endsWith('.webm') || mediaUrl.endsWith('.mp3')) {
             contentHtml += createAudioPlayer(mediaUrl, isIncoming);
         } else if (mediaType.startsWith('video')) {
             contentHtml += `<video src="${escapeAttr(mediaUrl)}" controls class="msg-video"></video>`;
+        } else {
+            contentHtml += `<div style="padding:4px;border:1px solid rgba(255,255,255,0.2);border-radius:4px;margin-top:5px;"><a href="${escapeAttr(mediaUrl)}" target="_blank" style="color:var(--accent);text-decoration:none;">📎 ملف مرفق</a></div>`;
         }
     }
 
@@ -585,8 +586,7 @@ function createMessageElement(msg, myId) {
         contentHtml += `<p style="margin:${msg.media ? '6px 0 0 0' : '0'}">${escapeHtml(msg.content)}</p>`;
     }
 
-    // إضافة وقت الإرسال وحالة القراءة
-    const readStatus = !isIncoming && msg.is_read ? ' (✅ قُرئت)' : '';
+    const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
     contentHtml += `<div class="meta-time">${formatTime(msg.timestamp)}${readStatus}</div>`;
 
     el.innerHTML = contentHtml;
@@ -596,13 +596,14 @@ function createMessageElement(msg, myId) {
 function setReplyTo(msg) {
     replyToMessage = {
         id: msg.messageId,
-        content: msg.content || (msg.media && msg.media.type) || 'رسالة وسائط',
+        content: msg.content || (msg.media ? 'رسالة وسائط' : 'رسالة'),
         senderName: (msg.senderId === myId) ? 'أنت' : otherName.textContent
     };
 
     replySenderEl.textContent = replyToMessage.senderName;
     replyTextEl.textContent = replyToMessage.content;
     replyContainer.style.display = 'flex';
+    msgInput.focus();
 }
 
 cancelReplyBtn.onclick = () => {
@@ -610,36 +611,25 @@ cancelReplyBtn.onclick = () => {
     replyContainer.style.display = 'none';
 };
 
-
-// ✅ تم تعديل هذه الدالة لاستخدام رابط صورة افتراضية عامة وموثوقة (حل خطأ 404 Cloudinary)
 async function fetchOtherProfile() {
     try {
         const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
         
         if (res.status === 401) return window.location.href = '/login';
         
+        const defaultAvatarUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=U'; 
+        
         if (!res.ok) {
-            otherName.textContent = 'مستخدم غير موجود';
-            otherUsername.textContent = 'غير متوفر';
+            otherName.textContent = 'مستخدم';
+            otherUsername.textContent = '';
+            otherAvatar.src = defaultAvatarUrl;
             return;
         }
 
         const other = await res.json(); 
-        
-        // رابط عام وموثوق لتجنب خطأ 404 في Cloudinary
-        const defaultAvatarUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=U'; 
-        
-        if (other) {
-            // استخدام الرابط الجديد كبديل إذا لم يكن هناك صورة
-            otherAvatar.src = other.profile_picture_url || defaultAvatarUrl; 
-            otherName.textContent = other.full_name || other.username || 'مستخدم';
-            otherUsername.textContent = other.username ? ('@' + other.username) : '';
-        } else {
-            otherName.textContent = 'مستخدم';
-            otherUsername.textContent = otherId;
-        }
-        
-        // تحديث رابط الملف الشخصي
+        otherAvatar.src = other.profile_picture_url || defaultAvatarUrl; 
+        otherName.textContent = other.full_name || other.username || 'مستخدم';
+        otherUsername.textContent = other.username ? ('@' + other.username) : '';
         document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
     } catch (err) {
         console.error('fetchOtherProfile error:', err);
@@ -650,28 +640,32 @@ async function fetchOtherProfile() {
 async function fetchMessages() {
     try {
         const res = await fetch(`/api/messages/${encodeURIComponent(otherId)}`, { credentials: 'same-origin' });
-
         if (res.status === 401) return window.location.href = '/login';
-
-        const data = await res.json();
-
-        if (!Array.isArray(data)) return;
-
-        const jsonKey = JSON.stringify(data);
-        if (jsonKey === JSON.stringify(lastMessages)) return; // لا يوجد تحديث
         
-        lastMessages = data;
-        const wasScrolledToBottom = messagesEl.scrollHeight - messagesEl.clientHeight <= messagesEl.scrollTop + 100; // 100px tolerance
+        const data = await res.json();
+        if (!data.ok || !Array.isArray(data.messages)) return;
+
+        const msgs = data.messages;
+        const jsonKey = JSON.stringify(msgs.map(m => m.messageId)); // المقارنة بالمعرفات فقط لتحسين الأداء
+        
+        // التحقق مما إذا كانت هناك رسائل جديدة فقط لتجنب إعادة الرسم الكاملة إذا لم يتغير شيء
+        if (lastMessages && JSON.stringify(lastMessages.map(m => m.messageId)) === jsonKey) {
+            // يمكن التحقق من حالة القراءة وتحديثها بدون إعادة بناء DOM بالكامل هنا مستقبلاً
+            return;
+        }
+        
+        lastMessages = msgs;
+        
+        // الحفاظ على موضع التمرير إذا لم نكن في الأسفل تماماً
+        const isScrolledToBottom = messagesEl.scrollHeight - messagesEl.clientHeight <= messagesEl.scrollTop + 50;
 
         messagesEl.innerHTML = '';
-        if (data.length === 0) {
-            messagesEl.innerHTML = '<div class="small" style="text-align:center">لا توجد رسائل بعد</div>';
+        
+        if (msgs.length === 0) {
+            messagesEl.innerHTML = '<div class="small" style="text-align:center;padding:20px;">لا توجد رسائل بعد. ابدأ المحادثة!</div>';
             return;
         }
 
-        // الرسائل تأتي بترتيب زمني، لا حاجة للفرز إذا كان الخادم يفرزها
-        
-        // جلب معرف المستخدم الحالي لأول مرة
         if (!myId) {
             const profileRes = await fetch('/api/profile');
             if (profileRes.ok) {
@@ -680,12 +674,12 @@ async function fetchMessages() {
             }
         }
         
-        data.forEach(msg => {
+        msgs.forEach(msg => {
             const el = createMessageElement(msg, myId);
             messagesEl.appendChild(el);
         });
 
-        if (wasScrolledToBottom) {
+        if (isScrolledToBottom) {
             scrollToBottom();
         }
 
@@ -693,42 +687,29 @@ async function fetchMessages() {
 
     } catch (err) {
         console.error('fetchMessages error', err);
-        messagesEl.innerHTML = '<div class="small" style="text-align:center;color:red;">خطأ في تحميل الرسائل.</div>';
     }
 }
 
-// chat.html
-
-
-// ✅ دالة إرسال الرسالة (معدلة للعرض الفوري وقراءة بيانات الرد)
 async function sendMessage() {
     let content = msgInput.value.trim();
-    
-    // إذا لم يكن هناك محتوى أو ملف أو تسجيل صوتي، لا ترسل
     if (!content && !uploadedFile && audioChunks.length === 0) return;
     
     sendBtn.disabled = true;
-    sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" class="spin"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12 6v6l4 2-1 2-5-3.01V6z"/></svg>';
+    const originalIcon = sendBtn.innerHTML;
+    sendBtn.innerHTML = '<div class="spin" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;"></div>';
 
     const formData = new FormData();
-    // ✅ إرسال other_id في body بدلاً من URL
     formData.append('other_id', otherId); 
     
-    if (content) {
-        formData.append('content', content);
-    }
-    if (uploadedFile) {
-        formData.append('media', uploadedFile);
-    }
+    if (content) formData.append('content', content);
+    if (uploadedFile) formData.append('media', uploadedFile);
 
-    // إذا كان هناك تسجيل صوتي، قم بإرساله كملف
     if (audioChunks.length > 0) {
-        // إذا كان هناك تسجيل صوتي لم يتم إرساله بعد
-        const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-        formData.append('media', audioBlob, 'audio.mp3');
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        // تسمية الملف بـ webm لضمان تعرف الخادم والمتصفح عليه
+        formData.append('media', audioBlob, 'voice_message.webm');
     }
     
-    // إضافة بيانات الرد
     if (replyToMessage) {
         formData.append('replied_to_id', replyToMessage.id);
         formData.append('replied_to_content', replyToMessage.content);
@@ -736,59 +717,47 @@ async function sendMessage() {
     }
     
     try {
-        // ✅ رابط الإرسال المصحح
         const res = await fetch('/api/messages/send', {
             method: 'POST',
             credentials: 'same-origin',
             body: formData
         });
 
-        // قراءة الاستجابة كـ JSON
         const result = await res.json();
         
-        // ✅ التحقق من النجاح ووجود بيانات الرسالة الجديدة
         if (res.ok && result.ok && result.messageData) { 
-            
-            const newMessageData = result.messageData; 
-            
-            // 1. إنشاء عنصر الرسالة وإضافته فوراً (العرض الفوري)
-            const el = createMessageElement(newMessageData, myId);
+            const el = createMessageElement(result.messageData, myId);
             messagesEl.appendChild(el); 
 
-            // 2. مسح الحقول وحالة الرد
             msgInput.value = '';
             uploadedFile = null;
-            audioChunks = []; // مسح مقاطع التسجيل الصوتي
+            audioChunks = []; 
             filePreview.style.display = 'none';
             filePreview.innerHTML = '';
             
-            // مسح حالة الرد وإخفاء الكتلة
             replyToMessage = null; 
             replyContainer.style.display = 'none';
             
-            // 3. التمرير إلى أسفل
             scrollToBottom();
             
-            // 💡 ملاحظة: لم نعد نحتاج إلى إعادة تحميل جميع الرسائل (fetchMessages) 
-            // لأننا أضفنا الرسالة مباشرة.
+            // تحديث القائمة لضمان التزامن
+            lastMessages = null; 
 
         } else {
-            console.error('Send message failed. Status:', res.status, 'Error:', result.error || 'Unknown error');
             alert('فشل في إرسال الرسالة: ' + (result.error || 'خطأ غير معروف'));
         }
 
     } catch (err) {
         console.error('sendMessage error', err);
-        alert('حدث خطأ في الاتصال بالخادم. حاول مرة أخرى.');
+        alert('خطأ في الاتصال.');
     } finally {
         sendBtn.disabled = false;
-        sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+        sendBtn.innerHTML = originalIcon;
     }
 }
-}
 
-// ✅ دالة تعليم الرسائل كمقروءة (حل مشكلة 404 POST /api/mark_read)
 async function markRead() {
+    if (!otherId) return;
     try {
         await fetch('/api/mark_read', { 
             method: 'POST', 
@@ -802,25 +771,22 @@ async function markRead() {
 }
 
 function startRecording() {
-    // إيقاف أي تسجيل سابق
     if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
     }
     
-    // إخفاء إدخال النص والملف
     msgInput.style.display = 'none';
     fileUpload.style.display = 'none';
     document.querySelector('.file-input-btn').style.display = 'none';
     
-    // إعادة تعيين قطع الصوت
     audioChunks = [];
     recordingIndicator.style.display = 'flex';
-    voiceBtn.style.background = 'red';
+    voiceBtn.style.background = 'rgba(255,0,0,0.5)';
+    voiceBtn.style.borderColor = 'red';
     
-    // البدء في التسجيل
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorder = new MediaRecorder(stream);
             mediaRecorder.start();
 
             mediaRecorder.ondataavailable = (e) => {
@@ -828,15 +794,13 @@ function startRecording() {
             };
             
             mediaRecorder.onstop = () => {
-                stream.getTracks().forEach(track => track.stop()); // إيقاف الميكروفون
+                stream.getTracks().forEach(track => track.stop());
                 
                 if (audioChunks.length > 0) {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    // إنشاء ملف وهمي للعرض في المعاينة
-                    const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
-                    uploadedFile = audioFile;
+                    // إنشاء ملف وهمي للمعاينة
+                    uploadedFile = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
 
-                    // عرض المعاينة
                     const audioURL = URL.createObjectURL(audioBlob);
                     const previewElement = document.createElement('audio');
                     previewElement.src = audioURL;
@@ -844,12 +808,12 @@ function startRecording() {
                     
                     filePreview.innerHTML = '';
                     filePreview.appendChild(previewElement);
-
+                    
+                    // زر الحذف
                     const removeBtn = document.createElement('button');
                     removeBtn.className = 'composer-btn btn';
-                    removeBtn.id = 'remove-file-btn';
-                    removeBtn.style.cssText = 'width:24px;height:24px;background:red;';
-                    removeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+                    removeBtn.style.cssText = 'width:24px;height:24px;background:#ef4444;margin-right:auto;';
+                    removeBtn.innerHTML = '×';
                     removeBtn.onclick = removeFile;
                     filePreview.appendChild(removeBtn);
 
@@ -859,12 +823,8 @@ function startRecording() {
 
         }).catch(err => {
             console.error('Voice recording error:', err);
-            alert('تعذر الوصول إلى الميكروفون. تأكد من إعطاء الإذن.');
-            // إعادة الواجهة إلى حالتها الطبيعية عند الفشل
-            recordingIndicator.style.display = 'none';
-            msgInput.style.display = 'block';
-            document.querySelector('.file-input-btn').style.display = 'flex';
-            voiceBtn.style.background = 'rgba(255, 255, 255, 0.05)';
+            alert('تعذر الوصول إلى الميكروفون.');
+            stopRecordingUI();
         });
 }
 
@@ -872,14 +832,16 @@ function stopRecording() {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
     }
-    
-    // إعادة الواجهة إلى حالتها الطبيعية
+    stopRecordingUI();
+}
+
+function stopRecordingUI() {
     recordingIndicator.style.display = 'none';
     msgInput.style.display = 'block';
     document.querySelector('.file-input-btn').style.display = 'flex';
-    voiceBtn.style.background = 'rgba(255, 255, 255, 0.05)';
+    voiceBtn.style.background = '';
+    voiceBtn.style.borderColor = '';
 }
-
 
 function removeFile() {
     uploadedFile = null;
@@ -889,9 +851,8 @@ function removeFile() {
 }
 
 function initializeAudioPlayers() {
-    // إيقاف المشغل النشط الحالي قبل إنشاء مشغلات جديدة
+    // تنظيف المشغلات القديمة إذا وجدت
     if (activeAudioPlayer) {
-        activeAudioPlayer.destroy();
         activeAudioPlayer = null;
     }
     
@@ -901,55 +862,60 @@ function initializeAudioPlayers() {
         const waveformContainer = player.querySelector('.audio-waveform-container');
         const timeDisplay = player.querySelector('.audio-time');
 
-        // تجنب التهيئة المتعددة
         if (waveformContainer.dataset.wavesurfer) return;
 
         const src = waveformContainer.dataset.src;
         const isIncoming = waveformContainer.dataset.isIncoming === 'true';
 
-        const wavesurfer = WaveSurfer.create({
-            container: waveformContainer,
-            waveColor: isIncoming ? '#cbd5e1' : '#e6f7ff',
-            progressColor: isIncoming ? '#8aa5bd' : '#7dd3fc',
-            cursorColor: 'transparent',
-            barWidth: 2,
-            height: 40,
-            barGap: 1,
-            barRadius: 2,
-            minPxPerSec: 10,
-        });
+        try {
+            const wavesurfer = WaveSurfer.create({
+                container: waveformContainer,
+                waveColor: isIncoming ? '#cbd5e1' : '#e6f7ff',
+                progressColor: isIncoming ? '#8aa5bd' : '#7dd3fc',
+                cursorColor: 'transparent',
+                barWidth: 2,
+                height: 30,
+                barGap: 2,
+                barRadius: 2,
+            });
 
-        // تمييز الحاوية لعدم إعادة التهيئة
-        waveformContainer.dataset.wavesurfer = true;
+            waveformContainer.dataset.wavesurfer = true;
+            wavesurfer.load(src);
 
-        wavesurfer.load(src);
+            playBtn.onclick = (e) => {
+                e.stopPropagation();
+                // إيقاف المشغلات الأخرى
+                if (activeAudioPlayer && activeAudioPlayer !== wavesurfer) {
+                    activeAudioPlayer.pause();
+                }
+                activeAudioPlayer = wavesurfer;
+                wavesurfer.playPause();
+            };
 
-        playBtn.onclick = (e) => {
-            e.stopPropagation();
-            if (activeAudioPlayer && activeAudioPlayer !== wavesurfer) {
-                activeAudioPlayer.pause();
-                activeAudioPlayer.playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';
-            }
-            activeAudioPlayer = wavesurfer;
-            activeAudioPlayer.playBtn = playBtn; // حفظ مرجع الزر للتحكم به لاحقًا
-            wavesurfer.playPause();
-        };
+            wavesurfer.on('play', () => {
+                playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+            });
 
-        wavesurfer.on('play', () => {
-            playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-        });
+            wavesurfer.on('pause', () => {
+                playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';
+            });
 
-        wavesurfer.on('pause', () => {
-            playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';
-        });
+            wavesurfer.on('ready', () => {
+                timeDisplay.textContent = formatAudioTime(wavesurfer.getDuration());
+            });
 
-        wavesurfer.on('ready', () => {
-            timeDisplay.textContent = formatAudioTime(wavesurfer.getDuration());
-        });
+            wavesurfer.on('audioprocess', () => {
+                timeDisplay.textContent = formatAudioTime(wavesurfer.getCurrentTime());
+            });
+            
+            wavesurfer.on('finish', () => {
+                 playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';
+                 activeAudioPlayer = null;
+            });
 
-        wavesurfer.on('timeupdate', (currentTime) => {
-            timeDisplay.textContent = formatAudioTime(currentTime);
-        });
+        } catch(e) {
+            console.error("WaveSurfer Error:", e);
+        }
     });
 }
 
@@ -961,27 +927,15 @@ function formatAudioTime(seconds) {
 }
 
 function formatTime(dateString) {
+    if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
     
-    // التحقق من اليوم
     if (date.toDateString() === now.toDateString()) {
         return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
     }
-    
-    // التحقق من الأمس
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) {
-        return 'أمس ' + date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-    }
-    
-    // التاريخ بالكامل
-    return date.toLocaleDateString('ar-EG', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString('ar-EG', { month: 'numeric', day: 'numeric' });
 }
-
-
-// ---------------- Events Handlers ----------------
 
 removeFileBtn.addEventListener('click', removeFile);
 
@@ -989,49 +943,39 @@ fileUpload.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
         uploadedFile = file;
-        audioChunks = []; // مسح أي تسجيل صوتي سابق
+        audioChunks = [];
         filePreview.innerHTML = '';
 
         const reader = new FileReader();
         reader.onload = (e) => {
             let previewElement;
-            const isAudio = file.type.startsWith('audio/');
-            const isVideo = file.type.startsWith('video/');
-
             if (file.type.startsWith('image/')) {
                 previewElement = document.createElement('img');
                 previewElement.src = e.target.result;
-                previewElement.alt = "صورة معاينة";
-            } else if (isAudio || isVideo) {
-                if (isAudio) {
-                    previewElement = document.createElement('audio');
-                } else {
-                    previewElement = document.createElement('video');
-                }
+            } else if (file.type.startsWith('video/')) {
+                previewElement = document.createElement('video');
+                previewElement.src = e.target.result;
+            } else if (file.type.startsWith('audio/')) {
+                previewElement = document.createElement('audio');
                 previewElement.src = e.target.result;
                 previewElement.controls = true;
             } else {
                 previewElement = document.createElement('span');
                 previewElement.textContent = file.name;
             }
-
             filePreview.appendChild(previewElement);
-
+            
+             // زر الحذف
             const removeBtn = document.createElement('button');
             removeBtn.className = 'composer-btn btn';
-            removeBtn.id = 'remove-file-btn';
-            removeBtn.style.cssText = 'width:24px;height:24px;background:red;';
-            removeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+            removeBtn.style.cssText = 'width:24px;height:24px;background:#ef4444;margin-right:auto;';
+            removeBtn.innerHTML = '×';
             removeBtn.onclick = removeFile;
             filePreview.appendChild(removeBtn);
 
             filePreview.style.display = 'flex';
         };
         reader.readAsDataURL(file);
-    } else {
-        uploadedFile = null;
-        filePreview.style.display = 'none';
-        filePreview.innerHTML = '';
     }
 });
 
@@ -1053,20 +997,30 @@ voiceBtn.addEventListener('mouseleave', stopRecording);
 voiceBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
 voiceBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
 
-
 (async function init() {
+    if(!otherId) {
+        alert("لا يوجد جهة اتصال محددة");
+        window.location.href = '/chat_list';
+        return;
+    }
     await fetchOtherProfile();
     await markRead();
     await fetchMessages();
     scrollToBottom();
     
-    // التحديث الدوري لتعليم الرسائل كمقروءة وجلب الرسائل الجديدة
+    // التحديث الدوري كل 3 ثواني
     setInterval(async () => {
         if (document.visibilityState === 'visible') {
-            await markRead();
             await fetchMessages();
         }
-    }, 5000); 
+    }, 3000); 
+    
+    // تعليم الرسائل كمقروءة عند التركيز على النافذة
+    window.addEventListener('focus', markRead);
+    // تعليمها بشكل دوري أقل تكراراً للتأكيد
+    setInterval(() => {
+        if (document.visibilityState === 'visible') markRead();
+    }, 10000);
 })();
 </script>
 </body>
