@@ -354,7 +354,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
     if (!postSnapshot.exists()) {
       return res.status(404).json({ ok: false, error: 'المنشور غير موجود.' });
     }
-
+    
     const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
     const userData = userSnapshot.val();
 
@@ -396,54 +396,76 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
   const postId = req.params.postId;
 
   try {
-    const commentsSnap = await db.ref(`comments/${postId}`).orderByChild('timestamp').once('value');
+    const commentsSnap = await db.ref(`comments/${postId}`)
+      .orderByChild('timestamp')
+      .once('value');
+
     const comments = [];
-    commentsSnap.forEach(snap => {
-      comments.push(snap.val());
+    commentsSnap.forEach(childSnap => {
+      comments.push(childSnap.val());
     });
+
     res.json({ ok: true, comments: comments });
+
   } catch (error) {
     console.error('Error fetching comments:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
   }
 });
 
-// نقطة وصول لجلب جميع المنشورات
+
+// نقطة وصول لجلب المنشورات الأخيرة
 app.get('/api/posts', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
+  const currentUserId = req.session.userId; // جلب معرف المستخدم الحالي
+
   try {
-    const postsSnap = await db.ref('posts').orderByChild('timestamp').once('value');
-    const posts = [];
-    postsSnap.forEach(snap => {
-      posts.push(snap.val());
+    const postsSnap = await db.ref('posts')
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
+
+    let posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
     });
 
-    // جلب بيانات المستخدمين لجميع المنشورات
-    const userIds = [...new Set(posts.map(post => post.userId))];
-    const profilesSnap = await db.ref('profiles').once('value');
-    const profiles = profilesSnap.val() || {};
+    posts.reverse(); 
 
-    // جلب حالة الإعجاب للمستخدم الحالي
-    const likesSnap = await db.ref('likes').once('value');
-    const likes = likesSnap.val() || {};
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = 'https://via.placeholder.com/40/000000/FFFFFF?text=A';
 
-    const finalPosts = posts.reverse().map(post => {
-      const userProfile = profiles[post.userId] || { username: 'مستخدم محذوف', profile_picture_url: 'https://via.placeholder.com/40' };
-      const isLiked = likes[post.postId] && likes[post.postId][currentUserId] !== undefined;
+    // جلب ملفات المستخدمين
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
 
-      return {
-        ...post,
-        user: {
-          id: userProfile.id,
-          username: userProfile.username,
-          full_name: userProfile.full_name,
-          profile_picture_url: userProfile.profile_picture_url,
-        },
-        isLiked: isLiked,
-      };
+    profileSnapshots.forEach((snap, index) => {
+        profiles[userIds[index]] = snap.val();
     });
+    
+    // جلب حالة إعجاب المستخدم الحالي لكل منشور
+    const likedStatuses = {};
+    const likePromises = posts.map(post => 
+      db.ref(`likes/${post.postId}/${currentUserId}`).once('value')
+    );
+    const likeSnapshots = await Promise.all(likePromises);
+    
+    likeSnapshots.forEach((snap, index) => {
+        likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+    // ----------------------------------------------------
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      is_liked: likedStatuses[post.postId] || false, // إضافة حالة الإعجاب
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم غير معروف',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+      }
+    }));
 
     res.json({ ok: true, posts: finalPosts });
+
   } catch (error) {
     console.error('Error fetching posts:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
@@ -460,7 +482,7 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   }
 
   const postRef = db.ref(`posts/${postId}`);
-
+  
   try {
     const postSnapshot = await postRef.once('value');
     const postData = postSnapshot.val();
@@ -476,10 +498,6 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
 
     // حذف المنشور من قاعدة البيانات
     await postRef.remove();
-
-    // حذف التعليقات والإعجابات المتعلقة به
-    await db.ref(`comments/${postId}`).remove();
-    await db.ref(`likes/${postId}`).remove();
 
     // تحديث عداد المنشورات للمستخدم
     const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
@@ -497,26 +515,246 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
 
 // ---------------- API: Profile and User Operations ----------------
 app.get('/api/profile', requireAuth, async (req, res) => {
-    const userId = req.session.userId;
-    try {
-        const profileSnap = await db.ref('profiles/' + userId).once('value');
-        const profile = profileSnap.val();
+  const currentUserId = req.session.userId;
+  // **التعديل: جلب معرّف الملف الشخصي المطلوب عرضه من الاستعلام، أو استخدام معرّف المستخدم الحالي**
+  const requestedUserId = req.query.userId || currentUserId; 
 
-        if (!profile) {
-            return res.status(404).json({ ok: false, error: "الملف الشخصي غير موجود." });
-        }
+  try {
+    // استخدام معرّف الملف الشخصي المطلوب
+    const profileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
+    const profileData = profileSnap.val();
 
-        res.json(profile);
-    } catch (error) {
-        console.error('Error fetching profile:', error);
-        res.status(500).json({ ok: false, error: "خطأ داخلي في الخادم." });
+    if (!profileData) {
+      return res.status(404).json({ ok: false, error: 'ملف المستخدم غير موجود.' });
     }
+
+    // **تعديل: تصفية البيانات لإزالة إحصائيات المتابعة وإضافة حقل النبذة**
+    const essentialProfileData = {
+        id: profileData.id,
+        username: profileData.username,
+        full_name: profileData.full_name,
+        email: profileData.email,
+        profile_picture_url: profileData.profile_picture_url,
+        is_online: profileData.is_online,
+        is_verified: profileData.is_verified,
+        bio: profileData.bio || null, // حقل النبذة
+    };
+    
+    // **إضافة حقل is_owner لتحديد ما إذا كان المستخدم الحالي هو صاحب الملف الشخصي المعروض**
+    const isOwner = requestedUserId === currentUserId;
+
+    res.json({ ok: true, ...essentialProfileData, is_owner: isOwner });
+
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب بيانات الملف الشخصي.' });
+  }
 });
 
+// نقطة وصول جديدة: جلب قائمة بجميع المستخدمين باستثناء المستخدم الحالي
+app.get('/api/users', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+
+  try {
+    const profilesSnap = await db.ref('profiles').once('value');
+    const profiles = profilesSnap.val() || {};
+
+    // تصفية المستخدم الحالي من القائمة وتنسيق البيانات
+    const usersList = Object.values(profiles).filter(user => user.id !== currentUserId).map(user => ({
+      id: user.id,
+      username: user.username,
+      profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40/000000/FFFFFF?text=U'
+    }));
+
+    res.json({ ok: true, users: usersList });
+
+  } catch (error) {
+    console.error('Error fetching users list:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المستخدمين.' });
+  }
+});
+
+
+// ---------------- API: Chat List and Messages ----------------
+app.get('/api/chats', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+
+  try {
+    const chatRefs = db.ref(`chats/${userId}`);
+    const chatSnap = await chatRefs.once('value');
+    const chats = [];
+    const contactIds = [];
+
+    chatSnap.forEach(childSnap => {
+      const chat = childSnap.val();
+      chats.push(chat);
+      contactIds.push(chat.contact_id);
+    });
+
+    const profiles = {};
+    const profilePromises = contactIds.map(id => db.ref(`profiles/${id}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+      profiles[contactIds[index]] = snap.val();
+    });
+
+    const finalChats = chats.map(chat => ({
+      ...chat,
+      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم غير معروف', profile_picture_url: 'https://via.placeholder.com/40' }
+    }));
+
+    res.json({ ok: true, chats: finalChats });
+    
+  } catch (error) {
+    console.error('Error fetching chat list:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المحادثات.' });
+  }
+});
+
+// نقطة وصول لجلب الرسائل في محادثة محددة
+app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const contactId = req.params.contactId;
+  const { limit = 50 } = req.query; // يمكن تحديد عدد الرسائل المُراد جلبها
+
+  if (!contactId) {
+    return res.status(400).json({ ok: false, error: 'معرف جهة الاتصال مطلوب.' });
+  }
+
+  // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
+  const chatRoomId = [userId, contactId].sort().join('_');
+  const messagesRef = db.ref(`messages/${chatRoomId}`);
+
+  try {
+    const messagesSnap = await messagesRef
+      .orderByChild('timestamp')
+      .limitToLast(Number(limit))
+      .once('value');
+
+    const messages = [];
+    messagesSnap.forEach(childSnap => {
+      messages.push(childSnap.val());
+    });
+
+    res.json({ ok: true, messages: messages.reverse() }); // اعكس الترتيب لعرض الأحدث في الأسفل
+
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الرسائل.' });
+  }
+});
+
+
+// نقطة وصول لإرسال رسالة جديدة (نص أو وسائط)
+app.post('/api/messages/send/:contactId', requireAuth, upload.single('media'), async (req, res) => {
+  const senderId = req.session.userId;
+  const contactId = req.params.contactId;
+  const { content } = req.body;
+  
+  let mediaUrl = null;
+  let mediaType = null;
+  const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+  // التحقق من وجود محتوى نصي أو ملف وسائط
+  if ((!content || content.trim().length === 0) && !req.file) {
+    return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
+  }
+
+  // إذا تم رفع ملف بنجاح
+  if (req.file) {
+    mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
+    
+    const mimeType = req.file.mimetype;
+    if (mimeType && mimeType.startsWith('image/')) {
+        mediaType = 'image';
+    } else if (mimeType && mimeType.startsWith('video/')) {
+        mediaType = 'video';
+    } else if (mimeType && mimeType.startsWith('audio/')) {
+        mediaType = 'audio';
+    } else {
+        mediaType = 'raw';
+    }
+  }
+
+  try {
+    // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
+    const chatRoomId = [senderId, contactId].sort().join('_');
+    const messagesRef = db.ref(`messages/${chatRoomId}`).push();
+    const messageId = messagesRef.key;
+
+    const messageData = {
+      messageId: messageId,
+      senderId: senderId,
+      content: content || null,
+      timestamp: timestamp,
+      // حفظ بيانات الوسائط فقط إذا كانت موجودة
+      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
+      is_read: false,
+    };
+
+    await messagesRef.set(messageData);
+
+    // تحديث بيانات المحادثات (last_message_content) لكلا المستخدمين
+    const lastMessageContent = content || `[${mediaType === 'image' ? 'صورة' : mediaType === 'video' ? 'فيديو' : mediaType === 'audio' ? 'مقطع صوتي' : 'ملف وسائط'}]`;
+
+    // تحديث محادثة المرسل
+    await db.ref(`chats/${senderId}/${contactId}`).update({
+        last_message_content: lastMessageContent,
+        last_message_timestamp: timestamp,
+        contact_id: contactId,
+    });
+
+    // تحديث محادثة المُستقبِل
+    await db.ref(`chats/${contactId}/${senderId}`).update({
+        last_message_content: lastMessageContent,
+        last_message_timestamp: timestamp,
+        contact_id: senderId,
+    });
+
+    res.json({ ok: true, message: 'تم إرسال الرسالة بنجاح', messageData: messageData });
+
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إرسال الرسالة.' });
+  }
+});
+
+
+// ---------------- Debug Routes (for development purposes) ----------------
+app.get('/api/debug/session', requireAuth, (req, res) => {
+  res.json({
+    ok: true,
+    message: 'Session is active.',
+    isAuthenticated: !!(req.session && req.session.userId),
+    userId: req.session.userId || null,
+    cookies: req.headers.cookie || null,
+    nodeEnv: process.env.NODE_ENV,
+    isSecure: req.secure,
+    proxySetting: app.get('trust proxy')
+  });
+});
+
+app.get('/api/debug/raw_profiles', requireAuth, async (req, res) => {
+  try {
+    const snap = await db.ref('profiles').once('value');
+    res.json({ ok: true, count: snap.numChildren(), data: snap.val() });
+  } catch (err) {
+    console.error('raw_profiles error', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+// نقطة وصول جديدة لجلب ملف شخصي واحد بمعرّف المستخدم
 app.get('/api/profile/:userId', requireAuth, async (req, res) => {
-    const targetUserId = req.params.userId;
+    const { userId } = req.params;
+    
     try {
-        const profileSnap = await db.ref('profiles/' + targetUserId).once('value');
+        if (!userId) {
+            return res.status(400).json({ ok: false, error: "معرّف المستخدم مفقود." });
+        }
+        
+        // جلب الملف الشخصي مباشرة من قاعدة بيانات Firebase باستخدام userId
+        const profileSnap = await db.ref('profiles').child(userId).once('value');
         const profile = profileSnap.val();
 
         if (!profile) {
@@ -538,268 +776,10 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
         res.status(500).json({ ok: false, error: "خطأ داخلي في الخادم." });
     }
 });
-
-// نقطة وصول لجلب قائمة المستخدمين (لصفحة users_list.html)
-app.get('/api/users/list', requireAuth, async (req, res) => {
-    const currentUserId = req.session.userId;
-    try {
-        const profilesSnap = await db.ref('profiles').once('value');
-        const profiles = profilesSnap.val() || {};
-
-        // تصفية المستخدم الحالي من القائمة وتنسيق البيانات
-        const usersList = Object.values(profiles).filter(user => user.id !== currentUserId).map(user => ({
-            id: user.id,
-            username: user.username,
-            profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40/000000/FFFFFF?text=U'
-        }));
-
-        res.json({ ok: true, users: usersList });
-    } catch (error) {
-        console.error('Error fetching users list:', error);
-        res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المستخدمين.' });
-    }
-});
-
-// ---------------- API: Chat List and Messages ----------------
-app.get('/api/chats', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-
-  try {
-    const chatRefs = db.ref(`chats/${userId}`);
-    // جلب آخر رسالة في كل محادثة
-    const chatSnap = await chatRefs.orderByChild('last_message_timestamp').once('value');
-    
-    const chats = [];
-    const contactIds = [];
-
-    chatSnap.forEach(childSnap => {
-        const chat = childSnap.val();
-        chats.push(chat);
-        contactIds.push(chat.contact_id);
-    });
-
-    // جلب ملفات التعريف لجهات الاتصال دفعة واحدة
-    const profiles = {};
-    const profilePromises = contactIds.map(id => db.ref(`profiles/${id}`).once('value'));
-    const profileSnapshots = await Promise.all(profilePromises);
-
-    profileSnapshots.forEach((snap, index) => {
-        profiles[contactIds[index]] = snap.val();
-    });
-
-    // تجميع بيانات المحادثات مع ملفات التعريف
-    const finalChats = chats.reverse().map(chat => ({
-      ...chat,
-      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم غير معروف', profile_picture_url: 'https://via.placeholder.com/40' }
-    }));
-
-    res.json({ ok: true, chats: finalChats });
-
-  } catch (error) {
-    console.error('Error fetching chat list:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المحادثات.' });
-  }
-});
-
-// نقطة وصول لجلب رسائل المحادثة
-app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
-    const userId = req.session.userId;
-    const contactId = req.params.contactId;
-
-    try {
-        if (!contactId) {
-            return res.status(400).json({ ok: false, error: 'معرف جهة الاتصال مطلوب.' });
-        }
-
-        // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
-        const chatRoomId = [userId, contactId].sort().join('_');
-        const messagesRef = db.ref(`messages/${chatRoomId}`);
-        
-        // جلب آخر 100 رسالة (لتقليل حجم البيانات)
-        const messagesSnap = await messagesRef.limitToLast(100).once('value');
-        const messages = [];
-        messagesSnap.forEach(childSnap => {
-            messages.push(childSnap.val());
-        });
-
-        res.json(messages);
-
-    } catch (error) {
-        console.error('Error fetching messages:', error);
-        res.status(500).json({ ok: false, error: 'فشل في جلب الرسائل.' });
-    }
-});
-
-// نقطة وصول لإرسال رسالة جديدة (نص أو وسائط)
-// ✅ تم تعديل المسار لاستخدام POST /api/messages/send
-app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, res) => {
-  const senderId = req.session.userId;
-  // ✅ استخراج contactId من body بدلاً من params (باستخدام الاسم other_id المرسل من chat.html)
-  const { content, other_id: contactId, replied_to_id, replied_to_content, replied_to_sender } = req.body;
-  const timestamp = admin.database.ServerValue.TIMESTAMP;
-  let mediaUrl = null;
-  let mediaType = null;
-
-  if (!contactId) {
-    return res.status(400).json({ ok: false, error: 'معرف جهة الاتصال مطلوب.' });
-  }
-  
-  // التحقق من وجود محتوى نصي أو ملف وسائط
-  if (!content && !req.file && !(req.body.content && req.body.content.length > 0)) {
-    return res.status(400).json({ ok: false, error: 'يجب توفير محتوى نصي أو ملف وسائط.' });
-  }
-  
-  // إذا تم رفع ملف بنجاح
-  if (req.file) {
-    mediaUrl = req.file.path; // الرابط النهائي من Cloudinary
-    
-    // تحديد نوع الملف بناءً على MimeType
-    const mimeType = req.file.mimetype;
-    if (mimeType && mimeType.startsWith('image/')) {
-        mediaType = 'image';
-    } else if (mimeType && mimeType.startsWith('video/')) {
-        mediaType = 'video';
-    } else if (mimeType && mimeType.startsWith('audio/')) {
-        mediaType = 'audio';
-    } else {
-        mediaType = 'raw';
-    }
-  }
-  
-  try {
-    // تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
-    const chatRoomId = [senderId, contactId].sort().join('_');
-    const messagesRef = db.ref(`messages/${chatRoomId}`).push();
-    const messageId = messagesRef.key;
-
-    const messageData = {
-      messageId: messageId,
-      senderId: senderId,
-      content: content || null,
-      timestamp: timestamp,
-      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
-      is_read: false,
-      replied_to_id: replied_to_id || null, // إضافة بيانات الرد
-      replied_to_content: replied_to_content || null,
-      replied_to_sender: replied_to_sender || null,
-    };
-
-    await messagesRef.set(messageData);
-
-    // تحديث بيانات المحادثات (last message and unread count)
-    const senderChatRef = db.ref(`chats/${senderId}/${contactId}`);
-    const receiverChatRef = db.ref(`chats/${contactId}/${senderId}`);
-    
-    // تحديث المحادثة لدى المُرسِل
-    await senderChatRef.update({
-        last_message: content ? content.substring(0, 50) : (mediaType || 'ملف'),
-        last_message_timestamp: timestamp,
-        contact_id: contactId,
-        unread_count: 0 // يتم تصفير عداد المرسل
-    });
-    
-    // تحديث المحادثة لدى المُستقبِل وزيادة عداد الرسائل غير المقروءة
-    await receiverChatRef.transaction((current) => {
-        if (current === null) {
-            return {
-                last_message: content ? content.substring(0, 50) : (mediaType || 'ملف'),
-                last_message_timestamp: timestamp,
-                contact_id: senderId,
-                unread_count: 1
-            };
-        }
-        return {
-            ...current,
-            last_message: content ? content.substring(0, 50) : (mediaType || 'ملف'),
-            last_message_timestamp: timestamp,
-            unread_count: (current.unread_count || 0) + 1
-        };
-    });
-
-    res.json({ ok: true, messageId: messageId });
-
-  } catch (error) {
-    console.error('Error sending message:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إرسال الرسالة على الخادم.' });
-  }
-});
-
-// ✅ نقطة وصول جديدة لتعليم الرسائل كمقروءة (حل مشكلة 404 POST /api/mark_read)
-app.post('/api/mark_read', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const { other_id } = req.body; // يتم إرسالها من chat.html
-
-  if (!other_id) {
-    return res.status(400).json({ ok: false, error: 'معرف جهة الاتصال مطلوب.' });
-  }
-
-  try {
-    // 1. تحديد اسم غرفة الدردشة بترتيب أبجدي للمُعرّفات
-    const chatRoomId = [userId, other_id].sort().join('_');
-    const messagesRef = db.ref(`messages/${chatRoomId}`);
-
-    // 2. تحديث الرسائل التي أرسلها الطرف الآخر وجعلها مقروءة
-    // استخدم الاستعلام للتقليل من حجم البيانات: جلب الرسائل غير المقروءة فقط
-    const messagesSnap = await messagesRef
-      .orderByChild('is_read')
-      .equalTo(false)
-      .once('value');
-
-    const updates = {};
-    messagesSnap.forEach(childSnap => {
-      const msg = childSnap.val();
-      // إذا كانت الرسالة غير مقروءة ومرسلها هو الطرف الآخر (other_id)
-      if (msg.senderId === other_id) {
-        updates[`${childSnap.key}/is_read`] = true;
-      }
-    });
-
-    if (Object.keys(updates).length > 0) {
-      await messagesRef.update(updates);
-    }
-    
-    // 3. تحديث عداد الرسائل غير المقروءة للمستخدم الحالي إلى صفر
-    await db.ref(`chats/${userId}/${other_id}`).update({
-        unread_count: 0
-    });
-
-    res.json({ ok: true, message: 'تم تعليم الرسائل كمقروءة بنجاح.' });
-
-  } catch (error) {
-    console.error('Error marking messages as read:', error);
-    res.status(500).json({ ok: false, error: 'فشل في عملية تعليم الرسائل كمقروءة.' });
-  }
-});
-
-
-// ---------------- Debug Routes ----------------
-// يمكن استخدام هذه المسارات لتصحيح الأخطاء محليًا أو على الخادم
-app.get('/api/debug/session', requireAuth, (req, res) => {
-  res.json({
-    userId: req.session.userId,
-    email: req.session.email,
-    sessionId: req.session.id,
-    cookies: req.headers.cookie || null,
-    nodeEnv: process.env.NODE_ENV,
-    isSecure: req.secure,
-    proxySetting: app.get('trust proxy')
-  });
-});
-
-app.get('/api/debug/raw_profiles', requireAuth, async (req, res) => {
-  try {
-    const snap = await db.ref('profiles').once('value');
-    res.json({ ok: true, count: snap.numChildren(), data: snap.val() });
-  } catch (err) {
-    console.error('raw_profiles error', err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 app.get('/api/debug/raw_users', requireAuth, async (req, res) => {
   try {
-    // لا يوجد لدينا مجموعة 'users' في قاعدة البيانات الحالية، يتم الاعتماد على Firebase Auth و Profiles
-    res.json({ ok: true, message: 'No direct "users" collection, check profiles.' });
+    const snap = await db.ref('users').once('value');
+    res.json({ ok: true, count: snap.numChildren(), data: snap.val() });
   } catch (err) {
     console.error('raw_users error', err);
     res.status(500).json({ ok: false, error: err.message });
@@ -816,12 +796,12 @@ app.use((err, req, res, next) => {
   if (err) {
     // أخطاء أخرى
     console.error('General error:', err);
-    return res.status(500).json({ ok: false, error: 'خطأ غير متوقع على الخادم.' });
+    return res.status(500).json({ ok: false, error: 'حدث خطأ غير متوقع على الخادم.' });
   }
   next();
 });
 
-// ---------------- Server Startup ----------------
+// ---------------- Server Start ----------------
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
 });
