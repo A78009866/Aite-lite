@@ -213,7 +213,6 @@ app.get('/api/chats', requireAuth, async (req, res) => {
   }
 });
 
-// ✅ تعديل: جلب الرسائل بترتيب زمني (الأقدم أولاً) لكي يعرضها العميل بشكل صحيح
 app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const contactId = req.params.contactId;
@@ -235,8 +234,7 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
       messages.push(childSnap.val());
     });
     
-    // نرسل الرسائل مصفوفة: [الأقدم، ... ، الأحدث]
-    // العميل سيضعهم في الصفحة واحداً تلو الآخر، فتظهر الأقدم في الأعلى والأحدث في الأسفل
+    // إرسال الرسائل بالترتيب الزمني (الأقدم -> الأحدث)
     res.json({ ok: true, messages: messages }); 
 
   } catch (error) {
@@ -332,6 +330,7 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
     }
 });
 
+// ---------------- API: Users & Profile ----------------
 app.get('/api/users', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
@@ -374,9 +373,235 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     }
 });
 
-// Posts stubs to prevent errors
-app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => { res.json({ ok: true }); });
+// ---------------- API: Posts (Full Implementation) ----------------
 
+// 1. إنشاء منشور جديد
+app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
+  const userId = req.session.userId;
+  const content = req.body.content ? req.body.content.trim() : '';
+  let mediaUrl = null;
+  let mediaType = null;
+
+  if (content.length === 0 && !req.file) {
+    return res.status(400).json({ ok: false, error: 'المحتوى مطلوب.' });
+  }
+
+  if (req.file) {
+    mediaUrl = req.file.path; 
+    const mimeType = req.file.mimetype;
+    if (mimeType && mimeType.startsWith('image/')) mediaType = 'image';
+    else if (mimeType && mimeType.startsWith('video/')) mediaType = 'video';
+    else if (mimeType && mimeType.startsWith('audio/')) mediaType = 'audio';
+    else mediaType = 'raw';
+  }
+
+  try {
+    const newPostRef = db.ref('posts').push();
+    const postId = newPostRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const postData = {
+      postId: postId,
+      userId: userId,
+      content: content,
+      timestamp: timestamp,
+      likes: 0,
+      commentsCount: 0,
+      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
+    };
+
+    await newPostRef.set(postData);
+
+    const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
+    await userPostsCountRef.transaction((currentCount) => (currentCount || 0) + 1);
+
+    res.json({ ok: true, message: 'تم النشر', postId: postId });
+
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء المنشور.' });
+  }
+});
+
+// 2. جلب المنشورات (الرئيسية)
+app.get('/api/posts', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  try {
+    const postsSnap = await db.ref('posts')
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
+
+    let posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
+    posts.reverse(); // الأحدث أولاً
+
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = 'https://via.placeholder.com/40';
+
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+        profiles[userIds[index]] = snap.val();
+    });
+    
+    // التحقق من الإعجابات
+    const likedStatuses = {};
+    const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
+    const likeSnapshots = await Promise.all(likePromises);
+    
+    likeSnapshots.forEach((snap, index) => {
+        likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      is_liked: likedStatuses[post.postId] || false,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
+  }
+});
+
+// 3. الإعجاب بمنشور
+app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
+
+  if (!postId) return res.status(400).json({ ok: false });
+
+  const postRef = db.ref(`posts/${postId}`);
+  const userLikeRef = db.ref(`likes/${postId}/${userId}`);
+
+  try {
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
+
+    const likeSnapshot = await userLikeRef.once('value');
+    const isLiked = likeSnapshot.val();
+    let likesUpdate = 0;
+    let action = '';
+    
+    if (isLiked) {
+      await userLikeRef.remove();
+      likesUpdate = -1;
+      action = 'unliked';
+    } else {
+      await userLikeRef.set(admin.database.ServerValue.TIMESTAMP);
+      likesUpdate = 1;
+      action = 'liked';
+    }
+
+    let newLikesCount = 0;
+    await postRef.child('likes').transaction((currentCount) => {
+      newLikesCount = (currentCount || 0) + likesUpdate;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    res.json({ ok: true, action: action, newLikes: newLikesCount });
+
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+// 4. التعليق على منشور
+app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
+  const { content } = req.body;
+
+  if (!postId || !content) return res.status(400).json({ ok: false });
+
+  try {
+    const postRef = db.ref(`posts/${postId}`);
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
+    
+    const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnapshot.val();
+
+    const newCommentRef = db.ref(`comments/${postId}`).push();
+    const commentData = {
+      commentId: newCommentRef.key,
+      postId: postId,
+      userId: userId,
+      content: content.trim(),
+      timestamp: admin.database.ServerValue.TIMESTAMP,
+      user: {
+        username: userData.username || 'مستخدم',
+        profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/40'
+      }
+    };
+
+    await newCommentRef.set(commentData);
+
+    let newCommentsCount = 0;
+    await postRef.child('commentsCount').transaction((currentCount) => {
+      newCommentsCount = (currentCount || 0) + 1;
+      return newCommentsCount;
+    });
+
+    res.json({ ok: true, comment: commentData, newComments: newCommentsCount });
+
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+// 5. جلب تعليقات منشور
+app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
+  const postId = req.params.postId;
+  try {
+    const commentsSnap = await db.ref(`comments/${postId}`)
+      .orderByChild('timestamp')
+      .once('value');
+
+    const comments = [];
+    commentsSnap.forEach(childSnap => comments.push(childSnap.val()));
+
+    res.json({ ok: true, comments: comments });
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+// 6. حذف منشور
+app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
+
+  const postRef = db.ref(`posts/${postId}`);
+  
+  try {
+    const postSnapshot = await postRef.once('value');
+    const postData = postSnapshot.val();
+
+    if (!postData) return res.status(404).json({ ok: false });
+    if (postData.userId !== userId) return res.status(403).json({ ok: false });
+
+    await postRef.remove();
+    await db.ref(`profiles/${userId}/postsCount`).transaction((c) => (c || 0) > 0 ? c - 1 : 0);
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+// ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
   next(err);
