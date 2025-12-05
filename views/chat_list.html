@@ -16,7 +16,6 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            padding-bottom: 64px; /* مساحة للنافبار السفلي */
         }
 
         .glass-navbar {
@@ -26,18 +25,11 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        /* نمط النافبار السفلي الجديد */
-        .glass-bottom-nav {
-            background-color: rgba(30, 30, 30, 0.5);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
         /* نمط الشعار الجديد */
         .app-logo {
             font-family: 'Montserrat', sans-serif; /* خط مودرن للشعار */
             font-weight: 800;
+            /* يمكن تجربة خط Vibes إذا كان متاحاً ومتناسباً: font-family: 'Vibes', cursive; */
         }
 
         /* نمط نافذة الملف الشخصي الزجاجية */
@@ -46,7 +38,7 @@
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1000;
+            z-index: 1000; /* للتأكد من أنها فوق كل شيء */
         }
 
         /* نمط نافذة التعليقات الزجاجية الجديدة */
@@ -141,33 +133,8 @@
 
     <main class="max-w-6xl mx-auto p-4">
         
-        <section id="postsSection" class="block">
-            <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
+        <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
             </div>
-        </section>
-
-        <section id="chatsSection" class="hidden max-w-xl mx-auto mt-4">
-            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-700">
-                <h2 class="text-2xl font-bold text-white">المحادثات</h2>
-                <button id="openUsersListBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center">
-                    <i class="fas fa-user-plus ml-2"></i>
-                    مستخدمون
-                </button>
-            </div>
-            <div id="chatListContainer" class="space-y-3">
-                </div>
-        </section>
-        
-        <section id="usersSection" class="hidden max-w-xl mx-auto mt-4">
-            <div class="flex justify-start items-center mb-4 pb-2 border-b border-gray-700">
-                <button id="backToChatsBtn" class="text-gray-400 hover:text-white transition mr-3">
-                    <i class="fas fa-arrow-right text-xl"></i>
-                </button>
-                <h2 class="text-2xl font-bold text-white">قائمة المستخدمين</h2>
-            </div>
-            <div id="usersListContainer" class="space-y-3">
-                </div>
-        </section>
 
     </main>
     
@@ -220,44 +187,15 @@
             حذف المنشور
         </button>
     </div>
-    
-    <footer class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-nav">
-        <nav class="max-w-xl mx-auto flex justify-around items-center h-16">
-            <button id="homeTab" onclick="switchTab('posts')" class="flex flex-col items-center justify-center w-1/2 p-2 text-blue-500 transition duration-300">
-                <i class="fas fa-home text-2xl"></i>
-                <span class="text-xs mt-1">الرئيسية</span>
-            </button>
-            <button id="chatsTab" onclick="switchTab('chats')" class="flex flex-col items-center justify-center w-1/2 p-2 text-gray-400 hover:text-blue-500 transition duration-300">
-                <i class="fas fa-comments text-2xl"></i>
-                <span class="text-xs mt-1">المحادثات</span>
-            </button>
-        </nav>
-    </footer>
 
 
     <script>
         let currentPostIdToDelete = null;
         let currentUserId = null; 
-        let activeWaveSurfer = null;
-        let activeVideo = null; 
+        let activeWaveSurfer = null; // لتتبع مشغل WaveSurfer النشط
+        let activeVideo = null; // لتتبع الفيديو النشط وإيقاف الآخر (جديد)
 
-        // عناصر الأقسام الرئيسية
-        const postsSection = document.getElementById('postsSection');
-        const chatsSection = document.getElementById('chatsSection');
-        const usersSection = document.getElementById('usersSection');
-        
-        // عناصر الحاويات
         const postsFeed = document.getElementById('postsFeed');
-        const chatListContainer = document.getElementById('chatListContainer');
-        const usersListContainer = document.getElementById('usersListContainer');
-        
-        // أزرار التنقل
-        const homeTab = document.getElementById('homeTab');
-        const chatsTab = document.getElementById('chatsTab');
-        const openUsersListBtn = document.getElementById('openUsersListBtn');
-        const backToChatsBtn = document.getElementById('backToChatsBtn');
-        
-        // ... (بقية العناصر كما هي)
         const deleteModal = document.getElementById('deleteModal');
         const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
         const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
@@ -276,48 +214,27 @@
         const newCommentInput = document.getElementById('newCommentInput');
         const postCommentBtn = document.getElementById('postCommentBtn');
         const commentError = document.getElementById('commentError');
-        let currentPostIdForComments = null;
-
-        // ******************** وظائف التبديل بين الأقسام ********************
+        let currentPostIdForComments = null; // لتتبع المنشور الحالي للتعليقات
         
-        function switchTab(target) {
-            // إخفاء جميع الأقسام
-            postsSection.classList.add('hidden');
-            chatsSection.classList.add('hidden');
-            usersSection.classList.add('hidden');
-            
-            // إعادة تعيين ألوان أزرار التنقل
-            homeTab.classList.remove('text-blue-500');
-            homeTab.classList.add('text-gray-400', 'hover:text-blue-500');
-            chatsTab.classList.remove('text-blue-500');
-            chatsTab.classList.add('text-gray-400', 'hover:text-blue-500');
+        // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
+        function toggleProfileDropdown(event) {
+            event.stopPropagation();
+            profileDropdown.classList.toggle('hidden');
+        }
 
-            // إظهار القسم المطلوب وتحديث لون الزر
-            if (target === 'posts') {
-                postsSection.classList.remove('hidden');
-                homeTab.classList.add('text-blue-500');
-                homeTab.classList.remove('text-gray-400', 'hover:text-blue-500');
-            } else if (target === 'chats') {
-                chatsSection.classList.remove('hidden');
-                chatsTab.classList.add('text-blue-500');
-                chatsTab.classList.remove('text-gray-400', 'hover:text-blue-500');
-                fetchAndDisplayChats();
-            } else if (target === 'users') {
-                usersSection.classList.remove('hidden');
-                chatsTab.classList.add('text-blue-500'); // يبقى لون زر المحادثات أزرق
-                fetchAndDisplayUsers();
+        function closeProfileDropdownOnClickOutside(event) {
+            if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
+                profileDropdown.classList.add('hidden');
             }
         }
-        
-        openUsersListBtn.addEventListener('click', () => switchTab('users'));
-        backToChatsBtn.addEventListener('click', () => switchTab('chats'));
 
+        document.addEventListener('click', closeProfileDropdownOnClickOutside);
         
         // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
-        // ... (وظائف openMediaViewer و closeMediaViewer كما هي)
         function openMediaViewer(url, type, event) {
             event.stopPropagation();
             
+            // مشغل الصوت والفيديو سيتعامل معه WaveSurfer أو المشغل المخصص في المنشور نفسه
             if (type === 'audio' || type === 'video') { 
                 return;
             }
@@ -345,14 +262,15 @@
                 mediaViewerContent.innerHTML = '';
             }
         }
-        
+
         // ******************** 2. وظائف حذف المنشور ********************
-        // ... (وظائف openDeleteModal و cancelDeleteBtn و confirmDeleteBtn كما هي)
+
         function openDeleteModal(postId, event) {
             event.stopPropagation();
             currentPostIdToDelete = postId;
             deleteMessage.classList.add('hidden');
             deleteModal.classList.remove('hidden');
+            // إغلاق قائمة الخيارات إذا كانت مفتوحة
             postMenu.classList.add('hidden');
         }
 
@@ -377,8 +295,10 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
+                    // حذف بطاقة المنشور من الواجهة
                     document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`).remove();
                     deleteModal.classList.add('hidden');
+                    // لا حاجة لإظهار رسالة نجاح طويلة
                 } else {
                     deleteMessage.textContent = result.error || 'فشل الحذف.';
                     deleteMessage.classList.remove('hidden');
@@ -393,25 +313,30 @@
             }
         });
 
-
         // ******************** 3. وظائف قائمة خيارات المنشور ********************
-        // ... (وظائف togglePostMenu و document.addEventListener('click') للقائمة كما هي)
+
         function togglePostMenu(postId, userId, event, menuButton) {
             event.stopPropagation();
             
+            // إغلاق أي قوائم مفتوحة أخرى
             if (!postMenu.classList.contains('hidden') && postMenu.dataset.postId === postId) {
                 postMenu.classList.add('hidden');
                 return;
             }
             
+            // تحديد موقع القائمة بالنسبة للزر الذي تم الضغط عليه
             const rect = menuButton.getBoundingClientRect();
             postMenu.style.top = `${rect.bottom + 5}px`;
+            // نستخدم rect.left هنا لتثبيت القائمة على يسار الزر (افتراضياً)
             postMenu.style.left = `${rect.left}px`;
             
+            // تخزين مُعرّف المنشور لزر الحذف
             postMenu.dataset.postId = postId;
 
+            // إظهار/إخفاء خيار الحذف بناءً على مالك المنشور
             if (userId === currentUserId) {
                 deleteOptionBtn.style.display = 'flex';
+                // تحديث وظيفة زر الحذف داخل القائمة
                 deleteOptionBtn.onclick = (e) => openDeleteModal(postId, e);
             } else {
                 deleteOptionBtn.style.display = 'none';
@@ -420,16 +345,15 @@
             postMenu.classList.remove('hidden');
         }
 
+        // إغلاق القائمة عند النقر خارجها
         document.addEventListener('click', (event) => {
             if (!postMenu.contains(event.target) && !event.target.closest('.post-menu-button')) {
                 postMenu.classList.add('hidden');
-                deleteModal.classList.add('hidden'); 
+                deleteModal.classList.add('hidden'); // للتأكد من إغلاق الحذف أيضاً
             }
         });
 
-
         // ******************** 4. وظائف WaveSurfer للصوت ********************
-        // ... (وظيفة initializePostWaveSurfer كما هي)
         function initializePostWaveSurfer(postId, url) {
             const container = document.getElementById(`waveform-${postId}`);
             if (!container) return;
@@ -491,11 +415,11 @@
                 });
             }
         }
-
-
-        // ******************** 4.1. وظائف تحكم الفيديو المخصصة ********************
-        // ... (جميع وظائف الفيديو: toggleVideoPlay, updateVideoProgress, updateVideoTimeDisplay, handleVideoEnd, formatVideoTime, seekVideo, toggleFullscreen كما هي)
+        
+        // ******************** 4.1. وظائف تحكم الفيديو المخصصة (جديد) ********************
+        
         function toggleVideoPlay(postId, event) {
+            // منع النقر من الانتشار إلى العناصر الأخرى (مثل ملء الشاشة)
             event.stopPropagation();
             
             const video = document.getElementById(`video-${postId}`);
@@ -505,6 +429,7 @@
 
             if (!video) return;
 
+            // 1. إيقاف تشغيل أي فيديو أو صوت آخر
             if (activeVideo && activeVideo !== video) {
                 const activePostId = activeVideo.id.split('-')[1];
                 const activeControlIcon = document.getElementById(`control-icon-${activePostId}`);
@@ -516,6 +441,7 @@
                 }
                 if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
                 
+                // إزالة مستمعي الأحداث للفيديو السابق
                 activeVideo.removeEventListener('timeupdate', updateVideoProgress);
                 activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
                 activeVideo.removeEventListener('ended', handleVideoEnd);
@@ -528,23 +454,27 @@
                 activeWaveSurfer = null;
             }
             
+            // 2. تبديل حالة التشغيل
             if (video.paused) {
                 video.play();
-                playOverlay.classList.add('hidden');
+                playOverlay.classList.add('hidden'); // إخفاء زر التشغيل المركزي
                 controlIcon.classList.remove('fa-play');
                 controlIcon.classList.add('fa-pause');
-                controlsBar.classList.remove('opacity-0');
+                controlsBar.classList.remove('opacity-0'); // إظهار شريط التحكم
                 activeVideo = video;
                 
+                // ربط مستمعي الأحداث
                 video.addEventListener('timeupdate', updateVideoProgress);
+                // يتم ربط loadedmetadata لضمان تحديث عرض الوقت
                 video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
                 video.addEventListener('ended', handleVideoEnd);
 
             } else {
                 video.pause();
-                playOverlay.classList.remove('hidden');
+                playOverlay.classList.remove('hidden'); // إظهار زر التشغيل المركزي
                 controlIcon.classList.remove('fa-pause');
                 controlIcon.classList.add('fa-play');
+                // controlsBar.classList.add('opacity-0'); // يمكن إخفاء شريط التحكم عند الإيقاف المؤقت
                 activeVideo = null;
             }
         }
@@ -557,9 +487,11 @@
 
             if (!video.duration || !progressBar || !timeDisplay) return;
 
+            // تحديث شريط التقدم
             const percent = (video.currentTime / video.duration) * 100;
             progressBar.style.width = `${percent}%`;
 
+            // تحديث عرض الوقت
             timeDisplay.textContent = `${formatVideoTime(video.currentTime)} / ${formatVideoTime(video.duration)}`;
         }
 
@@ -579,12 +511,14 @@
             const playOverlay = document.getElementById(`play-overlay-${postId}`);
             const controlIcon = document.getElementById(`control-icon-${postId}`);
             
+            // إعادة تعيين إلى البداية وإظهار زر التشغيل
             video.currentTime = 0;
             playOverlay.classList.remove('hidden'); 
             controlIcon.classList.remove('fa-pause');
             controlIcon.classList.add('fa-play');
             activeVideo = null;
             
+            // إزالة مستمعي الأحداث لتقليل استهلاك الذاكرة
             video.removeEventListener('timeupdate', updateVideoProgress);
             video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
             video.removeEventListener('ended', handleVideoEnd);
@@ -604,12 +538,15 @@
             
             if (!video || !video.duration) return;
 
+            // حساب النسبة المئوية للنقرة داخل الشريط
             const rect = progressContainer.getBoundingClientRect();
             const clickX = event.clientX - rect.left;
             const percentage = clickX / rect.width;
             
+            // تطبيق النسبة على مدة الفيديو
             video.currentTime = video.duration * percentage;
             
+            // تأكد من تشغيل الفيديو بعد التقديم/التأخير
             if (video.paused) {
                 toggleVideoPlay(postId, event);
             }
@@ -621,28 +558,33 @@
             if (video) {
                 if (video.requestFullscreen) {
                     video.requestFullscreen();
-                } else if (video.mozRequestFullScreen) {
+                } else if (video.mozRequestFullScreen) { /* Firefox */
                     video.mozRequestFullScreen();
-                } else if (video.webkitRequestFullscreen) {
+                } else if (video.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
                     video.webkitRequestFullscreen();
-                } else if (video.msRequestFullscreen) {
+                } else if (video.msRequestFullscreen) { /* IE/Edge */
                     video.msRequestFullscreen();
                 }
             }
         }
+        // ******************** نهاية وظائف تحكم الفيديو المخصصة ********************
+
 
         // ******************** 5. وظائف عرض المنشورات ********************
-        // ... (وظائف formatTimestamp, createPostCard, fetchAndDisplayPosts كما هي)
+
         function formatTimestamp(timestamp) {
             const date = new Date(timestamp);
             const now = new Date();
             const diffInHours = (now - date) / (1000 * 60 * 60);
 
             if (diffInHours < 24) {
+                // أقل من يوم: عرض الوقت فقط
                 return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
             } else if (diffInHours < 7 * 24) {
+                // أقل من أسبوع: عرض اليوم والوقت
                 return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
             } else {
+                // أكثر من أسبوع: عرض التاريخ
                 return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
             }
         }
@@ -658,6 +600,7 @@
                         </div>
                     `;
                 } else if (post.media.type === 'video') {
+                     // محتوى فيديو بتشغيل مباشر وأزرار مخصصة (مُحدَّث)
                      mediaContent = `
                         <div class="mt-3 relative w-full aspect-video rounded-lg overflow-hidden bg-black group">
                             <video id="video-${post.postId}" src="${post.media.url}" 
@@ -702,6 +645,7 @@
                 }
             }
 
+            // تحديد شكل زر الإعجاب الأولي بناءً على حالة الإعجاب (is_liked)
             const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
             const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
 
@@ -765,19 +709,19 @@
                     result.posts.forEach(post => {
                         postsFeed.innerHTML += createPostCard(post);
                         
+                        // جمع منشورات الصوت لتهيئة WaveSurfer
                         if (post.media && post.media.type === 'audio') {
                             audioPostsToInit.push({ postId: post.postId, url: post.media.url });
                         }
                     });
                     
+                    // تأخير تهيئة WaveSurfer للسماح للـ DOM بالتحميل
                     setTimeout(() => {
                         audioPostsToInit.forEach(ap => {
                             initializePostWaveSurfer(ap.postId, ap.url);
                         });
                     }, 100); 
 
-                } else {
-                    postsFeed.innerHTML = `<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات: ${result.error || 'غير معروف'}</div>`;
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -786,11 +730,13 @@
         }
         
         // ******************** 6. وظائف التفاعل (الإعجاب والتعليق) ********************
-        // ... (وظائف handleLike, handleComment كما هي)
+        
         async function handleLike(postId, buttonElement) {
+            console.log(`محاولة الإعجاب/إلغاء الإعجاب للمنشور: ${postId}`); 
             
             const likeIcon = buttonElement.querySelector('.like-icon');
             
+            // تعطيل الزر مؤقتاً لمنع النقر المتعدد
             buttonElement.disabled = true;
 
             try {
@@ -802,11 +748,14 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
+                    // تحديث عداد الإعجابات في الواجهة الأمامية
                     const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
                     const likesSpan = postCard.querySelector('.text-sm span:first-child');
                     
+                    // تحديث النص وشكل الأيقونة
                     likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
                     
+                    // تحديث شكل زر الإعجاب: قلب أحمر مملوء / قلب رمادي فارغ
                     if (result.action === 'liked') {
                         likeIcon.classList.remove('far', 'text-gray-400');
                         likeIcon.classList.add('fas', 'text-red-500');
@@ -828,6 +777,7 @@
             } catch (error) {
                 console.error('Error during like operation:', error);
             } finally {
+                // إعادة تفعيل الزر
                 buttonElement.disabled = false;
             }
         }
@@ -846,7 +796,7 @@
         });
 
         // ******************** 7. وظائف التعليقات ********************
-        // ... (وظائف createCommentHtml, fetchAndDisplayComments, postComment كما هي)
+
         function createCommentHtml(comment) {
             const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -882,6 +832,7 @@
                         result.comments.forEach(comment => {
                             commentsList.innerHTML += createCommentHtml(comment);
                         });
+                        // التمرير إلى أسفل بعد التحميل
                         commentsList.scrollTop = commentsList.scrollHeight;
                     }
                 } else {
@@ -915,16 +866,19 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
+                    // 1. تحديث قائمة التعليقات مباشرةً
                     if (commentsList.querySelector('.text-center.text-gray-500')) {
-                        commentsList.innerHTML = '';
+                        commentsList.innerHTML = ''; // إزالة رسالة "لا توجد تعليقات"
                     }
                     commentsList.innerHTML += createCommentHtml(result.comment);
                     newCommentInput.value = '';
                     
+                    // 2. تحديث عداد التعليقات في بطاقة المنشور
                     const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
                     const commentsSpan = postCard.querySelector('.text-sm span:last-child');
-                    commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`;
+                    commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`; // تم تحديث الأيقونة هنا أيضاً
                     
+                    // 3. التمرير إلى أسفل
                     commentsList.scrollTop = commentsList.scrollHeight;
 
                 } else {
@@ -937,138 +891,18 @@
                 commentError.classList.remove('hidden');
             } finally {
                 postCommentBtn.disabled = false;
-                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
+                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>'; // تم تحديث أيقونة الزر هنا
             }
         }
         
         postCommentBtn.addEventListener('click', postComment);
         newCommentInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                e.preventDefault();
+                e.preventDefault(); // منع إضافة سطر جديد في الإدخال
                 postComment();
             }
         });
         
-        // ******************** 8. وظائف قائمة المحادثات (الجديدة) ********************
-        
-        function createChatListItem(chat) {
-            const contact = chat.contact_profile;
-            const defaultPic = 'https://via.placeholder.com/40/000000/FFFFFF?text=U';
-            
-            // تحويل الطابع الزمني للرسالة الأخيرة إلى صيغة ودودة
-            let lastMessageTime = '';
-            if (chat.last_message_timestamp) {
-                const date = new Date(chat.last_message_timestamp);
-                lastMessageTime = date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-                // يمكن إضافة منطق لعرض التاريخ إذا كان قديماً
-            }
-            
-            return `
-                <div class="flex items-center p-3 rounded-xl glass-post-card cursor-pointer hover:bg-white/10 transition duration-200"
-                     onclick="window.location.href = '/chat?contact_id=${contact.id}'">
-                    
-                    <img src="${contact.profile_picture_url || defaultPic}" alt="${contact.username}" class="w-12 h-12 rounded-full object-cover ml-4 border border-blue-500 flex-shrink-0">
-                    
-                    <div class="flex-grow min-w-0">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-white font-semibold truncate">${contact.username || 'مستخدم غير معروف'}</span>
-                            <span class="text-gray-400 text-xs flex-shrink-0">${lastMessageTime}</span>
-                        </div>
-                        <p class="text-gray-400 text-sm truncate">${chat.last_message_content || 'ابدأ محادثة...'}</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        async function fetchAndDisplayChats() {
-            chatListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...</div>';
-
-            try {
-                const response = await fetch('/api/chats');
-                const result = await response.json();
-
-                chatListContainer.innerHTML = '';
-
-                if (response.ok && result.ok) {
-                    if (result.chats.length === 0) {
-                        chatListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد محادثات لديك بعد. ابدأ محادثة جديدة من قائمة المستخدمين.</div>';
-                    } else {
-                        // ترتيب المحادثات حسب آخر طابع زمني
-                        result.chats.sort((a, b) => (b.last_message_timestamp || 0) - (a.last_message_timestamp || 0));
-                        
-                        result.chats.forEach(chat => {
-                            chatListContainer.innerHTML += createChatListItem(chat);
-                        });
-                    }
-                } else {
-                    chatListContainer.innerHTML = `<div class="text-center text-red-500 p-4">فشل في جلب قائمة المحادثات: ${result.error || 'غير معروف'}</div>`;
-                }
-            } catch (error) {
-                console.error('Error fetching chats:', error);
-                chatListContainer.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في الاتصال بالخادم.</div>';
-            }
-        }
-        
-        // ******************** 9. وظائف قائمة المستخدمين (الجديدة) ********************
-        
-        function createUsersListItem(user) {
-            const defaultPic = 'https://via.placeholder.com/40/000000/FFFFFF?text=U';
-
-            return `
-                <div class="flex items-center p-3 rounded-xl glass-post-card cursor-pointer hover:bg-blue-500/10 transition duration-200"
-                     onclick="window.location.href = '/chat?contact_id=${user.id}'">
-                    
-                    <img src="${user.profile_picture_url || defaultPic}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover ml-4 border border-gray-600 flex-shrink-0">
-                    
-                    <div class="flex-grow min-w-0">
-                        <span class="text-white font-semibold truncate">${user.username || 'مستخدم غير معروف'}</span>
-                    </div>
-                    <i class="fas fa-arrow-left text-gray-400"></i>
-                </div>
-            `;
-        }
-
-        async function fetchAndDisplayUsers() {
-            usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المستخدمين...</div>';
-
-            try {
-                const response = await fetch('/api/users');
-                const result = await response.json();
-
-                usersListContainer.innerHTML = '';
-
-                if (response.ok && result.ok) {
-                    if (result.users.length === 0) {
-                        usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">لا يوجد مستخدمون آخرون في النظام.</div>';
-                    } else {
-                        result.users.forEach(user => {
-                            usersListContainer.innerHTML += createUsersListItem(user);
-                        });
-                    }
-                } else {
-                    usersListContainer.innerHTML = `<div class="text-center text-red-500 p-4">فشل في جلب قائمة المستخدمين: ${result.error || 'غير معروف'}</div>`;
-                }
-            } catch (error) {
-                console.error('Error fetching users:', error);
-                usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في الاتصال بالخادم.</div>';
-            }
-        }
-        
-        // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
-        function toggleProfileDropdown(event) {
-            event.stopPropagation();
-            profileDropdown.classList.toggle('hidden');
-        }
-
-        function closeProfileDropdownOnClickOutside(event) {
-            if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
-                profileDropdown.classList.add('hidden');
-            }
-        }
-
-        document.addEventListener('click', closeProfileDropdownOnClickOutside);
-        
-        // ******************** تهيئة الصفحة ********************
         document.addEventListener('DOMContentLoaded', () => {
             fetch('/api/profile')
                 .then(response => response.ok ? response.json() : null)
@@ -1081,8 +915,7 @@
                     }
                 }).catch(console.error);
                 
-            // افتراضياً، نعرض قسم المنشورات عند التحميل
-            switchTab('posts'); 
+            fetchAndDisplayPosts();
         });
         
     </script>
