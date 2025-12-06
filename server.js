@@ -640,7 +640,53 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
+// 7. جلب منشورات مستخدم معين (جديد)
+app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
+    const currentUserId = req.session.userId;
+    const { userId } = req.params;
+    
+    try {
+        const postsSnap = await db.ref('posts')
+            .orderByChild('userId')
+            .equalTo(userId)
+            .once('value');
 
+        let posts = [];
+        postsSnap.forEach(childSnap => {
+            posts.push(childSnap.val());
+        });
+        posts.reverse(); // الأحدث أولاً
+
+        // جلب بيانات المستخدم لـ "منشورات المستخدم" (يجب أن يكون ملف شخصي واحد هنا)
+        const profileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const profileData = profileSnap.val();
+        const userProfile = {
+            username: profileData?.username || 'مستخدم',
+            profile_picture_url: profileData?.profile_picture_url || 'https://via.placeholder.com/40'
+        };
+
+        // التحقق من الإعجابات
+        const likedStatuses = {};
+        const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
+        const likeSnapshots = await Promise.all(likePromises);
+        
+        likeSnapshots.forEach((snap, index) => {
+            likedStatuses[posts[index].postId] = snap.val() !== null;
+        });
+
+        const finalPosts = posts.map(post => ({
+            ...post,
+            is_liked: likedStatuses[post.postId] || false,
+            user: userProfile 
+        }));
+
+        res.json({ ok: true, posts: finalPosts });
+
+    } catch (error) {
+        console.error('Error fetching user posts:', error);
+        res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
+    }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
