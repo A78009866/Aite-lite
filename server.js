@@ -124,7 +124,11 @@ app.get('/profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirnam
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
 app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'register.html')); });
-
+// في ملف server.js، أضف هذا المسار (إذا لم يكن موجوداً):
+app.get('/edit_profile', requireAuth, (req, res) => { 
+    // يجب أن تكون لديك صفحة HTML لـ edit_profile.html
+    res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); 
+});
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
