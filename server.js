@@ -65,9 +65,6 @@ const db = getDatabase();
 const app = express();
 const port = 3000;
 
-// **هذا السطر يقدم الملفات الثابتة من مجلد 'views'**
-app.use(express.static('views')); //
-
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
@@ -120,7 +117,6 @@ app.get('/check-status', (req, res) => {
   }
 });
 
-// المسارات التي تستخدم chat_list.html
 app.get('/chat_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat_list.html')); });
 app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'users_list.html')); });
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
