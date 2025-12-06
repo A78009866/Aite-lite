@@ -1,3 +1,4 @@
+
 // server.js
 
 // تشغيل مكتبة dotenv لقراءة متغيرات البيئة من ملف .env محلياً
@@ -16,9 +17,6 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// ✅ توحيد المسار الافتراضي للصورة ليتوافق مع الملف المحلي (views/profile_pics/default_profile.png)
-const DEFAULT_PROFILE_PIC_URL = '/profile_pics/default_profile.png'; 
-
 // إعدادات Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -32,11 +30,9 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     let folderName = 'general';
-    // التعديل: إضافة فحص لـ file.fieldname لصور البروفايل والغلاف
-    if (req.originalUrl.includes('/register') || file.fieldname === 'profile_picture') folderName = 'profile_pics';
+    if (req.originalUrl.includes('/register')) folderName = 'profile_pics';
     else if (req.originalUrl.includes('/messages/send')) folderName = 'chat_media';
     else if (req.originalUrl.includes('/api/posts/create')) folderName = 'post_media';
-    else if (file.fieldname === 'cover_photo') folderName = 'cover_photos'; 
     
     let format = undefined;
     if (file.mimetype.startsWith('audio/')) {
@@ -68,9 +64,6 @@ const db = getDatabase();
 
 const app = express();
 const port = 3000;
-
-// ✅ تفعيل خدمة الملفات الثابتة من مجلد views (لجعل الصورة الافتراضية المحلية تعمل)
-app.use(express.static(path.join(__dirname, 'views'))); 
 
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
@@ -129,11 +122,14 @@ app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dir
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'profile.html')); });
-app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); }); 
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
 app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'register.html')); });
-
+// في ملف server.js، أضف هذا المسار (إذا لم يكن موجوداً):
+app.get('/edit_profile', requireAuth, (req, res) => { 
+    // يجب أن تكون لديك صفحة HTML لـ edit_profile.html
+    res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); 
+});
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
@@ -152,7 +148,7 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', upload.single('profile_picture'), async (req, res) => {
   const { username, password } = req.body;
-  let profile_picture_url = DEFAULT_PROFILE_PIC_URL; 
+  let profile_picture_url = 'https://via.placeholder.com/150';
 
   try {
     if (!username || !password) {
@@ -213,7 +209,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
 
     const finalChats = chats.map(chat => ({
       ...chat,
-      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: DEFAULT_PROFILE_PIC_URL }
+      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40' }
     }));
 
     finalChats.sort((a, b) => b.last_message_timestamp - a.last_message_timestamp);
@@ -244,6 +240,7 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
       messages.push(childSnap.val());
     });
     
+    // إرسال الرسائل بالترتيب الزمني (الأقدم -> الأحدث)
     res.json({ ok: true, messages: messages }); 
 
   } catch (error) {
@@ -299,7 +296,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
             last_message_timestamp: timestamp,
             contact_id: senderId, 
             unread_count: admin.database.ServerValue.increment(1),
-            last_message_sender_id: senderId
+            last_message_sender_id: senderId // ✅ ضروري لتحديد من أرسل آخر رسالة
         });
 
         // تحديث ملخص الدردشة للمرسل (العداد يبقى 0)
@@ -308,7 +305,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
             last_message_timestamp: timestamp,
             contact_id: contactId,
             unread_count: 0, 
-            last_message_sender_id: senderId
+            last_message_sender_id: senderId // ✅ ضروري لتحديد من أرسل آخر رسالة
         });
         
         messageData.timestamp = Date.now(); 
@@ -348,27 +345,31 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
     }
 });
 
-// ---------------- API: Users & Profile ----------------
+// ---------------- API: Users & Profile (المسار المُحسَّن) ----------------
 app.get('/api/users', requireAuth, async (req, res) => {
     const currentUserId = req.session.userId;
     try {
+        // 1. جلب جميع المستخدمين
         const profilesSnap = await db.ref('profiles').once('value');
         const profiles = profilesSnap.val() || {};
         const allUsers = Object.values(profiles).filter(user => user.id !== currentUserId);
         
+        // 2. جلب جميع ملخصات المحادثات للمستخدم الحالي (استعلام واحد سريع)
         const allChatsSnap = await db.ref(`chats/${currentUserId}`).once('value');
         const allChats = allChatsSnap.val() || {};
         
+        // 3. دمج بيانات المستخدم مع ملخص المحادثة (بدون استعلامات إضافية مكلفة)
         const usersList = allUsers.map((user) => {
             const contactId = user.id;
             const chatSummary = allChats[contactId] || {};
             
+            // بناء كائن الرسالة الأخيرة من بيانات ملخص الدردشة
             let lastMessage = null;
             if (chatSummary.last_message_content) {
                 lastMessage = {
                     content: chatSummary.last_message_content,
                     timestamp: chatSummary.last_message_timestamp,
-                    senderId: chatSummary.last_message_sender_id
+                    senderId: chatSummary.last_message_sender_id // نعتمد على هذا الحقل
                 };
             }
 
@@ -376,7 +377,8 @@ app.get('/api/users', requireAuth, async (req, res) => {
                 id: user.id,
                 username: user.username,
                 full_name: user.full_name,
-                profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL, 
+                profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40',
+                
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0
             };
@@ -389,30 +391,17 @@ app.get('/api/users', requireAuth, async (req, res) => {
         res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المستخدمين. (راجع سجلات الخادم)' });
     }
 });
+// -------------------------------------------------------------------------
 
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   const requestedUserId = req.query.userId || currentUserId; 
-  
   try {
     const profileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
     const profileData = profileSnap.val();
-    
-    if (!profileData) return res.status(404).json({ ok: false, error: 'Profile not found' });
-    
-    // 1. تعيين الصورة الافتراضية إذا كانت مفقودة
-    if (!profileData.profile_picture_url || profileData.profile_picture_url === 'https://via.placeholder.com/150') {
-        profileData.profile_picture_url = DEFAULT_PROFILE_PIC_URL;
-    }
-    
-    // 2. تعيين السيرة الذاتية فارغة إذا كانت مفقودة
-    if (!profileData.bio) {
-        profileData.bio = '';
-    }
-
+    if (!profileData) return res.status(404).json({ ok: false });
     res.json({ ok: true, ...profileData, is_owner: requestedUserId === currentUserId });
   } catch (error) {
-    console.error('Error fetching profile:', error);
     res.status(500).json({ ok: false });
   }
 });
@@ -429,76 +418,9 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     }
 });
 
-const uploadProfileFields = upload.fields([
-    { name: 'profile_picture', maxCount: 1 },
-    { name: 'cover_photo', maxCount: 1 }
-]);
-
-app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) => {
-    const userId = req.session.userId;
-    const { full_name, username, bio } = req.body;
-    
-    if (!username || !full_name) {
-        return res.status(400).json({ ok: false, error: 'اسم المستخدم والاسم الكامل مطلوبان.' });
-    }
-
-    const updates = {
-        full_name: full_name,
-        bio: bio || '',
-        username: username,
-    };
-
-    try {
-        const currentProfileSnap = await db.ref(`profiles/${userId}`).once('value');
-        const currentUsername = currentProfileSnap.val().username;
-
-        if (username !== currentUsername) {
-            const existingUsernameSnap = await db.ref('profiles')
-                .orderByChild('username')
-                .equalTo(username)
-                .once('value');
-
-            let isUsernameTaken = false;
-            existingUsernameSnap.forEach(snap => {
-                if (snap.key !== userId) {
-                    isUsernameTaken = true;
-                }
-            });
-
-            if (isUsernameTaken) {
-                return res.status(409).json({ ok: false, error: 'اسم المستخدم هذا مأخوذ بالفعل.' });
-            }
-            
-            const newEmail = `${username}@trimer.io`;
-            await firebaseAuth.updateUser(userId, {
-                displayName: username,
-                email: newEmail
-            });
-            updates.email = newEmail;
-        }
-
-        if (req.files && req.files.profile_picture) {
-            updates.profile_picture_url = req.files.profile_picture[0].path;
-        }
-        if (req.files && req.files.cover_photo) {
-            updates.cover_photo_url = req.files.cover_photo[0].path;
-        }
-
-        await db.ref(`profiles/${userId}`).update(updates);
-
-        res.json({ ok: true, message: 'تم تحديث الملف الشخصي بنجاح.' });
-
-    } catch (error) {
-        console.error('Error updating profile:', error);
-        if (error.code === 'auth/invalid-email' || error.code === 'auth/email-already-in-use' || error.message.includes('A user with the provided email already exists')) {
-             return res.status(409).json({ ok: false, error: 'اسم المستخدم غير صالح أو مأخوذ.' });
-        }
-        res.status(500).json({ ok: false, error: 'فشل في تحديث الملف الشخصي.' });
-    }
-});
-
 // ---------------- API: Posts (Full Implementation) ----------------
 
+// 1. إنشاء منشور جديد
 app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
   const userId = req.session.userId;
   const content = req.body.content ? req.body.content.trim() : '';
@@ -546,6 +468,7 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   }
 });
 
+// 2. جلب المنشورات (الرئيسية)
 app.get('/api/posts', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
@@ -558,11 +481,11 @@ app.get('/api/posts', requireAuth, async (req, res) => {
     postsSnap.forEach(childSnap => {
       posts.push(childSnap.val());
     });
-    posts.reverse(); 
+    posts.reverse(); // الأحدث أولاً
 
     const userIds = [...new Set(posts.map(p => p.userId))];
     const profiles = {};
-    const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL;
+    const defaultProfileUrl = 'https://via.placeholder.com/40';
 
     const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
     const profileSnapshots = await Promise.all(profilePromises);
@@ -571,6 +494,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
         profiles[userIds[index]] = snap.val();
     });
     
+    // التحقق من الإعجابات
     const likedStatuses = {};
     const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
     const likeSnapshots = await Promise.all(likePromises);
@@ -596,56 +520,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
-    const currentUserId = req.session.userId;
-    const requestedUserId = req.params.userId;
-    
-    try {
-        const postsSnap = await db.ref('posts')
-            .orderByChild('userId')
-            .equalTo(requestedUserId)
-            .once('value');
-            
-        let posts = [];
-        postsSnap.forEach(childSnap => {
-            posts.push(childSnap.val());
-        });
-        posts.reverse(); 
-        
-        const userProfileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
-        const userProfile = userProfileSnap.val();
-        
-        if (!userProfile) {
-            return res.status(404).json({ ok: false, error: 'User profile not found.' });
-        }
-        
-        const likedStatuses = {};
-        const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
-        const likeSnapshots = await Promise.all(likePromises);
-        
-        likeSnapshots.forEach((snap, index) => {
-            likedStatuses[posts[index].postId] = snap.val() !== null;
-        });
-        
-        const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL; 
-
-        const finalPosts = posts.map(post => ({
-            ...post,
-            is_liked: likedStatuses[post.postId] || false,
-            user: {
-                username: userProfile?.username || 'مستخدم',
-                profile_picture_url: userProfile?.profile_picture_url || defaultProfileUrl
-            }
-        }));
-
-        res.json({ ok: true, posts: finalPosts });
-        
-    } catch (error) {
-        console.error('Error fetching user posts:', error);
-        res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
-    }
-});
-
+// 3. الإعجاب بمنشور
 app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
@@ -687,6 +562,7 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   }
 });
 
+// 4. التعليق على منشور
 app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
@@ -711,7 +587,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       timestamp: admin.database.ServerValue.TIMESTAMP,
       user: {
         username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+        profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/40'
       }
     };
 
@@ -730,6 +606,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   }
 });
 
+// 5. جلب تعليقات منشور
 app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
   const postId = req.params.postId;
   try {
@@ -746,6 +623,7 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
   }
 });
 
+// 6. حذف منشور
 app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
@@ -767,7 +645,53 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
+// 7. جلب منشورات مستخدم معين (جديد)
+app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
+    const currentUserId = req.session.userId;
+    const { userId } = req.params;
+    
+    try {
+        const postsSnap = await db.ref('posts')
+            .orderByChild('userId')
+            .equalTo(userId)
+            .once('value');
 
+        let posts = [];
+        postsSnap.forEach(childSnap => {
+            posts.push(childSnap.val());
+        });
+        posts.reverse(); // الأحدث أولاً
+
+        // جلب بيانات المستخدم لـ "منشورات المستخدم" (يجب أن يكون ملف شخصي واحد هنا)
+        const profileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const profileData = profileSnap.val();
+        const userProfile = {
+            username: profileData?.username || 'مستخدم',
+            profile_picture_url: profileData?.profile_picture_url || 'https://via.placeholder.com/40'
+        };
+
+        // التحقق من الإعجابات
+        const likedStatuses = {};
+        const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
+        const likeSnapshots = await Promise.all(likePromises);
+        
+        likeSnapshots.forEach((snap, index) => {
+            likedStatuses[posts[index].postId] = snap.val() !== null;
+        });
+
+        const finalPosts = posts.map(post => ({
+            ...post,
+            is_liked: likedStatuses[post.postId] || false,
+            user: userProfile 
+        }));
+
+        res.json({ ok: true, posts: finalPosts });
+
+    } catch (error) {
+        console.error('Error fetching user posts:', error);
+        res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
+    }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
