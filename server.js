@@ -122,7 +122,7 @@ app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dir
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'profile.html')); });
-// **تمت الإضافة: مسار صفحة التعديل**
+// **مسار صفحة التعديل**
 app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); });
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
@@ -416,7 +416,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     }
 });
 
-// **المسار الجديد لتعديل الملف الشخصي (PUT /api/profile/edit)**
+// **مسار تعديل الملف الشخصي (PUT /api/profile/edit)**
 const uploadProfileFields = upload.fields([
     { name: 'profile_picture', maxCount: 1 },
     { name: 'cover_photo', maxCount: 1 }
@@ -592,6 +592,58 @@ app.get('/api/posts', requireAuth, async (req, res) => {
     console.error('Error fetching posts:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
   }
+});
+
+// 2.5. جلب منشورات مستخدم معين (جديد)
+app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
+    const currentUserId = req.session.userId;
+    const requestedUserId = req.params.userId;
+    
+    try {
+        const postsSnap = await db.ref('posts')
+            .orderByChild('userId')
+            .equalTo(requestedUserId)
+            .once('value');
+            
+        let posts = [];
+        postsSnap.forEach(childSnap => {
+            posts.push(childSnap.val());
+        });
+        posts.reverse(); // الأحدث أولاً
+        
+        if (posts.length === 0) {
+             return res.json({ ok: true, posts: [] });
+        }
+
+        const userProfileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
+        const userProfile = userProfileSnap.val();
+        
+        // التحقق من الإعجابات
+        const likedStatuses = {};
+        const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
+        const likeSnapshots = await Promise.all(likePromises);
+        
+        likeSnapshots.forEach((snap, index) => {
+            likedStatuses[posts[index].postId] = snap.val() !== null;
+        });
+        
+        const defaultProfileUrl = 'https://via.placeholder.com/40';
+
+        const finalPosts = posts.map(post => ({
+            ...post,
+            is_liked: likedStatuses[post.postId] || false,
+            user: {
+                username: userProfile?.username || 'مستخدم',
+                profile_picture_url: userProfile?.profile_picture_url || defaultProfileUrl
+            }
+        }));
+
+        res.json({ ok: true, posts: finalPosts });
+        
+    } catch (error) {
+        console.error('Error fetching user posts:', error);
+        res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
+    }
 });
 
 // 3. الإعجاب بمنشور
