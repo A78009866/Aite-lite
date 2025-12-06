@@ -1,4 +1,3 @@
-
 // server.js
 
 // تشغيل مكتبة dotenv لقراءة متغيرات البيئة من ملف .env محلياً
@@ -30,9 +29,10 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     let folderName = 'general';
-    if (req.originalUrl.includes('/register')) folderName = 'profile_pics';
+    if (req.originalUrl.includes('/register') || file.fieldname === 'profile_picture') folderName = 'profile_pics';
     else if (req.originalUrl.includes('/messages/send')) folderName = 'chat_media';
     else if (req.originalUrl.includes('/api/posts/create')) folderName = 'post_media';
+    else if (file.fieldname === 'cover_photo') folderName = 'cover_photos'; // مجلد جديد لصور الغلاف
     
     let format = undefined;
     if (file.mimetype.startsWith('audio/')) {
@@ -122,14 +122,12 @@ app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dir
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'profile.html')); });
+// **تمت الإضافة: مسار صفحة التعديل**
+app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); });
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
 app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'register.html')); });
-// في ملف server.js، أضف هذا المسار (إذا لم يكن موجوداً):
-app.get('/edit_profile', requireAuth, (req, res) => { 
-    // يجب أن تكون لديك صفحة HTML لـ edit_profile.html
-    res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); 
-});
+
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
@@ -345,7 +343,7 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
     }
 });
 
-// ---------------- API: Users & Profile (المسار المُحسَّن) ----------------
+// ---------------- API: Users & Profile ----------------
 app.get('/api/users', requireAuth, async (req, res) => {
     const currentUserId = req.session.userId;
     try {
@@ -417,6 +415,82 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
         res.status(500).json({ ok: false });
     }
 });
+
+// **المسار الجديد لتعديل الملف الشخصي (PUT /api/profile/edit)**
+const uploadProfileFields = upload.fields([
+    { name: 'profile_picture', maxCount: 1 },
+    { name: 'cover_photo', maxCount: 1 }
+]);
+
+app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) => {
+    const userId = req.session.userId;
+    const { full_name, username, bio } = req.body;
+    
+    if (!username || !full_name) {
+        return res.status(400).json({ ok: false, error: 'اسم المستخدم والاسم الكامل مطلوبان.' });
+    }
+
+    const updates = {
+        full_name: full_name,
+        bio: bio,
+        username: username,
+    };
+
+    try {
+        // 1. التحقق من تغيير اسم المستخدم (Username Uniqueness Check)
+        const currentProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const currentUsername = currentProfileSnap.val().username;
+
+        if (username !== currentUsername) {
+            // تحقق مما إذا كان اسم المستخدم الجديد مأخوذًا بالفعل
+            const existingUsernameSnap = await db.ref('profiles')
+                .orderByChild('username')
+                .equalTo(username)
+                .once('value');
+
+            let isUsernameTaken = false;
+            existingUsernameSnap.forEach(snap => {
+                if (snap.key !== userId) {
+                    isUsernameTaken = true;
+                }
+            });
+
+            if (isUsernameTaken) {
+                return res.status(409).json({ ok: false, error: 'اسم المستخدم هذا مأخوذ بالفعل.' });
+            }
+            
+            // تحديث اسم العرض (displayName) والبريد الإلكتروني في Firebase Auth
+            const newEmail = `${username}@trimer.io`;
+            await firebaseAuth.updateUser(userId, {
+                displayName: username,
+                email: newEmail
+            });
+            updates.email = newEmail;
+        }
+
+        // 2. معالجة تحميل الصور (Cloudinary URLs)
+        if (req.files && req.files.profile_picture) {
+            updates.profile_picture_url = req.files.profile_picture[0].path;
+        }
+        if (req.files && req.files.cover_photo) {
+            updates.cover_photo_url = req.files.cover_photo[0].path;
+        }
+
+        // 3. تحديث البيانات في قاعدة البيانات
+        await db.ref(`profiles/${userId}`).update(updates);
+
+        res.json({ ok: true, message: 'تم تحديث الملف الشخصي بنجاح.' });
+
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        // التعامل مع أخطاء Firebase Auth (مثل اسم مستخدم/بريد إلكتروني غير صالح)
+        if (error.code === 'auth/invalid-email' || error.code === 'auth/email-already-in-use' || error.message.includes('A user with the provided email already exists')) {
+             return res.status(409).json({ ok: false, error: 'اسم المستخدم غير صالح أو مأخوذ.' });
+        }
+        res.status(500).json({ ok: false, error: 'فشل في تحديث الملف الشخصي.' });
+    }
+});
+// -------------------------------------------------------------------------
 
 // ---------------- API: Posts (Full Implementation) ----------------
 
@@ -645,53 +719,7 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
-// 7. جلب منشورات مستخدم معين (جديد)
-app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
-    const currentUserId = req.session.userId;
-    const { userId } = req.params;
-    
-    try {
-        const postsSnap = await db.ref('posts')
-            .orderByChild('userId')
-            .equalTo(userId)
-            .once('value');
 
-        let posts = [];
-        postsSnap.forEach(childSnap => {
-            posts.push(childSnap.val());
-        });
-        posts.reverse(); // الأحدث أولاً
-
-        // جلب بيانات المستخدم لـ "منشورات المستخدم" (يجب أن يكون ملف شخصي واحد هنا)
-        const profileSnap = await db.ref(`profiles/${userId}`).once('value');
-        const profileData = profileSnap.val();
-        const userProfile = {
-            username: profileData?.username || 'مستخدم',
-            profile_picture_url: profileData?.profile_picture_url || 'https://via.placeholder.com/40'
-        };
-
-        // التحقق من الإعجابات
-        const likedStatuses = {};
-        const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
-        const likeSnapshots = await Promise.all(likePromises);
-        
-        likeSnapshots.forEach((snap, index) => {
-            likedStatuses[posts[index].postId] = snap.val() !== null;
-        });
-
-        const finalPosts = posts.map(post => ({
-            ...post,
-            is_liked: likedStatuses[post.postId] || false,
-            user: userProfile 
-        }));
-
-        res.json({ ok: true, posts: finalPosts });
-
-    } catch (error) {
-        console.error('Error fetching user posts:', error);
-        res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
-    }
-});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
