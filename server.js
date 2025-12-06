@@ -29,10 +29,11 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     let folderName = 'general';
+    // ✅ تحديث: لتعيين مجلد التحميل بناءً على اسم الحقل (لصور البروفايل والغلاف)
     if (req.originalUrl.includes('/register') || file.fieldname === 'profile_picture') folderName = 'profile_pics';
     else if (req.originalUrl.includes('/messages/send')) folderName = 'chat_media';
     else if (req.originalUrl.includes('/api/posts/create')) folderName = 'post_media';
-    else if (file.fieldname === 'cover_photo') folderName = 'cover_photos'; // مجلد جديد لصور الغلاف
+    else if (file.fieldname === 'cover_photo') folderName = 'cover_photos'; 
     
     let format = undefined;
     if (file.mimetype.startsWith('audio/')) {
@@ -122,8 +123,8 @@ app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dir
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'profile.html')); });
-// **مسار صفحة التعديل**
-app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); });
+// ✅ تمت الإضافة: مسار صفحة التعديل
+app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); }); 
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
 app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'register.html')); });
@@ -394,10 +395,25 @@ app.get('/api/users', requireAuth, async (req, res) => {
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   const requestedUserId = req.query.userId || currentUserId; 
+  // ✅ المسار الافتراضي للصورة
+  const defaultProfilePicPath = '/views/profile_pics/default_profile.png'; 
+  
   try {
     const profileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
     const profileData = profileSnap.val();
+    
     if (!profileData) return res.status(404).json({ ok: false });
+    
+    // ✅ 1. تعيين الصورة الافتراضية إذا كانت مفقودة
+    if (!profileData.profile_picture_url) {
+        profileData.profile_picture_url = defaultProfilePicPath;
+    }
+    
+    // ✅ 2. تعيين السيرة الذاتية فارغة إذا كانت مفقودة (إذا كانت null/undefined)
+    if (!profileData.bio) {
+        profileData.bio = '';
+    }
+
     res.json({ ok: true, ...profileData, is_owner: requestedUserId === currentUserId });
   } catch (error) {
     res.status(500).json({ ok: false });
@@ -416,7 +432,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     }
 });
 
-// **مسار تعديل الملف الشخصي (PUT /api/profile/edit)**
+// **✅ تمت الإضافة: مسار تعديل الملف الشخصي (PUT /api/profile/edit)**
 const uploadProfileFields = upload.fields([
     { name: 'profile_picture', maxCount: 1 },
     { name: 'cover_photo', maxCount: 1 }
@@ -594,7 +610,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
-// 2.5. جلب منشورات مستخدم معين (جديد)
+// **✅ تمت الإضافة: جلب منشورات مستخدم معين**
 app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
     const currentUserId = req.session.userId;
     const requestedUserId = req.params.userId;
@@ -609,7 +625,7 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
         postsSnap.forEach(childSnap => {
             posts.push(childSnap.val());
         });
-        posts.reverse(); // الأحدث أولاً
+        posts.reverse(); 
         
         if (posts.length === 0) {
              return res.json({ ok: true, posts: [] });
@@ -627,7 +643,7 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
             likedStatuses[posts[index].postId] = snap.val() !== null;
         });
         
-        const defaultProfileUrl = 'https://via.placeholder.com/40';
+        const defaultProfileUrl = '/views/profile_pics/default_profile.png'; // تم استخدام المسار الافتراضي الجديد هنا أيضًا
 
         const finalPosts = posts.map(post => ({
             ...post,
