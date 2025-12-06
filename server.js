@@ -64,7 +64,7 @@ const db = getDatabase();
 
 const app = express();
 const port = 3000;
-
+app.use(express.static('views'));
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
