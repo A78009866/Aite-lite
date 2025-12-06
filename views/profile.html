@@ -144,11 +144,10 @@
                             <p id="profileBio" class="text-gray-300 mt-1 whitespace-pre-wrap">السيرة الذاتية...</p>
                         </div>
                         
-                        <button id="editProfileButton" 
-                                class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-md">
-                            <i class="fas fa-pencil-alt ml-2"></i>
-                            تعديل الملف
-                        </button>
+                        <a id="editProfileButton" href="/edit_profile" 
+                                class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-4 rounded-lg transition duration-300 flex items-center text-sm shadow-md">
+                            تعديل
+                        </a>
                         
                         <a id="chatButton" 
                                 class="hidden bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-md">
@@ -157,13 +156,7 @@
                         </a>
                     </div>
                     
-                    <div class="flex justify-around items-center text-center mt-4 pt-4 border-t border-gray-700">
-                        <div>
-                            <p id="postsCount" class="text-xl font-bold text-white">0</p>
-                            <span class="text-gray-400 text-sm">منشور</span>
-                        </div>
                     </div>
-                </div>
             </div>
 
             <h2 class="text-2xl font-bold text-white mt-8 mb-4 border-b border-gray-700 pb-2">
@@ -252,17 +245,17 @@
     <script>
         // ******************** الوظائف الرئيسية لصفحة الملف الشخصي ********************
 
-        // **تعريف المتغيرات مرة واحدة فقط (لتجنب SyntaxError)**
         let currentProfileId = null; 
         let currentUserId = null; 
-        let activeWaveSurfer = null; // لتتبع مشغل WaveSurfer النشط
-        let activeVideo = null; // لتتبع الفيديو النشط 
-        let currentPostIdForComment = null; // لتتبع المنشور النشط للتعليق
-        let currentPostIdToDelete = null; // لتتبع المنشور النشط للحذف
+        let activeWaveSurfer = null; 
+        let activeVideo = null; 
+        let currentPostIdForComment = null; 
+        let currentPostIdToDelete = null; 
 
         const userPostsFeed = document.getElementById('userPostsFeed');
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
+        // زر التعديل هو الآن عنصر <a> لربطه بصفحة التعديل
         const editProfileButton = document.getElementById('editProfileButton'); 
         const chatButton = document.getElementById('chatButton');
         const pageTitle = document.getElementById('pageTitle');
@@ -434,20 +427,17 @@
         function togglePostMenu(postId, postUserId, event, button) {
             event.stopPropagation();
             
-            // إغلاق أي قائمة مفتوحة أخرى
             if (!postMenu.classList.contains('hidden') && postMenu.dataset.postId === postId) {
                 postMenu.classList.add('hidden');
                 return;
             }
 
-            // إعداد القائمة
             postMenu.dataset.postId = postId;
             
             const rect = button.getBoundingClientRect();
             postMenu.style.top = `${rect.bottom + window.scrollY}px`;
             postMenu.style.left = `${window.scrollX + rect.left - postMenu.offsetWidth + rect.width}px`;
 
-            // إظهار/إخفاء زر الحذف
             const deleteBtn = document.getElementById('deleteOptionBtn');
             if (postUserId === currentUserId) {
                 deleteBtn.classList.remove('hidden');
@@ -484,15 +474,14 @@
             confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
             try {
+                // استخدام المسار /api/posts/:postId للحذف
                 const response = await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
                 
                 if (response.ok) {
                     // إزالة المنشور من الواجهة
                     document.querySelector(`[data-post-id="${postId}"]`).remove();
                     // تحديث عداد المنشورات بصرياً
-                    const countElement = document.getElementById('postsCount');
-                    const currentCount = parseInt(countElement.textContent);
-                    countElement.textContent = Math.max(0, currentCount - 1);
+                    // **تم إزالة تحديث عداد المنشورات لعدم وجود عنصر إحصائيات**
                     closeDeleteModal();
                 } else {
                     alert('فشل في حذف المنشور.');
@@ -525,7 +514,6 @@
             await fetchComments(postId);
         }
 
-        // دالة جلب وعرض التعليقات (تحتاج إلى دالة مساعدة لـ createCommentElement)
         async function fetchComments(postId) {
             const commentsList = document.getElementById('commentsList');
             commentsList.innerHTML = '<div class="text-center text-gray-500"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل التعليقات...</div>';
@@ -588,12 +576,10 @@
                 if (response.ok) {
                     const result = await response.json();
                     
-                    // إزالة رسالة "لا توجد تعليقات" إذا كانت موجودة
                     if (commentsList.querySelector('.text-gray-500.mt-4')) {
                         commentsList.innerHTML = '';
                     }
 
-                    // إضافة التعليق الجديد إلى القائمة
                     commentsList.innerHTML += createCommentElement(result.newComment);
                     newCommentInput.value = '';
                     
@@ -666,7 +652,7 @@
             activeVideo = null;
         }
 
-        // 7. دوال التحكم في الفيديو والصوت (WaveSurfer/Video Controls)
+        // 7. دوال التحكم في الفيديو والصوت
         
         // دالة تهيئة WaveSurfer
         function initializePostWaveSurfer(postId, url) {
@@ -709,7 +695,7 @@
                 wavesurfer.seekTo(0);
             });
             
-            container.dataset.initialized = 'true'; // لمنع التهيئة المتكررة
+            container.dataset.initialized = 'true'; 
         }
         
         function toggleAudioPlay(postId) {
@@ -721,7 +707,6 @@
             }
         }
         
-        // دوال التحكم في الفيديو (تحتاج لـ event.stopPropagation() في الـ HTML)
         function toggleVideoPlay(postId, event) {
             event.stopPropagation();
             const video = document.getElementById(`video-${postId}`);
@@ -757,7 +742,6 @@
                 if (currentUserResponse.ok) {
                     currentUserIdData = await currentUserResponse.json();
                     currentUserId = currentUserIdData.id;
-                    // تحديث صورة الملف الشخصي في شريط التنقل العلوي
                     document.getElementById('userProfilePic').src = currentUserIdData.profile_picture_url; 
                 } 
             } catch (error) {
@@ -772,13 +756,13 @@
 
             // 2. جلب بيانات الملف الشخصي المطلوب
             try {
+                // ملاحظة: تم تعديل مسار API:profile في server.js ليحتوي على منطق جلب بيانات المستخدم بالـ ID
                 const response = await fetch(`/api/profile?userId=${currentProfileId}`);
                 const data = await response.json();
                 
                 if (response.ok && data.ok) {
                     
                     document.getElementById('profileImage').src = data.profile_picture_url || '/assets/default_profile_pic.png';
-                    // تم إضافة логиك للغلاف
                     if (data.cover_photo_url) {
                         document.getElementById('coverPhotoContainer').style.backgroundImage = `url('${data.cover_photo_url}')`;
                     }
@@ -786,13 +770,16 @@
                     document.getElementById('profileUsername').textContent = `@${data.username}`;
                     document.getElementById('profileFullName').textContent = data.full_name || 'لا يوجد اسم كامل';
                     document.getElementById('profileBio').textContent = data.bio || 'لم يقم المستخدم بإضافة سيرة ذاتية بعد.';
-                    document.getElementById('postsCount').textContent = data.postsCount || '0';
+                    
+                    // **تم إزالة تحديث postsCount**
                     pageTitle.textContent = `Aite - @${data.username}`;
                     
                     // إظهار/إخفاء زر التعديل أو الدردشة
-                    if (currentUserId && data.id === currentUserId) { // التحقق من أن ID الملف الشخصي المعروض هو نفسه ID المستخدم الحالي
+                    // يجب أن يكون data.id هو نفسه currentProfileId
+                    if (currentUserId && data.id === currentUserId) { 
                         editProfileButton.classList.remove('hidden');
                         chatButton.classList.add('hidden');
+                        // زر التعديل هو الآن رابط جاهز: href="/edit_profile"
                     } else {
                         editProfileButton.classList.add('hidden');
                         chatButton.href = `/chat?contactId=${currentProfileId}`;
@@ -816,6 +803,7 @@
             userPostsFeed.innerHTML = '<div class="text-center text-gray-500 p-8"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
             
             try {
+                // يستخدم مسار /api/posts/user/:userId
                 const response = await fetch(`/api/posts/user/${userId}`); 
                 const result = await response.json();
                 
@@ -837,10 +825,13 @@
                         }
                     });
                     
-                    // تهيئة WaveSurfer بعد إضافة العناصر إلى DOM
                     setTimeout(() => {
                         audioPostsToInit.forEach(ap => {
-                            initializePostWaveSurfer(ap.postId, ap.url); 
+                            // تهيئة WaveSurfer
+                            const container = document.getElementById(`waveform-${ap.postId}`);
+                            if(container) {
+                                container.waveSurfer = initializePostWaveSurfer(ap.postId, ap.url); 
+                            }
                         });
                     }, 100); 
 
