@@ -7,110 +7,75 @@
     
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes"> <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Aite">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://unpkg.com/wavesurfer.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
+    
     <style>
+        /* الأنماط الأساسية */
         body {
             background-color: #000000;
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            /* إضافة مساحة سفلية لمنع الشريط السفلي من حجب المحتوى */
             padding-bottom: 60px; 
         }
 
+        /* الأنماط الزجاجية (Glassmorphism) */
         .glass-navbar {
             background-color: rgba(30, 30, 30, 0.5);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
-        /* نمط الشعار الجديد */
         .app-logo {
-            font-family: 'Montserrat', sans-serif; /* خط مودرن للشعار */
+            font-family: 'Montserrat', sans-serif; 
             font-weight: 800;
-            /* يمكن تجربة خط Vibes إذا كان متاحاً ومتناسباً: font-family: 'Vibes', cursive; */
         }
-
-        /* نمط نافذة الملف الشخصي الزجاجية */
         .glass-dropdown {
             background-color: rgba(30, 30, 30, 0.9);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1000; /* للتأكد من أنها فوق كل شيء */
+            z-index: 1000; 
         }
-
-        /* نمط نافذة التعليقات الزجاجية الجديدة */
-        .glass-comment-modal-content {
-            background-color: rgba(0, 0, 0, 0.7); /* خلفية سوداء شفافة */
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
         .glass-modal-bg {
             background-color: rgba(0, 0, 0, 0.9);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
         }
-        .media-container {
-            max-height: 80vh; 
-            width: auto;
-        }
-        
-        /* نمط بطاقة المنشور الزجاجية الجديدة */
         .glass-post-card {
-            background-color: rgba(0, 0, 0, 0.3); /* خلفية سوداء شفافة */
-            backdrop-filter: blur(10px); /* تأثير زجاجي */
+            background-color: rgba(0, 0, 0, 0.3); 
+            backdrop-filter: blur(10px); 
             -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1); /* حدود بيضاء خفيفة */
+            border: 1px solid rgba(255, 255, 255, 0.1); 
         }
-        
-        /* ************************************** */
-        /* نمط الشريط السفلي الزجاجي الجديد */
         .glass-bottom-navbar {
             background-color: rgba(30, 30, 30, 0.6);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
-        /* ************************************** */
 
-
-        /* نمط WaveSurfer لمنشورات الهوم */
+        /* أنماط إضافية */
         .waveform-post {
             height: 60px; 
             background-color: #0f172a; 
             border-radius: 6px;
         }
-
-        /* شريط التمرير مخصص للتعليقات */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -154,11 +119,19 @@
     <main class="max-w-6xl mx-auto p-4">
         
         <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
-            </div>
+        </div>
+        <div id="loadingIndicator" class="text-center p-4 text-white hidden">
+            <i class="fas fa-spinner fa-spin text-3xl"></i>
+            <p class="mt-2">جاري تحميل المنشورات...</p>
+        </div>
+        <div id="noPostsMessage" class="text-center p-8 text-gray-500 hidden">
+            <i class="fas fa-inbox text-5xl mb-3"></i>
+            <p class="text-lg">لا توجد منشورات لعرضها بعد.</p>
+        </div>
 
     </main>
     
-<div class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-navbar">
+    <div class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-navbar">
         <nav class="flex justify-around items-center max-w-lg mx-auto h-14">
             
             <a href="/chat_list" class="flex flex-col items-center justify-center p-2 text-blue-400">
@@ -178,6 +151,7 @@
 
         </nav>
     </div>
+    
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
             <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
@@ -232,9 +206,10 @@
     <script>
         let currentPostIdToDelete = null;
         let currentUserId = null; 
-        let activeWaveSurfer = null; // لتتبع مشغل WaveSurfer النشط
-        let activeVideo = null; // لتتبع الفيديو النشط وإيقاف الآخر (جديد)
+        let activeWaveSurfer = null; 
+        let activeVideo = null; 
 
+        // عناصر DOM الأساسية
         const postsFeed = document.getElementById('postsFeed');
         const deleteModal = document.getElementById('deleteModal');
         const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
@@ -246,17 +221,19 @@
         const mediaViewerContent = document.getElementById('mediaViewerContent');
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
-        
-        // المتغيرات الجديدة للتعليقات
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const noPostsMessage = document.getElementById('noPostsMessage');
         const commentModal = document.getElementById('commentModal');
         const closeCommentModalBtn = document.getElementById('closeCommentModalBtn');
         const commentsList = document.getElementById('commentsList');
         const newCommentInput = document.getElementById('newCommentInput');
         const postCommentBtn = document.getElementById('postCommentBtn');
         const commentError = document.getElementById('commentError');
-        let currentPostIdForComments = null; // لتتبع المنشور الحالي للتعليقات
+        let currentPostIdForComments = null; 
         
-        // ******************** وظائف النافذة الزجاجية للملف الشخصي (إصلاح ReferenceError) ********************
+        // ------------------ دوال UI العامة ------------------
+
+        // إصلاح ReferenceError: toggleProfileDropdown is not defined
         function toggleProfileDropdown(event) {
             event.stopPropagation();
             profileDropdown.classList.toggle('hidden');
@@ -267,273 +244,213 @@
                 profileDropdown.classList.add('hidden');
             }
         }
-
-        document.addEventListener('click', closeProfileDropdownOnClickOutside);
         
-        // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
-        function openMediaViewer(url, type, event) {
-            event.stopPropagation();
-            
-            // مشغل الصوت والفيديو سيتعامل معه WaveSurfer أو المشغل المخصص في المنشور نفسه
-            if (type === 'audio' || type === 'video') { 
-                return;
+        // ------------------ دوال عرض المنشورات ------------------
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' + 
+                   date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        function createMediaElement(media) {
+            if (!media || !media.url) return '';
+
+            const isImage = media.type.startsWith('image');
+            const isVideo = media.type.startsWith('video');
+            const isAudio = media.type.startsWith('audio');
+            const postId = media.postId;
+
+            let mediaHtml = '';
+
+            if (isImage) {
+                mediaHtml = `
+                    <div class="mt-3 overflow-hidden rounded-lg cursor-pointer" onclick="openMediaViewer('${media.url}', 'image', event)">
+                        <img src="${media.url}" alt="Post Media" class="w-full object-cover max-h-96 transition duration-300 hover:opacity-90">
+                    </div>`;
+            } else if (isVideo) {
+                // مشغل الفيديو المخصص (بدون شريط تحكم معقد)
+                mediaHtml = `
+                    <div class="mt-3 relative bg-black rounded-lg overflow-hidden">
+                        <video id="video-${postId}" src="${media.url}" class="w-full max-h-96 object-contain" onclick="toggleVideoPlay('${postId}', event)"></video>
+                        <div id="play-overlay-${postId}" class="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer" onclick="toggleVideoPlay('${postId}', event)">
+                            <i class="fas fa-play text-white text-5xl p-4 bg-black/50 rounded-full"></i>
+                        </div>
+                    </div>`;
+            } else if (isAudio) {
+                // مشغل الصوت باستخدام WaveSurfer
+                mediaHtml = `
+                    <div class="mt-3 flex items-center bg-[#1f2937] p-2 rounded-lg">
+                        <button class="audio-play-button text-blue-400 hover:text-blue-300 transition duration-300 text-2xl mx-2" onclick="toggleAudioPlay('${postId}', '${media.url}')">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div id="waveform-${postId}" class="waveform-post flex-grow ml-2"></div>
+                    </div>`;
             }
 
-            let mediaElement;
-            mediaViewerContent.innerHTML = '';
-            
-            if (type === 'image') {
-                mediaElement = `<img src="${url}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
-            } else {
-                return;
-            }
-
-            mediaViewerContent.innerHTML = mediaElement;
-            mediaViewerModal.classList.remove('hidden');
+            return mediaHtml;
         }
 
-        function closeMediaViewer(event) {
-            if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
-                const activeMedia = mediaViewerContent.querySelector('video, audio');
-                if (activeMedia) {
-                    activeMedia.pause();
-                }
-                mediaViewerModal.classList.add('hidden');
-                mediaViewerContent.innerHTML = '';
-            }
+        function createPostCard(post) {
+            const mediaData = post.media || (post.media_url ? { url: post.media_url, type: post.media_type || 'image', postId: post.id } : null);
+            const mediaHtml = createMediaElement(mediaData);
+            const userProfileUrl = post.user.profile_picture_url || 'https://via.placeholder.com/40/3182CE/FFFFFF?text=P';
+
+            return `
+                <div data-post-id="${post.id}" class="glass-post-card p-4 rounded-xl shadow-lg">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center">
+                            <a href="/profile?id=${post.userId}">
+                                <img src="${userProfileUrl}" alt="صورة المستخدم" class="w-10 h-10 rounded-full object-cover border-2 border-gray-600">
+                            </a>
+                            <div class="mr-3">
+                                <a href="/profile?id=${post.userId}" class="text-white font-semibold hover:text-blue-400 transition duration-300">${post.user.username}</a>
+                                <p class="text-gray-400 text-sm">${formatTimestamp(post.timestamp)}</p>
+                            </div>
+                        </div>
+                        <button class="post-menu-button text-gray-400 hover:text-white transition duration-300 text-lg p-1" onclick="togglePostMenu('${post.id}', '${post.userId}', event, this)">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </div>
+
+                    <p class="text-white mt-3 whitespace-pre-wrap">${post.content}</p>
+
+                    ${mediaHtml}
+
+                    <div class="flex justify-around items-center pt-4 border-t border-gray-800 mt-4">
+                        <button class="text-gray-400 hover:text-red-500 transition duration-300" onclick="toggleLike('${post.id}')">
+                            <i class="${post.isLiked ? 'fas text-red-500' : 'far'} fa-heart text-xl"></i>
+                            <span class="mr-2 text-sm like-count">${post.likesCount || 0}</span>
+                        </button>
+
+                        <button class="text-gray-400 hover:text-blue-500 transition duration-300" onclick="openCommentModal('${post.id}', event)">
+                            <i class="far fa-comment-dots text-xl"></i>
+                            <span class="mr-2 text-sm comment-count">${post.commentsCount || 0} تعليق</span>
+                        </button>
+
+                        <button class="text-gray-400 hover:text-green-500 transition duration-300">
+                            <i class="fas fa-share-alt text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
         }
-
-        // ******************** 2. وظائف حذف المنشور ********************
-
-        function openDeleteModal(postId, event) {
-            event.stopPropagation();
-            currentPostIdToDelete = postId;
-            deleteMessage.classList.add('hidden');
-            deleteModal.classList.remove('hidden');
-            // إغلاق قائمة الخيارات إذا كانت مفتوحة
-            postMenu.classList.add('hidden');
-        }
-
-        cancelDeleteBtn.addEventListener('click', () => {
-            deleteModal.classList.add('hidden');
-            currentPostIdToDelete = null;
-        });
-
-        // دالة الحذف الفعلية
-        confirmDeleteBtn.addEventListener('click', async () => {
-            if (!currentPostIdToDelete) return;
-
-            confirmDeleteBtn.disabled = true;
-            confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحذف';
-            deleteMessage.classList.add('hidden');
+        
+        // إصلاح ReferenceError: fetchAndDisplayPosts is not defined
+        async function fetchAndDisplayPosts() {
+            loadingIndicator.classList.remove('hidden');
+            noPostsMessage.classList.add('hidden');
+            postsFeed.innerHTML = '';
 
             try {
-                const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
-                });
+                const response = await fetch('/api/posts');
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // حذف بطاقة المنشور من الواجهة
-                    document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`).remove();
-                    deleteModal.classList.add('hidden');
+                    loadingIndicator.classList.add('hidden');
+                    if (result.posts && result.posts.length > 0) {
+                        result.posts.forEach(post => {
+                            postsFeed.innerHTML += createPostCard(post);
+                        });
+                        // بعد عرض المنشورات، قد تحتاج لتشغيل أي وظيفة تهيئة لـ WaveSurfer إذا كانت المنشورات تحتوي على أصوات
+                    } else {
+                        noPostsMessage.classList.remove('hidden');
+                    }
                 } else {
-                    deleteMessage.textContent = result.error || 'فشل الحذف.';
-                    deleteMessage.classList.remove('hidden');
+                    loadingIndicator.classList.add('hidden');
+                    postsFeed.innerHTML = '<p class="text-red-500 text-center">فشل في جلب المنشورات. تأكد من أنك سجلت الدخول.</p>';
                 }
             } catch (error) {
-                deleteMessage.textContent = 'حدث خطأ في الاتصال بالخادم.';
-                deleteMessage.classList.remove('hidden');
-            } finally {
-                confirmDeleteBtn.disabled = false;
-                confirmDeleteBtn.innerHTML = 'تأكيد الحذف';
-                currentPostIdToDelete = null;
+                loadingIndicator.classList.add('hidden');
+                postsFeed.innerHTML = '<p class="text-red-500 text-center">خطأ في الاتصال بالخادم.</p>';
+                console.error('Fetch posts error:', error);
             }
-        });
-        // ******************** 3. وظائف قائمة خيارات المنشور ********************
-        function togglePostMenu(postId, userId, event, menuButton) {
-            event.stopPropagation();
-            // إغلاق أي قوائم مفتوحة أخرى
-            if (!postMenu.classList.contains('hidden') && postMenu.dataset.postId === postId) {
-                postMenu.classList.add('hidden');
+        }
+        
+        // ------------------ دوال التفاعل ------------------
+
+        async function toggleLike(postId) {
+            if (!currentUserId) {
+                alert('الرجاء تسجيل الدخول أولاً للإعجاب.');
                 return;
             }
-            // تحديد موقع القائمة بالنسبة للزر الذي تم الضغط عليه
-            const rect = menuButton.getBoundingClientRect();
-            postMenu.style.top = `${rect.bottom + 5}px`;
-            // نستخدم rect.left هنا لتثبيت القائمة على يسار الزر (افتراضياً)
-            postMenu.style.left = `${rect.left}px`;
+            const likeButton = document.querySelector(`div[data-post-id="${postId}"] .fa-heart`);
+            const likeCountSpan = document.querySelector(`div[data-post-id="${postId}"] .like-count`);
+            
+            try {
+                const response = await fetch(`/api/posts/${postId}/like`);
+                const result = await response.json();
+                
+                if (response.ok && result.ok) {
+                    let currentCount = parseInt(likeCountSpan.textContent) || 0;
 
-            // تخزين مُعرّف المنشور لزر الحذف
-            postMenu.dataset.postId = postId;
-
-            // إظهار/إخفاء خيار الحذف بناءً على مالك المنشور
-            if (userId === currentUserId) {
-                deleteOptionBtn.style.display = 'flex';
-                // تحديث وظيفة زر الحذف داخل القائمة
-                deleteOptionBtn.onclick = (e) => openDeleteModal(postId, e);
-            } else {
-                deleteOptionBtn.style.display = 'none';
-            }
-            postMenu.classList.remove('hidden');
-        }
-
-        // إغلاق القائمة عند النقر خارجها
-        document.addEventListener('click', (event) => {
-            if (!postMenu.contains(event.target) && !event.target.closest('.post-menu-button')) {
-                postMenu.classList.add('hidden');
-            }
-        });
-        
-        // ******************** 4.1. وظائف تحكم الفيديو المخصصة ********************
-        // (يجب أن يتم تضمين جميع وظائف الفيديو الأخرى هنا مثل updateVideoProgress, updateVideoTimeDisplay, handleVideoEnd, handleVideoSeek)
-
-        function toggleVideoPlay(postId, event) {
-            event.stopPropagation();
-            const video = document.getElementById(`video-${postId}`);
-            const playOverlay = document.getElementById(`play-overlay-${postId}`);
-            const controlIcon = document.getElementById(`control-icon-${postId}`);
-            const controlsBar = document.getElementById(`controls-bar-${postId}`);
-            if (!video) return;
-
-            // 1. إيقاف تشغيل أي فيديو أو صوت آخر
-            if (activeVideo && activeVideo !== video) {
-                const activePostId = activeVideo.id.split('-')[1];
-                const activeControlIcon = document.getElementById(`control-icon-${activePostId}`);
-                const activePlayOverlay = document.getElementById(`play-overlay-${activePostId}`);
-                activeVideo.pause();
-                if (activeControlIcon) {
-                    activeControlIcon.classList.remove('fa-pause');
-                    activeControlIcon.classList.add('fa-play');
+                    if (result.action === 'liked') {
+                        likeButton.classList.remove('far');
+                        likeButton.classList.add('fas', 'text-red-500');
+                        likeCountSpan.textContent = currentCount + 1;
+                    } else if (result.action === 'unliked') {
+                        likeButton.classList.remove('fas', 'text-red-500');
+                        likeButton.classList.add('far');
+                        likeCountSpan.textContent = Math.max(0, currentCount - 1);
+                    }
+                } else if (response.status === 401) {
+                     alert('الرجاء تسجيل الدخول للإعجاب.');
                 }
-                if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
-                // إزالة مستمعي الأحداث للفيديو السابق
-                activeVideo.removeEventListener('timeupdate', updateVideoProgress);
-                activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
-                activeVideo.removeEventListener('ended', handleVideoEnd);
-            }
-            if (activeWaveSurfer) {
-                activeWaveSurfer.pause();
-                const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
-                otherPostCard.querySelector('.audio-play-button i').classList.remove('fa-pause');
-                otherPostCard.querySelector('.audio-play-button i').classList.add('fa-play');
-                activeWaveSurfer = null;
-            }
-
-            // 2. تبديل حالة التشغيل
-            if (video.paused) {
-                video.play();
-                playOverlay.classList.add('hidden'); // إخفاء زر التشغيل المركزي
-                controlIcon.classList.remove('fa-play');
-                controlIcon.classList.add('fa-pause');
-                controlsBar.classList.remove('opacity-0'); // إظهار شريط التحكم
-                activeVideo = video;
-                // ربط مستمعي الأحداث
-                video.addEventListener('timeupdate', updateVideoProgress);
-                // يتم ربط loadedmetadata لضمان تحديث عرض الوقت
-                video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
-                video.addEventListener('ended', handleVideoEnd);
-
-            } else {
-                video.pause();
-                controlIcon.classList.remove('fa-pause');
-                controlIcon.classList.add('fa-play');
-                playOverlay.classList.remove('hidden'); // إظهار زر التشغيل المركزي
+            } catch (error) {
+                console.error('Error toggling like:', error);
             }
         }
         
-        // ******************** 4.2. وظائف WaveSurfer (الصوت) ********************
-        function toggleAudioPlay(postId, url) {
-            const playButton = document.querySelector(`div[data-post-id="${postId}"] .audio-play-button i`);
-            const waveformContainer = document.getElementById(`waveform-${postId}`);
+        function createCommentHtml(comment) {
+            const profileUrl = comment.user.profile_picture_url || 'https://via.placeholder.com/30';
+            return `
+                <div class="flex items-start space-x-3 space-x-reverse p-3 bg-[#18191a] rounded-lg shadow-md border border-gray-800">
+                    <img src="${profileUrl}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover mt-1">
+                    <div class="flex-grow">
+                        <p class="text-white font-semibold text-sm">${comment.user.username} <span class="text-gray-500 text-xs mr-2">${formatTimestamp(comment.timestamp)}</span></p>
+                        <p class="text-gray-300 whitespace-pre-wrap">${comment.content}</p>
+                    </div>
+                </div>
+            `;
+        }
 
-            // 1. إيقاف تشغيل أي مشغل WaveSurfer آخر
-            if (activeWaveSurfer && activeWaveSurfer.container.id !== `waveform-${postId}`) {
-                activeWaveSurfer.pause();
-                const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
-                otherPostCard.querySelector('.audio-play-button i').classList.remove('fa-pause');
-                otherPostCard.querySelector('.audio-play-button i').classList.add('fa-play');
-                activeWaveSurfer = null;
-            }
-            // إيقاف تشغيل أي فيديو آخر
-            if (activeVideo) {
-                const activePostId = activeVideo.id.split('-')[1];
-                const activeControlIcon = document.getElementById(`control-icon-${activePostId}`);
-                const activePlayOverlay = document.getElementById(`play-overlay-${activePostId}`);
-                activeVideo.pause();
-                if (activeControlIcon) {
-                    activeControlIcon.classList.remove('fa-pause');
-                    activeControlIcon.classList.add('fa-play');
-                }
-                if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
-                activeVideo = null;
-            }
-
-            // 2. تشغيل أو إيقاف المشغل الحالي
-            if (activeWaveSurfer && activeWaveSurfer.container.id === `waveform-${postId}`) {
-                activeWaveSurfer.playPause();
-                if (activeWaveSurfer.isPlaying()) {
-                    playButton.classList.remove('fa-play');
-                    playButton.classList.add('fa-pause');
+        async function fetchComments(postId) {
+            commentsList.innerHTML = '<div class="text-center text-blue-400"><i class="fas fa-spinner fa-spin text-2xl"></i><p>جاري تحميل التعليقات...</p></div>';
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`);
+                const result = await response.json();
+                
+                commentsList.innerHTML = '';
+                
+                if (response.ok && result.ok && result.comments && result.comments.length > 0) {
+                    // عرض التعليقات من الأحدث إلى الأقدم
+                    result.comments.reverse().forEach(comment => {
+                        commentsList.innerHTML += createCommentHtml(comment);
+                    });
                 } else {
-                    playButton.classList.remove('fa-pause');
-                    playButton.classList.add('fa-play');
+                    commentsList.innerHTML = '<p class="text-center text-gray-500 p-4">لا توجد تعليقات بعد. كن أول من يعلق!</p>';
                 }
-                return;
+            } catch (error) {
+                 commentsList.innerHTML = '<p class="text-center text-red-500 p-4">حدث خطأ أثناء تحميل التعليقات.</p>';
             }
-
-            // 3. إنشاء وتشغيل مشغل جديد
-            if (!waveformContainer.wavesurfer) {
-                waveformContainer.wavesurfer = WaveSurfer.create({
-                    container: waveformContainer,
-                    waveColor: '#4f46e5',
-                    progressColor: '#3b82f6',
-                    cursorColor: '#93c5fd',
-                    barWidth: 2,
-                    barRadius: 3,
-                    height: 60,
-                    backend: 'MediaElement',
-                    mediaControls: false,
-                    url: url,
-                });
-
-                waveformContainer.wavesurfer.on('play', () => {
-                    playButton.classList.remove('fa-play');
-                    playButton.classList.add('fa-pause');
-                    activeWaveSurfer = waveformContainer.wavesurfer;
-                });
-
-                waveformContainer.wavesurfer.on('pause', () => {
-                    playButton.classList.remove('fa-pause');
-                    playButton.classList.add('fa-play');
-                });
-
-                waveformContainer.wavesurfer.on('finish', () => {
-                    playButton.classList.remove('fa-pause');
-                    playButton.classList.add('fa-play');
-                    activeWaveSurfer = null;
-                });
-            }
-
-            // تشغيل المشغل الجديد
-            waveformContainer.wavesurfer.play();
-            activeWaveSurfer = waveformContainer.wavesurfer;
         }
 
-        // ******************** 5. وظائف عرض المنشورات ********************
-        // (يجب أن يتم تضمين دالة formatTimestamp, createPostCard, و fetchAndDisplayPosts هنا)
-        // ...
-
-        // ******************** 6. وظائف التعليقات ********************
-        // (يجب أن يتم تضمين دالة createCommentHtml, openCommentModal, fetchComments, و postComment هنا)
-        // ...
-
-        // **دالة postComment المفقودة والمعدلة**
+        async function openCommentModal(postId, event) {
+            if (event) event.stopPropagation();
+            currentPostIdForComments = postId;
+            commentModal.classList.remove('hidden');
+            commentError.classList.add('hidden');
+            await fetchComments(postId); 
+        }
+        
         async function postComment() {
             const content = newCommentInput.value.trim();
             if (!content) return;
             if (!currentPostIdForComments) return;
+            if (!currentUserId) {
+                alert('الرجاء تسجيل الدخول أولاً للتعليق.');
+                return;
+            }
 
             postCommentBtn.disabled = true;
             postCommentBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-lg"></i>';
@@ -549,26 +466,29 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // 1. تحديث قائمة التعليقات مباشرةً
                     if (commentsList.querySelector('.text-center.text-gray-500')) {
-                        commentsList.innerHTML = ''; // إزالة رسالة "لا توجد تعليقات"
+                        commentsList.innerHTML = ''; 
                     }
-                    // *يفترض أن لديك دالة createCommentHtml(comment) لإنشاء التعليق*
-                    // commentsList.innerHTML += createCommentHtml(result.comment); 
-                    // سأضيف التعليق كنص مؤقت لضمان عدم حدوث خطأ
-                    commentsList.innerHTML += `<div class="p-2 bg-gray-900 rounded-lg"><p class="text-white font-bold">${result.comment.user.username}</p><p class="text-gray-300">${result.comment.content}</p></div>`;
+                    
+                    // يفترض أن الخادم يرجع بيانات التعليق كاملاً بما فيها بيانات المستخدم
+                    const newCommentHtml = createCommentHtml(result.comment);
+                    // إضافة التعليق في الأعلى
+                    commentsList.insertAdjacentHTML('afterbegin', newCommentHtml);
                     
                     newCommentInput.value = '';
                     
-                    // 2. تحديث عداد التعليقات في بطاقة المنشور
+                    // تحديث عداد التعليقات في بطاقة المنشور
                     const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
                     if (postCard) {
                         const commentsSpan = postCard.querySelector('.comment-count');
                         if (commentsSpan) {
-                            commentsSpan.textContent = `${result.newComments} تعليق`;
+                            commentsSpan.textContent = `${result.newCommentsCount || 0} تعليق`;
                         }
                     }
 
+                } else if (response.status === 401) {
+                     commentError.textContent = 'الرجاء تسجيل الدخول للتعليق.';
+                     commentError.classList.remove('hidden');
                 } else {
                     commentError.textContent = result.error || 'فشل إرسال التعليق.';
                     commentError.classList.remove('hidden');
@@ -582,17 +502,192 @@
                 postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
             }
         }
+
+        // ------------------ دوال التحكم بالوسائط ------------------
+
+        function openMediaViewer(url, type, event) {
+            event.stopPropagation();
+            if (type !== 'image') return; // حالياً فقط للصور
+
+            mediaViewerContent.innerHTML = `<img src="${url}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
+            mediaViewerModal.classList.remove('hidden');
+        }
+
+        function closeMediaViewer(event) {
+            if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
+                mediaViewerModal.classList.add('hidden');
+                mediaViewerContent.innerHTML = '';
+            }
+        }
+        
+        function toggleVideoPlay(postId, event) {
+             event.stopPropagation();
+             const video = document.getElementById(`video-${postId}`);
+             const playOverlay = document.getElementById(`play-overlay-${postId}`);
+             if (!video) return;
+
+             // إيقاف تشغيل أي مشغل آخر (صوت أو فيديو)
+             if (activeVideo && activeVideo !== video) { activeVideo.pause(); }
+             if (activeWaveSurfer) { activeWaveSurfer.pause(); }
+
+             if (video.paused) {
+                 video.play();
+                 playOverlay.classList.add('hidden');
+                 activeVideo = video;
+             } else {
+                 video.pause();
+                 playOverlay.classList.remove('hidden');
+             }
+         }
+
+        function toggleAudioPlay(postId, url) {
+            const playButton = document.querySelector(`div[data-post-id="${postId}"] .audio-play-button i`);
+            const waveformContainer = document.getElementById(`waveform-${postId}`);
+
+            // إيقاف تشغيل أي مشغل آخر (صوت أو فيديو)
+            if (activeVideo) { activeVideo.pause(); activeVideo = null; }
+            if (activeWaveSurfer && activeWaveSurfer.container.id !== `waveform-${postId}`) { 
+                activeWaveSurfer.pause();
+                const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
+                otherPostCard.querySelector('.audio-play-button i').classList.remove('fa-pause');
+                otherPostCard.querySelector('.audio-play-button i').classList.add('fa-play');
+                activeWaveSurfer = null;
+            }
+
+            if (activeWaveSurfer && activeWaveSurfer.container.id === `waveform-${postId}`) {
+                activeWaveSurfer.playPause();
+                if (activeWaveSurfer.isPlaying()) {
+                    playButton.classList.remove('fa-play');
+                    playButton.classList.add('fa-pause');
+                } else {
+                    playButton.classList.remove('fa-pause');
+                    playButton.classList.add('fa-play');
+                }
+                return;
+            }
+
+            if (!waveformContainer.wavesurfer) {
+                waveformContainer.wavesurfer = WaveSurfer.create({
+                    container: waveformContainer,
+                    waveColor: '#4f46e5', progressColor: '#3b82f6', cursorColor: '#93c5fd',
+                    barWidth: 2, barRadius: 3, height: 40, url: url,
+                });
+
+                waveformContainer.wavesurfer.on('play', () => {
+                    playButton.classList.remove('fa-play');
+                    playButton.classList.add('fa-pause');
+                    activeWaveSurfer = waveformContainer.wavesurfer;
+                });
+                waveformContainer.wavesurfer.on('pause', () => {
+                    playButton.classList.remove('fa-pause');
+                    playButton.classList.add('fa-play');
+                });
+                waveformContainer.wavesurfer.on('finish', () => {
+                    playButton.classList.remove('fa-pause');
+                    playButton.classList.add('fa-play');
+                    activeWaveSurfer = null;
+                });
+            }
+
+            waveformContainer.wavesurfer.play();
+            activeWaveSurfer = waveformContainer.wavesurfer;
+        }
+
+        // ------------------ دوال الحذف والقائمة ------------------
+
+        function openDeleteModal(postId, event) {
+            event.stopPropagation();
+            currentPostIdToDelete = postId;
+            deleteMessage.classList.add('hidden');
+            deleteModal.classList.remove('hidden');
+            postMenu.classList.add('hidden');
+        }
+
+        cancelDeleteBtn.addEventListener('click', () => {
+            deleteModal.classList.add('hidden');
+            currentPostIdToDelete = null;
+        });
+
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (!currentPostIdToDelete) return;
+
+            confirmDeleteBtn.disabled = true;
+            confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحذف';
+            deleteMessage.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`).remove();
+                    deleteModal.classList.add('hidden');
+                } else {
+                    deleteMessage.textContent = result.error || 'فشل الحذف. ربما لا تملك الصلاحية.';
+                    deleteMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                deleteMessage.textContent = 'حدث خطأ في الاتصال بالخادم.';
+                deleteMessage.classList.remove('hidden');
+            } finally {
+                confirmDeleteBtn.disabled = false;
+                confirmDeleteBtn.innerHTML = 'تأكيد الحذف';
+                currentPostIdToDelete = null;
+            }
+        });
+
+        function togglePostMenu(postId, userId, event, menuButton) {
+            event.stopPropagation();
+            if (!postMenu.classList.contains('hidden') && postMenu.dataset.postId === postId) {
+                postMenu.classList.add('hidden');
+                return;
+            }
+            
+            // حساب موقع القائمة (لتظهر بجوار الزر)
+            const rect = menuButton.getBoundingClientRect();
+            postMenu.style.top = `${rect.bottom + 5}px`;
+            // نستخدم rect.left هنا لتثبيت القائمة على يسار الزر (افتراضياً)
+            postMenu.style.left = `${rect.left - 100}px`; // قد تحتاج لتعديل 100px حسب عرض القائمة
+
+            postMenu.dataset.postId = postId;
+
+            // إظهار/إخفاء خيار الحذف
+            if (userId === currentUserId) {
+                deleteOptionBtn.style.display = 'flex';
+                deleteOptionBtn.onclick = (e) => openDeleteModal(postId, e);
+            } else {
+                deleteOptionBtn.style.display = 'none';
+            }
+            postMenu.classList.remove('hidden');
+        }
+
+
+        // ------------------ مستمعو الأحداث والتهيئة ------------------
+
+        document.addEventListener('click', closeProfileDropdownOnClickOutside);
+        document.addEventListener('click', (event) => {
+            if (!postMenu.contains(event.target) && !event.target.closest('.post-menu-button')) {
+                postMenu.classList.add('hidden');
+            }
+        });
+        closeCommentModalBtn.addEventListener('click', () => {
+            commentModal.classList.add('hidden');
+            currentPostIdForComments = null;
+        });
         
         postCommentBtn.addEventListener('click', postComment);
         newCommentInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                e.preventDefault(); // منع إضافة سطر جديد في الإدخال
+                e.preventDefault(); 
                 postComment();
             }
         });
         
         document.addEventListener('DOMContentLoaded', () => {
-            // **كود Service Worker للتسجيل (PWA)**
+            // **تهيئة Service Worker لـ PWA**
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
                     navigator.serviceWorker.register('/sw.js')
@@ -600,12 +695,13 @@
                             console.log('Service Worker registered: ', registration.scope);
                         })
                         .catch(error => {
-                            console.log('Service Worker registration failed: ', error);
+                            // هذا سيساعدك في تصحيح خطأ 404 لملف sw.js
+                            console.error('Service Worker registration failed (Check for 404 on sw.js): ', error);
                         });
                 });
             }
-            // **نهاية كود Service Worker**
             
+            // جلب بيانات المستخدم وعرضها
             fetch('/api/profile')
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
@@ -613,10 +709,11 @@
                     if (data && data.profile_picture_url) {
                         profilePicElement.src = data.profile_picture_url;
                         profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                        currentUserId = data.id; // حفظ معرف المستخدم الحالي
+                        currentUserId = data.id; 
                     }
                 }).catch(console.error);
                 
+            // جلب وعرض المنشورات
             fetchAndDisplayPosts();
         });
         
