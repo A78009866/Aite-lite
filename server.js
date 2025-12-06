@@ -17,7 +17,7 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 // ✅ صورة بروفايل افتراضية موثوقة (استبدلت via.placeholder)
-const DEFAULT_PROFILE_PIC_URL = 'https://i.imgur.com/sC5oV0X.png'; 
+const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765007135/post_media/1765007135269-default_profile.png'; 
 
 // إعدادات Cloudinary
 cloudinary.config({
