@@ -16,6 +16,9 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
+// ✅ صورة بروفايل افتراضية موثوقة (استبدلت via.placeholder)
+const DEFAULT_PROFILE_PIC_URL = 'https://i.imgur.com/sC5oV0X.png'; 
+
 // إعدادات Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -123,7 +126,6 @@ app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dir
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'profile.html')); });
-// ✅ تمت الإضافة: مسار صفحة التعديل
 app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); }); 
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
@@ -147,7 +149,8 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', upload.single('profile_picture'), async (req, res) => {
   const { username, password } = req.body;
-  let profile_picture_url = 'https://via.placeholder.com/150';
+  // ✅ استخدام الصورة الافتراضية الموثوقة الجديدة
+  let profile_picture_url = DEFAULT_PROFILE_PIC_URL; 
 
   try {
     if (!username || !password) {
@@ -208,7 +211,8 @@ app.get('/api/chats', requireAuth, async (req, res) => {
 
     const finalChats = chats.map(chat => ({
       ...chat,
-      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40' }
+      // ✅ استخدام DEFAULT_PROFILE_PIC_URL هنا أيضًا
+      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: DEFAULT_PROFILE_PIC_URL }
     }));
 
     finalChats.sort((a, b) => b.last_message_timestamp - a.last_message_timestamp);
@@ -376,7 +380,8 @@ app.get('/api/users', requireAuth, async (req, res) => {
                 id: user.id,
                 username: user.username,
                 full_name: user.full_name,
-                profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40',
+                // ✅ استخدام DEFAULT_PROFILE_PIC_URL هنا أيضًا
+                profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL, 
                 
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0
@@ -395,8 +400,6 @@ app.get('/api/users', requireAuth, async (req, res) => {
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   const requestedUserId = req.query.userId || currentUserId; 
-  // ✅ المسار الافتراضي للصورة
-  const defaultProfilePicPath = '/views/profile_pics/default_profile.png'; 
   
   try {
     const profileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
@@ -404,12 +407,12 @@ app.get('/api/profile', requireAuth, async (req, res) => {
     
     if (!profileData) return res.status(404).json({ ok: false });
     
-    // ✅ 1. تعيين الصورة الافتراضية إذا كانت مفقودة
-    if (!profileData.profile_picture_url) {
-        profileData.profile_picture_url = defaultProfilePicPath;
+    // ✅ 1. تعيين الصورة الافتراضية إذا كانت مفقودة أو كانت تشير إلى مسار قديم
+    if (!profileData.profile_picture_url || profileData.profile_picture_url === 'https://via.placeholder.com/150') {
+        profileData.profile_picture_url = DEFAULT_PROFILE_PIC_URL;
     }
     
-    // ✅ 2. تعيين السيرة الذاتية فارغة إذا كانت مفقودة (إذا كانت null/undefined)
+    // ✅ 2. تعيين السيرة الذاتية فارغة إذا كانت مفقودة (حل مشكلة "عدم وجود سيرة")
     if (!profileData.bio) {
         profileData.bio = '';
     }
@@ -432,7 +435,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     }
 });
 
-// **✅ تمت الإضافة: مسار تعديل الملف الشخصي (PUT /api/profile/edit)**
+// **مسار تعديل الملف الشخصي (PUT /api/profile/edit)**
 const uploadProfileFields = upload.fields([
     { name: 'profile_picture', maxCount: 1 },
     { name: 'cover_photo', maxCount: 1 }
@@ -448,7 +451,8 @@ app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) 
 
     const updates = {
         full_name: full_name,
-        bio: bio,
+        // ✅ التأكد من أن السيرة الذاتية هي سلسلة نصية فارغة إذا لم يتم إرسالها
+        bio: bio || '',
         username: username,
     };
 
@@ -575,7 +579,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
 
     const userIds = [...new Set(posts.map(p => p.userId))];
     const profiles = {};
-    const defaultProfileUrl = 'https://via.placeholder.com/40';
+    const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL;
 
     const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
     const profileSnapshots = await Promise.all(profilePromises);
@@ -610,7 +614,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
-// **✅ تمت الإضافة: جلب منشورات مستخدم معين**
+// جلب منشورات مستخدم معين
 app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
     const currentUserId = req.session.userId;
     const requestedUserId = req.params.userId;
@@ -643,7 +647,7 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
             likedStatuses[posts[index].postId] = snap.val() !== null;
         });
         
-        const defaultProfileUrl = '/views/profile_pics/default_profile.png'; // تم استخدام المسار الافتراضي الجديد هنا أيضًا
+        const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL;
 
         const finalPosts = posts.map(post => ({
             ...post,
@@ -729,7 +733,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       timestamp: admin.database.ServerValue.TIMESTAMP,
       user: {
         username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/40'
+        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL // ✅ استخدام DEFAULT_PROFILE_PIC_URL
       }
     };
 
