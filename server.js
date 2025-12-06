@@ -15,7 +15,7 @@ const cors = require('cors');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-
+const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
 // إعدادات Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -719,7 +719,227 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
+app.get('/api/posts', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  try {
+    const postsSnap = await db.ref('posts')
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
 
+    let posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
+    posts.reverse(); 
+
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL;
+
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+        profiles[userIds[index]] = snap.val();
+    });
+    
+    const likedStatuses = {};
+    const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
+    const likeSnapshots = await Promise.all(likePromises);
+    
+    likeSnapshots.forEach((snap, index) => {
+        likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      is_liked: likedStatuses[post.postId] || false,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المنشورات.' });
+  }
+});
+
+app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
+    const currentUserId = req.session.userId;
+    const requestedUserId = req.params.userId;
+    
+    try {
+        const postsSnap = await db.ref('posts')
+            .orderByChild('userId')
+            .equalTo(requestedUserId)
+            .once('value');
+            
+        let posts = [];
+        postsSnap.forEach(childSnap => {
+            posts.push(childSnap.val());
+        });
+        posts.reverse(); 
+        
+        const userProfileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
+        const userProfile = userProfileSnap.val();
+        
+        if (!userProfile) {
+            return res.status(404).json({ ok: false, error: 'User profile not found.' });
+        }
+        
+        const likedStatuses = {};
+        const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
+        const likeSnapshots = await Promise.all(likePromises);
+        
+        likeSnapshots.forEach((snap, index) => {
+            likedStatuses[posts[index].postId] = snap.val() !== null;
+        });
+        
+        const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL; 
+
+        const finalPosts = posts.map(post => ({
+            ...post,
+            is_liked: likedStatuses[post.postId] || false,
+            user: {
+                username: userProfile?.username || 'مستخدم',
+                profile_picture_url: userProfile?.profile_picture_url || defaultProfileUrl
+            }
+        }));
+
+        res.json({ ok: true, posts: finalPosts });
+        
+    } catch (error) {
+        console.error('Error fetching user posts:', error);
+        res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
+    }
+});
+
+app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
+
+  if (!postId) return res.status(400).json({ ok: false });
+
+  const postRef = db.ref(`posts/${postId}`);
+  const userLikeRef = db.ref(`likes/${postId}/${userId}`);
+
+  try {
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
+
+    const likeSnapshot = await userLikeRef.once('value');
+    const isLiked = likeSnapshot.val();
+    let likesUpdate = 0;
+    let action = '';
+    
+    if (isLiked) {
+      await userLikeRef.remove();
+      likesUpdate = -1;
+      action = 'unliked';
+    } else {
+      await userLikeRef.set(admin.database.ServerValue.TIMESTAMP);
+      likesUpdate = 1;
+      action = 'liked';
+    }
+
+    let newLikesCount = 0;
+    await postRef.child('likes').transaction((currentCount) => {
+      newLikesCount = (currentCount || 0) + likesUpdate;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    res.json({ ok: true, action: action, newLikes: newLikesCount });
+
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
+  const { content } = req.body;
+
+  if (!postId || !content) return res.status(400).json({ ok: false });
+
+  try {
+    const postRef = db.ref(`posts/${postId}`);
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
+    
+    const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnapshot.val();
+
+    const newCommentRef = db.ref(`comments/${postId}`).push();
+    const commentData = {
+      commentId: newCommentRef.key,
+      postId: postId,
+      userId: userId,
+      content: content.trim(),
+      timestamp: admin.database.ServerValue.TIMESTAMP,
+      user: {
+        username: userData.username || 'مستخدم',
+        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+      }
+    };
+
+    await newCommentRef.set(commentData);
+
+    let newCommentsCount = 0;
+    await postRef.child('commentsCount').transaction((currentCount) => {
+      newCommentsCount = (currentCount || 0) + 1;
+      return newCommentsCount;
+    });
+
+    res.json({ ok: true, comment: commentData, newComments: newCommentsCount });
+
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
+  const postId = req.params.postId;
+  try {
+    const commentsSnap = await db.ref(`comments/${postId}`)
+      .orderByChild('timestamp')
+      .once('value');
+
+    const comments = [];
+    commentsSnap.forEach(childSnap => comments.push(childSnap.val()));
+
+    res.json({ ok: true, comments: comments });
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const postId = req.params.postId;
+
+  const postRef = db.ref(`posts/${postId}`);
+  
+  try {
+    const postSnapshot = await postRef.once('value');
+    const postData = postSnapshot.val();
+
+    if (!postData) return res.status(404).json({ ok: false });
+    if (postData.userId !== userId) return res.status(403).json({ ok: false });
+
+    await postRef.remove();
+    await db.ref(`profiles/${userId}/postsCount`).transaction((c) => (c || 0) > 0 ? c - 1 : 0);
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
