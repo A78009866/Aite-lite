@@ -16,8 +16,8 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// ✅ المسار الافتراضي للصورة المحلية
-const DEFAULT_PROFILE_PIC_URL = '/profile_pics/default_profile.png'; 
+// ✅ صورة بروفايل افتراضية موثوقة (استبدلت via.placeholder)
+const DEFAULT_PROFILE_PIC_URL = 'https://i.imgur.com/sC5oV0X.png'; 
 
 // إعدادات Cloudinary
 cloudinary.config({
@@ -32,7 +32,7 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     let folderName = 'general';
-    // تحديد مجلد التحميل بناءً على نوع الملف
+    // ✅ تحديث: لتعيين مجلد التحميل بناءً على اسم الحقل (لصور البروفايل والغلاف)
     if (req.originalUrl.includes('/register') || file.fieldname === 'profile_picture') folderName = 'profile_pics';
     else if (req.originalUrl.includes('/messages/send')) folderName = 'chat_media';
     else if (req.originalUrl.includes('/api/posts/create')) folderName = 'post_media';
@@ -68,9 +68,6 @@ const db = getDatabase();
 
 const app = express();
 const port = 3000;
-
-// ✅ تفعيل خدمة الملفات الثابتة من مجلد views (لجعل الصورة الافتراضية المحلية تعمل)
-app.use(express.static(path.join(__dirname, 'views'))); 
 
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
@@ -152,6 +149,7 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', upload.single('profile_picture'), async (req, res) => {
   const { username, password } = req.body;
+  // ✅ استخدام الصورة الافتراضية الموثوقة الجديدة
   let profile_picture_url = DEFAULT_PROFILE_PIC_URL; 
 
   try {
@@ -213,6 +211,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
 
     const finalChats = chats.map(chat => ({
       ...chat,
+      // ✅ استخدام DEFAULT_PROFILE_PIC_URL هنا أيضًا
       contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: DEFAULT_PROFILE_PIC_URL }
     }));
 
@@ -300,7 +299,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
             last_message_timestamp: timestamp,
             contact_id: senderId, 
             unread_count: admin.database.ServerValue.increment(1),
-            last_message_sender_id: senderId 
+            last_message_sender_id: senderId // ✅ ضروري لتحديد من أرسل آخر رسالة
         });
 
         // تحديث ملخص الدردشة للمرسل (العداد يبقى 0)
@@ -309,7 +308,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
             last_message_timestamp: timestamp,
             contact_id: contactId,
             unread_count: 0, 
-            last_message_sender_id: senderId 
+            last_message_sender_id: senderId // ✅ ضروري لتحديد من أرسل آخر رسالة
         });
         
         messageData.timestamp = Date.now(); 
@@ -330,14 +329,17 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
     const messagesRef = db.ref(`messages/${chatRoomId}`);
 
     try {
+        // 1. تحديد الرسائل غير المقروءة التي أرسلها الطرف الآخر
         const messagesSnap = await messagesRef.orderByChild('senderId').equalTo(other_id).once('value');
         const updates = {};
         messagesSnap.forEach(childSnap => {
             if (childSnap.val().is_read === false) updates[`${childSnap.key}/is_read`] = true;
         });
         
+        // 2. تحديث الرسائل في قاعدة البيانات
         if (Object.keys(updates).length > 0) await messagesRef.update(updates);
         
+        // 3. تصفير عداد الرسائل غير المقروءة في ملخص الدردشة للمستخدم الحالي
         await db.ref(`chats/${userId}/${other_id}`).update({ unread_count: 0 });
 
         res.json({ ok: true });
@@ -350,23 +352,27 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
 app.get('/api/users', requireAuth, async (req, res) => {
     const currentUserId = req.session.userId;
     try {
+        // 1. جلب جميع المستخدمين
         const profilesSnap = await db.ref('profiles').once('value');
         const profiles = profilesSnap.val() || {};
         const allUsers = Object.values(profiles).filter(user => user.id !== currentUserId);
         
+        // 2. جلب جميع ملخصات المحادثات للمستخدم الحالي (استعلام واحد سريع)
         const allChatsSnap = await db.ref(`chats/${currentUserId}`).once('value');
         const allChats = allChatsSnap.val() || {};
         
+        // 3. دمج بيانات المستخدم مع ملخص المحادثة (بدون استعلامات إضافية مكلفة)
         const usersList = allUsers.map((user) => {
             const contactId = user.id;
             const chatSummary = allChats[contactId] || {};
             
+            // بناء كائن الرسالة الأخيرة من بيانات ملخص الدردشة
             let lastMessage = null;
             if (chatSummary.last_message_content) {
                 lastMessage = {
                     content: chatSummary.last_message_content,
                     timestamp: chatSummary.last_message_timestamp,
-                    senderId: chatSummary.last_message_sender_id
+                    senderId: chatSummary.last_message_sender_id // نعتمد على هذا الحقل
                 };
             }
 
@@ -374,7 +380,9 @@ app.get('/api/users', requireAuth, async (req, res) => {
                 id: user.id,
                 username: user.username,
                 full_name: user.full_name,
+                // ✅ استخدام DEFAULT_PROFILE_PIC_URL هنا أيضًا
                 profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL, 
+                
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0
             };
@@ -387,6 +395,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
         res.status(500).json({ ok: false, error: 'فشل في جلب قائمة المستخدمين. (راجع سجلات الخادم)' });
     }
 });
+// -------------------------------------------------------------------------
 
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
@@ -396,21 +405,20 @@ app.get('/api/profile', requireAuth, async (req, res) => {
     const profileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
     const profileData = profileSnap.val();
     
-    if (!profileData) return res.status(404).json({ ok: false, error: 'Profile not found' });
+    if (!profileData) return res.status(404).json({ ok: false });
     
-    // 1. تعيين الصورة الافتراضية إذا كانت مفقودة
-    if (!profileData.profile_picture_url || profileData.profile_picture_url.includes('via.placeholder.com')) {
+    // ✅ 1. تعيين الصورة الافتراضية إذا كانت مفقودة أو كانت تشير إلى مسار قديم
+    if (!profileData.profile_picture_url || profileData.profile_picture_url === 'https://via.placeholder.com/150') {
         profileData.profile_picture_url = DEFAULT_PROFILE_PIC_URL;
     }
     
-    // 2. تعيين السيرة الذاتية فارغة إذا كانت مفقودة أو null/undefined
+    // ✅ 2. تعيين السيرة الذاتية فارغة إذا كانت مفقودة (حل مشكلة "عدم وجود سيرة")
     if (!profileData.bio) {
         profileData.bio = '';
     }
 
     res.json({ ok: true, ...profileData, is_owner: requestedUserId === currentUserId });
   } catch (error) {
-    console.error('Error fetching profile:', error);
     res.status(500).json({ ok: false });
   }
 });
@@ -427,6 +435,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     }
 });
 
+// **مسار تعديل الملف الشخصي (PUT /api/profile/edit)**
 const uploadProfileFields = upload.fields([
     { name: 'profile_picture', maxCount: 1 },
     { name: 'cover_photo', maxCount: 1 }
@@ -442,15 +451,18 @@ app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) 
 
     const updates = {
         full_name: full_name,
+        // ✅ التأكد من أن السيرة الذاتية هي سلسلة نصية فارغة إذا لم يتم إرسالها
         bio: bio || '',
         username: username,
     };
 
     try {
+        // 1. التحقق من تغيير اسم المستخدم (Username Uniqueness Check)
         const currentProfileSnap = await db.ref(`profiles/${userId}`).once('value');
         const currentUsername = currentProfileSnap.val().username;
 
         if (username !== currentUsername) {
+            // تحقق مما إذا كان اسم المستخدم الجديد مأخوذًا بالفعل
             const existingUsernameSnap = await db.ref('profiles')
                 .orderByChild('username')
                 .equalTo(username)
@@ -467,6 +479,7 @@ app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) 
                 return res.status(409).json({ ok: false, error: 'اسم المستخدم هذا مأخوذ بالفعل.' });
             }
             
+            // تحديث اسم العرض (displayName) والبريد الإلكتروني في Firebase Auth
             const newEmail = `${username}@trimer.io`;
             await firebaseAuth.updateUser(userId, {
                 displayName: username,
@@ -475,6 +488,7 @@ app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) 
             updates.email = newEmail;
         }
 
+        // 2. معالجة تحميل الصور (Cloudinary URLs)
         if (req.files && req.files.profile_picture) {
             updates.profile_picture_url = req.files.profile_picture[0].path;
         }
@@ -482,21 +496,25 @@ app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) 
             updates.cover_photo_url = req.files.cover_photo[0].path;
         }
 
+        // 3. تحديث البيانات في قاعدة البيانات
         await db.ref(`profiles/${userId}`).update(updates);
 
         res.json({ ok: true, message: 'تم تحديث الملف الشخصي بنجاح.' });
 
     } catch (error) {
         console.error('Error updating profile:', error);
+        // التعامل مع أخطاء Firebase Auth (مثل اسم مستخدم/بريد إلكتروني غير صالح)
         if (error.code === 'auth/invalid-email' || error.code === 'auth/email-already-in-use' || error.message.includes('A user with the provided email already exists')) {
              return res.status(409).json({ ok: false, error: 'اسم المستخدم غير صالح أو مأخوذ.' });
         }
         res.status(500).json({ ok: false, error: 'فشل في تحديث الملف الشخصي.' });
     }
 });
+// -------------------------------------------------------------------------
 
-// ---------------- API: Posts ----------------
+// ---------------- API: Posts (Full Implementation) ----------------
 
+// 1. إنشاء منشور جديد
 app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
   const userId = req.session.userId;
   const content = req.body.content ? req.body.content.trim() : '';
@@ -544,6 +562,7 @@ app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, r
   }
 });
 
+// 2. جلب المنشورات (الرئيسية)
 app.get('/api/posts', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
@@ -556,7 +575,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
     postsSnap.forEach(childSnap => {
       posts.push(childSnap.val());
     });
-    posts.reverse(); 
+    posts.reverse(); // الأحدث أولاً
 
     const userIds = [...new Set(posts.map(p => p.userId))];
     const profiles = {};
@@ -569,6 +588,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
         profiles[userIds[index]] = snap.val();
     });
     
+    // التحقق من الإعجابات
     const likedStatuses = {};
     const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
     const likeSnapshots = await Promise.all(likePromises);
@@ -594,6 +614,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
+// جلب منشورات مستخدم معين
 app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
     const currentUserId = req.session.userId;
     const requestedUserId = req.params.userId;
@@ -610,17 +631,14 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
         });
         posts.reverse(); 
         
-        const userProfileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
-        const userProfile = userProfileSnap.val();
-        
-        if (!userProfile) {
-            return res.status(404).json({ ok: false, error: 'User profile not found.' });
-        }
-        
         if (posts.length === 0) {
              return res.json({ ok: true, posts: [] });
         }
 
+        const userProfileSnap = await db.ref(`profiles/${requestedUserId}`).once('value');
+        const userProfile = userProfileSnap.val();
+        
+        // التحقق من الإعجابات
         const likedStatuses = {};
         const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
         const likeSnapshots = await Promise.all(likePromises);
@@ -648,6 +666,7 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
     }
 });
 
+// 3. الإعجاب بمنشور
 app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
@@ -689,6 +708,7 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   }
 });
 
+// 4. التعليق على منشور
 app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
@@ -713,7 +733,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       timestamp: admin.database.ServerValue.TIMESTAMP,
       user: {
         username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL // ✅ استخدام DEFAULT_PROFILE_PIC_URL
       }
     };
 
@@ -732,6 +752,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   }
 });
 
+// 5. جلب تعليقات منشور
 app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
   const postId = req.params.postId;
   try {
@@ -748,6 +769,7 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
   }
 });
 
+// 6. حذف منشور
 app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
