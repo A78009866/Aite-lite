@@ -4,7 +4,7 @@
 require('dotenv').config();
 
 const express = require('express');
-const path = require('path');
+const path = require('path'); // يجب التأكد من استيراد path
 const session = require('express-session');
 const FirebaseStore = require('connect-session-firebase')(session);
 const admin = require('firebase-admin');
