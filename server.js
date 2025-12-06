@@ -4,7 +4,7 @@
 require('dotenv').config();
 
 const express = require('express');
-const path = require('path'); // يجب التأكد من استيراد path
+const path = require('path');
 const session = require('express-session');
 const FirebaseStore = require('connect-session-firebase')(session);
 const admin = require('firebase-admin');
@@ -64,7 +64,10 @@ const db = getDatabase();
 
 const app = express();
 const port = 3000;
-app.use(express.static('views'));
+
+// **هذا السطر يقدم الملفات الثابتة من مجلد 'views'**
+app.use(express.static('views')); //
+
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
@@ -117,6 +120,7 @@ app.get('/check-status', (req, res) => {
   }
 });
 
+// المسارات التي تستخدم chat_list.html
 app.get('/chat_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat_list.html')); });
 app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'users_list.html')); });
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
