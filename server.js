@@ -121,8 +121,11 @@ app.get('/chat_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirn
 app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'users_list.html')); });
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
-app.get('/profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'profile.html')); });
-// **تمت الإضافة: مسار صفحة التعديل**
+// المسار الجديد لعرض صفحة HTML الثابتة
+app.get('/profile/:userId?', requireAuth, (req, res) => { 
+    // ? تجعل معامل userId اختيارياً، لتغطية حالة زيارة ملفك الشخصي
+    res.sendFile(path.join(__dirname, 'views', 'profile.html')); 
+});// **تمت الإضافة: مسار صفحة التعديل**
 app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'edit_profile.html')); });
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
