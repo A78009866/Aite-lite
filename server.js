@@ -29,10 +29,19 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     let folderName = 'general';
-    if (req.originalUrl.includes('/register') || file.fieldname === 'profile_picture') folderName = 'profile_pics';
-    else if (req.originalUrl.includes('/messages/send')) folderName = 'chat_media';
-    else if (req.originalUrl.includes('/api/posts/create')) folderName = 'post_media';
-    else if (file.fieldname === 'cover_photo') folderName = 'cover_photos'; // مجلد جديد لصور الغلاف
+    
+    // 💡 التعديل هنا لتحسين منطق تحديد المجلد
+    if (file.fieldname === 'profile_picture') {
+        folderName = 'profile_pics';
+    } else if (file.fieldname === 'cover_photo') {
+        folderName = 'cover_photos';
+    } else if (req.originalUrl.includes('/messages/send')) {
+        folderName = 'chat_media';
+    } else if (req.originalUrl.includes('/api/posts/create')) {
+        folderName = 'post_media';
+    } else if (req.originalUrl.includes('/register')) {
+         folderName = 'profile_pics';
+    }
     
     let format = undefined;
     if (file.mimetype.startsWith('audio/')) {
@@ -425,7 +434,7 @@ const uploadProfileFields = upload.fields([
     { name: 'cover_photo', maxCount: 1 }
 ]);
 
-// 💡 التعديل هنا: استخدام app.post بدلاً من app.put
+// 💡 تم تغيير app.put إلى app.post لاستيعاب بيانات multipart/form-data بشكل صحيح
 app.post('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) => {
     const userId = req.session.userId;
     const { full_name, username, bio } = req.body;
