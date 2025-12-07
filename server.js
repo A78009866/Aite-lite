@@ -425,7 +425,8 @@ const uploadProfileFields = upload.fields([
     { name: 'cover_photo', maxCount: 1 }
 ]);
 
-app.put('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) => {
+// 💡 التعديل هنا: استخدام app.post بدلاً من app.put
+app.post('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) => {
     const userId = req.session.userId;
     const { full_name, username, bio } = req.body;
     
