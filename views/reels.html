@@ -1,273 +1,598 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trimer Reels</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        /* إعدادات الصفحة الأساسية لمنع التمدد وإصلاح التمرير */
-        html, body {
-            margin: 0; padding: 0;
-            width: 100%; height: 100%;
-            background: #000; color: white;
-            overflow: hidden; /* نمنع تمرير الجسم الرئيسي */
-            font-family: system-ui, -apple-system, sans-serif;
-        }
-
-        /* حاوية الريلز - هذا الجزء المسؤول عن التمرير العمودي */
-        .reels-container {
-            width: 100%;
-            height: 100vh;
-            overflow-y: scroll;
-            scroll-snap-type: y mandatory;
-            -webkit-overflow-scrolling: touch; /* تمرير ناعم على آيفون */
-        }
-
-        .reel-video-container {
-            width: 100%;
-            height: 100vh;
-            scroll-snap-align: start;
-            scroll-snap-stop: always;
-            position: relative;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain; /* يحافظ على أبعاد الفيديو بدون قص */
-        }
-
-        /* نافذة التعليقات - سوداء تماماً */
-        .comments-sheet {
-            position: fixed;
-            bottom: -100%;
-            left: 0;
-            width: 100%;
-            height: 70%;
-            background: #000;
-            border-top: 1px solid #333;
-            border-radius: 20px 20px 0 0;
-            z-index: 9999;
-            transition: bottom 0.3s ease-out;
-            display: flex;
-            flex-direction: column;
-        }
-        .comments-sheet.active { bottom: 0; }
-
-        .sheet-header {
-            padding: 15px;
-            text-align: center;
-            border-bottom: 1px solid #222;
-        }
-        .close-btn {
-            position: absolute; left: 20px;
-            font-size: 22px; cursor: pointer;
-        }
-
-        .comment-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-        }
-
-        .comment-input-area {
-            padding: 15px;
-            border-top: 1px solid #222;
-            display: flex; gap: 10px;
-            background: #000;
-        }
-        .comment-input-area input {
-            flex: 1; background: #1a1a1a; border: 1px solid #333;
-            border-radius: 20px; padding: 10px 15px; color: white; outline: none;
-        }
-
-        /* الأزرار والمعلومات */
-        .reel-actions {
-            position: absolute; bottom: 100px; left: 15px;
-            display: flex; flex-direction: column; gap: 20px; z-index: 10;
-        }
-        .action-btn { color: white; text-align: center; cursor: pointer; font-size: 28px; }
-        .action-btn span { display: block; font-size: 12px; margin-top: 5px; }
-        .liked { color: #ff3040; }
-
-        .reel-info {
-            position: absolute; bottom: 40px; right: 15px;
-            z-index: 10; text-align: right; width: 75%;
-        }
-        .user-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .user-pic { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #fff; }
-
-        .heart-overlay {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 100px; color: white; opacity: 0; pointer-events: none;
-        }
-        @keyframes heartPop {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.9; }
-            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>ريلز — تمرير عمودي سلس، اعجاب بضغطتين وتعليقات</title>
+  <style>
+    :root{
+      --bg: #000;
+      --overlay: linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0.85) 100%);
+      --accent: #ff2d55;
+      --muted: rgba(255,255,255,0.7);
+    }
+    html,body{height:100%;margin:0;background:var(--bg);font-family: "Segoe UI", Roboto, "Noto Sans Arabic", system-ui, sans-serif;color:#fff; -webkit-font-smoothing:antialiased;}
+    .reels-container{
+      height:100vh;
+      overflow-y:scroll;
+      scroll-snap-type:y mandatory;
+      -webkit-overflow-scrolling: touch;
+      background: #000;
+    }
+    .reel{
+      height:100vh;
+      width:100%;
+      position:relative;
+      scroll-snap-align:start;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: #000;
+      overflow:hidden;
+    }
+    .reel video, .reel img, .reel audio{
+      max-height:100%;
+      width:100%;
+      object-fit:cover;
+      height:100vh;
+      display:block;
+      background:#000;
+    }
+    .overlay { position:absolute; inset:0; pointer-events:none; }
+    .bottom-gradient{ position:absolute; left:0;right:0;bottom:0;height:45%; background:var(--overlay); pointer-events:none; }
+    .controls{
+      position:absolute;
+      bottom:20px;
+      left:20px;
+      right:20px;
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+      pointer-events:auto;
+    }
+    .left-meta{ color:var(--muted); max-width:66%; font-size:14px; line-height:1.2; text-align:right; }
+    .left-meta .user{font-weight:700;margin-bottom:6px;}
+    .left-meta .caption{opacity:0.95}
+    .side-actions{ display:flex; flex-direction:column; align-items:center; gap:20px; margin-left:10px; text-align:center; }
+    .action-btn{ background:transparent;border:none;color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;padding:4px; }
+    .action-btn svg{width:36px;height:36px;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.6));}
+    .likes-count{font-size:13px;color:var(--muted);}
+    .tap-heart { position:absolute; transform:translate(-50%,-50%) scale(0.2); pointer-events:none; animation:pop 800ms cubic-bezier(.2,.9,.2,1) forwards; z-index:6; filter: drop-shadow(0 6px 18px rgba(0,0,0,0.6)); }
+    @keyframes pop{ 0%{opacity:0; transform:translate(-50%,-50%) scale(0.2) rotate(-10deg);} 20%{opacity:1; transform:translate(-50%,-50%) scale(1.15) rotate(0deg);} 55%{transform:translate(-50%,-50%) scale(0.95);} 100%{opacity:0; transform:translate(-50%,-50%) scale(0.9);} }
+    .play-toggle{ position:absolute; inset:auto 12px 50px auto; pointer-events:auto; background:rgba(0,0,0,0.45); border-radius:50%; padding:10px; display:flex; align-items:center; justify-content:center; }
+    .sheet-backdrop{ position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;z-index:50; transition:opacity .18s ease; }
+    .sheet-backdrop.open{display:block;opacity:1;}
+    .comments-sheet{
+      position:fixed; left:0;right:0; bottom:0; height:60vh; max-height:84vh; background:#000; border-top-left-radius:14px; border-top-right-radius:14px;
+      transform:translateY(110%); transition:transform .28s cubic-bezier(.2,.9,.25,1); z-index:60; display:flex; flex-direction:column; color:#fff; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.6); padding:12px; gap:8px;
+    }
+    .comments-sheet.open{transform:translateY(0);}
+    .sheet-handle{width:42px;height:6px;background:#333;border-radius:999px;margin:6px auto;}
+    .sheet-header{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;}
+    .sheet-title{font-weight:700}
+    .close-sheet{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer}
+    .comments-list{overflow:auto;padding:8px 6px;flex:1}
+    .comment{display:flex;gap:10px;padding:8px 6px;border-bottom:1px solid rgba(255,255,255,0.04)}
+    .comment img{width:36px;height:36px;border-radius:50%;object-fit:cover}
+    .comment .body{flex:1}
+    .comment .username{font-weight:700;font-size:14px}
+    .comment .text{font-size:13px;color:var(--muted);margin-top:4px}
+    .comment-form{display:flex;gap:8px;padding:8px;border-top:1px solid rgba(255,255,255,0.04)}
+    .comment-form input{flex:1;padding:10px 12px;border-radius:999px;border:none;background:rgba(255,255,255,0.04);color:#fff}
+    .comment-form button{background:var(--accent);border:none;color:#fff;padding:10px 12px;border-radius:10px;cursor:pointer}
+    .big-like-heart{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0.8);opacity:0;pointer-events:none;filter:drop-shadow(0 8px 30px rgba(0,0,0,0.6));transition:all .28s ease;z-index:6}
+    .big-like-heart.show{opacity:1;transform:translate(-50%,-50%) scale(1.05);animation:pop 700ms cubic-bezier(.2,.9,.2,1);}
+    .loader{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:var(--muted);z-index:80}
+    @media (max-width:640px){
+      .left-meta{max-width:58%;font-size:13px}
+      .action-btn svg{width:32px;height:32px}
+    }
+  </style>
 </head>
 <body>
 
-<div class="reels-container" id="reelsWrapper">
-    </div>
+  <div class="reels-container" id="reelsContainer" aria-label="قائمة الريلز">
+    <div class="loader" id="loader">جارٍ التحميل…</div>
+  </div>
 
-<div class="comments-sheet" id="commentSheet">
+  <div class="sheet-backdrop" id="sheetBackdrop" aria-hidden="true"></div>
+  <aside class="comments-sheet" id="commentsSheet" aria-hidden="true" role="dialog" aria-label="تعليقات الريل">
+    <div class="sheet-handle" aria-hidden="true"></div>
     <div class="sheet-header">
-        <i class="fas fa-times close-btn" onclick="closeComments()"></i>
-        <strong>التعليقات</strong>
+      <div class="sheet-title" id="sheetTitle">التعليقات</div>
+      <button class="close-sheet" id="closeSheetBtn" aria-label="إغلاق">✕</button>
     </div>
-    <div class="comment-list" id="commentList"></div>
-    <div class="comment-input-area">
-        <input type="text" id="commentInput" placeholder="أضف تعليقاً...">
-        <button onclick="postComment()" style="background:none; border:none; color:#0095f6; font-weight:bold; cursor:pointer;">نشر</button>
-    </div>
-</div>
+    <div class="comments-list" id="commentsList" tabindex="0"></div>
+    <form class="comment-form" id="commentForm">
+      <input id="commentInput" placeholder="اكتب تعليقًا..." aria-label="نص التعليق" autocomplete="off" />
+      <button type="submit">نشر</button>
+    </form>
+  </aside>
 
-<script>
+  <template id="reelTemplate">
+    <div class="reel" data-id="">
+      <!-- media placeholder (will be replaced with video/img/audio as needed) -->
+      <div class="media-wrapper" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div>
+
+      <div class="overlay" aria-hidden="true">
+        <div class="bottom-gradient"></div>
+        <div class="controls">
+          <div class="left-meta">
+            <div class="user"><span class="username"></span></div>
+            <div class="caption"></div>
+          </div>
+
+          <div class="side-actions" aria-hidden="true">
+            <button class="action-btn like-btn" aria-label="اعجاب">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+              <div class="likes-count">0</div>
+            </button>
+
+            <button class="action-btn comment-btn" aria-label="تعليق">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <div class="likes-count">تعليق</div>
+            </button>
+
+            <button class="action-btn play-pause-btn" aria-label="إيقاف/تشغيل">
+              <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3v18l15-9z"></path></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="big-like-heart" aria-hidden="true">
+        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="0" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 21s-7-4.35-9-7.06C1.2 11.63 3.2 7 7.5 7 9.2 7 10 8 12 10c2-2 2.8-3 4.5-3C20.8 7 22.8 11.63 21 13.94 19 16.65 12 21 12 21z" fill="#ff2d55"></path>
+        </svg>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    // Helper: safe escape
+    function escapeHtml(s){ return String(s || '').replace(/[&<>"]/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m])); }
+
+    const container = document.getElementById('reelsContainer');
+    const template = document.getElementById('reelTemplate');
+    const loader = document.getElementById('loader');
+    const sheet = document.getElementById('commentsSheet');
+    const sheetBackdrop = document.getElementById('sheetBackdrop');
+    const commentsList = document.getElementById('commentsList');
+    const sheetTitle = document.getElementById('sheetTitle');
+    const closeSheetBtn = document.getElementById('closeSheetBtn');
+    const commentForm = document.getElementById('commentForm');
+    const commentInput = document.getElementById('commentInput');
+
     let activeReelId = null;
+    let observer = null;
+    const reelsMap = new Map(); // id -> element
 
-    // جلب البيانات عند التشغيل
-    window.onload = async () => {
-        await loadReels();
-    };
+    // Fetch reels from backend
+    async function fetchReels(limit = 50){
+      showLoader(true);
+      try {
+        const res = await fetch(`/api/reels?limit=${encodeURIComponent(limit)}`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) throw new Error('خطأ في الشبكة');
+        const data = await res.json();
+        if (!data.ok || !data.reels) throw new Error('لم يتم جلب الريلز');
+        return data.reels;
+      } catch (err) {
+        console.error('fetchReels error:', err);
+        showLoader(false);
+        container.innerHTML = `<div style="padding:16px;color:var(--muted);text-align:center">تعذر جلب الريلز. تحقق من تسجيل الدخول أو الشبكة.</div>`;
+        return [];
+      } finally {
+        showLoader(false);
+      }
+    }
 
-    async function loadReels() {
-        try {
-            const res = await fetch('/api/reels');
-            const data = await res.json();
-            if (data.ok) {
-                renderReels(data.reels);
-                setupObserver();
+    function showLoader(visible){
+      loader.style.display = visible ? 'block' : 'none';
+    }
+
+    // Render reels list
+    function renderReels(reels){
+      container.innerHTML = '';
+      if (!reels || reels.length === 0){
+        container.innerHTML = `<div style="padding:16px;color:var(--muted);text-align:center">لا توجد ريلز للعرض.</div>`;
+        return;
+      }
+
+      reels.forEach(r => {
+        const node = template.content.cloneNode(true);
+        const reelEl = node.querySelector('.reel');
+        reelEl.dataset.id = r.reelId || r.id || '';
+        reelEl.reelData = {
+          id: reelEl.dataset.id,
+          userId: r.userId,
+          username: r.user?.username || r.userId || 'مستخدم',
+          caption: r.content || '',
+          likes: r.likes || 0,
+          isLiked: !!r.is_liked,
+          comments: [] // will be fetched on demand
+        };
+
+        // media handling
+        const mediaWrapper = reelEl.querySelector('.media-wrapper');
+        const mediaUrl = (r.media && r.media.url) || r.mediaUrl || '';
+        const mediaType = (r.media && r.media.type) || guessTypeFromUrl(mediaUrl);
+
+        if (mediaType === 'video') {
+          const video = document.createElement('video');
+          video.src = mediaUrl;
+          video.playsInline = true;
+          video.muted = true;
+          video.loop = true;
+          video.setAttribute('preload','metadata');
+          video.controls = false;
+          mediaWrapper.appendChild(video);
+        } else if (mediaType === 'image') {
+          const img = document.createElement('img');
+          img.src = mediaUrl;
+          img.alt = r.content || ('ريل من ' + reelEl.reelData.username);
+          mediaWrapper.appendChild(img);
+        } else if (mediaType === 'audio') {
+          const video = document.createElement('video'); // use video element for webm audio too for consistent UI
+          video.src = mediaUrl;
+          video.playsInline = true;
+          video.muted = false;
+          video.loop = false;
+          video.setAttribute('preload','metadata');
+          video.controls = true;
+          mediaWrapper.appendChild(video);
+        } else {
+          // fallback: show poster image if available or a blank block
+          const img = document.createElement('img');
+          img.src = mediaUrl || '';
+          img.alt = 'ميديا';
+          mediaWrapper.appendChild(img);
+        }
+
+        reelEl.querySelector('.username').textContent = reelEl.reelData.username;
+        reelEl.querySelector('.caption').textContent = reelEl.reelData.caption;
+        reelEl.querySelector('.likes-count').textContent = reelEl.reelData.likes;
+
+        if (reelEl.reelData.isLiked) reelEl.querySelector('.like-btn').classList.add('liked');
+        attachInteractions(reelEl);
+        container.appendChild(node);
+        reelsMap.set(reelEl.dataset.id, reelEl);
+      });
+
+      // observe videos for auto-play
+      setupObserver();
+    }
+
+    function guessTypeFromUrl(url){
+      if (!url) return '';
+      const u = url.toLowerCase();
+      if (u.endsWith('.mp4') || u.endsWith('.webm') || u.endsWith('.mov') || u.includes('video')) return 'video';
+      if (u.endsWith('.jpg') || u.endsWith('.jpeg') || u.endsWith('.png') || u.endsWith('.gif') || u.includes('image')) return 'image';
+      if (u.endsWith('.mp3') || u.endsWith('.wav') || u.endsWith('.ogg') || u.includes('audio')) return 'audio';
+      return '';
+    }
+
+    // Setup IntersectionObserver to play visible video
+    function setupObserver(){
+      if (observer) {
+        // disconnect old
+        observer.disconnect();
+      }
+      const options = { root: container, threshold: 0.6 };
+      observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const reelEl = entry.target;
+          const media = reelEl.querySelector('.media-wrapper > video');
+          const playBtn = reelEl.querySelector('.play-pause-btn');
+          if (entry.isIntersecting) {
+            if (media && media.paused) {
+              media.play().catch(()=>{/* ignore autoplay block */});
             }
-        } catch (e) { console.error("Load error:", e); }
+            if (playBtn) playBtn.querySelector('.play-icon').innerHTML = `<path d="M6 19h4.5V5H6v14zm7.5 0H18V5h-4.5v14z" />`;
+          } else {
+            if (media && !media.paused) media.pause();
+            if (playBtn) playBtn.querySelector('.play-icon').innerHTML = `<path d="M5 3v18l15-9z"></path>`;
+          }
+        });
+      }, options);
+
+      document.querySelectorAll('.reel').forEach(r => observer.observe(r));
     }
 
-    function renderReels(reels) {
-        const container = document.getElementById('reelsWrapper');
-        container.innerHTML = reels.map(reel => `
-            <div class="reel-video-container">
-                <video src="${reel.media?.url}" loop muted playsinline 
-                       onclick="handleVideoClick(this)" 
-                       ondblclick="handleDoubleLike(event, '${reel.reelId}')"></video>
-                
-                <div class="heart-overlay" id="heart-${reel.reelId}"><i class="fas fa-heart"></i></div>
+    // Attach interactions (double-tap, like button, comment button, play/pause)
+    function attachInteractions(reelEl){
+      const mediaWrapper = reelEl.querySelector('.media-wrapper');
+      const mediaVideo = mediaWrapper.querySelector('video');
+      const likeBtn = reelEl.querySelector('.like-btn');
+      const commentBtn = reelEl.querySelector('.comment-btn');
+      const playBtn = reelEl.querySelector('.play-pause-btn');
+      const likesCountEl = likeBtn.querySelector('.likes-count');
 
-                <div class="reel-actions">
-                    <div class="action-btn ${reel.is_liked ? 'liked' : ''}" id="like-btn-${reel.reelId}" onclick="toggleLike('${reel.reelId}')">
-                        <i class="fas fa-heart"></i>
-                        <span id="like-count-${reel.reelId}">${reel.likes || 0}</span>
-                    </div>
-                    <div class="action-btn" onclick="openComments('${reel.reelId}')">
-                        <i class="fas fa-comment"></i>
-                        <span>${reel.commentsCount || 0}</span>
-                    </div>
-                </div>
-
-                <div class="reel-info">
-                    <div class="user-row">
-                        <img src="${reel.user.profile_picture_url}" class="user-pic">
-                        <strong>${reel.user.username}</strong>
-                    </div>
-                    <p>${reel.content}</p>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function handleVideoClick(video) {
-        if (video.muted) video.muted = false; // تشغيل الصوت عند أول لمسة
-        if (video.paused) video.play();
-        else video.pause();
-    }
-
-    function setupObserver() {
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.play().catch(() => {});
-                } else {
-                    entry.target.pause();
-                }
-            });
-        }, { threshold: 0.8 });
-        document.querySelectorAll('video').forEach(v => observer.observe(v));
-    }
-
-    // --- وظائف التعليقات ---
-    async function openComments(reelId) {
-        activeReelId = reelId;
-        document.getElementById('commentSheet').classList.add('active');
-        const list = document.getElementById('commentList');
-        list.innerHTML = '<p style="text-align:center">جاري التحميل...</p>';
-
-        try {
-            const res = await fetch(`/api/reels/${reelId}/comments`);
-            const data = await res.json();
-            if (data.ok) {
-                list.innerHTML = data.comments.length ? data.comments.map(c => `
-                    <div style="display:flex; gap:10px; margin-bottom:15px;">
-                        <img src="${c.user.profile_picture_url}" style="width:30px; height:30px; border-radius:50%;">
-                        <div>
-                            <div style="font-weight:bold; font-size:12px; color:#888;">${c.user.username}</div>
-                            <div style="font-size:14px;">${c.content}</div>
-                        </div>
-                    </div>
-                `).join('') : '<p style="text-align:center; color:#555;">لا توجد تعليقات</p>';
+      // pointer-detection for single/double tap
+      let lastTap = 0, lastX = 0, lastY = 0;
+      const DBL_THRESHOLD = 300;
+      reelEl.addEventListener('pointerup', (ev) => {
+        const now = Date.now();
+        const x = ev.clientX, y = ev.clientY;
+        if (now - lastTap < DBL_THRESHOLD && Math.hypot(x-lastX, y-lastY) < 60){
+          // double tap
+          triggerDoubleTap(reelEl, x, y);
+          lastTap = 0;
+        } else {
+          lastTap = now; lastX = x; lastY = y;
+          setTimeout(()=>{
+            if (Date.now() - lastTap >= DBL_THRESHOLD) {
+              // single tap -> toggle play/pause for video
+              togglePlayPause(mediaVideo, playBtn);
+              lastTap = 0;
             }
-        } catch(e) { list.innerHTML = 'خطأ في التحميل'; }
+          }, DBL_THRESHOLD + 10);
+        }
+      });
+
+      likeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await likeReel(reelEl, likesCountEl);
+      });
+
+      commentBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openComments(reelEl);
+      });
+
+      playBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePlayPause(mediaVideo, playBtn, true);
+      });
     }
 
-    function closeComments() {
-        document.getElementById('commentSheet').classList.remove('active');
+    // Toggle play/pause for video (safe if media undefined)
+    function togglePlayPause(video, playBtn, forceToggle=false){
+      if (!video) return;
+      if (video.paused || forceToggle) {
+        if (video.paused) {
+          video.play().catch(()=>{/* ignore */});
+          if (playBtn) playBtn.querySelector('.play-icon').innerHTML = `<path d="M6 19h4.5V5H6v14zm7.5 0H18V5h-4.5v14z" />`;
+        } else {
+          video.pause();
+          if (playBtn) playBtn.querySelector('.play-icon').innerHTML = `<path d="M5 3v18l15-9z"></path>`;
+        }
+      } else {
+        video.pause();
+        if (playBtn) playBtn.querySelector('.play-icon').innerHTML = `<path d="M5 3v18l15-9z"></path>`;
+      }
     }
 
-    async function postComment() {
-        const input = document.getElementById('commentInput');
-        const content = input.value.trim();
-        if (!content || !activeReelId) return;
+    // Double tap: animate heart + like via backend
+    async function triggerDoubleTap(reelEl, pageX, pageY){
+      const rect = reelEl.getBoundingClientRect();
+      const x = pageX - rect.left;
+      const y = pageY - rect.top;
+      const heart = document.createElement('div');
+      heart.className = 'tap-heart';
+      heart.innerHTML = `<svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 21s-7-4.35-9-7.06C1.2 11.63 3.2 7 7.5 7 9.2 7 10 8 12 10c2-2 2.8-3 4.5-3C20.8 7 22.8 11.63 21 13.94 19 16.65 12 21 12 21z" fill="#ff2d55"/>
+      </svg>`;
+      heart.style.left = x + 'px';
+      heart.style.top = y + 'px';
+      reelEl.appendChild(heart);
+      setTimeout(()=> heart.remove(), 900);
 
-        try {
-            const res = await fetch(`/api/reels/${activeReelId}/comment`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content })
-            });
-            const data = await res.json();
-            if (data.ok) {
-                input.value = '';
-                openComments(activeReelId); // إعادة تحديث القائمة
-            }
-        } catch (e) { alert("فشل إرسال التعليق"); }
+      // perform like (double-tap should like, not toggle)
+      const id = reelEl.dataset.id;
+      const likeBtn = reelEl.querySelector('.like-btn');
+      const likesCountEl = likeBtn.querySelector('.likes-count');
+
+      // If already liked, only animate center heart
+      if (reelEl.reelData.isLiked) {
+        const bigHeart = reelEl.querySelector('.big-like-heart');
+        bigHeart.classList.add('show');
+        setTimeout(()=> bigHeart.classList.remove('show'), 700);
+        return;
+      }
+
+      // optimistic UI
+      reelEl.reelData.isLiked = true;
+      reelEl.reelData.likes = (reelEl.reelData.likes || 0) + 1;
+      likeBtn.classList.add('liked');
+      likesCountEl.textContent = reelEl.reelData.likes;
+      const bigHeart = reelEl.querySelector('.big-like-heart');
+      bigHeart.classList.add('show');
+      setTimeout(()=> bigHeart.classList.remove('show'), 700);
+
+      // call backend
+      try {
+        await fetch(`/api/reels/${encodeURIComponent(id)}/like`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+      } catch (err) {
+        console.error('like error:', err);
+        // revert optimistic on failure
+        reelEl.reelData.isLiked = false;
+        reelEl.reelData.likes = Math.max(0, (reelEl.reelData.likes||1) - 1);
+        likeBtn.classList.remove('liked');
+        likesCountEl.textContent = reelEl.reelData.likes;
+      }
     }
 
-    // --- وظائف الإعجاب ---
-    async function toggleLike(reelId) {
-        try {
-            const res = await fetch(`/api/reels/${reelId}/like`, { method: 'POST' });
-            const data = await res.json();
-            if (data.ok) {
-                const btn = document.getElementById(`like-btn-${reelId}`);
-                btn.classList.toggle('liked', data.action === 'liked');
-                document.getElementById(`like-count-${reelId}`).innerText = data.newLikes;
-            }
-        } catch(e) {}
+    // Like/unlike via clicking like button (toggle)
+    async function likeReel(reelEl, likesCountEl){
+      const id = reelEl.dataset.id;
+      // optimistic toggle
+      const wasLiked = !!reelEl.reelData.isLiked;
+      reelEl.reelData.isLiked = !wasLiked;
+      reelEl.reelData.likes = wasLiked ? Math.max(0, (reelEl.reelData.likes||1)-1) : (reelEl.reelData.likes||0)+1;
+      reelEl.querySelector('.like-btn').classList.toggle('liked', reelEl.reelData.isLiked);
+      likesCountEl.textContent = reelEl.reelData.likes;
+
+      try {
+        const res = await fetch(`/api/reels/${encodeURIComponent(id)}/like`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (!res.ok) throw new Error('شبكة');
+        const data = await res.json();
+        if (!data.ok) {
+          // backend returned not-ok -> revert
+          reelEl.reelData.isLiked = wasLiked;
+          reelEl.reelData.likes = wasLiked ? (reelEl.reelData.likes||0)+1 : Math.max(0, reelEl.reelData.likes-1);
+          reelEl.querySelector('.like-btn').classList.toggle('liked', reelEl.reelData.isLiked);
+          likesCountEl.textContent = reelEl.reelData.likes;
+        } else {
+          // sync count if backend gave newLikes
+          if (typeof data.newLikes === 'number') {
+            reelEl.reelData.likes = data.newLikes;
+            likesCountEl.textContent = data.newLikes;
+          }
+        }
+      } catch (err) {
+        console.error('likeReel error:', err);
+        // revert
+        reelEl.reelData.isLiked = wasLiked;
+        reelEl.reelData.likes = wasLiked ? (reelEl.reelData.likes||0)+1 : Math.max(0, reelEl.reelData.likes-1);
+        reelEl.querySelector('.like-btn').classList.toggle('liked', reelEl.reelData.isLiked);
+        likesCountEl.textContent = reelEl.reelData.likes;
+      }
     }
 
-    function handleDoubleLike(event, reelId) {
-        const heart = document.getElementById(`heart-${reelId}`);
-        heart.style.animation = 'heartPop 0.7s ease';
-        setTimeout(() => heart.style.animation = '', 700);
-        
-        const btn = document.getElementById(`like-btn-${reelId}`);
-        if (!btn.classList.contains('liked')) toggleLike(reelId);
+    // Comments sheet logic (fetch comments when opening)
+    async function openComments(reelEl){
+      activeReelId = reelEl.dataset.id;
+      sheetTitle.textContent = `التعليقات — @${reelEl.reelData.username}`;
+      sheetBackdrop.classList.add('open');
+      sheet.classList.add('open');
+      sheet.setAttribute('aria-hidden', 'false');
+      sheetBackdrop.setAttribute('aria-hidden','false');
+      commentInput.focus();
+
+      // fetch comments from backend
+      try {
+        const res = await fetch(`/api/reels/${encodeURIComponent(activeReelId)}/comments`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) throw new Error('شبكة');
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.comments)) {
+          reelEl.reelData.comments = data.comments.map(c => ({ username: c.user?.username || c.user?.username || c.username || 'مستخدم', text: c.content || c.text || '' }));
+        } else {
+          reelEl.reelData.comments = reelEl.reelData.comments || [];
+        }
+      } catch (err) {
+        console.error('fetch comments error:', err);
+        // fallback to local cache
+        reelEl.reelData.comments = reelEl.reelData.comments || [];
+      }
+      populateComments(reelEl.reelData.comments);
     }
-</script>
+
+    function closeComments(){
+      activeReelId = null;
+      sheetBackdrop.classList.remove('open');
+      sheet.classList.remove('open');
+      sheet.setAttribute('aria-hidden', 'true');
+      sheetBackdrop.setAttribute('aria-hidden','true');
+      commentsList.innerHTML = '';
+      commentInput.value = '';
+    }
+
+    function populateComments(comments){
+      commentsList.innerHTML = '';
+      if (!comments || comments.length === 0){
+        commentsList.innerHTML = `<div style="color:var(--muted);padding:16px;text-align:center">لا توجد تعليقات بعد</div>`;
+        return;
+      }
+      comments.forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'comment';
+        el.innerHTML = `
+          <img src="https://via.placeholder.com/80" alt="${escapeHtml(c.username)}" />
+          <div class="body">
+            <div class="username">${escapeHtml(c.username)}</div>
+            <div class="text">${escapeHtml(c.text)}</div>
+          </div>
+        `;
+        commentsList.appendChild(el);
+      });
+      commentsList.scrollTop = commentsList.scrollHeight;
+    }
+
+    // Submit comment to backend (and optimistic update)
+    commentForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = commentInput.value.trim();
+      if (!text || !activeReelId) return;
+      const reelEl = reelsMap.get(activeReelId);
+      if (!reelEl) return;
+
+      // optimistic update
+      const newComment = { username: 'أنت', text };
+      reelEl.reelData.comments = reelEl.reelData.comments || [];
+      reelEl.reelData.comments.push(newComment);
+      populateComments(reelEl.reelData.comments);
+      commentInput.value = '';
+
+      try {
+        const res = await fetch(`/api/reels/${encodeURIComponent(activeReelId)}/comment`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: text })
+        });
+        if (!res.ok) throw new Error('شبكة');
+        const data = await res.json();
+        if (data.ok && data.comment) {
+          // replace optimistic with server comment (optional)
+          // (server comment structure: comment.user.username and comment.content)
+          // update last element
+          const serverComment = { username: data.comment.user?.username || 'أنت', text: data.comment.content || data.comment.text || text };
+          reelEl.reelData.comments[reelEl.reelData.comments.length - 1] = serverComment;
+          populateComments(reelEl.reelData.comments);
+        }
+      } catch (err) {
+        console.error('post comment error:', err);
+        // keep optimistic comment but could mark failed
+      }
+    });
+
+    closeSheetBtn.addEventListener('click', closeComments);
+    sheetBackdrop.addEventListener('click', closeComments);
+    document.addEventListener('keydown', (e)=> {
+      if (e.key === 'Escape' && sheet.classList.contains('open')) closeComments();
+    });
+
+    // Prevent default passive gestures interference
+    document.addEventListener('touchmove', function(){}, {passive:true});
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e)=>{
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+      }
+    });
+
+    // Initial load: fetch and render reels from API
+    (async function init(){
+      const reels = await fetchReels(50);
+      // normalize server objects to expected shape if necessary
+      // server returns objects with reelId, media.url, user object already included in server.js
+      renderReels(reels);
+      console.log('ريلز جاهزة ومتصلة بالـ API.');
+    })();
+  </script>
 </body>
 </html>
