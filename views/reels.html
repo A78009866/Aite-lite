@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Aite - ريلز</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body { background: #000; color: #f1f5f9; font-family: Inter, system-ui, sans-serif; margin:0; padding-bottom:68px; }
+    .reel-video { width:100%; height:100vh; object-fit:cover; }
+    .reel-overlay { position: absolute; inset:0; display:flex; align-items:flex-end; justify-content:space-between; padding:20px; pointer-events:none; }
+    .reel-actions { pointer-events:auto; display:flex; flex-direction:column; gap:16px; align-items:center; }
+    .like-heart { transform: scale(0); transition: transform .25s ease-out; }
+    .like-heart.show { transform: scale(1); }
+    .reel-info { pointer-events:auto; max-width:65%; }
+    .glass-comment-modal-content { background-color: rgba(0,0,0,0.85); backdrop-filter: blur(12px); border:1px solid rgba(255,255,255,0.06); }
+  </style>
+</head>
+<body>
+
+  <div id="reelsContainer" class="relative w-full h-screen overflow-hidden bg-black">
+    <!-- سيتم توليد الريلز ديناميكياً — كمثال أضع مقطعين -->
+    <div class="reel-item relative w-full h-screen" data-reel-id="reel1">
+      <video id="video-reel1" class="reel-video" src="https://www.w3schools.com/html/mov_bbb.mp4" playsinline preload="metadata" loop></video>
+      <div class="reel-overlay">
+        <div class="reel-info text-right pr-4">
+          <h3 class="text-white font-bold text-lg">اسم المستخدم • @username</h3>
+          <p class="text-gray-300 text-sm mt-2">وصف الريلز — موجز أو هاشتاق</p>
+        </div>
+
+        <div class="reel-actions pr-2">
+          <div id="floating-heart-reel1" class="like-heart bg-white/10 rounded-full p-3">
+            <i class="fas fa-heart text-red-500 text-2xl"></i>
+          </div>
+          <button class="flex flex-col items-center text-gray-300" onclick="toggleLikeUI('reel1')">
+            <i id="like-icon-reel1" class="far fa-heart text-2xl"></i>
+            <span id="like-count-reel1" class="text-xs mt-1">12K</span>
+          </button>
+
+          <button class="flex flex-col items-center text-gray-300" onclick="openReelComments('reel1')">
+            <i class="far fa-comment text-2xl"></i>
+            <span id="comment-count-reel1" class="text-xs mt-1">123</span>
+          </button>
+
+          <button class="flex flex-col items-center text-gray-300" onclick="shareReel('reel1')">
+            <i class="fas fa-share text-2xl"></i>
+            <span class="text-xs mt-1">مشاركة</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="reel-item relative w-full h-screen" data-reel-id="reel2" style="display:none">
+      <video id="video-reel2" class="reel-video" src="https://www.w3schools.com/html/movie.mp4" playsinline preload="metadata" loop></video>
+      <div class="reel-overlay">
+        <div class="reel-info text-right pr-4">
+          <h3 class="text-white font-bold text-lg">Another User</h3>
+          <p class="text-gray-300 text-sm mt-2">وصف ثاني</p>
+        </div>
+
+        <div class="reel-actions pr-2">
+          <div id="floating-heart-reel2" class="like-heart bg-white/10 rounded-full p-3">
+            <i class="fas fa-heart text-red-500 text-2xl"></i>
+          </div>
+          <button class="flex flex-col items-center text-gray-300" onclick="toggleLikeUI('reel2')">
+            <i id="like-icon-reel2" class="far fa-heart text-2xl"></i>
+            <span id="like-count-reel2" class="text-xs mt-1">1.2K</span>
+          </button>
+
+          <button class="flex flex-col items-center text-gray-300" onclick="openReelComments('reel2')">
+            <i class="far fa-comment text-2xl"></i>
+            <span id="comment-count-reel2" class="text-xs mt-1">34</span>
+          </button>
+
+          <button class="flex flex-col items-center text-gray-300" onclick="shareReel('reel2')">
+            <i class="fas fa-share text-2xl"></i>
+            <span class="text-xs mt-1">مشاركة</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- تعليقات الريلز (نافذة سفلية) -->
+  <div id="reelCommentModal" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4">
+    <div class="glass-comment-modal-content w-full max-w-md rounded-t-xl p-4" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-white text-lg font-bold">التعليقات</h3>
+        <button onclick="closeReelComments()" class="text-gray-300"><i class="fas fa-times"></i></button>
+      </div>
+
+      <div id="reelCommentsList" class="max-h-64 overflow-y-auto space-y-3 mb-3">
+        <div class="text-gray-400 text-center p-4">لا توجد تعليقات حتى الآن.</div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input id="reelCommentInput" class="flex-grow p-3 rounded-full bg-gray-800 text-white" placeholder="أضف تعليقًا..." />
+        <button id="reelPostCommentBtn" class="bg-blue-500 text-white px-4 py-2 rounded-full">نشر</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fixed bottom-0 left-0 right-0 bg-[#0b1220] p-3 text-center">
+    <div class="max-w-3xl mx-auto flex justify-between items-center">
+      <a href="/chat_list" class="text-gray-400 hover:text-white"><i class="fas fa-home"></i></a>
+      <a href="/users_list" class="text-gray-400 hover:text-white"><i class="fas fa-comment-dots"></i></a>
+      <a href="/create-reel" class="text-white bg-blue-600 px-4 py-2 rounded-full">إنشاء ريلز</a>
+    </div>
+  </div>
+
+  <script>
+    // بسيط: جعل تشغيل الفيديو الأول تلقائي
+    const reels = Array.from(document.querySelectorAll('.reel-item'));
+    let currentIndex = 0;
+    function showReel(index) {
+      reels.forEach((el, i) => {
+        el.style.display = i === index ? 'block' : 'none';
+        const v = el.querySelector('video');
+        if (i === index) {
+          v.currentTime = 0;
+          v.play().catch(()=>{});
+        } else {
+          v.pause();
+        }
+      });
+    }
+    showReel(0);
+
+    // تنقل مع السحب العمودي — (نسخة بسيطة) استمع للمفاتيح للتجربة
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        currentIndex = Math.min(currentIndex + 1, reels.length - 1);
+        showReel(currentIndex);
+      } else if (e.key === 'ArrowUp') {
+        currentIndex = Math.max(currentIndex - 1, 0);
+        showReel(currentIndex);
+      }
+    });
+
+    // دعم double-tap للهاتف: منطق بسيط per reel
+    function setupDoubleTap(reelId) {
+      const container = document.querySelector(`.reel-item[data-reel-id="${reelId}"]`);
+      const video = container.querySelector('video');
+      let lastTap = 0;
+      let lastX = 0;
+      let lastY = 0;
+
+      function handleTap(e) {
+        const now = Date.now();
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        const y = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const dt = now - lastTap;
+        const dx = Math.abs(x - lastX);
+        const dy = Math.abs(y - lastY);
+
+        // شرط أن تكون الضغطة الثانية خلال 300ms وبقرب مكان الضغطة الأولى
+        if (dt < 300 && dx < 30 && dy < 30) {
+          // double-tap
+          showFloatingHeart(reelId);
+          toggleLikeUI(reelId, true);
+        }
+        lastTap = now;
+        lastX = x;
+        lastY = y;
+      }
+
+      container.addEventListener('click', handleTap);
+      container.addEventListener('touchend', handleTap);
+    }
+
+    function showFloatingHeart(reelId) {
+      const heart = document.getElementById(`floating-heart-${reelId}`);
+      if (!heart) return;
+      heart.classList.add('show');
+      setTimeout(()=> heart.classList.remove('show'), 700);
+    }
+
+    function toggleLikeUI(reelId, fromDoubleTap = false) {
+      const icon = document.getElementById(`like-icon-${reelId}`);
+      const countEl = document.getElementById(`like-count-${reelId}`);
+      let countText = countEl.textContent.replace(/,/g,'').replace('K','000'); // بسيط
+      // Toggle UI فقط (يمكن ربطها لاحقاً بAPI)
+      if (icon.classList.contains('far')) {
+        icon.classList.remove('far'); icon.classList.add('fas', 'text-red-500');
+        // زيادة رقم افتراضي
+        let val = parseLikeCount(countEl.textContent);
+        val = val + 1;
+        countEl.textContent = formatLikeCount(val);
+      } else {
+        icon.classList.remove('fas','text-red-500'); icon.classList.add('far');
+        let val = parseLikeCount(countEl.textContent);
+        val = Math.max(0, val - 1);
+        countEl.textContent = formatLikeCount(val);
+      }
+    }
+
+    function parseLikeCount(text) {
+      // بسيط: يدعم K
+      text = text.trim();
+      if (text.endsWith('K')) {
+        return Math.round(parseFloat(text.replace('K','')) * 1000);
+      }
+      return parseInt(text.replace(/[^0-9]/g,'')) || 0;
+    }
+    function formatLikeCount(n) {
+      if (n >= 1000) return (Math.round(n/100)/10) + 'K';
+      return ''+n;
+    }
+
+    function openReelComments(reelId) {
+      document.getElementById('reelCommentModal').classList.remove('hidden');
+      // TODO: جلب التعليقات من API عند توفره
+    }
+    function closeReelComments() {
+      document.getElementById('reelCommentModal').classList.add('hidden');
+    }
+    function shareReel(reelId) {
+      alert('مشاركة (تجريبي)');
+    }
+
+    // تهيئة double-tap لكل reel
+    reels.forEach(r => setupDoubleTap(r.dataset.reelId));
+
+    // زر نشر تعليق (تجريبي)
+    document.getElementById('reelPostCommentBtn').addEventListener('click', () => {
+      const input = document.getElementById('reelCommentInput');
+      const val = input.value.trim();
+      if (!val) return;
+      // عرض تعليق محلي
+      const list = document.getElementById('reelCommentsList');
+      const el = document.createElement('div');
+      el.className = 'flex items-start gap-2';
+      el.innerHTML = `<div class="flex-grow"><div class="text-white font-semibold">أنت</div><div class="text-gray-300">${escapeHtml(val)}</div></div>`;
+      list.appendChild(el);
+      input.value = '';
+      list.scrollTop = list.scrollHeight;
+    });
+
+    function escapeHtml(s) { return s.replace(/[&<>"']/g, function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];}); }
+  </script>
+</body>
+</html>
