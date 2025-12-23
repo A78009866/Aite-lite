@@ -3,88 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إنشاء ريلز جديد</title>
+    <title>إنشاء ريلز جديد - Aite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; background: #fafafa; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .upload-card { background: white; width: 100%; max-width: 400px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 20px; }
-        h2 { text-align: center; color: #333; }
-        .preview-box { 
-            width: 100%; height: 400px; background: #eee; border-radius: 10px; 
-            margin: 20px 0; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;
-        }
-        .preview-box video { width: 100%; height: 100%; object-fit: cover; }
-        .file-input { display: none; }
-        .btn-select { background: #e91e63; color: white; padding: 12px 25px; border-radius: 25px; cursor: pointer; display: inline-block; }
-        textarea { width: 100%; border: 1px solid #ddd; border-radius: 10px; padding: 10px; margin-top: 15px; resize: none; box-sizing: border-box; }
-        .btn-publish { width: 100%; background: #0095f6; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; margin-top: 15px; cursor: pointer; }
-        .loading { display: none; margin-top: 10px; color: #666; font-size: 14px; }
+        body { background-color: #000; color: #fff; font-family: 'Segoe UI', sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        #videoPreview { max-height: 400px; width: 100%; border-radius: 12px; display: none; object-fit: cover; }
     </style>
 </head>
-<body>
-
-    <div class="upload-card">
-        <h2>إنشاء ريلز</h2>
-        <div class="preview-box" id="previewBox">
-            <span id="placeholderText"><i class="fas fa-video fa-3x" style="color:#ccc"></i><br>اختر فيديو للبدء</span>
-            <video id="videoPreview" style="display:none" controls></video>
+<body class="flex flex-col min-h-screen items-center justify-center p-4">
+    <div class="w-full max-w-md glass-card p-6 rounded-2xl shadow-2xl">
+        <div class="flex items-center mb-6">
+            <a href="/reels" class="text-gray-400 hover:text-white ml-4"><i class="fas fa-arrow-right text-xl"></i></a>
+            <h1 class="text-xl font-bold">إنشاء ريلز</h1>
         </div>
 
-        <form id="reelForm">
-            <center>
-                <label class="btn-select">
-                    <i class="fas fa-cloud-upload-alt"></i> اختر ملف
-                    <input type="file" name="media" class="file-input" accept="video/*" onchange="previewFile(event)">
-                </label>
-            </center>
+        <form id="reelForm" action="/api/reels/create" method="POST" enctype="multipart/form-data">
+            <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 transition mb-4">
+                <input type="file" id="videoInput" name="media" accept="video/*" class="hidden" required>
+                <div id="uploadPlaceholder">
+                    <i class="fas fa-video text-4xl text-blue-500 mb-2"></i>
+                    <p class="text-gray-400">اضغط هنا أو اسحب الفيديو لرفعه</p>
+                </div>
+                <video id="videoPreview" controls></video>
+            </div>
 
-            <textarea name="content" rows="3" placeholder="اكتب وصفاً للريلز..."></textarea>
+            <textarea name="caption" placeholder="اكتب وصفاً للريل..." class="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:outline-none focus:border-blue-500 mb-4 h-24 resize-none"></textarea>
             
-            <button type="submit" class="btn-publish" id="submitBtn">نشر الآن</button>
-            <div class="loading" id="status">جاري الرفع... يرجى الانتظار <i class="fas fa-spinner fa-spin"></i></div>
+            <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition duration-300 disabled:opacity-50">
+                <span id="btnText">نشر الريلز</span>
+            </button>
         </form>
     </div>
 
     <script>
-        function previewFile(event) {
-            const file = event.target.files[0];
+        const videoInput = document.getElementById('videoInput');
+        const videoPreview = document.getElementById('videoPreview');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const dropZone = document.getElementById('dropZone');
+
+        dropZone.onclick = () => videoInput.click();
+
+        videoInput.onchange = (e) => {
+            const file = e.target.files[0];
             if (file) {
                 const url = URL.createObjectURL(file);
-                const video = document.getElementById('videoPreview');
-                video.src = url;
-                video.style.display = 'block';
-                document.getElementById('placeholderText').style.display = 'none';
+                videoPreview.src = url;
+                videoPreview.style.display = 'block';
+                uploadPlaceholder.style.display = 'none';
             }
-        }
+        };
 
         document.getElementById('reelForm').onsubmit = async (e) => {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const status = document.getElementById('status');
             const btn = document.getElementById('submitBtn');
-
-            if (!formData.get('media').name) return alert('يرجى اختيار فيديو');
-
-            status.style.display = 'block';
+            const btnText = document.getElementById('btnText');
+            
             btn.disabled = true;
+            btnText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
 
+            const formData = new FormData(e.target);
             try {
-                const res = await fetch('/api/reels/create', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    window.location.href = '/reels';
-                } else {
-                    alert('خطأ: ' + data.error);
-                }
-            } catch (err) {
-                alert('فشل في الاتصال بالخادم');
-            } finally {
-                status.style.display = 'none';
-                btn.disabled = false;
-            }
+                const res = await fetch(e.target.action, { method: 'POST', body: formData });
+                if (res.ok) window.location.href = '/reels';
+                else alert('حدث خطأ أثناء النشر');
+            } catch (err) { alert('فشل الاتصال'); }
+            finally { btn.disabled = false; btnText.textContent = 'نشر الريلز'; }
         };
     </script>
 </body>
