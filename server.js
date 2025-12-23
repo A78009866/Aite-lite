@@ -41,6 +41,9 @@ const storage = new CloudinaryStorage({
         folderName = 'post_media';
     } else if (req.originalUrl.includes('/register')) {
          folderName = 'profile_pics';
+    } else if (req.originalUrl.includes('/api/reels') || req.originalUrl.includes('/create-reel')) {
+         // لو قررت إضافة endpoint للريلز مستقبلاً
+         folderName = 'reels';
     }
     
     let format = undefined;
@@ -139,6 +142,11 @@ app.get('/edit_profile', requireAuth, (req, res) => { res.sendFile(path.join(__d
 app.get('/create-post', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_post.html')); });
 app.get('/login', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'login.html')); });
 app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'register.html')); });
+
+// --- New routes for Reels pages (added) ---
+app.get('/reels', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'reels.html')); });
+app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_reel.html')); });
+// ---------------- (end Reels routes) ----------------
 
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
