@@ -1,345 +1,234 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Aite - ريلز</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    :root{ --bg:#000; --glass: rgba(10,12,16,0.6); --muted:#94a3b8; }
-    html,body{height:100%; margin:0; background:var(--bg); color:#fff; font-family:Inter, system-ui, sans-serif;}
-    .viewport{ position:relative; width:100%; height:100vh; overflow:hidden; touch-action: pan-y; background:#000; }
-    .slide{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transition: transform 360ms cubic-bezier(.2,.9,.25,1), opacity 260ms ease; }
-    .video-el{ width:100%; height:100vh; object-fit:cover; background:#000; }
-    .overlay{ position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:space-between; pointer-events:none; padding:18px; }
-    .actions{ pointer-events:auto; display:flex; flex-direction:column; gap:14px; align-items:center; margin-left:8px; }
-    .action-btn{ display:flex; flex-direction:column; align-items:center; gap:6px; color:#d1d5db; font-size:12px; }
-    .floating-heart{ position:absolute; left:50%; top:45%; transform:translate(-50%,-50%) scale(0); transition: transform 270ms ease; pointer-events:none; z-index:40; }
-    .floating-heart.show{ transform:translate(-50%,-50%) scale(1); }
-    .bottom-nav{ position:fixed; left:0; right:0; bottom:0; z-index:60; background:linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.8)); padding:10px 0; }
-    .comment-modal{ position:fixed; inset:0; display:flex; align-items:end; justify-content:center; z-index:70; background:rgba(0,0,0,0.6); }
-    .glass-card{ width:100%; max-width:420px; background:rgba(8,10,14,0.95); border-top-left-radius:14px; border-top-right-radius:14px; border:1px solid rgba(255,255,255,0.03); padding:12px; }
-    .muted{ color:#94a3b8; }
-    /* smoother transitions for mobile */
-    .no-select{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trimer Reels</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        
+        /* حاوية الريلز الرئيسية */
+        .reels-container {
+            height: 100vh; overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scrollbar-width: none; /* إخفاء شريط التمرير لـ Firefox */
+        }
+        .reels-container::-webkit-scrollbar { display: none; } /* إخفاء لـ Chrome/Safari */
+
+        .reel-video-container {
+            height: 100vh; width: 100vw;
+            scroll-snap-align: start;
+            position: relative;
+            background: black;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        video { width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+        
+        /* الأزرار الجانبية */
+        .reel-actions {
+            position: absolute; bottom: 100px; left: 15px;
+            display: flex; flex-direction: column; align-items: center;
+            gap: 20px; z-index: 10;
+        }
+        .action-btn { color: white; text-align: center; font-size: 26px; cursor: pointer; transition: 0.2s; }
+        .action-btn span { display: block; font-size: 13px; margin-top: 5px; font-weight: bold; }
+        .liked { color: #ff3040 !important; }
+
+        /* معلومات المستخدم والوصف */
+        .reel-info {
+            position: absolute; bottom: 40px; right: 15px;
+            color: white; z-index: 10; text-align: right; width: 75%;
+            text-shadow: 1px 1px 5px rgba(0,0,0,0.8);
+        }
+        .user-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .user-pic { width: 38px; height: 38px; border-radius: 50%; border: 2px solid #fff; }
+        .reel-content { font-size: 15px; line-height: 1.4; margin: 0; }
+
+        /* نافذة التعليقات السفلية */
+        .comments-sheet {
+            position: fixed; bottom: -100%; left: 0; width: 100%; height: 65%;
+            background: #121212; border-radius: 20px 20px 0 0;
+            z-index: 100; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1); 
+            padding: 20px; box-sizing: border-box; color: white;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+        }
+        .comments-sheet.active { bottom: 0; }
+        .comment-list { height: calc(100% - 100px); overflow-y: auto; margin-top: 15px; }
+        .comment-item { display: flex; gap: 12px; margin-bottom: 18px; align-items: flex-start; }
+        
+        .comment-input-area {
+            position: absolute; bottom: 20px; left: 20px; right: 20px;
+            display: flex; gap: 10px; background: #262626; padding: 5px 15px; border-radius: 25px;
+        }
+        .comment-input-area input {
+            flex: 1; background: none; border: none; color: white; padding: 10px 0; outline: none;
+        }
+
+        /* تأثير القلب عند الضغط المزدوج */
+        .heart-overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 100px; color: white; opacity: 0; pointer-events: none; z-index: 5;
+        }
+        @keyframes heartPop { 
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.9; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+
+        /* زر الحذف */
+        .delete-btn { color: #888; font-size: 18px; margin-top: 10px; cursor: pointer; }
+    </style>
 </head>
-<body class="no-select">
+<body>
 
-  <div id="viewport" class="viewport"></div>
-
-  <!-- comments modal -->
-  <div id="commentModal" class="hidden comment-modal" onclick="closeComments()">
-    <div class="glass-card" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center mb-2">
-        <h3 class="text-lg font-bold">التعليقات</h3>
-        <button onclick="closeComments()" class="text-gray-300"><i class="fas fa-times"></i></button>
-      </div>
-      <div id="commentsList" style="max-height:260px; overflow:auto;" class="space-y-3 muted mb-3">جارٍ التحميل...</div>
-      <div class="flex gap-2">
-        <input id="commentInput" class="flex-grow p-3 rounded-full bg-gray-900 text-white" placeholder="اكتب تعليق..." />
-        <button id="postCommentBtn" class="bg-blue-600 px-4 py-2 rounded-full">نشر</button>
-      </div>
+<div class="reels-container" id="reelsWrapper">
     </div>
-  </div>
 
-  <div class="bottom-nav">
-    <div class="max-w-3xl mx-auto flex justify-between items-center px-4">
-      <a href="/chat_list" class="text-gray-300"><i class="fas fa-home"></i></a>
-      <a href="/users_list" class="text-gray-300"><i class="fas fa-comment-dots"></i></a>
-      <a href="/create-reel" class="bg-blue-600 text-white px-4 py-2 rounded-full">إنشاء ريلز</a>
+<div class="comments-sheet" id="commentSheet">
+    <div style="width: 40px; height: 4px; background: #333; margin: 0 auto 15px; border-radius: 10px;" onclick="closeComments()"></div>
+    <h3 style="text-align:center; font-size: 16px;">التعليقات</h3>
+    
+    <div class="comment-list" id="commentList"></div>
+
+    <div class="comment-input-area">
+        <input type="text" id="commentInput" placeholder="إضافة تعليق...">
+        <button onclick="postComment()" style="background:none; border:none; color:#0095f6; font-weight:bold; cursor:pointer;">نشر</button>
     </div>
-  </div>
+</div>
 
-  <template id="reelTpl">
-    <div class="slide">
-      <video class="video-el" playsinline preload="metadata" muted></video>
-      <div class="overlay">
-        <div class="info pr-4 pointer-events-auto" style="max-width:65%;">
-          <div class="font-semibold username"></div>
-          <div class="muted text-sm mt-2 description"></div>
-        </div>
-        <div class="actions pointer-events-auto pr-2">
-          <div class="floating-heart" aria-hidden="true"><i class="fas fa-heart text-6xl text-red-500"></i></div>
+<script>
+    let currentReels = [];
+    let activeReelId = null;
 
-          <button class="action-btn like-btn">
-            <i class="far fa-heart text-2xl" id="icon-like"></i>
-            <span class="text-xs like-count">0</span>
-          </button>
+    // 1. جلب الريلز من السيرفر
+    async function loadReels() {
+        try {
+            const res = await fetch('/api/reels');
+            const data = await res.json();
+            if (data.ok) {
+                currentReels = data.reels;
+                renderReels();
+                observeVideos(); // تفعيل التشغيل التلقائي عند التمرير
+            }
+        } catch (e) { console.error("Error loading reels", e); }
+    }
 
-          <button class="action-btn comment-btn">
-            <i class="far fa-comment text-2xl"></i>
-            <span class="text-xs comment-count">0</span>
-          </button>
+    // 2. بناء واجهة الريلز
+    function renderReels() {
+        const container = document.getElementById('reelsWrapper');
+        container.innerHTML = currentReels.map(reel => `
+            <div class="reel-video-container" id="reel-${reel.reelId}">
+                <video src="${reel.media?.url}" loop playsinline onclick="togglePlay(this)" 
+                       ondblclick="handleDoubleLike(event, '${reel.reelId}')"></video>
+                
+                <div class="heart-overlay" id="heart-${reel.reelId}"><i class="fas fa-heart"></i></div>
 
-          <button class="action-btn share-btn">
-            <i class="fas fa-share text-2xl"></i>
-            <span class="text-xs">مشاركة</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </template>
+                <div class="reel-actions">
+                    <div class="action-btn ${reel.is_liked ? 'liked' : ''}" id="like-btn-${reel.reelId}" onclick="toggleLike('${reel.reelId}')">
+                        <i class="fas fa-heart"></i>
+                        <span id="like-count-${reel.reelId}">${reel.likes || 0}</span>
+                    </div>
+                    <div class="action-btn" onclick="openComments('${reel.reelId}')">
+                        <i class="fas fa-comment"></i>
+                        <span>${reel.commentsCount || 0}</span>
+                    </div>
+                    ${reel.userId === 'current_user_id_logic' ? `<div class="delete-btn" onclick="deleteReel('${reel.reelId}')"><i class="fas fa-trash"></i></div>` : ''}
+                </div>
 
-  <script>
-    // State
-    let reels = [];
-    let index = 0;
-    const viewport = document.getElementById('viewport');
-    const tpl = document.getElementById('reelTpl').content;
-    let startY=0, moveY=0, isTouch=false;
-    let tapState = {};
-    let currentReelIdForComments = null;
+                <div class="reel-info">
+                    <div class="user-row" onclick="window.location.href='/profile/${reel.userId}'">
+                        <img src="${reel.user.profile_picture_url}" class="user-pic">
+                        <strong>${reel.user.username}</strong>
+                    </div>
+                    <p class="reel-content">${reel.content}</p>
+                </div>
+            </div>
+        `).join('');
+    }
 
-    async function loadReels(){
-      viewport.innerHTML = '<div class="text-center muted p-6">جاري التحميل...</div>';
-      try {
-        const res = await fetch('/api/reels');
+    // 3. التحكم في التشغيل والإيقاف
+    function togglePlay(video) {
+        if (video.paused) video.play();
+        else video.pause();
+    }
+
+    // 4. نظام الإعجاب (النقر المزدوج والزر)
+    async function handleDoubleLike(event, reelId) {
+        const heart = document.getElementById(`heart-${reelId}`);
+        heart.style.animation = 'heartPop 0.8s ease-out';
+        setTimeout(() => heart.style.animation = '', 800);
+        
+        const btn = document.getElementById(`like-btn-${reelId}`);
+        if (!btn.classList.contains('liked')) toggleLike(reelId);
+    }
+
+    async function toggleLike(reelId) {
+        const res = await fetch(`/api/reels/${reelId}/like`, { method: 'POST' });
         const data = await res.json();
-        if (res.ok && data.ok) {
-          reels = data.reels || [];
-          if (reels.length === 0) {
-            viewport.innerHTML = '<div class="text-center muted p-6">لا توجد ريلز بعد.</div>';
-            return;
-          }
-          renderSlides();
-          showSlide(0,false);
-        } else {
-          viewport.innerHTML = '<div class="text-center text-red-500 p-6">فشل في جلب الريلز.</div>';
+        if (data.ok) {
+            const btn = document.getElementById(`like-btn-${reelId}`);
+            const count = document.getElementById(`like-count-${reelId}`);
+            btn.classList.toggle('liked', data.action === 'liked');
+            count.innerText = data.newLikes;
         }
-      } catch (err) {
-        console.error(err);
-        viewport.innerHTML = '<div class="text-center text-red-500 p-6">خطأ في الاتصال.</div>';
-      }
     }
 
-    function renderSlides(){
-      viewport.innerHTML = '';
-      reels.forEach((r,i)=>{
-        const node = tpl.cloneNode(true);
-        const slide = node.querySelector('.slide');
-        slide.dataset.index = i;
-        slide.dataset.reelId = r.reelId;
-        const video = slide.querySelector('video');
-        video.src = r.media?.url || '';
-        video.muted = false;
-        video.setAttribute('playsinline','');
-        video.preload = 'metadata';
+    // 5. إدارة التعليقات الحقيقية
+    async function openComments(reelId) {
+        activeReelId = reelId;
+        document.getElementById('commentSheet').classList.add('active');
+        const list = document.getElementById('commentList');
+        list.innerHTML = '<p style="text-align:center;">جاري التحميل...</p>';
 
-        slide.querySelector('.username').textContent = r.user?.username || 'مستخدم';
-        slide.querySelector('.description').textContent = r.content || '';
-        slide.querySelector('.like-count').textContent = r.likes || 0;
-        slide.querySelector('.comment-count').textContent = r.commentsCount || 0;
-
-        // events
-        slide.addEventListener('touchstart', (e)=> onTouchStart(e, slide));
-        slide.addEventListener('touchmove', (e)=> onTouchMove(e, slide));
-        slide.addEventListener('touchend', (e)=> onTouchEnd(e, slide));
-        slide.addEventListener('mousedown', (e)=> onMouseDown(e, slide));
-        slide.addEventListener('click', (e)=> handleTap(e, r.reelId));
-
-        // like btn
-        const likeBtn = slide.querySelector('.like-btn');
-        likeBtn.addEventListener('click', async (ev)=>{ ev.stopPropagation(); await sendLike(r.reelId, slide); });
-
-        const commentBtn = slide.querySelector('.comment-btn');
-        commentBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); openComments(r.reelId); });
-
-        const shareBtn = slide.querySelector('.share-btn');
-        shareBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); alert('مشاركة (تجريبي)'); });
-
-        // initial position
-        slide.style.transform = `translateY(${(i - index) * 100}%)`;
-        slide.style.opacity = i === index ? '1' : '0';
-        viewport.appendChild(slide);
-      });
-    }
-
-    function showSlide(i, userAction = true){
-      if (i < 0 || i >= reels.length) return;
-      index = i;
-      const slides = Array.from(viewport.querySelectorAll('.slide'));
-      slides.forEach((s,si)=>{
-        s.style.transition = 'transform 360ms cubic-bezier(.2,.9,.25,1), opacity 260ms ease';
-        s.style.transform = `translateY(${(si - index) * 100}%)`;
-        s.style.opacity = si === index ? '1' : '0';
-      });
-
-      // pause others, play current
-      slides.forEach((s,si)=>{
-        const v = s.querySelector('video');
-        if (!v) return;
-        if (si === index) {
-          // try to autoplay; muted for auto-play policy then unmute user-controlled
-          v.currentTime = 0;
-          v.play().catch(()=>{ /* ignore */ });
-          // preload next for smoother transition
-          const next = slides[si+1];
-          if (next) {
-            const nv = next.querySelector('video');
-            if (nv && nv.src) nv.preload = 'auto';
-          }
-        } else {
-          v.pause();
-        }
-      });
-    }
-
-    // Touch/mouse handlers for vertical swipe
-    function onTouchStart(e, slide){ startY = e.touches[0].clientY; isTouch=true; }
-    function onTouchMove(e, slide){ if (!isTouch) return; moveY = e.touches[0].clientY; }
-    function onTouchEnd(e, slide){
-      isTouch=false;
-      const diff = startY - (moveY || startY);
-      if (Math.abs(diff) > 60) {
-        if (diff > 0) showSlide(Math.min(index+1, reels.length-1)); // swipe up -> next
-        else showSlide(Math.max(index-1, 0)); // swipe down -> prev
-      }
-      startY = moveY = 0;
-    }
-
-    function onMouseDown(e, slide){
-      const start = e.clientY;
-      const onMove = (ev)=> moveY = ev.clientY;
-      const onUp = (ev)=>{
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        const diff = start - (moveY || start);
-        if (Math.abs(diff) > 60) {
-          if (diff > 0) showSlide(Math.min(index+1, reels.length-1));
-          else showSlide(Math.max(index-1, 0));
-        }
-        moveY = 0;
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    }
-
-    // double-tap detection and floating heart
-    function handleTap(e, reelId){
-      e.stopPropagation();
-      const now = Date.now();
-      if (!tapState[reelId]) tapState[reelId] = { last: 0, x:0, y:0 };
-      const x = e.touches ? e.touches[0].clientX : e.clientX;
-      const y = e.touches ? e.touches[0].clientY : e.clientY;
-      const dt = now - tapState[reelId].last;
-      const dx = Math.abs(x - tapState[reelId].x);
-      const dy = Math.abs(y - tapState[reelId].y);
-      if (dt < 300 && dx < 30 && dy < 30) {
-        // double tap
-        const slide = document.querySelector(`.slide[data-reel-id="${reelId}"]`);
-        if (!slide) return;
-        const fh = slide.querySelector('.floating-heart');
-        fh.classList.add('show');
-        setTimeout(()=> fh.classList.remove('show'), 700);
-        sendLike(reelId, slide);
-      }
-      tapState[reelId].last = now; tapState[reelId].x = x; tapState[reelId].y = y;
-    }
-
-    // Like API
-    async function sendLike(reelId, slide){
-      try {
-        const res = await fetch(`/api/reels/${reelId}/like`, { method:'POST' });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-          const icon = slide.querySelector('#icon-like');
-          const countEl = slide.querySelector('.like-count');
-          if (data.action === 'liked') {
-            icon.classList.remove('far'); icon.classList.add('fas','text-red-500');
-          } else {
-            icon.classList.remove('fas','text-red-500'); icon.classList.add('far');
-          }
-          countEl.textContent = data.newLikes;
-        }
-      } catch (err) { console.error(err); }
-    }
-
-    // Comments modal & API
-    const commentModal = document.getElementById('commentModal');
-    const commentsList = document.getElementById('commentsList');
-    const commentInput = document.getElementById('commentInput');
-    const postCommentBtn = document.getElementById('postCommentBtn');
-
-    function openComments(reelId){
-      currentReelIdForComments = reelId;
-      commentModal.classList.remove('hidden');
-      document.body.style.overflow = 'hidden';
-      loadComments(reelId);
-    }
-    function closeComments(){
-      commentModal.classList.add('hidden');
-      document.body.style.overflow = '';
-      commentsList.innerHTML = '';
-      commentInput.value = '';
-      currentReelIdForComments = null;
-    }
-
-    async function loadComments(reelId){
-      commentsList.innerHTML = '<div class="muted p-4 text-center">جاري التحميل...</div>';
-      try {
         const res = await fetch(`/api/reels/${reelId}/comments`);
         const data = await res.json();
-        if (res.ok && data.ok) {
-          if (!data.comments || data.comments.length === 0) {
-            commentsList.innerHTML = '<div class="muted p-4 text-center">لا توجد تعليقات بعد.</div>';
-            return;
-          }
-          commentsList.innerHTML = '';
-          data.comments.forEach(c=>{
-            const el = document.createElement('div');
-            el.className = 'flex items-start gap-3';
-            el.innerHTML = `<img src="${c.user.profile_picture_url || ''}" class="w-8 h-8 rounded-full" />
-              <div><div class="font-semibold">${c.user.username}</div><div class="muted text-sm">${escapeHtml(c.content)}</div></div>`;
-            commentsList.appendChild(el);
-          });
-        } else {
-          commentsList.innerHTML = '<div class="text-red-500 p-4 text-center">فشل في جلب التعليقات.</div>';
+        if (data.ok) {
+            list.innerHTML = data.comments.map(c => `
+                <div class="comment-item">
+                    <img src="${c.user.profile_picture_url}" style="width:32px; height:32px; border-radius:50%;">
+                    <div>
+                        <strong style="font-size:13px; color:#aaa;">${c.user.username}</strong>
+                        <p style="margin:3px 0; font-size:14px;">${c.content}</p>
+                    </div>
+                </div>
+            `).join('');
         }
-      } catch (err) { console.error(err); commentsList.innerHTML = '<div class="text-red-500 p-4">خطأ في الاتصال.</div>'; }
     }
 
-    postCommentBtn.addEventListener('click', async ()=>{
-      const text = (commentInput.value || '').trim();
-      if (!text || !currentReelIdForComments) return;
-      postCommentBtn.disabled = true;
-      try {
-        const res = await fetch(`/api/reels/${currentReelIdForComments}/comment`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ content: text })
+    async function postComment() {
+        const input = document.getElementById('commentInput');
+        if (!input.value.trim()) return;
+
+        const res = await fetch(`/api/reels/${activeReelId}/comment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: input.value })
         });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-          // append
-          const el = document.createElement('div');
-          el.className = 'flex items-start gap-3';
-          el.innerHTML = `<img src="${data.comment.user.profile_picture_url}" class="w-8 h-8 rounded-full" />
-            <div><div class="font-semibold">${data.comment.user.username}</div><div class="muted text-sm">${escapeHtml(data.comment.content)}</div></div>`;
-          if (commentsList.querySelector('.muted')) commentsList.innerHTML = '';
-          commentsList.appendChild(el);
-          commentInput.value = '';
-          // update count
-          const slide = document.querySelector(`.slide[data-reel-id="${currentReelIdForComments}"]`);
-          if (slide) slide.querySelector('.comment-count').textContent = data.newComments;
-        } else {
-          alert(data.error || 'فشل في إضافة التعليق.');
+        if ((await res.json()).ok) {
+            input.value = '';
+            openComments(activeReelId);
         }
-      } catch (err) { console.error(err); alert('خطأ في الاتصال.'); }
-      postCommentBtn.disabled = false;
-    });
+    }
 
-    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+    function closeComments() { document.getElementById('commentSheet').classList.remove('active'); }
 
-    // init
-    loadReels();
+    // 6. تشغيل الفيديو التلقائي عند التمرير (Intersection Observer)
+    function observeVideos() {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const video = entry.target;
+                if (entry.isIntersecting) video.play();
+                else video.pause();
+            });
+        }, { threshold: 0.7 });
 
-    // keyboard shortcuts for testing on desktop
-    document.addEventListener('keydown', (e)=>{
-      if (e.key === 'ArrowDown') showSlide(Math.min(index+1, reels.length-1));
-      if (e.key === 'ArrowUp') showSlide(Math.max(index-1, 0));
-    });
-  </script>
+        document.querySelectorAll('video').forEach(v => observer.observe(v));
+    }
+
+    window.onload = loadReels;
+</script>
+
 </body>
 </html>
