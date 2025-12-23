@@ -1,367 +1,91 @@
-<! DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إنشاء ريل جديد - Aite</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min. css">
+    <title>إنشاء ريلز جديد</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body {
-            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-            color: #e4e6eb;
-            font-family:  'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
+        body { font-family: sans-serif; background: #fafafa; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .upload-card { background: white; width: 100%; max-width: 400px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 20px; }
+        h2 { text-align: center; color: #333; }
+        .preview-box { 
+            width: 100%; height: 400px; background: #eee; border-radius: 10px; 
+            margin: 20px 0; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;
         }
-
-        .drag-active {
-            background: rgba(59, 130, 246, 0.15) !important;
-            border-color: #3b82f6 !important;
-        }
-
-        .progress-bar-fill {
-            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-            transition: width 0.3s ease;
-        }
-
-        .fade-in {
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
+        .preview-box video { width: 100%; height: 100%; object-fit: cover; }
+        .file-input { display: none; }
+        .btn-select { background: #e91e63; color: white; padding: 12px 25px; border-radius: 25px; cursor: pointer; display: inline-block; }
+        textarea { width: 100%; border: 1px solid #ddd; border-radius: 10px; padding: 10px; margin-top: 15px; resize: none; box-sizing: border-box; }
+        .btn-publish { width: 100%; background: #0095f6; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; margin-top: 15px; cursor: pointer; }
+        .loading { display: none; margin-top: 10px; color: #666; font-size: 14px; }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body>
 
-    <div class="w-full max-w-2xl">
-        
-        <!-- Header -->
-        <header class="mb-8">
-            <div class="flex items-center justify-between mb-6">
-                <a href="/reels" class="text-gray-400 hover:text-blue-400 transition p-2 rounded-lg hover:bg-white/5">
-                    <i class="fas fa-arrow-right text-2xl"></i>
-                </a>
-                <h1 class="text-3xl font-bold text-white flex-1 text-center">
-                    <i class="fas fa-video text-blue-400 ml-2"></i>إنشاء ريل جديد
-                </h1>
-                <div class="w-12"></div>
-            </div>
-            <p class="text-center text-gray-400 text-sm">شارك لحظاتك المميزة مع الجميع</p>
-        </header>
-
-        <!-- Main Form -->
-        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
-            
-            <form id="createReelForm" action="/api/reels/create" method="POST" enctype="multipart/form-data">
-                
-                <!-- File Upload Section -->
-                <div class="mb-8">
-                    <label class="block text-sm font-semibold text-gray-300 mb-4">
-                        <i class="fas fa-film text-blue-400 ml-2"></i>الفيديو أو الصورة
-                    </label>
-
-                    <div id="dropZone" 
-                         class="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer transition-all hover:border-blue-400 hover:bg-blue-500/5">
-                        
-                        <i class="fas fa-cloud-upload-alt text-5xl text-gray-500 mb-4 block"></i>
-                        <h3 class="text-lg font-semibold text-white mb-2">اسحب الملف هنا أو انقر للاختيار</h3>
-                        <p class="text-sm text-gray-400">MP4, WebM, MOV (الحد الأقصى 500 ميجابايت)</p>
-                        
-                        <input type="file" id="mediaFile" name="media" accept="video/*,image/*" class="hidden">
-                    </div>
-
-                    <!-- File Info -->
-                    <div id="fileInfo" class="hidden mt-4 bg-gray-800 rounded-lg p-4 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <i class="fas fa-check-circle text-green-500 text-2xl"></i>
-                            <div>
-                                <p id="fileName" class="text-white font-semibold"></p>
-                                <p id="fileSize" class="text-gray-400 text-sm"></p>
-                            </div>
-                        </div>
-                        <button type="button" id="removeFileBtn" class="text-red-500 hover:text-red-400">
-                            <i class="fas fa-times-circle text-2xl"></i>
-                        </button>
-                    </div>
-
-                    <!-- Preview -->
-                    <div id="previewContainer" class="hidden mt-4">
-                        <p class="text-gray-400 text-sm mb-2">معاينة: </p>
-                        <div class="w-full aspect-video bg-black rounded-lg overflow-hidden">
-                            <video id="previewVideo" class="w-full h-full object-cover" controls></video>
-                        </div>
-                    </div>
-
-                    <!-- Progress -->
-                    <div id="uploadProgress" class="hidden mt-4">
-                        <div class="flex justify-between mb-2">
-                            <span class="text-gray-400 text-sm">جاري التحميل...</span>
-                            <span id="progressPercent" class="text-blue-400 font-semibold">0%</span>
-                        </div>
-                        <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
-                            <div id="progressBar" class="progress-bar-fill h-full w-0"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Caption Section -->
-                <div class="mb-8">
-                    <label class="block text-sm font-semibold text-gray-300 mb-4">
-                        <i class="fas fa-pen text-purple-400 ml-2"></i>الوصف
-                    </label>
-                    <textarea id="reelCaption" 
-                              name="content" 
-                              rows="3" 
-                              placeholder="أضف وصفاً للريل (اختياري)..."
-                              class="w-full p-4 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-500 resize-none"></textarea>
-                    <p id="charCount" class="text-gray-500 text-xs mt-2">0 / 500 حرف</p>
-                </div>
-
-                <!-- Error Message -->
-                <div id="errorMessage" class="hidden mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                    <i class="fas fa-exclamation-circle ml-2"></i>
-                    <span id="errorText"></span>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="flex gap-4 flex-col-reverse sm:flex-row">
-                    <button type="button" id="cancelBtn" class="flex-1 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-semibold transition">
-                        <i class="fas fa-times ml-2"></i>إلغاء
-                    </button>
-                    <button type="submit" id="submitBtn" class="flex-1 p-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 rounded-lg text-white font-semibold transition disabled:opacity-50" disabled>
-                        <i id="submitIcon" class="fas fa-rocket ml-2"></i>
-                        <span id="submitText">نشر الريل</span>
-                    </button>
-                </div>
-
-                <!-- Success Message -->
-                <div id="successMessage" class="hidden mt-6 p-4 bg-green-500/10 border border-green-500/50 rounded-lg text-green-400 text-sm text-center fade-in">
-                    <i class="fas fa-check-circle ml-2"></i>تم نشر الريل بنجاح!  ✨
-                </div>
-            </form>
+    <div class="upload-card">
+        <h2>إنشاء ريلز</h2>
+        <div class="preview-box" id="previewBox">
+            <span id="placeholderText"><i class="fas fa-video fa-3x" style="color:#ccc"></i><br>اختر فيديو للبدء</span>
+            <video id="videoPreview" style="display:none" controls></video>
         </div>
+
+        <form id="reelForm">
+            <center>
+                <label class="btn-select">
+                    <i class="fas fa-cloud-upload-alt"></i> اختر ملف
+                    <input type="file" name="media" class="file-input" accept="video/*" onchange="previewFile(event)">
+                </label>
+            </center>
+
+            <textarea name="content" rows="3" placeholder="اكتب وصفاً للريلز..."></textarea>
+            
+            <button type="submit" class="btn-publish" id="submitBtn">نشر الآن</button>
+            <div class="loading" id="status">جاري الرفع... يرجى الانتظار <i class="fas fa-spinner fa-spin"></i></div>
+        </form>
     </div>
 
     <script>
-        const form = document.getElementById('createReelForm');
-        const mediaFile = document.getElementById('mediaFile');
-        const dropZone = document.getElementById('dropZone');
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const fileSize = document.getElementById('fileSize');
-        const removeFileBtn = document.getElementById('removeFileBtn');
-        const previewContainer = document.getElementById('previewContainer');
-        const previewVideo = document.getElementById('previewVideo');
-        const uploadProgress = document.getElementById('uploadProgress');
-        const progressBar = document.getElementById('progressBar');
-        const progressPercent = document.getElementById('progressPercent');
-        const reelCaption = document.getElementById('reelCaption');
-        const charCount = document.getElementById('charCount');
-        const submitBtn = document.getElementById('submitBtn');
-        const submitText = document.getElementById('submitText');
-        const submitIcon = document.getElementById('submitIcon');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const errorMessage = document.getElementById('errorMessage');
-        const errorText = document.getElementById('errorText');
-        const successMessage = document.getElementById('successMessage');
+        function previewFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                const video = document.getElementById('videoPreview');
+                video.src = url;
+                video.style.display = 'block';
+                document.getElementById('placeholderText').style.display = 'none';
+            }
+        }
 
-        // Drag & Drop
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) {
+        document.getElementById('reelForm').onsubmit = async (e) => {
             e.preventDefault();
-            e.stopPropagation();
-        }
+            const formData = new FormData(e.target);
+            const status = document.getElementById('status');
+            const btn = document.getElementById('submitBtn');
 
-        dropZone.addEventListener('dragover', () => dropZone.classList.add('drag-active'));
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
-        dropZone.addEventListener('drop', (e) => {
-            dropZone.classList.remove('drag-active');
-            const files = e.dataTransfer. files;
-            if (files. length > 0) {
-                mediaFile.files = files;
-                handleFileSelect();
-            }
-        });
+            if (!formData.get('media').name) return alert('يرجى اختيار فيديو');
 
-        // File Selection
-        mediaFile.addEventListener('change', handleFileSelect);
-
-        function handleFileSelect() {
-            errorMessage.classList.add('hidden');
-
-            if (mediaFile.files. length === 0) {
-                resetUI();
-                return;
-            }
-
-            const file = mediaFile.files[0];
-            const maxSize = 500 * 1024 * 1024;
-
-            // Validation
-            if (! file. type.startsWith('video/') && !file.type.startsWith('image/')) {
-                showError('الرجاء اختيار فيديو أو صورة');
-                mediaFile.value = '';
-                return;
-            }
-
-            if (file.size > maxSize) {
-                showError('حجم الملف يجب أن يكون أقل من 500 ميجابايت');
-                mediaFile.value = '';
-                return;
-            }
-
-            // Display file info
-            fileName.textContent = file.name;
-            fileSize.textContent = formatFileSize(file.size);
-            fileInfo.classList.remove('hidden');
-
-            // Preview
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewVideo. src = e.target.result;
-                previewContainer.classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
-
-            checkValidity();
-        }
-
-        removeFileBtn.addEventListener('click', () => {
-            mediaFile.value = '';
-            resetUI();
-        });
-
-        function resetUI() {
-            fileInfo.classList.add('hidden');
-            previewContainer.classList.add('hidden');
-            uploadProgress.classList.add('hidden');
-            previewVideo.src = '';
-            checkValidity();
-        }
-
-        // Caption Counter
-        reelCaption.addEventListener('input', () => {
-            let length = reelCaption.value. length;
-            charCount.textContent = `${length} / 500 حرف`;
-
-            if (length > 500) {
-                reelCaption.value = reelCaption. value.substring(0, 500);
-                length = 500;
-                charCount.textContent = `${length} / 500 حرف`;
-            }
-
-            checkValidity();
-        });
-
-        function checkValidity() {
-            submitBtn.disabled = mediaFile.files.length === 0;
-        }
-
-        // Form Submission
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            if (mediaFile.files. length === 0) {
-                showError('الرجاء اختيار فيديو أو صورة');
-                return;
-            }
-
-            submitBtn.disabled = true;
-            submitText.textContent = 'جاري النشر...';
-            submitIcon.classList.add('fa-spinner', 'fa-spin');
-            errorMessage.classList.add('hidden');
-            uploadProgress.classList.remove('hidden');
-
-            const formData = new FormData();
-            formData.append('media', mediaFile. files[0]);
-            formData.append('content', reelCaption.value. trim());
+            status.style.display = 'block';
+            btn.disabled = true;
 
             try {
-                const xhr = new XMLHttpRequest();
-
-                xhr.upload.addEventListener('progress', (e) => {
-                    if (e.lengthComputable) {
-                        const percent = Math.round((e.loaded / e.total) * 100);
-                        progressBar.style.width = percent + '%';
-                        progressPercent.textContent = percent + '%';
-                    }
+                const res = await fetch('/api/reels/create', {
+                    method: 'POST',
+                    body: formData
                 });
-
-                xhr.addEventListener('load', () => {
-                    if (xhr.status === 200) {
-                        const result = JSON.parse(xhr.responseText);
-                        if (result.ok) {
-                            successMessage.classList.remove('hidden');
-                            setTimeout(() => {
-                                window.location.href = '/reels';
-                            }, 1500);
-                        } else {
-                            showError(result.error || 'حدث خطأ في النشر');
-                            resetButtonState();
-                        }
-                    } else {
-                        showError('فشل في إرسال الريل');
-                        resetButtonState();
-                    }
-                });
-
-                xhr.addEventListener('error', () => {
-                    showError('خطأ في الاتصال بالخادم');
-                    resetButtonState();
-                });
-
-                xhr.open('POST', form.action);
-                xhr.send(formData);
-
-            } catch (error) {
-                showError('حدث خطأ:  ' + error.message);
-                resetButtonState();
+                const data = await res.json();
+                if (data.ok) {
+                    window.location.href = '/reels';
+                } else {
+                    alert('خطأ: ' + data.error);
+                }
+            } catch (err) {
+                alert('فشل في الاتصال بالخادم');
+            } finally {
+                status.style.display = 'none';
+                btn.disabled = false;
             }
-        });
-
-        function resetButtonState() {
-            submitBtn.disabled = false;
-            submitText. textContent = 'نشر الريل';
-            submitIcon.classList.remove('fa-spinner', 'fa-spin');
-            uploadProgress.classList.add('hidden');
-            progressBar.style.width = '0%';
-            progressPercent. textContent = '0%';
-        }
-
-        cancelBtn.addEventListener('click', () => {
-            if (mediaFile.files.length > 0) {
-                if (! confirm('هل تريد إلغاء إنشاء الريل؟')) return;
-            }
-            window.location.href = '/reels';
-        });
-
-        function showError(message) {
-            errorText.textContent = message;
-            errorMessage.classList.remove('hidden');
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math. pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        document.addEventListener('DOMContentLoaded', checkValidity);
+        };
     </script>
-
 </body>
 </html>
