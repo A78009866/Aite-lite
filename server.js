@@ -909,11 +909,23 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
 app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
   const { reelId } = req.params;
   try {
-    const snap = await db.ref(`reels_comments/${reelId}`).orderByChild('timestamp').limitToLast(50).once('value');
+    // نزيد الحد قليلاً للتأكد، ونزيل orderByChild إذا كانت الفهرسة تسبب مشاكل، 
+    // لكن orderByChild('timestamp') هو الأصح.
+    const snap = await db.ref(`reels_comments/${reelId}`)
+      .orderByChild('timestamp')
+      .limitToLast(100) // زيادة الحد
+      .once('value');
+
     const comments = [];
-    snap.forEach(s => comments.push(s.val()));
+    snap.forEach(s => {
+      const val = s.val();
+      // التأكد من أن البيانات سليمة قبل إضافتها
+      if (val) comments.push(val);
+    });
+
     res.json({ ok: true, comments: comments });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ ok: false });
   }
 });
