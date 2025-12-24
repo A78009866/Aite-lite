@@ -7,61 +7,40 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+
   <style>
-    /* إعدادات أساسية لضمان ملء الشاشة ومنع التمرير المزدوج */
     html, body { 
-      margin: 0; 
-      padding: 0; 
-      height: 100%; 
-      width: 100%; 
+      margin: 0; padding: 0; 
+      height: 100%; width: 100%; 
+      background: black; color: white; 
       font-family: 'Cairo', sans-serif; 
-      background: black; 
-      color: white; 
       overflow: hidden; 
     }
-    
-    /* الحاوية الرئيسية للريلز */
-    .reels-container {
-      height: 100%;
-      width: 100%;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory; /* تفعيل الانجذاب الإجباري */
-      scroll-behavior: smooth;
-      position: relative;
-    }
 
-    /* تنسيق العنصر الواحد */
-    .reel-item {
-      height: 100dvh; /* استخدام Dynamic Viewport Height لدعم الموبايل بشكل صحيح */
+    /* إعدادات Swiper لتملأ الشاشة */
+    .swiper {
       width: 100%;
-      scroll-snap-align: start;
-      scroll-snap-stop: always; /* يمنع تجاوز الفيديو عند التمرير السريع */
-      position: relative;
+      height: 100%;
+    }
+    .swiper-slide {
       background: #000;
       display: flex;
       justify-content: center;
       align-items: center;
       overflow: hidden;
+      position: relative;
     }
 
-    /* إخفاء شريط التمرير */
-    .reels-container::-webkit-scrollbar { display: none; }
-    .reels-container { -ms-overflow-style: none; scrollbar-width: none; }
-
-    /* أنيميشن القلب الكبير عند الضغط المزدوج */
+    /* أنيميشن القلب */
     .big-heart {
-      position: absolute;
-      top: 50%; left: 50%;
+      position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%) scale(0);
-      font-size: 80px;
-      color: white; 
-      text-shadow: 0 0 10px rgba(0,0,0,0.5);
-      pointer-events: none;
-      z-index: 20;
+      font-size: 80px; color: white; 
+      text-shadow: 0 0 10px rgba(0,0,0,0.5); pointer-events: none; z-index: 20;
     }
-    .big-heart.animate {
-      animation: heart-pop 0.8s ease-out;
-    }
+    .big-heart.animate { animation: heart-pop 0.8s ease-out; }
     @keyframes heart-pop {
       0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
       15% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; transform: rotate(-10deg); }
@@ -73,12 +52,9 @@
     /* نافذة التعليقات */
     .comments-sheet {
       position: fixed; bottom: 0; left: 0; right: 0;
-      background: #111;
-      border-radius: 16px 16px 0 0;
-      height: 60vh;
-      transform: translateY(100%);
-      transition: transform 0.3s ease-out;
-      z-index: 50;
+      background: #111; border-radius: 16px 16px 0 0;
+      height: 60vh; transform: translateY(100%);
+      transition: transform 0.3s ease-out; z-index: 50;
       display: flex; flex-direction: column;
     }
     .comments-sheet.open { transform: translateY(0); }
@@ -91,16 +67,21 @@
 </head>
 <body>
 
-  <div class="fixed top-4 right-4 z-30 flex gap-4">
+  <button onclick="runDiagnostics()" class="fixed top-16 left-4 z-50 bg-red-600 text-white p-2 rounded-full text-xs opacity-70 hover:opacity-100">
+    <i class="fas fa-bug"></i> فحص
+  </button>
+
+  <div class="fixed top-4 right-4 z-30">
     <a href="/chat_list" class="text-white text-xl drop-shadow-lg p-2"><i class="fas fa-arrow-right"></i></a>
   </div>
-  
   <div class="fixed top-4 left-4 z-30">
       <a href="/create-reel" class="text-white text-2xl drop-shadow-lg p-2"><i class="fas fa-camera"></i></a>
   </div>
 
-  <div id="reelsContainer" class="reels-container">
-    </div>
+  <div class="swiper mySwiper">
+    <div class="swiper-wrapper" id="reelsWrapper">
+      </div>
+  </div>
 
   <div id="backdrop" class="overlay-backdrop"></div>
   <div id="commentsSheet" class="comments-sheet border-t border-gray-800">
@@ -108,72 +89,90 @@
       <h3 class="font-bold text-sm">التعليقات</h3>
       <button id="closeComments" class="text-gray-400 p-2"><i class="fas fa-times"></i></button>
     </div>
-    <div id="commentsList" class="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
-      </div>
+    <div id="commentsList" class="flex-1 overflow-y-auto p-4 space-y-4 pb-20"></div>
     <div class="p-3 border-t border-gray-800 flex items-center gap-2 bg-black absolute bottom-0 w-full">
       <input type="text" id="commentInput" placeholder="أضف تعليقاً..." 
-             class="flex-1 bg-[#222] text-white text-sm rounded-full px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500">
-      <button id="sendCommentBtn" class="text-blue-500 font-bold text-sm disabled:opacity-50 px-3">نشر</button>
+             class="flex-1 bg-[#222] text-white text-sm rounded-full px-4 py-2 outline-none">
+      <button id="sendCommentBtn" class="text-blue-500 font-bold text-sm px-3">نشر</button>
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+
 <script>
-  const reelsContainer = document.getElementById('reelsContainer');
-  let currentReels = [];
-  let currentReelIdForComments = null;
+  let swiperInstance = null;
+  let currentReelsData = [];
+  let debugLog = [];
+
+  function log(msg) {
+    console.log(msg);
+    debugLog.push(msg);
+  }
+
+  // دالة فحص الأخطاء التي طلبها المستخدم
+  window.runDiagnostics = function() {
+    const report = `
+    === تقرير الفحص ===
+    - عدد الريلز المحملة: ${currentReelsData.length}
+    - حالة Swiper: ${swiperInstance ? 'يعمل' : 'غير مفعل'}
+    - أخطاء مسجلة: \n${debugLog.join('\n')}
+    `;
+    alert(report);
+  }
 
   document.addEventListener('DOMContentLoaded', loadReels);
 
-  // --- دوال التحميل والعرض ---
   async function loadReels() {
     try {
+      log('جاري طلب الريلز من السيرفر...');
       const res = await fetch('/api/reels/feed');
+      if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+      
       const data = await res.json();
-      if(data.ok && data.reels.length > 0) {
-        currentReels = data.reels;
+      log(`تم استلام البيانات. العدد: ${data.reels ? data.reels.length : 0}`);
+
+      if(data.ok && data.reels && data.reels.length > 0) {
+        currentReelsData = data.reels;
         renderReels(data.reels);
-        setupIntersectionObserver();
-        setupDesktopControls(); 
+        initSwiper(); // تشغيل مكتبة السحب
       } else {
-        reelsContainer.innerHTML = '<div class="h-screen flex items-center justify-center text-gray-500">لا توجد ريلز حالياً</div>';
+        document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
       }
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      log(`خطأ: ${e.message}`);
+      document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">خطأ في التحميل: ${e.message}</div>`;
+    }
   }
 
   function renderReels(reels) {
-    reelsContainer.innerHTML = reels.map((reel, index) => `
-      <div class="reel-item" id="reel-${index}" data-id="${reel.reelId}" data-index="${index}">
-        <video src="${reel.videoUrl}" class="w-full h-full object-cover cursor-pointer" loop playsinline></video>
+    const wrapper = document.getElementById('reelsWrapper');
+    wrapper.innerHTML = reels.map((reel, index) => `
+      <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
+        <video src="${reel.videoUrl}" class="w-full h-full object-cover" playsinline loop muted></video>
         
         <i class="fas fa-heart big-heart" id="bigHeart-${reel.reelId}"></i>
-        
         <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 pointer-events-none"></div>
 
         <div class="absolute left-4 bottom-24 flex flex-col items-center gap-6 z-20 pointer-events-auto">
-          
           <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="handleLike('${reel.reelId}')">
-            <i class="${reel.is_liked ? 'fas text-red-500' : 'far text-white'} fa-heart text-3xl drop-shadow-md transition transform active:scale-75" id="likeIcon-${reel.reelId}"></i>
+            <i class="${reel.is_liked ? 'fas text-red-500' : 'far text-white'} fa-heart text-3xl drop-shadow-md" id="likeIcon-${reel.reelId}"></i>
             <span class="text-xs font-bold" id="likeCount-${reel.reelId}">${reel.likes}</span>
           </div>
-
           <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="openComments('${reel.reelId}')">
-            <i class="fas fa-comment-dots text-3xl text-white drop-shadow-md transition active:scale-90"></i>
+            <i class="fas fa-comment-dots text-3xl text-white drop-shadow-md"></i>
             <span class="text-xs font-bold" id="commentCount-${reel.reelId}">${reel.commentsCount}</span>
           </div>
-
           <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="shareReel('${reel.reelId}')">
-            <i class="fas fa-share text-3xl text-white drop-shadow-md transition active:scale-90"></i>
+            <i class="fas fa-share text-3xl text-white drop-shadow-md"></i>
             <span class="text-xs font-bold">مشاركة</span>
           </div>
         </div>
 
         <div class="absolute right-4 bottom-8 left-16 z-20 text-right pointer-events-none">
-          
           <div class="flex items-center gap-3 mb-2 pointer-events-auto cursor-pointer" onclick="window.location.href='/profile/${reel.userId}'">
-            <img src="${reel.user.profile_picture_url}" class="w-10 h-10 rounded-full border border-white object-cover">
+            <img src="${reel.user.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-white object-cover">
             <h3 class="font-bold text-white shadow-black drop-shadow-md text-base">@${reel.user.username}</h3>
           </div>
-          
           <p class="text-sm text-gray-200 line-clamp-2 leading-relaxed drop-shadow-md dir-rtl pr-1">
             ${reel.description}
           </p>
@@ -181,19 +180,16 @@
       </div>
     `).join('');
 
-    // تفعيل الضغط المزدوج (Double Tap)
-    document.querySelectorAll('.reel-item video').forEach(vid => {
+    // تفعيل الضغط المزدوج
+    document.querySelectorAll('video').forEach(vid => {
       let lastTap = 0;
       vid.addEventListener('click', (e) => {
         const now = new Date().getTime();
         const timesince = now - lastTap;
         if (timesince < 300 && timesince > 0) {
-          const reelItem = vid.closest('.reel-item');
-          handleLike(reelItem.getAttribute('data-id'), true);
-          const heart = document.getElementById(`bigHeart-${reelItem.getAttribute('data-id')}`);
-          heart.classList.remove('animate');
-          void heart.offsetWidth;
-          heart.classList.add('animate');
+          const reelId = vid.closest('.swiper-slide').getAttribute('data-id');
+          handleLike(reelId, true);
+          animateHeart(reelId);
         } else {
            if(vid.paused) vid.play(); else vid.pause();
         }
@@ -202,43 +198,55 @@
     });
   }
 
-  // --- منطق التحكم (تم إصلاحه ليعمل مع scroll-snap) ---
-  function setupDesktopControls() {
-    // دعم الأسهم في الكيبورد فقط
-    document.addEventListener('keydown', (e) => {
-      if (document.getElementById('commentsSheet').classList.contains('open')) return;
-      
-      const container = document.getElementById('reelsContainer');
-      const height = container.clientHeight;
-      const currentScroll = container.scrollTop;
-      const index = Math.round(currentScroll / height);
-
-      if (e.key === 'ArrowDown') {
-        container.scrollTo({ top: (index + 1) * height, behavior: 'smooth' });
-      } else if (e.key === 'ArrowUp') {
-        container.scrollTo({ top: (index - 1) * height, behavior: 'smooth' });
+  function initSwiper() {
+    if(swiperInstance) swiperInstance.destroy();
+    
+    swiperInstance = new Swiper(".mySwiper", {
+      direction: "vertical",
+      mousewheel: true,
+      keyboard: { enabled: true },
+      speed: 400,
+      on: {
+        init: function() {
+          playCurrentVideo(this);
+        },
+        slideChange: function () {
+          pauseAllVideos();
+          playCurrentVideo(this);
+        }
       }
     });
-    // تم حذف أكواد الماوس (mousedown/up) لأنها تتعارض مع التمرير الطبيعي
   }
 
-  function setupIntersectionObserver() {
-    const options = { threshold: 0.6 };
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        const vid = entry.target.querySelector('video');
-        if (entry.isIntersecting) {
-          vid.currentTime = 0;
-          vid.play().catch(() => {});
-        } else {
-          vid.pause();
-        }
+  function pauseAllVideos() {
+    document.querySelectorAll('video').forEach(v => {
+      v.pause();
+      v.currentTime = 0;
+    });
+  }
+
+  function playCurrentVideo(swiper) {
+    const activeSlide = swiper.slides[swiper.activeIndex];
+    const video = activeSlide.querySelector('video');
+    if (video) {
+      video.muted = false; // إلغاء كتم الصوت عند التشغيل (قد يتطلب تفاعل المستخدم أولاً)
+      video.play().catch(e => {
+        log('Auto-play blocked, user interaction needed: ' + e.message);
+        // في الموبايل، الفيديو يحتاج لكتم الصوت أحياناً للتشغيل التلقائي الأول
+        video.muted = true;
+        video.play();
       });
-    }, options);
-    document.querySelectorAll('.reel-item').forEach(item => observer.observe(item));
+    }
   }
 
-  // --- التفاعلات (لايك، مشاركة) ---
+  function animateHeart(reelId) {
+    const heart = document.getElementById(`bigHeart-${reelId}`);
+    heart.classList.remove('animate');
+    void heart.offsetWidth; // Trigger reflow
+    heart.classList.add('animate');
+  }
+
+  // --- دوال التفاعل (نفس المنطق السابق) ---
   async function handleLike(reelId, forceLike = false) {
     const icon = document.getElementById(`likeIcon-${reelId}`);
     const countSpan = document.getElementById(`likeCount-${reelId}`);
@@ -247,40 +255,40 @@
     if (forceLike && isLiked) return;
 
     if (isLiked) {
-      icon.className = 'far fa-heart text-3xl text-white drop-shadow-md transition transform active:scale-75';
+      icon.className = 'far fa-heart text-3xl text-white drop-shadow-md';
       countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
     } else {
-      icon.className = 'fas fa-heart text-3xl text-red-500 drop-shadow-md transition transform active:scale-75';
+      icon.className = 'fas fa-heart text-3xl text-red-500 drop-shadow-md';
       countSpan.textContent = parseInt(countSpan.textContent) + 1;
     }
-    
     try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST' }); } catch(e) {}
-  }
-
-  function shareReel(reelId) {
-    const url = `${window.location.origin}/reels?r=${reelId}`;
-    navigator.clipboard.writeText(url).then(() => alert('تم نسخ الرابط!'));
   }
 
   // --- التعليقات ---
   const backdrop = document.getElementById('backdrop');
   const sheet = document.getElementById('commentsSheet');
   const commentsList = document.getElementById('commentsList');
-  const commentInput = document.getElementById('commentInput');
-  const sendBtn = document.getElementById('sendCommentBtn');
+  let currentReelIdForComments = null;
 
   window.openComments = async function(reelId) {
     currentReelIdForComments = reelId;
     backdrop.classList.add('open');
     sheet.classList.add('open');
+    if(swiperInstance) swiperInstance.allowTouchMove = false; // منع السحب عند فتح التعليقات
+
     commentsList.innerHTML = '<div class="text-center mt-5"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
-    
     try {
       const res = await fetch(`/api/reels/${reelId}/comments`);
       const data = await res.json();
-      if(data.ok) renderComments(data.comments);
-    } catch(e) { commentsList.innerHTML = '<p class="text-center text-red-500 mt-5">خطأ في التحميل</p>'; }
+      renderComments(data.comments);
+    } catch(e) { log(e); }
   };
+
+  function closeCommentsSheet() {
+    backdrop.classList.remove('open');
+    sheet.classList.remove('open');
+    if(swiperInstance) swiperInstance.allowTouchMove = true; // إعادة تفعيل السحب
+  }
 
   function renderComments(comments) {
     commentsList.innerHTML = '';
@@ -290,61 +298,41 @@
     }
     commentsList.innerHTML = comments.map(c => `
       <div class="flex gap-3 mb-4 w-full">
-        <img src="${c.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-8 h-8 rounded-full flex-shrink-0 bg-gray-800 object-cover">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <span class="text-gray-300 text-xs font-bold truncate">${c.username || 'مستخدم'}</span>
-            <span class="text-gray-600 text-[10px]">${new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-          </div>
-          <p class="text-sm text-white mt-1 break-words leading-relaxed">${c.content}</p>
+        <img src="${c.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover">
+        <div>
+           <div class="flex items-center gap-2">
+             <span class="font-bold text-xs">${c.username}</span>
+             <span class="text-[10px] text-gray-500">${new Date(c.timestamp).toLocaleTimeString()}</span>
+           </div>
+           <p class="text-sm mt-1">${c.content}</p>
         </div>
       </div>
     `).join('');
-    setTimeout(() => commentsList.scrollTop = commentsList.scrollHeight, 100);
-  }
-
-  function closeCommentsSheet() {
-    backdrop.classList.remove('open');
-    sheet.classList.remove('open');
-    currentReelIdForComments = null;
   }
 
   backdrop.addEventListener('click', closeCommentsSheet);
   document.getElementById('closeComments').addEventListener('click', closeCommentsSheet);
-
-  sendBtn.addEventListener('click', async () => {
-    const content = commentInput.value.trim();
+  
+  document.getElementById('sendCommentBtn').addEventListener('click', async () => {
+    const input = document.getElementById('commentInput');
+    const content = input.value.trim();
     if(!content || !currentReelIdForComments) return;
+    input.value = '';
     
-    commentInput.value = '';
-    const tempId = 'temp-' + Date.now();
-    commentsList.insertAdjacentHTML('beforeend', `
-      <div class="flex gap-3 mb-4 opacity-50" id="${tempId}">
-        <img src="https://via.placeholder.com/40" class="w-8 h-8 rounded-full">
-        <div><p class="text-sm text-white">${content}</p></div>
-      </div>
-    `);
-    commentsList.scrollTop = commentsList.scrollHeight;
-
+    // إرسال وهمي سريع
+    commentsList.insertAdjacentHTML('beforeend', `<div class="text-sm opacity-50 mb-2">جاري النشر...</div>`);
+    
     try {
-      const res = await fetch(`/api/reels/${currentReelIdForComments}/comment`, {
+      await fetch(`/api/reels/${currentReelIdForComments}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content })
       });
+      // تحديث التعليقات
+      const res = await fetch(`/api/reels/${currentReelIdForComments}/comments`);
       const data = await res.json();
-      if(data.ok) {
-        const refresh = await fetch(`/api/reels/${currentReelIdForComments}/comments`);
-        const rData = await refresh.json();
-        renderComments(rData.comments);
-        
-        const countEl = document.getElementById(`commentCount-${currentReelIdForComments}`);
-        if(countEl) countEl.textContent = parseInt(countEl.textContent || 0) + 1;
-      }
-    } catch(e) {
-      document.getElementById(tempId).remove();
-      alert('فشل التعليق');
-    }
+      renderComments(data.comments);
+    } catch(e) { alert('فشل الإرسال'); }
   });
 </script>
 </body>
