@@ -17,9 +17,7 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
-// --- حل مشكلة الحجم Content Too Large ---
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+
 // إعدادات Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -777,59 +775,6 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
 
 // ---------------- API: Reels ----------------
 
-// 1. إنشاء ريل
-app.post('/api/reels/create', requireAuth, upload.single('video'), async (req, res) => {
-  try {
-    const { description } = req.body;
-    if (!req.file) return res.status(400).json({ ok: false, error: 'لم يتم رفع فيديو' });
-
-    const db = admin.database();
-    const reelRef = db.ref('reels').push();
-    await reelRef.set({
-      userId: req.session.userId,
-      videoUrl: req.file.path,
-      description: description || '',
-      likesCount: 0,
-      commentsCount: 0,
-      createdAt: admin.database.ServerValue.TIMESTAMP
-    });
-
-    res.json({ ok: true });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ ok: false, error: 'فشل في حفظ الريل' });
-  }
-});
-
-// 2. جلب الريلز
-app.get('/api/reels', async (req, res) => {
-  try {
-    const db = admin.database();
-    const snapshot = await db.ref('reels').orderByChild('createdAt').limitToLast(20).once('value');
-    const reels = [];
-    snapshot.forEach(child => {
-      reels.unshift({ id: child.key, ...child.val() });
-    });
-    res.json({ ok: true, reels });
-  } catch (error) {
-    res.status(500).json({ ok: false });
-  }
-});
-
-// 3. إضافة تعليق
-app.post('/api/reels/:id/comment', requireAuth, async (req, res) => {
-  const { content } = req.body;
-  const db = admin.database();
-  const commentRef = db.ref(`reel_comments/${req.params.id}`).push();
-  const commentData = {
-    userId: req.session.userId,
-    content,
-    createdAt: admin.database.ServerValue.TIMESTAMP
-  };
-  await commentRef.set(commentData);
-  await db.ref(`reels/${req.params.id}/commentsCount`).transaction(c => (c || 0) + 1);
-  res.json({ ok: true, comment: commentData });
-});
 
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
