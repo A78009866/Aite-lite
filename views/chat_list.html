@@ -105,6 +105,28 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #6b7280;
         }
+        /* تأثير ظهور النافذة */
+.modal-animate-in {
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* نمط أزرار الخيارات داخل النافذة */
+.create-option-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.create-option-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-5px);
+    border-color: rgba(59, 130, 246, 0.5);
+}
     </style>
 </head>
 <body class="min-h-screen">
@@ -126,40 +148,14 @@
             
             <div class="flex items-center space-x-4 space-x-reverse">
                 <!-- تم تحويل زر إنشاء منشور إلى زر قائمة تعرض خيارين -->
-               <div class="relative">
-                   <button onclick="openCreateModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full transition duration-300 shadow-lg flex items-center">
+                <div class="relative">
+                    <button id="createBtn" class="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center border border-gray-700" onclick="toggleCreateModal()">
     <i class="fas fa-plus ml-2"></i>
     إنشاء
 </button>
-
-<div id="createModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-black/80 backdrop-blur-sm">
-    <div class="bg-[#18191a] w-full max-w-sm mx-4 rounded-2xl border border-gray-800 p-6 shadow-2xl transform transition-all">
-        <div class="flex justify-between items-center mb-6">
-            <h3 class="text-xl font-bold text-white">ماذا تريد أن تنشئ؟</h3>
-            <button onclick="closeCreateModal()" class="text-gray-400 hover:text-white">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-        </div>
-        
-        <div class="grid grid-cols-2 gap-4">
-            <a href="/create-post" class="flex flex-col items-center justify-center p-6 bg-[#242526] hover:bg-blue-600/20 border border-gray-700 rounded-xl transition-all group">
-                <div class="w-14 h-14 bg-blue-500/10 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-500">
-                    <i class="fas fa-file-alt text-2xl text-blue-500 group-hover:text-white"></i>
+                   
                 </div>
-                <span class="text-white font-medium">منشور</span>
-            </a>
-
-            <a href="/create-reel" class="flex flex-col items-center justify-center p-6 bg-[#242526] hover:bg-red-600/20 border border-gray-700 rounded-xl transition-all group">
-                <div class="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mb-3 group-hover:bg-red-500">
-                    <i class="fas fa-video text-2xl text-red-500 group-hover:text-white"></i>
-                </div>
-                <span class="text-white font-medium">ريلز</span>
-            </a>
-        </div>
-    </div>
-</div>
-    
-           
+            </div>
 
             <div id="profileDropdown" class="absolute top-14 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
                 <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
@@ -252,7 +248,39 @@
             حذف المنشور
         </button>
     </div>
+<div id="createModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 glass-modal-bg">
+    <div class="glass-comment-modal-content p-8 rounded-3xl shadow-2xl max-w-sm w-full modal-animate-in border border-white/20" onclick="event.stopPropagation()">
+        
+        <div class="flex justify-between items-center mb-8">
+            <h3 class="text-2xl font-bold text-white">ماذا تريد أن تنشر؟</h3>
+            <button onclick="toggleCreateModal()" class="text-gray-400 hover:text-white transition text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
 
+        <div class="grid grid-cols-1 gap-4">
+            <a href="/create-post" class="create-option-card flex items-center p-5 rounded-2xl group">
+                <div class="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center ml-4 group-hover:bg-blue-500/40 transition">
+                    <i class="fas fa-file-alt text-blue-400 text-xl"></i>
+                </div>
+                <div class="text-right">
+                    <span class="block text-white font-bold text-lg">منشور جديد</span>
+                    <span class="block text-gray-400 text-sm">شارك أفكارك وصورك</span>
+                </div>
+            </a>
+
+            <a href="/create-reel" class="create-option-card flex items-center p-5 rounded-2xl group">
+                <div class="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center ml-4 group-hover:bg-purple-500/40 transition">
+                    <i class="fas fa-video text-purple-400 text-xl"></i>
+                </div>
+                <div class="text-right">
+                    <span class="block text-white font-bold text-lg">ريلز</span>
+                    <span class="block text-gray-400 text-sm">فيديو قصير ممتع</span>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
 
     <script>
         let currentPostIdToDelete = null;
@@ -300,15 +328,24 @@
         document.addEventListener('click', closeProfileDropdownOnClickOutside);
 
         // وظائف قائمة الإنشاء
-        function toggleCreateMenu(event) {
-            event.stopPropagation();
-            createMenu.classList.toggle('hidden');
-        }
-        document.addEventListener('click', (e) => {
-            if (!createMenu.contains(e.target) && !createBtn.contains(e.target)) {
-                createMenu.classList.add('hidden');
-            }
-        });
+      const createModal = document.getElementById('createModal');
+
+function toggleCreateModal() {
+    createModal.classList.toggle('hidden');
+    // منع التمرير في الخلفية عند فتح النافذة
+    if (!createModal.classList.contains('hidden')) {
+        document.body.style.overflow = 'hidden';
+    } else {
+        document.body.style.overflow = 'auto';
+    }
+}
+
+// إغلاق النافذة عند النقر على الخلفية السوداء
+createModal.addEventListener('click', (e) => {
+    if (e.target === createModal) {
+        toggleCreateModal();
+    }
+});
         
         // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
         function openMediaViewer(url, type, event) {
@@ -999,23 +1036,7 @@
                 
             fetchAndDisplayPosts();
         });
-function openCreateModal() {
-    document.getElementById('createModal').classList.remove('hidden');
-    document.body.style.overflow = 'hidden'; // منع التمرير في الخلفية
-}
-
-function closeCreateModal() {
-    document.getElementById('createModal').classList.add('hidden');
-    document.body.style.overflow = 'auto';
-}
-
-// إغلاق النافذة عند الضغط خارجها
-window.onclick = function(event) {
-    const modal = document.getElementById('createModal');
-    if (event.target == modal) {
-        closeCreateModal();
-    }
-}
+        
     </script>
 </body>
     </html>
