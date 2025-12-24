@@ -92,29 +92,31 @@
       border-radius: 999px;
       background: rgba(255,255,255,0.06);
       z-index: 30;
-      overflow: hidden;
+      overflow: visible;
       cursor: pointer;
     }
-    /* تدرج أسود -> رمادي */
+    /* تدرج أزرق */
     .video-progress .progress {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #000000 0%, #4a4a4a 100%);
-      transition: width 0.1s linear;
+      background: linear-gradient(90deg, #007AFF 0%, #00D4FF 100%);
+      transition: width 0.08s linear;
+      border-radius: 999px;
     }
-    /* تحريك الـ thumb باستخدام left (لمعالجة الحركة في نفس اتجاه الشريط) */
+    /* دائرة تمشي مع الخط */
     .video-progress .thumb {
       position: absolute;
       top: 50%;
       left: 0%;
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
-      background: #ffffff;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      background: linear-gradient(180deg, #00D4FF, #007AFF);
+      border: 2px solid rgba(255,255,255,0.95);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
       transform: translate(-50%, -50%);
       pointer-events: none;
-      opacity: 0.95;
+      z-index: 35;
     }
 
     /* نافذة التعليقات */
@@ -265,7 +267,7 @@
       // تحديث شريط التقدم عند التقدم
       const progressBar = document.getElementById(`progressBar-${reelId}`);
       const progressContainer = document.getElementById(`progress-${reelId}`);
-      const playBtn = document.getElementById(`playBtn-${reelId}`);
+      const playBtn = document.getElementById(`playBtn-${reel.reelId}`);
       const thumb = document.getElementById(`thumb-${reelId}`);
 
       // timeupdate => تحديث شريط التقدم
@@ -273,7 +275,7 @@
         if (!progressBar || !vid.duration || isNaN(vid.duration)) return;
         const pct = (vid.currentTime / vid.duration) * 100;
         progressBar.style.width = pct + '%';
-        if (thumb) thumb.style.left = pct + '%'; // استخدم left ليحرك المؤشر في نفس اتجاه الشريط
+        if (thumb) thumb.style.left = pct + '%'; // الدائرة تتحرك مع التقدم
       });
 
       // seek عند الضغط على شريط التقدم
@@ -290,8 +292,9 @@
       }
 
       // زر التشغيل المركزي يجب أن يعمل أيضاً
-      if (playBtn) {
-        playBtn.addEventListener('click', (e) => {
+      const playBtnEl = document.getElementById(`playBtn-${reelId}`);
+      if (playBtnEl) {
+        playBtnEl.addEventListener('click', (e) => {
           e.stopPropagation();
           togglePlayPause(vid, reelId, true);
         });
@@ -317,15 +320,18 @@
 
       // إظهار زر التشغيل/الإيقاف عند توقف الفيديو أو عند الانتقال
       vid.addEventListener('pause', () => {
-        showPlayBtnTemporarily(reelId, true);
+        const id = vid.closest('.swiper-slide').getAttribute('data-id');
+        showPlayBtnTemporarily(id, true);
       });
       vid.addEventListener('play', () => {
-        showPlayBtnTemporarily(reelId, false);
+        const id = vid.closest('.swiper-slide').getAttribute('data-id');
+        showPlayBtnTemporarily(id, false);
       });
 
       // إذا انتهى الفيديو نعكس حالة الزر
       vid.addEventListener('ended', () => {
-        showPlayBtnTemporarily(reelId, true);
+        const id = vid.closest('.swiper-slide').getAttribute('data-id');
+        showPlayBtnTemporarily(id, true);
       });
     });
   }
