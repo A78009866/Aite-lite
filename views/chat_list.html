@@ -18,7 +18,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
             /* إضافة مساحة سفلية لمنع الشريط السفلي من حجب المحتوى */
-            padding-bottom: 60px; 
+            padding-bottom: 80px; 
         }
 
         .glass-navbar {
@@ -127,6 +127,24 @@
     transform: translateY(-5px);
     border-color: rgba(59, 130, 246, 0.5);
 }
+
+/* notification badge */
+#notifBadge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
     </style>
 </head>
 <body class="min-h-screen">
@@ -179,7 +197,7 @@
     </main>
     
 <div class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-navbar">
-        <nav class="flex justify-around items-center max-w-lg mx-auto h-14">
+        <nav class="flex justify-around items-center max-w-lg mx-auto h-14 relative">
             
             <a href="/chat_list" class="flex flex-col items-center justify-center p-2 text-blue-400">
                 <i class="fas fa-home text-xl"></i>
@@ -195,6 +213,13 @@
             <a href="/reels" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
                 <i class="fas fa-clapperboard text-xl"></i>
                 <span class="text-xs mt-1"></span>
+            </a>
+
+            <!-- Notifications icon -->
+            <a id="notifBtn" href="/notifications" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300 relative">
+                <i class="fas fa-bell text-xl"></i>
+                <span class="text-xs mt-1">الإشعارات</span>
+                <span id="notifBadge" style="display:none">0</span>
             </a>
 
         </nav>
@@ -328,12 +353,12 @@
         document.addEventListener('click', closeProfileDropdownOnClickOutside);
 
         // وظائف قائمة الإنشاء
-      const createModal = document.getElementById('createModal');
+      const createModalEl = document.getElementById('createModal');
 
 function toggleCreateModal() {
-    createModal.classList.toggle('hidden');
+    createModalEl.classList.toggle('hidden');
     // منع التمرير في الخلفية عند فتح النافذة
-    if (!createModal.classList.contains('hidden')) {
+    if (!createModalEl.classList.contains('hidden')) {
         document.body.style.overflow = 'hidden';
     } else {
         document.body.style.overflow = 'auto';
@@ -341,8 +366,8 @@ function toggleCreateModal() {
 }
 
 // إغلاق النافذة عند النقر على الخلفية السوداء
-createModal.addEventListener('click', (e) => {
-    if (e.target === createModal) {
+createModalEl.addEventListener('click', (e) => {
+    if (e.target === createModalEl) {
         toggleCreateModal();
     }
 });
@@ -413,9 +438,9 @@ createModal.addEventListener('click', (e) => {
 
                 if (response.ok && result.ok) {
                     // حذف بطاقة المنشور من الواجهة
-                    document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`).remove();
+                    const el = document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`);
+                    if (el) el.remove();
                     deleteModal.classList.add('hidden');
-                    // لا حاجة لإظهار رسالة نجاح طويلة
                 } else {
                     deleteMessage.textContent = result.error || 'فشل الحذف.';
                     deleteMessage.classList.remove('hidden');
@@ -497,8 +522,10 @@ createModal.addEventListener('click', (e) => {
                     if (activeWaveSurfer && activeWaveSurfer !== ws) {
                         activeWaveSurfer.pause();
                         const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
-                        otherPostCard.querySelector('.audio-play-button i').classList.remove('fa-pause');
-                        otherPostCard.querySelector('.audio-play-button i').classList.add('fa-play');
+                        if (otherPostCard) {
+                            const pb = otherPostCard.querySelector('.audio-play-button i');
+                            if (pb) { pb.classList.remove('fa-pause'); pb.classList.add('fa-play'); }
+                        }
                     }
                     if (activeVideo) {
                         const activePostId = activeVideo.id.split('-')[1];
@@ -536,7 +563,6 @@ createModal.addEventListener('click', (e) => {
         // ******************** 4.1. وظائف تحكم الفيديو المخصصة (جديد) ********************
         
         function toggleVideoPlay(postId, event) {
-            // منع النقر من الانتشار إلى العناصر الأخرى (مثل ملء الشاشة)
             event.stopPropagation();
             
             const video = document.getElementById(`video-${postId}`);
@@ -566,8 +592,10 @@ createModal.addEventListener('click', (e) => {
             if (activeWaveSurfer) {
                 activeWaveSurfer.pause();
                 const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
-                otherPostCard.querySelector('.audio-play-button i').classList.remove('fa-pause');
-                otherPostCard.querySelector('.audio-play-button i').classList.add('fa-play');
+                if (otherPostCard) {
+                    const apb = otherPostCard.querySelector('.audio-play-button i');
+                    if (apb) { apb.classList.remove('fa-pause'); apb.classList.add('fa-play'); }
+                }
                 activeWaveSurfer = null;
             }
             
@@ -575,23 +603,19 @@ createModal.addEventListener('click', (e) => {
             if (video.paused) {
                 video.play();
                 playOverlay.classList.add('hidden'); // إخفاء زر التشغيل المركزي
-                controlIcon.classList.remove('fa-play');
-                controlIcon.classList.add('fa-pause');
-                controlsBar.classList.remove('opacity-0'); // إظهار شريط التحكم
+                if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
+                if (controlsBar) controlsBar.classList.remove('opacity-0'); // إظهار شريط التحكم
                 activeVideo = video;
                 
                 // ربط مستمعي الأحداث
                 video.addEventListener('timeupdate', updateVideoProgress);
-                // يتم ربط loadedmetadata لضمان تحديث عرض الوقت
                 video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
                 video.addEventListener('ended', handleVideoEnd);
 
             } else {
                 video.pause();
                 playOverlay.classList.remove('hidden'); // إظهار زر التشغيل المركزي
-                controlIcon.classList.remove('fa-pause');
-                controlIcon.classList.add('fa-play');
-                // controlsBar.classList.add('opacity-0'); // يمكن إخفاء شريط التحكم عند الإيقاف المؤقت
+                if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
                 activeVideo = null;
             }
         }
@@ -604,11 +628,8 @@ createModal.addEventListener('click', (e) => {
 
             if (!video.duration || !progressBar || !timeDisplay) return;
 
-            // تحديث شريط التقدم
             const percent = (video.currentTime / video.duration) * 100;
             progressBar.style.width = `${percent}%`;
-
-            // تحديث عرض الوقت
             timeDisplay.textContent = `${formatVideoTime(video.currentTime)} / ${formatVideoTime(video.duration)}`;
         }
 
@@ -628,14 +649,11 @@ createModal.addEventListener('click', (e) => {
             const playOverlay = document.getElementById(`play-overlay-${postId}`);
             const controlIcon = document.getElementById(`control-icon-${postId}`);
             
-            // إعادة تعيين إلى البداية وإظهار زر التشغيل
             video.currentTime = 0;
-            playOverlay.classList.remove('hidden'); 
-            controlIcon.classList.remove('fa-pause');
-            controlIcon.classList.add('fa-play');
+            if (playOverlay) playOverlay.classList.remove('hidden'); 
+            if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
             activeVideo = null;
             
-            // إزالة مستمعي الأحداث لتقليل استهلاك الذاكرة
             video.removeEventListener('timeupdate', updateVideoProgress);
             video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
             video.removeEventListener('ended', handleVideoEnd);
@@ -655,15 +673,10 @@ createModal.addEventListener('click', (e) => {
             
             if (!video || !video.duration) return;
 
-            // حساب النسبة المئوية للنقرة داخل الشريط
             const rect = progressContainer.getBoundingClientRect();
             const clickX = event.clientX - rect.left;
             const percentage = clickX / rect.width;
-            
-            // تطبيق النسبة على مدة الفيديو
             video.currentTime = video.duration * percentage;
-            
-            // تأكد من تشغيل الفيديو بعد التقديم/التأخير
             if (video.paused) {
                 toggleVideoPlay(postId, event);
             }
@@ -675,11 +688,11 @@ createModal.addEventListener('click', (e) => {
             if (video) {
                 if (video.requestFullscreen) {
                     video.requestFullscreen();
-                } else if (video.mozRequestFullScreen) { /* Firefox */
+                } else if (video.mozRequestFullScreen) {
                     video.mozRequestFullScreen();
-                } else if (video.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+                } else if (video.webkitRequestFullscreen) {
                     video.webkitRequestFullscreen();
-                } else if (video.msRequestFullscreen) { /* IE/Edge */
+                } else if (video.msRequestFullscreen) {
                     video.msRequestFullscreen();
                 }
             }
@@ -695,13 +708,10 @@ createModal.addEventListener('click', (e) => {
             const diffInHours = (now - date) / (1000 * 60 * 60);
 
             if (diffInHours < 24) {
-                // أقل من يوم: عرض الوقت فقط
                 return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
             } else if (diffInHours < 7 * 24) {
-                // أقل من أسبوع: عرض اليوم والوقت
                 return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
             } else {
-                // أكثر من أسبوع: عرض التاريخ
                 return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
             }
         }
@@ -717,7 +727,6 @@ createModal.addEventListener('click', (e) => {
                         </div>
                     `;
                 } else if (post.media.type === 'video') {
-                     // محتوى فيديو بتشغيل مباشر وأزرار مخصصة (مُحدَّث)
                      mediaContent = `
                         <div class="mt-3 relative w-full aspect-video rounded-lg overflow-hidden bg-black group">
                             <video id="video-${post.postId}" src="${post.media.url}" 
@@ -762,7 +771,6 @@ createModal.addEventListener('click', (e) => {
                 }
             }
 
-            // تحديد شكل زر الإعجاب الأولي بناءً على حالة الإعجاب (is_liked)
             const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
             const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
 
@@ -867,14 +875,13 @@ createModal.addEventListener('click', (e) => {
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // تحديث عداد الإعجابات في الواجهة الأمامية
                     const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
-                    const likesSpan = postCard.querySelector('.text-sm span:first-child');
-                    
-                    // تحديث النص وشكل الأيقونة
-                    likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
-                    
-                    // تحديث شكل زر الإعجاب: قلب أحمر مملوء / قلب رمادي فارغ
+                    // تحديث عرض الإعجابات الموجود إن وُجد
+                    if (postCard) {
+                        const likesSpan = postCard.querySelector('.flex.justify-between span:first-child');
+                        if (likesSpan) likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
+                    }
+
                     if (result.action === 'liked') {
                         likeIcon.classList.remove('far', 'text-gray-400');
                         likeIcon.classList.add('fas', 'text-red-500');
@@ -896,7 +903,6 @@ createModal.addEventListener('click', (e) => {
             } catch (error) {
                 console.error('Error during like operation:', error);
             } finally {
-                // إعادة تفعيل الزر
                 buttonElement.disabled = false;
             }
         }
@@ -926,7 +932,7 @@ createModal.addEventListener('click', (e) => {
                     <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover ml-3 flex-shrink-0">
                     <div class="flex-grow bg-gray-700 p-3 rounded-lg">
                         <div class="flex justify-between items-center mb-1">
-                            <a href="/profile?user_id=${comment.userId}" class="text-white font-semibold text-sm hover:text-blue-400">${comment.user.username}</a>
+                            <a href="/profile?userId=${comment.userId}" class="text-white font-semibold text-sm hover:text-blue-400">${comment.user.username}</a>
                             <span class="text-gray-400 text-xs">${commentDate}</span>
                         </div>
                         <p class="text-gray-200 whitespace-pre-wrap text-sm">${comment.content}</p>
@@ -951,7 +957,6 @@ createModal.addEventListener('click', (e) => {
                         result.comments.forEach(comment => {
                             commentsList.innerHTML += createCommentHtml(comment);
                         });
-                        // التمرير إلى أسفل بعد التحميل
                         commentsList.scrollTop = commentsList.scrollHeight;
                     }
                 } else {
@@ -985,19 +990,18 @@ createModal.addEventListener('click', (e) => {
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // 1. تحديث قائمة التعليقات مباشرةً
                     if (commentsList.querySelector('.text-center.text-gray-500')) {
-                        commentsList.innerHTML = ''; // إزالة رسالة "لا توجد تعليقات"
+                        commentsList.innerHTML = '';
                     }
                     commentsList.innerHTML += createCommentHtml(result.comment);
                     newCommentInput.value = '';
                     
-                    // 2. تحديث عداد التعليقات في بطاقة المنشور
                     const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
-                    const commentsSpan = postCard.querySelector('.text-sm span:last-child');
-                    commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`; // تم تحديث الأيقونة هنا أيضاً
+                    if (postCard) {
+                        const commentsSpan = postCard.querySelector('.flex.justify-between span:last-child');
+                        if (commentsSpan) commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`;
+                    }
                     
-                    // 3. التمرير إلى أسفل
                     commentsList.scrollTop = commentsList.scrollHeight;
 
                 } else {
@@ -1010,14 +1014,14 @@ createModal.addEventListener('click', (e) => {
                 commentError.classList.remove('hidden');
             } finally {
                 postCommentBtn.disabled = false;
-                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>'; // تم تحديث أيقونة الزر هنا
+                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
             }
         }
         
         postCommentBtn.addEventListener('click', postComment);
         newCommentInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                e.preventDefault(); // منع إضافة سطر جديد في الإدخال
+                e.preventDefault();
                 postComment();
             }
         });
@@ -1030,13 +1034,57 @@ createModal.addEventListener('click', (e) => {
                     if (data && data.profile_picture_url) {
                         profilePicElement.src = data.profile_picture_url;
                         profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                        currentUserId = data.id; // حفظ معرف المستخدم الحالي
+                        currentUserId = data.id;
                     }
                 }).catch(console.error);
                 
             fetchAndDisplayPosts();
         });
-        
+
+        // ---------------- Notifications: SSE badge (فوري) ----------------
+
+        (function setupNotifSSE() {
+          if (!window.EventSource) return;
+          // Create EventSource to SSE endpoint
+          const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+
+          es.addEventListener('notifications', (e) => {
+            try {
+              const payload = JSON.parse(e.data);
+              const unread = payload.unread_count || 0;
+              const badge = document.getElementById('notifBadge');
+              if (unread > 0) {
+                badge.style.display = 'inline-flex';
+                badge.textContent = unread > 99 ? '99+' : String(unread);
+              } else {
+                badge.style.display = 'none';
+              }
+            } catch (err) {
+              console.error('Failed to parse notifications SSE data', err);
+            }
+          });
+
+          es.addEventListener('error', (err) => {
+            console.warn('Notifications SSE error', err);
+            // EventSource will auto-reconnect; nothing else needed here
+          });
+        })();
+
+        // Fallback initial unread count (in case SSE connects slowly)
+        (function initUnreadCount() {
+          fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d && d.ok) {
+                const badge = document.getElementById('notifBadge');
+                if (d.unread_count > 0) {
+                  badge.style.display = 'inline-flex';
+                  badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count);
+                }
+              }
+            }).catch(()=>{});
+        })();
+
     </script>
 </body>
     </html>
