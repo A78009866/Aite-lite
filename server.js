@@ -808,27 +808,23 @@ app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, r
   }
 });
 
-// جلب الريلز (Feed)
+// 1. تحديث API الجلب لإرجاع معرف المستخدم الحالي
 app.get('/api/reels/feed', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
-    // جلب آخر 20 ريل
-    const reelsSnap = await db.ref('reels').orderByChild('timestamp').limitToLast(20).once('value');
+    const reelsSnap = await db.ref('reels').orderByChild('timestamp').limitToLast(50).once('value');
     let reels = [];
     reelsSnap.forEach(snap => reels.push(snap.val()));
-    reels.reverse(); // الأحدث أولاً
+    reels.reverse();
 
-    // جلب بيانات المستخدمين وحالة الإعجاب
     const finalReels = await Promise.all(reels.map(async (reel) => {
       const userSnap = await db.ref(`profiles/${reel.userId}`).once('value');
       const userData = userSnap.val() || {};
-      
       const likeSnap = await db.ref(`reels_likes/${reel.reelId}/${currentUserId}`).once('value');
-      const isLiked = likeSnap.exists();
-
+      
       return {
         ...reel,
-        is_liked: isLiked,
+        is_liked: likeSnap.exists(),
         user: {
           username: userData.username || 'مستخدم',
           profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150'
@@ -836,9 +832,39 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
       };
     }));
 
-    res.json({ ok: true, reels: finalReels });
+    // نرسل currentUserId مع البيانات
+    res.json({ ok: true, reels: finalReels, currentUserId: currentUserId });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'Error fetching reels' });
+  }
+});
+
+// 2. إضافة API الحذف
+app.delete('/api/reels/:reelId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId } = req.params;
+
+  try {
+    const reelRef = db.ref(`reels/${reelId}`);
+    const snapshot = await reelRef.once('value');
+    const reel = snapshot.val();
+
+    if (!reel) return res.status(404).json({ ok: false, error: 'الريل غير موجود' });
+    
+    // التحقق من الملكية
+    if (reel.userId !== userId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا الريل' });
+    }
+
+    // حذف الريل والبيانات المرتبطة به
+    await reelRef.remove();
+    await db.ref(`reels_likes/${reelId}`).remove();
+    await db.ref(`reels_comments/${reelId}`).remove();
+
+    res.json({ ok: true, message: 'تم الحذف بنجاح' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: 'فشل الحذف' });
   }
 });
 
