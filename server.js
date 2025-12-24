@@ -807,16 +807,23 @@ app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, r
     res.status(500).json({ ok: false, error: 'فشل في رفع الريل.' });
   }
 });
-
-// 1. تحديث API الجلب لإرجاع معرف المستخدم الحالي
+// تحديث API الجلب في ملف server.js
 app.get('/api/reels/feed', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
-    const reelsSnap = await db.ref('reels').orderByChild('timestamp').limitToLast(50).once('value');
+    // جلب البيانات بدون limitToLast مؤقتاً للتأكد من وصول كل شيء
+    const reelsSnap = await db.ref('reels').once('value');
     let reels = [];
-    reelsSnap.forEach(snap => reels.push(snap.val()));
-    reels.reverse();
+    
+    reelsSnap.forEach(snap => {
+      const data = snap.val();
+      if (data) reels.push(data);
+    });
 
+    // ترتيب يدوي بناءً على الوقت (الأحدث أولاً)
+    reels.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    // جلب بيانات المستخدمين وحالة اللايك لكل ريل
     const finalReels = await Promise.all(reels.map(async (reel) => {
       const userSnap = await db.ref(`profiles/${reel.userId}`).once('value');
       const userData = userSnap.val() || {};
@@ -832,9 +839,10 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
       };
     }));
 
-    // نرسل currentUserId مع البيانات
+    console.log(`تم إرسال ${finalReels.length} ريلز إلى العميل`); // سيظهر في شاشة السيرفر
     res.json({ ok: true, reels: finalReels, currentUserId: currentUserId });
   } catch (error) {
+    console.error("خطأ في جلب الريلز:", error);
     res.status(500).json({ ok: false, error: 'Error fetching reels' });
   }
 });
