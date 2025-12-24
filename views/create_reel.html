@@ -2,131 +2,273 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>إنشاء ريل — Aite</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+  <title>نشر ريل جديد — Aite</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    body { background: linear-gradient(180deg, #000000 0%, #070707 100%); color: #e6eef8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .glass-card { background: rgba(10,10,12,0.45); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.06); }
-    .glass-input { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: #e6eef8; }
-    .hidden-file { display:none; }
-    .preview-video { max-height: 60vh; width:100%; border-radius: 12px; background: #000; object-fit: contain; }
+    :root {
+      --primary: #3b82f6;
+      --glass-bg: rgba(20, 20, 20, 0.7);
+      --glass-border: rgba(255, 255, 255, 0.1);
+    }
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: 'Cairo', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* تأثير الزجاج للخلفيات */
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    /* منطقة الرفع */
+    .upload-area {
+      border: 2px dashed #333;
+      border-radius: 24px;
+      transition: all 0.3s ease;
+      background: rgba(255,255,255,0.02);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 9/16;
+      max-height: 60vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .upload-area:hover, .upload-area.active {
+      border-color: var(--primary);
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    /* حقل الإدخال */
+    .modern-input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid #333;
+      border-radius: 16px;
+      padding: 16px;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      transition: 0.3s;
+      resize: none;
+    }
+    .modern-input:focus {
+      border-color: var(--primary);
+      background: rgba(0,0,0,0.4);
+    }
+
+    /* زر النشر */
+    .publish-btn {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-radius: 50px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+      transition: transform 0.2s;
+    }
+    .publish-btn:active { transform: scale(0.98); }
+    .publish-btn:disabled { opacity: 0.6; cursor: not-allowed; grayscale: 1; }
+
+    /* معاينة الفيديو */
+    #videoPreview {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: none;
+      border-radius: 22px;
+    }
+    .remove-video-btn {
+      position: absolute; top: 10px; right: 10px;
+      background: rgba(0,0,0,0.6); color: #fff;
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; z-index: 10;
+      backdrop-filter: blur(4px);
+      display: none; /* يظهر عند اختيار فيديو */
+    }
+
+    /* رسائل الحالة */
+    .status-msg {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      padding: 10px 24px; border-radius: 30px;
+      font-weight: 600; font-size: 14px;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s;
+      z-index: 100;
+    }
+    .status-msg.show { opacity: 1; }
+    .status-msg.error { background: rgba(220, 38, 38, 0.9); color: white; }
+    .status-msg.success { background: rgba(22, 163, 74, 0.9); color: white; }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body>
 
-  <div class="max-w-3xl w-full glass-card rounded-3xl p-6 shadow-xl">
-    <div class="flex items-center justify-between mb-4">
-      <h1 class="text-2xl font-bold app-logo">إنشاء ريل</h1>
-      <a href="/reels" class="text-sm text-gray-300 hover:text-white">العودة إلى الريلز</a>
+  <header class="flex items-center justify-between px-6 py-5 sticky top-0 z-50 bg-black/80 backdrop-blur-md">
+    <a href="/reels" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-white active:scale-95 transition">
+      <i class="fas fa-arrow-right"></i>
+    </a>
+    <h1 class="text-lg font-bold">إنشاء ريل جديد</h1>
+    <div class="w-10"></div> </header>
+
+  <main class="flex-1 px-4 pb-8 max-w-md mx-auto w-full flex flex-col gap-6">
+    
+    <div class="relative w-full">
+      <input type="file" id="fileInput" accept="video/*,image/*" class="hidden">
+      
+      <div id="uploadArea" class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <div id="placeholderContent" class="flex flex-col items-center text-gray-400 text-center px-4">
+          <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 border border-white/10">
+            <i class="fas fa-cloud-upload-alt text-3xl text-blue-500"></i>
+          </div>
+          <p class="font-bold text-gray-200 text-lg mb-1">اضغط لرفع فيديو</p>
+          <p class="text-xs text-gray-500">يدعم MP4, MOV (أقصى مدة 60 ثانية)</p>
+        </div>
+
+        <video id="videoPreview" autoplay loop muted playsinline></video>
+        <img id="imagePreview" class="w-full h-full object-cover hidden rounded-[22px]" />
+        
+        <button id="removeBtn" class="remove-video-btn" onclick="event.stopPropagation(); removeFile();">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
     </div>
 
-    <form id="createReelForm" class="space-y-4" enctype="multipart/form-data">
-      <div>
-        <label class="block text-sm text-gray-300 mb-2">اختر ملف الفيديو</label>
-        <div class="flex items-center gap-3">
-          <button type="button" id="chooseBtn" class="px-4 py-2 rounded-full glass-input hover:bg-white/5 transition">
-            <i class="fas fa-upload ml-2"></i> اختر ملف
-          </button>
-          <span id="fileName" class="text-sm text-gray-400"></span>
-        </div>
-        <input id="mediaInput" name="media" accept="video/*,image/*,audio/*" type="file" class="hidden-file" />
-      </div>
+    <div class="space-y-2">
+      <label class="text-sm font-semibold text-gray-400 mr-1">الوصف</label>
+      <textarea id="description" rows="3" class="modern-input" placeholder="اكتب وصفاً مثيراً للريل الخاص بك..."></textarea>
+    </div>
 
-      <div id="previewArea" class="hidden">
-        <label class="block text-sm text-gray-300 mb-2">معاينة</label>
-        <video id="previewVideo" class="preview-video rounded-lg" controls></video>
-      </div>
+    <button id="publishBtn" class="publish-btn w-full py-4 text-white flex items-center justify-center gap-2 mt-auto">
+      <span id="btnText">نشر الريل</span>
+      <i id="btnIcon" class="fas fa-paper-plane"></i>
+    </button>
 
-      <div>
-        <label class="block text-sm text-gray-300 mb-2">وصف الريل (اختياري)</label>
-        <textarea id="description" name="description" rows="4" class="w-full rounded-xl p-3 glass-input resize-none" placeholder="أضف وصفاً جذاباً للريل..."></textarea>
-      </div>
+  </main>
 
-      <div class="flex items-center justify-between">
-        <div class="text-sm text-gray-400">يمكنك إضافة فيديو، صورة أو صوت. يدعم Cloudinary التحويل التلقائي.</div>
-        <div class="flex items-center gap-3">
-          <button type="button" id="cancelBtn" class="px-4 py-2 rounded-full bg-gray-700 hover:bg-gray-600">إلغاء</button>
-          <button type="submit" id="uploadBtn" class="px-6 py-2 rounded-full bg-blue-500 hover:bg-blue-600 font-semibold">
-            <i class="fas fa-cloud-upload-alt ml-2"></i> نشر الريل
-          </button>
-        </div>
-      </div>
-
-      <div id="statusMessage" class="text-center text-sm mt-2 hidden"></div>
-    </form>
-  </div>
+  <div id="statusMessage" class="status-msg"></div>
 
 <script>
-  const mediaInput = document.getElementById('mediaInput');
-  const chooseBtn = document.getElementById('chooseBtn');
-  const fileName = document.getElementById('fileName');
-  const previewArea = document.getElementById('previewArea');
-  const previewVideo = document.getElementById('previewVideo');
-  const createReelForm = document.getElementById('createReelForm');
-  const uploadBtn = document.getElementById('uploadBtn');
-  const cancelBtn = document.getElementById('cancelBtn');
-  const statusMessage = document.getElementById('statusMessage');
+  const fileInput = document.getElementById('fileInput');
+  const uploadArea = document.getElementById('uploadArea');
+  const videoPreview = document.getElementById('videoPreview');
+  const imagePreview = document.getElementById('imagePreview');
+  const placeholder = document.getElementById('placeholderContent');
+  const removeBtn = document.getElementById('removeBtn');
+  const publishBtn = document.getElementById('publishBtn');
+  const descriptionInput = document.getElementById('description');
+  const statusMsg = document.getElementById('statusMessage');
+  
+  let selectedFile = null;
 
-  chooseBtn.addEventListener('click', () => mediaInput.click());
-  mediaInput.addEventListener('change', (e) => {
+  // Handle File Selection
+  fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-    fileName.textContent = file.name;
-    const url = URL.createObjectURL(file);
-    previewVideo.src = url;
-    previewArea.classList.remove('hidden');
+    if (file) handleFile(file);
   });
 
-  cancelBtn.addEventListener('click', () => {
-    window.location.href = '/reels';
-  });
-
-  createReelForm.addEventListener('submit', async (e) => {
+  // Drag and Drop (Desktop support)
+  uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('active'); });
+  uploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); uploadArea.classList.remove('active'); });
+  uploadArea.addEventListener('drop', (e) => {
     e.preventDefault();
-    const file = mediaInput.files[0];
-    if (!file) {
-      statusMessage.textContent = 'الرجاء اختيار ملف قبل النشر.';
-      statusMessage.classList.remove('hidden');
-      statusMessage.classList.remove('text-green-500'); statusMessage.classList.add('text-red-400');
+    uploadArea.classList.remove('active');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file) {
+    // Basic validation
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      showToast('حجم الملف كبير جداً (أقصى حد 50 ميجا)', 'error');
       return;
     }
 
-    uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري النشر';
+    selectedFile = file;
+    placeholder.style.display = 'none';
+    removeBtn.style.display = 'flex';
+
+    const url = URL.createObjectURL(file);
+
+    if (file.type.startsWith('video')) {
+      videoPreview.src = url;
+      videoPreview.style.display = 'block';
+      imagePreview.style.display = 'none';
+    } else if (file.type.startsWith('image')) {
+      imagePreview.src = url;
+      imagePreview.style.display = 'block';
+      videoPreview.style.display = 'none';
+    }
+  }
+
+  function removeFile() {
+    selectedFile = null;
+    fileInput.value = '';
+    videoPreview.src = '';
+    imagePreview.src = '';
+    videoPreview.style.display = 'none';
+    imagePreview.style.display = 'none';
+    placeholder.style.display = 'flex';
+    removeBtn.style.display = 'none';
+  }
+
+  // Publish Logic
+  publishBtn.addEventListener('click', async () => {
+    if (!selectedFile) {
+      showToast('الرجاء اختيار فيديو أولاً', 'error');
+      return;
+    }
+
+    setLoading(true);
 
     const formData = new FormData();
-    formData.append('media', file);
-    formData.append('description', document.getElementById('description').value || '');
+    formData.append('media', selectedFile);
+    formData.append('description', descriptionInput.value);
 
     try {
       const res = await fetch('/api/reels/create', {
         method: 'POST',
         body: formData
       });
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        statusMessage.textContent = 'تم النشر بنجاح';
-        statusMessage.classList.remove('hidden');
-        statusMessage.classList.remove('text-red-400'); statusMessage.classList.add('text-green-400');
-        setTimeout(() => { window.location.href = '/reels'; }, 900);
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        showToast('تم النشر بنجاح!', 'success');
+        setTimeout(() => window.location.href = '/reels', 1500);
       } else {
-        statusMessage.textContent = json.error || 'فشل في نشر الريل.';
-        statusMessage.classList.remove('hidden');
-        statusMessage.classList.remove('text-green-500'); statusMessage.classList.add('text-red-400');
+        throw new Error(data.error || 'فشل النشر');
       }
     } catch (err) {
-      statusMessage.textContent = 'فشل الاتصال بالخادم.';
-      statusMessage.classList.remove('hidden');
-      statusMessage.classList.remove('text-green-500'); statusMessage.classList.add('text-red-400');
-    } finally {
-      uploadBtn.disabled = false;
-      uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt ml-2"></i> نشر الريل';
+      showToast(err.message || 'حدث خطأ في الاتصال', 'error');
+      setLoading(false);
     }
   });
-</script>
 
+  function setLoading(loading) {
+    publishBtn.disabled = loading;
+    if (loading) {
+      document.getElementById('btnText').textContent = 'جاري الرفع...';
+      document.getElementById('btnIcon').className = 'fas fa-spinner fa-spin';
+    } else {
+      document.getElementById('btnText').textContent = 'نشر الريل';
+      document.getElementById('btnIcon').className = 'fas fa-paper-plane';
+    }
+  }
+
+  function showToast(msg, type) {
+    statusMsg.textContent = msg;
+    statusMsg.className = `status-msg show ${type}`;
+    setTimeout(() => statusMsg.classList.remove('show'), 3000);
+  }
+</script>
 </body>
 </html>
