@@ -19,11 +19,7 @@
       overflow: hidden; 
     }
 
-    /* إعدادات Swiper لتملأ الشاشة */
-    .swiper {
-      width: 100%;
-      height: 100%;
-    }
+    .swiper { width: 100%; height: 100%; }
     .swiper-slide {
       background: #000;
       display: flex;
@@ -67,15 +63,11 @@
 </head>
 <body>
 
-  <button onclick="runDiagnostics()" class="fixed top-16 left-4 z-50 bg-red-600 text-white p-2 rounded-full text-xs opacity-70 hover:opacity-100">
-    <i class="fas fa-bug"></i> فحص
-  </button>
-
   <div class="fixed top-4 right-4 z-30">
     <a href="/chat_list" class="text-white text-xl drop-shadow-lg p-2"><i class="fas fa-arrow-right"></i></a>
   </div>
   <div class="fixed top-4 left-4 z-30">
-      <a href="/create-reel" class="text-white text-2xl drop-shadow-lg p-2"><i class="fas fa-camera"></i></a>
+      <a href="/create-reel" class="text-white text-2xl drop-shadow-lg p-2"><i class="fas fa-plus"></i></a>
   </div>
 
   <div class="swiper mySwiper">
@@ -102,45 +94,25 @@
 <script>
   let swiperInstance = null;
   let currentReelsData = [];
-  let debugLog = [];
-
-  function log(msg) {
-    console.log(msg);
-    debugLog.push(msg);
-  }
-
-  // دالة فحص الأخطاء التي طلبها المستخدم
-  window.runDiagnostics = function() {
-    const report = `
-    === تقرير الفحص ===
-    - عدد الريلز المحملة: ${currentReelsData.length}
-    - حالة Swiper: ${swiperInstance ? 'يعمل' : 'غير مفعل'}
-    - أخطاء مسجلة: \n${debugLog.join('\n')}
-    `;
-    alert(report);
-  }
 
   document.addEventListener('DOMContentLoaded', loadReels);
 
   async function loadReels() {
     try {
-      log('جاري طلب الريلز من السيرفر...');
       const res = await fetch('/api/reels/feed');
       if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
       
       const data = await res.json();
-      log(`تم استلام البيانات. العدد: ${data.reels ? data.reels.length : 0}`);
 
       if(data.ok && data.reels && data.reels.length > 0) {
         currentReelsData = data.reels;
         renderReels(data.reels);
-        initSwiper(); // تشغيل مكتبة السحب
+        initSwiper();
       } else {
         document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
       }
     } catch(e) {
-      log(`خطأ: ${e.message}`);
-      document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">خطأ في التحميل: ${e.message}</div>`;
+      document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">خطأ في التحميل</div>`;
     }
   }
 
@@ -180,7 +152,7 @@
       </div>
     `).join('');
 
-    // تفعيل الضغط المزدوج
+    // تفعيل الضغط المزدوج والتحكم في الفيديو
     document.querySelectorAll('video').forEach(vid => {
       let lastTap = 0;
       vid.addEventListener('click', (e) => {
@@ -199,25 +171,24 @@
   }
 
   function initSwiper() {
-  if(swiperInstance) swiperInstance.destroy();
-  
-  swiperInstance = new Swiper(".mySwiper", {
-    direction: "vertical",
-    mousewheel: true,
-    keyboard: { enabled: true },
-    speed: 400,
-    observer: true, // يراقب التغييرات في العناصر
-    observeParents: true,
-    on: {
-      init: function() { playCurrentVideo(this); },
-      slideChange: function () {
-        pauseAllVideos();
-        playCurrentVideo(this);
+    if(swiperInstance) swiperInstance.destroy();
+    
+    swiperInstance = new Swiper(".mySwiper", {
+      direction: "vertical",
+      mousewheel: true,
+      keyboard: { enabled: true },
+      speed: 400,
+      observer: true,
+      observeParents: true,
+      on: {
+        init: function() { playCurrentVideo(this); },
+        slideChange: function () {
+          pauseAllVideos();
+          playCurrentVideo(this);
+        }
       }
-    }
-  });
-}
-
+    });
+  }
 
   function pauseAllVideos() {
     document.querySelectorAll('video').forEach(v => {
@@ -230,10 +201,8 @@
     const activeSlide = swiper.slides[swiper.activeIndex];
     const video = activeSlide.querySelector('video');
     if (video) {
-      video.muted = false; // إلغاء كتم الصوت عند التشغيل (قد يتطلب تفاعل المستخدم أولاً)
-      video.play().catch(e => {
-        log('Auto-play blocked, user interaction needed: ' + e.message);
-        // في الموبايل، الفيديو يحتاج لكتم الصوت أحياناً للتشغيل التلقائي الأول
+      video.muted = false;
+      video.play().catch(() => {
         video.muted = true;
         video.play();
       });
@@ -242,12 +211,12 @@
 
   function animateHeart(reelId) {
     const heart = document.getElementById(`bigHeart-${reelId}`);
+    if(!heart) return;
     heart.classList.remove('animate');
-    void heart.offsetWidth; // Trigger reflow
+    void heart.offsetWidth; 
     heart.classList.add('animate');
   }
 
-  // --- دوال التفاعل (نفس المنطق السابق) ---
   async function handleLike(reelId, forceLike = false) {
     const icon = document.getElementById(`likeIcon-${reelId}`);
     const countSpan = document.getElementById(`likeCount-${reelId}`);
@@ -265,7 +234,7 @@
     try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST' }); } catch(e) {}
   }
 
-  // --- التعليقات ---
+  // --- إدارة التعليقات ---
   const backdrop = document.getElementById('backdrop');
   const sheet = document.getElementById('commentsSheet');
   const commentsList = document.getElementById('commentsList');
@@ -275,20 +244,20 @@
     currentReelIdForComments = reelId;
     backdrop.classList.add('open');
     sheet.classList.add('open');
-    if(swiperInstance) swiperInstance.allowTouchMove = false; // منع السحب عند فتح التعليقات
+    if(swiperInstance) swiperInstance.allowTouchMove = false;
 
     commentsList.innerHTML = '<div class="text-center mt-5"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
     try {
       const res = await fetch(`/api/reels/${reelId}/comments`);
       const data = await res.json();
       renderComments(data.comments);
-    } catch(e) { log(e); }
+    } catch(e) {}
   };
 
   function closeCommentsSheet() {
     backdrop.classList.remove('open');
     sheet.classList.remove('open');
-    if(swiperInstance) swiperInstance.allowTouchMove = true; // إعادة تفعيل السحب
+    if(swiperInstance) swiperInstance.allowTouchMove = true;
   }
 
   function renderComments(comments) {
@@ -320,16 +289,12 @@
     if(!content || !currentReelIdForComments) return;
     input.value = '';
     
-    // إرسال وهمي سريع
-    commentsList.insertAdjacentHTML('beforeend', `<div class="text-sm opacity-50 mb-2">جاري النشر...</div>`);
-    
     try {
       await fetch(`/api/reels/${currentReelIdForComments}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content })
       });
-      // تحديث التعليقات
       const res = await fetch(`/api/reels/${currentReelIdForComments}/comments`);
       const data = await res.json();
       renderComments(data.comments);
