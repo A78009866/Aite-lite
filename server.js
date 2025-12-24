@@ -995,7 +995,7 @@ app.delete('/api/reels/:reelId', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
--------- Error Handling ----------------
+// ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
   next(err);
