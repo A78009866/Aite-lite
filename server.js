@@ -149,6 +149,9 @@ app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 
 app.get('/reels', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'reels.html')); });
 app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_reel.html')); });
 
+// Notifications page
+app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
+
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
@@ -633,6 +636,30 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
       return newLikesCount < 0 ? 0 : newLikesCount;
     });
 
+    // إنشاء إشعار للمستخدم صاحب المنشور عندما يقوم شخص آخر بالإعجاب
+    try {
+      const postData = postSnapshot.val();
+      if (action === 'liked' && postData.userId && postData.userId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${postData.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'post_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: postId,
+          reelId: null,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create post_like notification:', nerr);
+    }
+
     res.json({ ok: true, action: action, newLikes: newLikesCount });
 
   } catch (error) {
@@ -892,16 +919,43 @@ app.post('/api/reels/:reelId/like', requireAuth, async (req, res) => {
     if (isLiked) {
       await likeRef.remove();
       increment = -1;
+      isLiked = false;
     } else {
       await likeRef.set(admin.database.ServerValue.TIMESTAMP);
       increment = 1;
+      isLiked = true;
     }
 
     await reelRef.child('likes').transaction(count => (count || 0) + increment);
     
     // إرجاع العدد الجديد
-    const updatedReel = await reelRef.once('value');
-    res.json({ ok: true, likes: updatedReel.val().likes, is_liked: !isLiked });
+    const updatedReelSnap = await reelRef.once('value');
+    const updatedReel = updatedReelSnap.val();
+
+    // إنشاء إشعار لمالك الريل عند اللايك
+    try {
+      if (isLiked && updatedReel.userId && updatedReel.userId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${updatedReel.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'reel_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: null,
+          reelId: reelId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create reel_like notification:', nerr);
+    }
+
+    res.json({ ok: true, likes: updatedReel.likes, is_liked: isLiked });
 
   } catch (error) {
     res.status(500).json({ ok: false });
@@ -963,6 +1017,121 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
+
+// ---------------- API: Notifications ----------------
+
+// جلب الإشعارات للمستخدم الحالي (الأحدث أولاً) مع عداد غير المقروء
+app.get('/api/notifications', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    const snap = await db.ref(`notifications/${userId}`).once('value');
+    const items = [];
+    snap.forEach(child => {
+      const v = child.val();
+      items.push({ id: child.key, ...v });
+    });
+    // ترتيب بحيث الأحدث أولاً (القيمة timestamp قد تكون ServerValue.TIMESTAMP أو رقم)
+    items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const unreadCount = items.filter(i => !i.is_read).length;
+    res.json({ ok: true, notifications: items, unread_count: unreadCount });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الإشعارات' });
+  }
+});
+
+// جلب عدد الاشعارات غير المقروءة بسرعة (لا يحتاج لبيانات كاملة)
+app.get('/api/notifications/unread_count', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    const snap = await db.ref(`notifications/${userId}`).once('value');
+    let count = 0;
+    snap.forEach(child => {
+      const v = child.val();
+      if (!v.is_read) count++;
+    });
+    res.json({ ok: true, unread_count: count });
+  } catch (error) {
+    console.error('Error fetching unread notifications count:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب عدد الإشعارات' });
+  }
+});
+
+// تعليم إشعار كـ مقروء. إذا لم يحدد id فسيتم تعليم الكل كمقروء
+app.post('/api/notifications/mark_read', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { id } = req.body || {};
+  try {
+    if (id) {
+      await db.ref(`notifications/${userId}/${id}`).update({ is_read: true });
+    } else {
+      const snap = await db.ref(`notifications/${userId}`).once('value');
+      const updates = {};
+      snap.forEach(child => {
+        const v = child.val();
+        if (v && !v.is_read) updates[`${child.key}/is_read`] = true;
+      });
+      if (Object.keys(updates).length > 0) {
+        await db.ref(`notifications/${userId}`).update(updates);
+      }
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error marking notifications read:', error);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// ---- SSE stream endpoint: يدفع تحديثات الاشعارات فورياً للعميل ----
+app.get('/api/notifications/stream', requireAuth, (req, res) => {
+  const userId = req.session.userId;
+
+  // تهيئة رأس SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
+  });
+  res.write('\n');
+
+  // تعريف المعالج الذي يرسل البيانات عند أي تغيير
+  const ref = db.ref(`notifications/${userId}`);
+
+  const handler = async (snapshot) => {
+    try {
+      const items = [];
+      snapshot.forEach(child => {
+        const v = child.val();
+        items.push({ id: child.key, ...v });
+      });
+      items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      const unreadCount = items.filter(i => !i.is_read).length;
+      const payload = { unread_count: unreadCount, notifications: items };
+      res.write(`event: notifications\n`);
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    } catch (err) {
+      console.error('Error preparing SSE payload:', err);
+      res.write(`event: error\n`);
+      res.write(`data: ${JSON.stringify({ error: String(err) })}\n\n`);
+    }
+  };
+
+  // ربط المستمع
+  ref.on('value', handler, err => {
+    console.error('SSE DB listener error:', err);
+    res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
+  });
+
+  // تنظيف عند إغلاق الاتصال من قبل العميل
+  req.on('close', () => {
+    try {
+      ref.off('value', handler);
+    } catch (e) { /* ignore */ }
+    res.end();
+  });
+});
+
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
