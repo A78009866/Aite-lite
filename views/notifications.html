@@ -9,13 +9,38 @@
   <style>
     body { background: #000; color: #e4e6eb; font-family: Inter, system-ui, sans-serif; }
     .glass-navbar { background-color: rgba(30,30,30,0.5); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.06); }
-    .notification-card { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04); border-radius: 12px; padding:12px; display:flex; gap:12px; align-items:center; cursor:pointer; }
+    .notification-card { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04); border-radius: 12px; padding:12px; display:flex; gap:12px; align-items:center; cursor:pointer; position:relative; }
     .notification-card.unread { border-left: 4px solid #007AFF; }
-    .notif-avatar { width:48px; height:48px; border-radius:50%; object-fit:cover; border:1px solid rgba(255,255,255,0.06); }
+    .notif-avatar { width:48px; height:48px; border-radius:50%; object-fit:cover; border:1px solid rgba(255,255,255,0.06); flex-shrink:0; }
     .badge { background:#ef4444; color:white; font-size:12px; padding:4px 8px; border-radius:999px; }
     .empty { text-align:center; color:#94a3b8; padding:40px 0; }
     .bottom-nav { position:fixed; left:0; right:0; bottom:0; height:60px; background: rgba(20,20,20,0.7); border-top:1px solid rgba(255,255,255,0.04); display:flex; justify-content:center; align-items:center; }
-    .action-btn { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:8px; color:#e6eefb; cursor:pointer; }
+    .action-btn { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:8px; color:#e6eefb; cursor:pointer; font-size:13px; }
+    /* أصغر زر لتناسق أفضل */
+    .action-small { padding:6px 8px; font-size:12px; border-radius:8px; display:inline-flex; gap:6px; align-items:center; justify-content:center; }
+    /* زر حذف إشعار فردي */
+    .notif-delete-btn {
+      position: absolute;
+      top: 8px;
+      left: 8px; /* left لأن الصفحة dir=rtl، نضع الزر على "الجهة الإدارية" */
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      color: #f87171;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.12s;
+      z-index: 5;
+    }
+    .notif-delete-btn:hover { background: rgba(255,255,255,0.04); transform: translateY(-1px); }
+    .notif-card-content { flex:1; min-width:0; }
+    .notif-title { font-size:14px; color:#e6eefb; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .notif-time { font-size:12px; color:#9fb3c8; }
+    .notif-target { margin-top:6px; color:#9fb3c8; font-size:13px; }
   </style>
 </head>
 <body>
@@ -28,8 +53,14 @@
         <h1 class="text-xl font-bold">الإشعارات</h1>
       </div>
       <div style="width:40px; display:flex; gap:8px; align-items:center; justify-content:flex-end;">
-        <button id="markAllReadBtn" class="action-btn" title="تعيين الكل كمقروء">تعيين الكل كمقروء</button>
-        <button id="clearAllBtn" class="action-btn" title="حذف كل الإشعارات">حذف الكل</button>
+        <button id="markAllReadBtn" class="action-btn action-small" title="تعيين الكل كمقروء">
+          <i class="fas fa-check-double" style="font-size:12px"></i>
+          <span style="font-size:12px">تعيين الكل</span>
+        </button>
+        <button id="clearAllBtn" class="action-btn action-small" title="حذف كل الإشعارات">
+          <i class="fas fa-trash" style="font-size:12px"></i>
+          <span style="font-size:12px">حذف الكل</span>
+        </button>
       </div>
     </nav>
   </header>
@@ -40,7 +71,6 @@
     </div>
   </main>
 
- 
 <script>
   async function fetchNotifications() {
     try {
@@ -89,58 +119,92 @@
 
       return `
         <div class="notification-card ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-type="${n.type}" data-post-id="${n.postId || ''}" data-reel-id="${n.reelId || ''}" data-from="${n.from_user_id || ''}">
+          <button class="notif-delete-btn" data-id="${n.id}" title="حذف الإشعار"><i class="fas fa-trash" style="font-size:12px"></i></button>
           <img src="${escapeHtml(n.from_profile_picture_url || '')}" class="notif-avatar" alt="">
-          <div style="flex:1">
+          <div class="notif-card-content">
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
-              <div style="font-size:14px; color:#e6eefb">${title}</div>
-              <div style="font-size:12px; color:#9fb3c8">${time}</div>
+              <div class="notif-title">${title}</div>
+              <div class="notif-time">${time}</div>
             </div>
-            <div style="margin-top:6px; color:#9fb3c8; font-size:13px">${targetHint}</div>
+            <div class="notif-target">${targetHint}</div>
           </div>
         </div>
       `;
     }).join('');
 
-    // attach click handlers
-    document.querySelectorAll('.notification-card').forEach(el => {
-      el.addEventListener('click', async () => {
-        const id = el.dataset.id;
-        const type = el.dataset.type;
-        const postId = el.dataset.postId;
-        const reelId = el.dataset.reelId;
-        const fromUser = el.dataset.from;
-
-        // mark this notif read
-        try {
-          await fetch('/api/notifications/mark_read', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id })
-          });
-        } catch (e) { console.error('mark read failed', e); }
-
-        // redirect based on type
-        if (type === 'post_like' || type === 'post_comment') {
-          if (postId) window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
-          else window.location.href = '/chat_list';
-        } else if (type === 'reel_like' || type === 'reel_comment') {
-          if (reelId) window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
-          else window.location.href = '/reels';
-        } else if (type === 'message') {
-          if (fromUser) window.location.href = `/chat?contactId=${encodeURIComponent(fromUser)}`;
-          else window.location.href = '/chat_list';
-        } else {
-          window.location.href = '/chat_list';
-        }
-      });
-    });
+    // attach click handlers for cards (delegated) in a safe way
+    // Card click (navigation) handled by parent click listener below
   }
 
   function escapeHtml(s) {
     if (!s && s !== 0) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+
+  // Delegated click handling:
+  document.addEventListener('click', async (ev) => {
+    const delBtn = ev.target.closest('.notif-delete-btn');
+    if (delBtn) {
+      ev.stopPropagation();
+      const notifId = delBtn.dataset.id;
+      if (!notifId) return;
+      if (!confirm('هل تريد حذف هذا الإشعار؟')) return;
+      try {
+        const res = await fetch(`/api/notifications/${encodeURIComponent(notifId)}`, {
+          method: 'DELETE',
+          credentials: 'same-origin'
+        });
+        if (res.ok) {
+          // إزالة البطاقة محليًا
+          const card = delBtn.closest('.notification-card');
+          if (card) card.remove();
+          // لو لم يبقِ بطاقات نعيد جلب الواجهة لتحديث الحالة
+          const container = document.getElementById('notifContainer');
+          if (!container.querySelector('.notification-card')) fetchNotifications();
+        } else {
+          alert('فشل حذف الإشعار');
+        }
+      } catch (e) {
+        console.error('Delete notification error', e);
+        alert('فشل الاتصال بالخادم');
+      }
+      return;
+    }
+
+    // إذا كان النقر داخل بطاقة إشعار (وليس على زر الحذف) — التوجيه وعلامة كمقروء
+    const card = ev.target.closest('.notification-card');
+    if (card) {
+      const id = card.dataset.id;
+      const type = card.dataset.type;
+      const postId = card.dataset.postId;
+      const reelId = card.dataset.reelId;
+      const fromUser = card.dataset.from;
+
+      // أولاً: تعليم هذا الإشعار كمقروء (لا ننتظر الاستجابة تماماً)
+      if (id) {
+        fetch('/api/notifications/mark_read', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        }).catch(()=>{});
+      }
+
+      // redirect based on type
+      if (type === 'post_like' || type === 'post_comment') {
+        if (postId) window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
+        else window.location.href = '/chat_list';
+      } else if (type === 'reel_like' || type === 'reel_comment') {
+        if (reelId) window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+        else window.location.href = '/reels';
+      } else if (type === 'message') {
+        if (fromUser) window.location.href = `/chat?contactId=${encodeURIComponent(fromUser)}`;
+        else window.location.href = '/chat_list';
+      } else {
+        window.location.href = '/chat_list';
+      }
+    }
+  });
 
   // initial load
   fetchNotifications();
@@ -150,8 +214,7 @@
     const es = new EventSource('/api/notifications/stream', { withCredentials: true });
     es.addEventListener('notifications', (e) => {
       try {
-        const payload = JSON.parse(e.data);
-        // تحديث الواجهة: نعيد جلب القائمة لكي تعكس المحتوى (أسهل من محاولة تحديث محلي)
+        // نعيد جلب القائمة لكي تعكس المحتوى (أسهل من محاولة تحديث محلي)
         fetchNotifications();
       } catch (err) {
         console.error('Failed to parse notifications SSE data', err);
@@ -172,6 +235,7 @@
         body: JSON.stringify({}) // لا id => يعلّم الكل
       });
       if (res.ok) fetchNotifications();
+      else throw new Error('mark all failed');
     } catch (e) { console.error('Mark all read failed', e); alert('فشل تعيين الكل كمقروء'); }
   });
 
@@ -184,9 +248,10 @@
         credentials: 'same-origin'
       });
       if (res.ok) fetchNotifications();
-      else throw new Error('delete failed');
+      else { console.error('clear all failed', res.status); alert('فشل حذف الإشعارات'); }
     } catch (e) { console.error('Clear all failed', e); alert('فشل حذف الإشعارات'); }
   });
 </script>
 </body>
 </html>
+```
