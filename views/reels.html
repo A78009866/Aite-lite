@@ -9,19 +9,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
   <style>
     html,body { height:100%; background: linear-gradient(180deg,#000,#060606); color:#e6eef8; margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    .glass-bg { background: rgba(8,8,10,0.5); backdrop-filter: blur(12px); border:1px solid rgba(255,255,255,0.05); }
+    .glass-bg { background: rgba(6,6,6,0.6); backdrop-filter: blur(14px); border:1px solid rgba(255,255,255,0.04); }
     .reel-card { height:100vh; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; scroll-snap-align:start; }
     .reel-media { width:100%; height:100vh; object-fit:cover; background:#000; display:block; }
-    /* تحريك الأزرار: أنزلها قليلاً لتكون فوق البروفايل مباشرة */
-    .right-controls { position:absolute; bottom:120px; right:12px; display:flex; flex-direction:column; gap:14px; z-index:40; align-items:center; }
-    .control-btn { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.06); cursor:pointer; transition: transform .12s ease, box-shadow .12s ease; }
+    /* الأزرار moved to sit just above profile */
+    .right-controls { position:absolute; bottom:130px; right:12px; display:flex; flex-direction:column; gap:14px; z-index:40; align-items:center; }
+    .control-btn { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.06); cursor:pointer; transition: transform .12s ease, box-shadow .12s ease; }
     .control-btn:active { transform: scale(.96); }
     .bottom-info { position:absolute; left:0; right:0; bottom:20px; padding:16px; z-index:40; display:flex; gap:12px; align-items:flex-end; pointer-events:none; }
     .reel-meta { flex:1; text-align:right; pointer-events:auto; }
     .comments-sheet { position:fixed; left:0; right:0; bottom:0; height:60vh; transform: translateY(100%); transition: transform .28s ease; z-index:60; display:flex; flex-direction:column; }
     .comments-sheet.open { transform: translateY(0%); }
-    .comments-sheet .sheet-inner { height:100%; overflow:auto; padding:16px; }
-    .copy-toast { position:fixed; left:50%; transform:translateX(-50%); bottom:90px; z-index:80; background:rgba(0,0,0,0.7); color:#fff; padding:8px 14px; border-radius:10px; display:none; }
+    .comments-sheet .sheet-inner { height:100%; overflow:auto; padding:10px 12px; background: rgba(0,0,0,0.85); backdrop-filter: blur(18px); color: #e6eef8; border-top-left-radius:18px; border-top-right-radius:18px; }
+    .copy-toast { position:fixed; left:50%; transform:translateX(-50%); bottom:90px; z-index:80; background:rgba(0,0,0,0.8); color:#fff; padding:8px 14px; border-radius:10px; display:none; }
     .profile-pill { display:flex; gap:10px; align-items:center; pointer-events:auto; }
     .heart-burst { position:absolute; transform: translate(-50%,-50%) scale(0.9); left:50%; top:50%; z-index:80; pointer-events:none; animation: burst .6s ease-out forwards; }
     @keyframes burst {
@@ -31,26 +31,26 @@
     }
 
     /* تحسين نافذة التعليقات: رأس ثابت وداخل قابل للتمرير */
-    .sheet-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.04); }
-    .comment-item { display:flex; gap:12px; align-items:flex-start; }
-    .comment-box { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); padding:10px; border-radius:12px; color:#e6eef8; }
-    .comment-input-row { display:flex; gap:8px; align-items:center; padding:12px; border-top:1px solid rgba(255,255,255,0.03); }
-    .comment-input { flex:1; background:transparent; border-radius:999px; padding:10px 14px; border:1px solid rgba(255,255,255,0.04); color:#fff; outline:none; }
+    .sheet-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 6px; border-bottom:1px solid rgba(255,255,255,0.04); }
+    .comment-item { display:flex; gap:12px; align-items:flex-start; padding:8px 4px; }
+    .comment-box { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04); padding:10px; border-radius:12px; color:#e6eef8; width:100%; }
+    .comment-input-row { display:flex; gap:8px; align-items:center; padding:10px; border-top:1px solid rgba(255,255,255,0.03); background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02)); }
+    .comment-input { flex:1; background:transparent; border-radius:999px; padding:10px 14px; border:1px solid rgba(255,255,255,0.05); color:#fff; outline:none; }
     .small-muted { color:#9aa4b2; font-size:.9rem; }
 
     /* smooth scroll snapping container */
     #reelsContainer { height:100vh; overflow-y:auto; scroll-snap-type:y mandatory; -webkit-overflow-scrolling:touch; }
 
-    /* زر تشغيل/إيقاف صغير */
+    /* زر تشغيل/إيقاف كبير */
     .play-overlay { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:30; pointer-events:none; opacity:0; transition:opacity .12s ease; }
     .show-play-overlay { opacity:1; }
 
-    /* عندما يكون الفيديو في وضع المؤقت (موقوف) نظهر أيقونة التشغيل الشفافة */
     .video-paused .play-overlay { opacity:1; pointer-events:none; }
 
-    /* جعل عناصر البوتوم قابلة للنقر */
-    .bottom-info * { pointer-events:auto; }
+    /* delete button style */
+    .delete-btn { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; background: rgba(180,30,30,0.12); border:1px solid rgba(255,80,80,0.08); color:#ff7b7b; cursor:pointer; }
 
+    .time-badge { color:#bfc9d6; font-size:0.85rem; margin-top:6px; }
   </style>
 </head>
 <body>
@@ -60,7 +60,8 @@
       <a href="/chat_list" class="text-white font-bold app-logo text-lg">Aite</a>
     </div>
     <div class="flex items-center gap-2">
-      <a href="/create-reel" class="px-4 py-2 bg-blue-500 text-white rounded-full">إنشاء ريل</a>
+      <!-- زر العودة للرئيسية -->
+      <a href="/chat_list" class="px-4 py-2 bg-gray-800 text-white rounded-full">العودة للرئيسية</a>
     </div>
   </header>
 
@@ -68,7 +69,7 @@
     <!-- Reels will be injected here -->
   </main>
 
-  <div id="commentsSheet" class="comments-sheet glass-bg rounded-t-2xl shadow-2xl">
+  <div id="commentsSheet" class="comments-sheet glass-bg">
     <div class="sheet-inner">
       <div class="sheet-header">
         <div>
@@ -80,9 +81,9 @@
         </div>
       </div>
 
-      <div id="commentsList" class="mt-4 space-y-3" aria-live="polite"></div>
+      <div id="commentsList" class="mt-2 space-y-2" aria-live="polite" role="log"></div>
 
-      <div class="comment-input-row">
+      <div class="comment-input-row" role="group" aria-label="add-comment">
         <input id="commentInput" class="comment-input" placeholder="أضف تعليقاً..." aria-label="تعليق"/>
         <button id="sendCommentBtn" class="px-4 py-2 bg-blue-500 rounded-full text-white"><i class="fas fa-paper-plane"></i></button>
       </div>
@@ -106,17 +107,36 @@
   const copyToast = document.getElementById('copyToast');
   const commentsCountMeta = document.getElementById('commentsCountMeta');
   let activeReelIdForComments = null;
+  let scrollHandlersAttached = false;
 
   // جلب بروفايل المستخدم الحالي
   fetch('/api/profile').then(r => r.ok ? r.json() : null).then(data => {
-    if (data && data.id) currentUserId = data.id;
+    if (data && data.id) {
+      currentUserId = data.id;
+      // after we know current user, reveal any owner-only buttons if present
+      revealOwnerButtons();
+    }
   }).catch(()=>{});
+
+  // ---------- مساعدة عرض الوقت ----------
+  function formatTimestamp(ts) {
+    if (!ts) return '';
+    const date = new Date(Number(ts));
+    const now = Date.now();
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return 'الآن';
+    if (diff < 3600) return `${Math.floor(diff/60)} دقيقة`;
+    if (diff < 86400) return `${Math.floor(diff/3600)} ساعة`;
+    if (diff < 7*86400) return `${Math.floor(diff/86400)} يوم`;
+    return date.toLocaleDateString('ar-EG', { year:'numeric', month:'short', day:'numeric' });
+  }
 
   // ---------- إنشاء كرت الريل مع الأحداث المحسنة ----------
   function createReelElement(reel) {
     const wrapper = document.createElement('section');
     wrapper.className = 'reel-card snap-start relative';
     wrapper.dataset.reelId = reel.reelId;
+    wrapper.dataset.owner = reel.userId || '';
 
     // media element
     let mediaEl;
@@ -127,7 +147,7 @@
       mediaEl.src = reel.media.url;
       mediaEl.setAttribute('playsinline', '');
       mediaEl.preload = 'metadata';
-      mediaEl.muted = true; // سيعمل التشغيل التلقائي في بعض المتصفحات عند وجود muted
+      mediaEl.muted = true; // allow autoplay
       mediaEl.controls = false;
     } else if (reel.media && reel.media.type === 'image') {
       mediaEl = document.createElement('img');
@@ -148,9 +168,10 @@
     playOverlay.innerHTML = `<i class="fas fa-play text-white text-6xl"></i>`;
     wrapper.appendChild(playOverlay);
 
-    // right controls (moved lower via CSS)
+    // right controls (moved lower)
     const rightControls = document.createElement('div');
     rightControls.className = 'right-controls';
+    // build buttons; delete button included but hidden if not owner (revealed later)
     rightControls.innerHTML = `
       <div class="control-btn like-btn" title="إعجاب" data-liked="${reel.is_liked ? '1' : '0'}">
         <i class="${reel.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-white'}"></i>
@@ -161,10 +182,13 @@
       <div class="control-btn copy-btn" title="نسخ الرابط">
         <i class="fas fa-link text-white"></i>
       </div>
+      <div class="delete-btn" data-reel-owner="${reel.userId}" style="display:none;" title="حذف الريل">
+        <i class="fas fa-trash"></i>
+      </div>
     `;
     wrapper.appendChild(rightControls);
 
-    // bottom meta (profile + description)
+    // bottom meta (profile + description + time)
     const bottomInfo = document.createElement('div');
     bottomInfo.className = 'bottom-info';
     bottomInfo.innerHTML = `
@@ -174,6 +198,7 @@
           <div>
             <div class="text-white font-semibold">${reel.user.username}</div>
             <div class="text-gray-300 text-sm mt-1">${escapeHtml(reel.description || '')}</div>
+            <div class="time-badge">${formatTimestamp(reel.timestamp)}</div>
           </div>
         </div>
         <div class="text-gray-300 text-sm mt-3 flex gap-4 items-center">
@@ -204,6 +229,27 @@
       navigator.clipboard?.writeText(url).then(()=> showCopyToast()).catch(()=> showCopyToast());
     });
 
+    // delete (only owner) - revealed by revealOwnerButtons later
+    const deleteBtn = rightControls.querySelector('.delete-btn');
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('هل أنت متأكد من حذف هذا الريل؟ لا يمكن التراجع.')) return;
+      try {
+        const res = await fetch(`/api/reels/${reel.reelId}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (res.ok && json.ok) {
+          // remove DOM card
+          wrapper.remove();
+          // if comments sheet was open for this reel, close it
+          if (activeReelIdForComments === reel.reelId) closeComments();
+        } else {
+          alert(json.error || 'فشل في حذف الريل.');
+        }
+      } catch (err) {
+        alert('فشل الاتصال بالخادم.');
+      }
+    });
+
     // play/pause & double-tap to like (mobile-friendly)
     if (mediaEl.tagName === 'VIDEO' || mediaEl.tagName === 'AUDIO') {
       // single tap toggles play/pause; double tap likes
@@ -232,7 +278,7 @@
       mediaEl.addEventListener('play', () => {
         wrapper.classList.remove('video-paused');
         playOverlay.classList.remove('show-play-overlay');
-        mediaEl.muted = false; // unmute when playing (if desired)
+        mediaEl.muted = false;
       });
       mediaEl.addEventListener('pause', () => {
         wrapper.classList.add('video-paused');
@@ -244,7 +290,7 @@
         document.querySelectorAll('video').forEach(v => { if (v !== mediaEl) { v.pause(); v.muted = true; }});
       });
     } else {
-      // clicks on images toggle nothing, but we can allow opening in new tab on double click
+      // image: double click to like
       wrapper.addEventListener('dblclick', (e)=> {
         e.stopPropagation();
         toggleLike(reel.reelId, wrapper);
@@ -317,11 +363,9 @@
           commentsList.innerHTML = '<div class="text-center small-muted p-4">لا توجد تعليقات بعد.</div>';
         } else {
           json.comments.forEach(c => commentsList.insertAdjacentHTML('beforeend', createCommentHTML(c)));
-          // scroll to bottom
           commentsList.scrollTop = commentsList.scrollHeight;
         }
         commentsCountMeta.textContent = `${json.comments ? json.comments.length : 0} تعليق`;
-        // update comment count badge in reel card
         updateReelCommentsCountInCard(reelId, json.comments ? json.comments.length : 0);
       } else {
         commentsList.innerHTML = '<div class="text-center text-red-400 p-4">فشل في تحميل التعليقات.</div>';
@@ -365,7 +409,7 @@
     if (!content || !activeReelIdForComments) return;
     sendCommentBtn.disabled = true;
     sendCommentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    // Optimistic UI: append temporary comment
+    // optimistic UI
     const tempComment = {
       user: { username: 'أنت', profile_picture_url: '/https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png' },
       content: content,
@@ -381,9 +425,6 @@
       });
       const json = await res.json();
       if (res.ok && json.ok) {
-        // replace temporary last comment with server comment (simple approach: remove last and append returned)
-        // (for robust solution you'd track IDs)
-        // remove last (optimistic) item
         const items = commentsList.querySelectorAll('.comment-item');
         if (items.length) items[items.length-1].remove();
         commentsList.insertAdjacentHTML('beforeend', createCommentHTML(json.comment));
@@ -391,7 +432,6 @@
         commentsCountMeta.textContent = `${json.newComments} تعليق`;
       } else {
         alert(json.error || 'فشل في إضافة التعليق.');
-        // remove optimistic
         const items = commentsList.querySelectorAll('.comment-item');
         if (items.length) items[items.length-1].remove();
       }
@@ -414,6 +454,16 @@
     }
   }
 
+  // reveal delete buttons for owner after we know currentUserId
+  function revealOwnerButtons() {
+    if (!currentUserId) return;
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+      const owner = btn.getAttribute('data-reel-owner');
+      if (owner === currentUserId) btn.style.display = 'flex';
+      else btn.style.display = 'none';
+    });
+  }
+
   // ---------- IntersectionObserver لتشغيل الفيديوهات تلقائياً ----------
   let videoObserver = null;
   function observeVideos() {
@@ -424,7 +474,6 @@
         const media = entry.target;
         if (media.tagName !== 'VIDEO') return;
         if (entry.isIntersecting) {
-          // pause others, play current
           document.querySelectorAll('video').forEach(v => { if (v !== media) { v.pause(); v.muted = true; }});
           media.play().catch(()=>{});
           media.muted = false;
@@ -439,27 +488,41 @@
     });
   }
 
-  // ---------- تحميل الريلز مع تمرير واحد لكل صفحة (تسلسل) ----------
+  // ---------- تحميل الريلز مع تحسين عرض أحدث أولاً ----------
   async function loadReels(initial = false) {
     if (loading) return;
     loading = true;
     const params = new URLSearchParams();
-    params.set('limit', 6);
+    params.set('limit', 8);
     if (lastTimestamp && !initial) params.set('before', lastTimestamp);
     try {
       const res = await fetch('/api/reels?' + params.toString());
       const json = await res.json();
       if (res.ok && json.ok) {
+        if (initial) {
+          // clear and reset to always show newest first
+          reels = [];
+          reelsContainer.innerHTML = '';
+          lastTimestamp = null;
+        }
         if (json.reels && json.reels.length) {
+          // append reels (newest first)
           json.reels.forEach(r => {
             reels.push(r);
             reelsContainer.appendChild(createReelElement(r));
           });
           lastTimestamp = json.lastTimestamp;
-          // observe videos after injection
+          // observe videos
           observeVideos();
-          // Attach one-by-one scroll handlers
-          attachOneByOneScroll();
+          revealOwnerButtons();
+          // scroll to top to show newest reel
+          const firstCard = reelsContainer.querySelector('.reel-card');
+          if (firstCard) firstCard.scrollIntoView({ behavior: 'auto', block: 'start' });
+          // attach page-by-page scroll handlers once
+          if (!scrollHandlersAttached) {
+            attachOneByOneScroll();
+            scrollHandlersAttached = true;
+          }
         } else if (initial) {
           reelsContainer.innerHTML = '<div class="h-screen flex items-center justify-center text-gray-400">لا توجد ريلز حتى الآن.</div>';
         }
@@ -471,7 +534,7 @@
     }
   }
 
-  // ---------- تمرير صفحة بصفحة: استمع للـ wheel و touch ----------
+  // ---------- تمرير صفحة بصفحة: wheel و touch ----------
   let scrollCooldown = false;
   function attachOneByOneScroll() {
     // mouse wheel
@@ -509,8 +572,8 @@
 
   function scrollToNext() {
     const cards = Array.from(document.querySelectorAll('.reel-card'));
+    if (!cards.length) return;
     const top = window.scrollY || document.documentElement.scrollTop;
-    // find currently visible index
     let curIndex = cards.findIndex(c => {
       const r = c.getBoundingClientRect();
       return r.top >= -10 && r.top < window.innerHeight*0.5;
@@ -518,7 +581,6 @@
     if (curIndex === -1) curIndex = 0;
     const nextIndex = Math.min(cards.length - 1, curIndex + 1);
     if (nextIndex === cards.length - 1 && !loading) {
-      // load more when nearing end
       loadReels();
     }
     cards[nextIndex]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -526,6 +588,7 @@
 
   function scrollToPrev() {
     const cards = Array.from(document.querySelectorAll('.reel-card'));
+    if (!cards.length) return;
     let curIndex = cards.findIndex(c => {
       const r = c.getBoundingClientRect();
       return r.top >= -10 && r.top < window.innerHeight*0.5;
@@ -547,11 +610,14 @@
     return String(text || '').replace(/[&<>"']/g, m => map[m]);
   }
 
+  // reload newest when window gains focus so newly uploaded reel appears
+  window.addEventListener('focus', () => {
+    // reload only if not busy
+    if (!loading) loadReels(true);
+  });
+
   // initial load
   loadReels(true);
-
-  // ensure we observe videos again if new nodes are loaded dynamically later
-  // (loadReels calls observeVideos internally)
 
 </script>
 
