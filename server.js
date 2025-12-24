@@ -967,7 +967,35 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
   }
 });
 
-// ---------------- Error Handling ----------------
+// Delete reel (owner only)
+app.delete('/api/reels/:reelId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const reelId = req.params.reelId;
+  if (!reelId) return res.status(400).json({ ok: false });
+
+  try {
+    const reelRef = db.ref(`reels/${reelId}`);
+    const reelSnap = await reelRef.once('value');
+    if (!reelSnap.exists()) return res.status(404).json({ ok: false, error: 'Reel not found' });
+
+    const reel = reelSnap.val();
+    if (reel.userId !== userId) {
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+
+    // remove reel and related nodes (likes/comments)
+    await reelRef.remove();
+    await db.ref(`reel_comments/${reelId}`).remove();
+    await db.ref(`reel_likes/${reelId}`).remove();
+    await db.ref(`profiles/${userId}/reelsCount`).transaction((c) => (c || 0) > 0 ? c - 1 : 0);
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error deleting reel:', error);
+    res.status(500).json({ ok: false });
+  }
+});
+-------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
   next(err);
