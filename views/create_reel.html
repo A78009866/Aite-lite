@@ -3,97 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إنشاء ريل جديد</title>
+    <title>إنشاء ريلز جديد</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body { background: #000; color: #fff; font-family: sans-serif; margin: 0; padding: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .header h2 { font-size: 18px; }
-        
-        .upload-container { background: #111; border: 2px dashed #333; border-radius: 15px; height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; cursor: pointer; }
-        .upload-container video { width: 100%; height: 100%; object-fit: cover; display: none; }
-        .upload-container i { font-size: 40px; color: #888; margin-bottom: 10px; }
-
-        textarea { width: 100%; background: #111; border: 1px solid #333; border-radius: 10px; color: #fff; padding: 15px; margin-top: 20px; box-sizing: border-box; resize: none; font-size: 15px; }
-        
-        .publish-btn { background: #ff3b5c; color: #fff; border: none; width: 100%; padding: 15px; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; }
-        .publish-btn:disabled { opacity: 0.5; }
-
-        #fileInput { display: none; }
-    </style>
 </head>
-<body>
+<body class="bg-black text-white min-h-screen flex flex-col">
 
-<div class="header">
-    <a href="/reels" style="color: #fff;"><i class="fas fa-arrow-right"></i></a>
-    <h2>إنشاء ريل</h2>
-    <div></div>
-</div>
+    <header class="p-4 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-black z-10">
+        <button onclick="history.back()" class="text-gray-400"><i class="fas fa-arrow-right text-xl"></i></button>
+        <h1 class="text-lg font-bold">ريلز جديد</h1>
+        <button id="submitBtn" form="reelForm" class="text-blue-500 font-bold disabled:opacity-50" disabled>نشر</button>
+    </header>
 
-<div class="upload-container" onclick="document.getElementById('fileInput').click()">
-    <i class="fas fa-video" id="uploadIcon"></i>
-    <span id="uploadText">اختر فيديو للبدء</span>
-    <video id="previewVideo" muted></video>
-</div>
+    <main class="flex-1 p-4 max-w-2xl mx-auto w-full">
+        <form id="reelForm" action="/api/reels/create" method="POST" enctype="multipart/form-data">
+            
+            <div class="mb-6">
+                <div id="videoContainer" class="relative w-full aspect-[9/16] max-h-[500px] bg-[#18191a] rounded-2xl border-2 border-dashed border-gray-700 flex flex-col items-center justify-center overflow-hidden">
+                    <video id="preview" class="hidden w-full h-full object-cover"></video>
+                    
+                    <div id="uploadUI" class="text-center">
+                        <i class="fas fa-film text-5xl text-gray-600 mb-3"></i>
+                        <p class="text-gray-400">اختر فيديو للبدء</p>
+                        <button type="button" onclick="document.getElementById('videoFile').click()" class="mt-4 bg-white text-black px-6 py-2 rounded-full font-bold">اختيار ملف</button>
+                    </div>
+                    
+                    <div id="uploadOverlay" class="absolute inset-0 bg-black/60 hidden flex flex-col items-center justify-center">
+                        <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p id="uploadStatus">جاري النشر...</p>
+                    </div>
+                </div>
+                <input type="file" id="videoFile" name="video" accept="video/*" class="hidden" required>
+            </div>
 
-<input type="file" id="fileInput" accept="video/*" onchange="previewFile()">
+            <div class="mb-4">
+                <textarea name="description" placeholder="اكتب وصفاً للريلز..." class="w-full bg-transparent border-none text-lg focus:ring-0 resize-none" rows="3"></textarea>
+            </div>
 
-<textarea id="caption" rows="4" placeholder="اكتب وصفاً للريل..."></textarea>
+        </form>
+    </main>
 
-<button class="publish-btn" id="submitBtn" onclick="uploadReel()">نشر الريل</button>
+    <script>
+        const videoFile = document.getElementById('videoFile');
+        const preview = document.getElementById('preview');
+        const uploadUI = document.getElementById('uploadUI');
+        const submitBtn = document.getElementById('submitBtn');
+        const reelForm = document.getElementById('reelForm');
 
-<script>
-    function previewFile() {
-        const file = document.getElementById('fileInput').files[0];
-        const video = document.getElementById('previewVideo');
-        const icon = document.getElementById('uploadIcon');
-        const text = document.getElementById('uploadText');
-
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                video.src = e.target.result;
-                video.style.display = 'block';
-                video.play();
-                icon.style.display = 'none';
-                text.style.display = 'none';
+        videoFile.onchange = function() {
+            const file = this.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                preview.src = url;
+                preview.classList.remove('hidden');
+                preview.play();
+                uploadUI.classList.add('hidden');
+                submitBtn.disabled = false;
             }
-            reader.readAsDataURL(file);
-        }
-    }
+        };
 
-    async function uploadReel() {
-        const file = document.getElementById('fileInput').files[0];
-        const content = document.getElementById('caption').value;
-        const btn = document.getElementById('submitBtn');
+        reelForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(reelForm);
+            
+            // إظهار مؤشر النشر
+            document.getElementById('uploadOverlay').classList.remove('hidden');
+            submitBtn.disabled = true;
 
-        if (!file) return alert('يرجى اختيار فيديو أولاً');
-
-        const formData = new FormData();
-        formData.append('media', file);
-        formData.append('content', content);
-
-        btn.disabled = true;
-        btn.innerText = 'جاري النشر...';
-
-        try {
-            const res = await fetch('/api/reels/create', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            if (data.ok) {
-                window.location.href = '/reels';
-            } else {
-                alert('خطأ أثناء النشر: ' + data.error);
-                btn.disabled = false;
-                btn.innerText = 'نشر الريل';
+            try {
+                const res = await fetch('/api/reels/create', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.ok) {
+                    window.location.href = '/chat_list'; // العودة للرئيسية
+                } else {
+                    alert('خطأ في النشر: ' + data.error);
+                }
+            } catch (err) {
+                alert('فشل الاتصال بالخادم');
+            } finally {
+                document.getElementById('uploadOverlay').classList.add('hidden');
+                submitBtn.disabled = false;
             }
-        } catch (e) {
-            alert('فشل الاتصال بالسيرفر');
-            btn.disabled = false;
-        }
-    }
-</script>
+        };
+    </script>
 </body>
 </html>
