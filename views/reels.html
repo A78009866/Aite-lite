@@ -71,8 +71,7 @@
   </div>
 
   <div class="swiper mySwiper">
-    <div class="swiper-wrapper" id="reelsWrapper">
-      </div>
+    <div class="swiper-wrapper" id="reelsWrapper"></div>
   </div>
 
   <div id="backdrop" class="overlay-backdrop"></div>
@@ -94,6 +93,7 @@
 <script>
   let swiperInstance = null;
   let currentReelsData = [];
+  let currentUserId = null; // تخزين معرف المستخدم الحالي للمقارنة
 
   document.addEventListener('DOMContentLoaded', loadReels);
 
@@ -103,6 +103,7 @@
       if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
       
       const data = await res.json();
+      currentUserId = data.currentUserId; // استلام المعرف من السيرفر
 
       if(data.ok && data.reels && data.reels.length > 0) {
         currentReelsData = data.reels;
@@ -118,7 +119,10 @@
 
   function renderReels(reels) {
     const wrapper = document.getElementById('reelsWrapper');
-    wrapper.innerHTML = reels.map((reel, index) => `
+    wrapper.innerHTML = reels.map((reel, index) => {
+      const isOwner = reel.userId === currentUserId; // التحقق من ملكية الريل
+
+      return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" class="w-full h-full object-cover" playsinline loop muted></video>
         
@@ -138,6 +142,13 @@
             <i class="fas fa-share text-3xl text-white drop-shadow-md"></i>
             <span class="text-xs font-bold">مشاركة</span>
           </div>
+          
+          ${isOwner ? `
+          <div class="flex flex-col items-center gap-1 cursor-pointer text-red-500" onclick="deleteReel('${reel.reelId}')">
+            <i class="fas fa-trash-can text-2xl drop-shadow-md"></i>
+            <span class="text-[10px] font-bold">حذف</span>
+          </div>
+          ` : ''}
         </div>
 
         <div class="absolute right-4 bottom-8 left-16 z-20 text-right pointer-events-none">
@@ -150,9 +161,12 @@
           </p>
         </div>
       </div>
-    `).join('');
+    `}).join('');
 
-    // تفعيل الضغط المزدوج والتحكم في الفيديو
+    setupVideoInteractions();
+  }
+
+  function setupVideoInteractions() {
     document.querySelectorAll('video').forEach(vid => {
       let lastTap = 0;
       vid.addEventListener('click', (e) => {
@@ -172,14 +186,11 @@
 
   function initSwiper() {
     if(swiperInstance) swiperInstance.destroy();
-    
     swiperInstance = new Swiper(".mySwiper", {
       direction: "vertical",
       mousewheel: true,
       keyboard: { enabled: true },
       speed: 400,
-      observer: true,
-      observeParents: true,
       on: {
         init: function() { playCurrentVideo(this); },
         slideChange: function () {
@@ -191,10 +202,7 @@
   }
 
   function pauseAllVideos() {
-    document.querySelectorAll('video').forEach(v => {
-      v.pause();
-      v.currentTime = 0;
-    });
+    document.querySelectorAll('video').forEach(v => { v.pause(); v.currentTime = 0; });
   }
 
   function playCurrentVideo(swiper) {
@@ -202,10 +210,7 @@
     const video = activeSlide.querySelector('video');
     if (video) {
       video.muted = false;
-      video.play().catch(() => {
-        video.muted = true;
-        video.play();
-      });
+      video.play().catch(() => { video.muted = true; video.play(); });
     }
   }
 
@@ -217,11 +222,21 @@
     heart.classList.add('animate');
   }
 
+  // حذف الريل
+  window.deleteReel = async function(reelId) {
+    if(!confirm('هل تريد حذف هذا الريل نهائياً؟')) return;
+    try {
+      const res = await fetch(`/api/reels/${reelId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if(data.ok) location.reload();
+      else alert(data.error || 'خطأ في الحذف');
+    } catch(e) { alert('فشل الاتصال بالسيرفر'); }
+  };
+
   async function handleLike(reelId, forceLike = false) {
     const icon = document.getElementById(`likeIcon-${reelId}`);
     const countSpan = document.getElementById(`likeCount-${reelId}`);
     const isLiked = icon.classList.contains('text-red-500');
-
     if (forceLike && isLiked) return;
 
     if (isLiked) {
@@ -300,6 +315,16 @@
       renderComments(data.comments);
     } catch(e) { alert('فشل الإرسال'); }
   });
+
+  window.shareReel = function(reelId) {
+    const shareUrl = window.location.origin + '/reels?id=' + reelId;
+    if (navigator.share) {
+      navigator.share({ title: 'شاهد هذا الريل', url: shareUrl });
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      alert('تم نسخ الرابط!');
+    }
+  };
 </script>
 </body>
 </html>
