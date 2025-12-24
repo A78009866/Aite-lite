@@ -3,203 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aite - إنشاء ريل جديد</title>
+    <title>Aite - إنشاء ريل</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
     <style>
-        body {
-            background-color: #000000;
-            color: #e4e6eb;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
-
-        .glass-navbar {
-            background-color: rgba(30, 30, 30, 0.5);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .glass-card {
-            background-color: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .app-logo { font-family: 'Montserrat', sans-serif; font-weight: 800; }
-
-        /* حاوية معاينة الريل (نسبة 9:16) */
-        .reel-preview-container {
-            width: 100%;
-            max-width: 320px;
-            aspect-ratio: 9 / 16;
-            background: #111;
-            border-radius: 20px;
-            overflow: hidden;
-            position: relative;
-            border: 2px dashed rgba(255, 255, 255, 0.2);
-        }
-
-        .video-preview {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: none;
-        }
-
-        .upload-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .upload-placeholder:hover { background: rgba(255, 255, 255, 0.05); }
+        body { background: #000; color: white; font-family: sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
     </style>
 </head>
-<body>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-md glass-card rounded-[2.5rem] p-8 shadow-2xl">
+        <div class="flex items-center mb-8">
+            <a href="/chat_list" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-right text-xl"></i></a>
+            <h1 class="flex-1 text-center text-xl font-bold">إنشاء ريل جديد</h1>
+        </div>
 
-    <header class="sticky top-0 z-50 glass-navbar p-3">
-        <nav class="flex justify-between items-center max-w-4xl mx-auto">
-            <a href="/chat_list" class="text-white hover:text-gray-300 transition text-xl">
-                <i class="fas fa-arrow-right"></i>
-            </a>
-            <div class="app-logo text-2xl tracking-widest text-white">Aite</div>
-            <div class="w-8"></div> </nav>
-    </header>
-
-    <main class="max-w-4xl mx-auto p-4 flex flex-col md:flex-row gap-6 mt-6">
-        
-        <div class="flex-1 flex justify-center items-start">
-            <div class="reel-preview-container shadow-2xl" id="dropZone">
-                <input type="file" id="reelInput" accept="video/*" class="hidden">
-                <div id="placeholder" class="upload-placeholder" onclick="document.getElementById('reelInput').click()">
-                    <i class="fas fa-clapperboard text-4xl text-purple-500 mb-3"></i>
-                    <p class="text-sm text-gray-400">اختر فيديو الريل</p>
-                    <span class="text-xs text-gray-500 mt-2">MP4, WebM (9:16 مستحسن)</span>
-                </div>
-                <video id="previewVideo" class="video-preview" controls></video>
-                
-                <button id="changeVideoBtn" class="hidden absolute top-2 left-2 bg-black/60 p-2 rounded-full text-white text-xs hover:bg-black" onclick="document.getElementById('reelInput').click()">
-                    <i class="fas fa-sync-alt ml-1"></i> تغيير
-                </button>
+        <div id="dropZone" onclick="document.getElementById('videoInput').click()" class="relative border-2 border-dashed border-white/20 rounded-3xl aspect-[9/16] flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all overflow-hidden">
+            <input type="file" id="videoInput" accept="video/*" class="hidden">
+            <video id="preview" class="hidden w-full h-full object-cover"></video>
+            <div id="placeholder" class="text-center">
+                <i class="fas fa-cloud-upload-alt text-4xl text-blue-500 mb-2"></i>
+                <p class="text-gray-400 text-sm">اضغط لرفع فيديو</p>
             </div>
         </div>
 
-        <div class="flex-[1.5] space-y-4">
-            <div class="glass-card p-6 rounded-2xl">
-                <h2 class="text-xl font-bold mb-4 flex items-center">
-                    <i class="fas fa-pen-nib ml-2 text-blue-400"></i> تفاصيل الريل
-                </h2>
-                
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-gray-400 text-sm mb-2">وصف الريل</label>
-                        <textarea id="reelDescription" rows="5" 
-                            class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
-                            placeholder="اكتب وصفاً جذاباً هنا... #ريلز #Aite"></textarea>
-                    </div>
+        <textarea id="description" class="w-full mt-6 bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all h-24" placeholder="اكتب وصفاً للريل..."></textarea>
 
-                    <div class="bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
-                        <p class="text-xs text-blue-300 leading-relaxed">
-                            <i class="fas fa-info-circle ml-1"></i>
-                            نصيحة: الفيديوهات التي تبلغ مدتها أقل من 60 ثانية وبأبعاد عمودية تحقق انتشاراً أفضل.
-                        </p>
-                    </div>
-
-                    <button id="publishBtn" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 rounded-xl transition duration-300 transform active:scale-95 flex items-center justify-center">
-                        <i class="fas fa-paper-plane ml-2"></i> نشر الريل الآن
-                    </button>
-                </div>
+        <div id="progressContainer" class="hidden mt-4">
+            <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                <div id="progressBar" class="bg-blue-600 h-full w-0 transition-all"></div>
             </div>
-            
-            <div id="statusMessage" class="hidden p-3 rounded-lg text-center text-sm"></div>
+            <p id="progressText" class="text-center text-xs text-gray-400 mt-2">0% جاري الرفع</p>
         </div>
 
-    </main>
+        <button id="uploadBtn" onclick="handleUpload()" class="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-400 py-4 rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-transform">
+            نشر الريل
+        </button>
+    </div>
 
     <script>
-        const reelInput = document.getElementById('reelInput');
-        const previewVideo = document.getElementById('previewVideo');
+        const videoInput = document.getElementById('videoInput');
+        const preview = document.getElementById('preview');
         const placeholder = document.getElementById('placeholder');
-        const changeVideoBtn = document.getElementById('changeVideoBtn');
-        const publishBtn = document.getElementById('publishBtn');
-        const statusMessage = document.getElementById('statusMessage');
 
-        // معاينة الفيديو عند الاختيار
-        reelInput.addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                if (file.type.startsWith('video/')) {
-                    const url = URL.createObjectURL(file);
-                    previewVideo.src = url;
-                    previewVideo.style.display = 'block';
-                    placeholder.style.display = 'none';
-                    changeVideoBtn.classList.remove('hidden');
-                    
-                    // تحذير إذا كان الفيديو طويلاً جداً (اختياري)
-                    previewVideo.onloadedmetadata = function() {
-                        if (previewVideo.duration > 90) {
-                            alert("تنبيه: الفيديو طويل جداً، يفضل أن يكون الريل أقل من 90 ثانية.");
-                        }
-                    };
-                } else {
-                    alert("يرجى اختيار ملف فيديو صالح.");
-                }
+        videoInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if(file) {
+                preview.src = URL.createObjectURL(file);
+                preview.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                preview.play();
             }
-        });
+        };
 
-        // وظيفة النشر
-        publishBtn.addEventListener('click', async () => {
-            const description = document.getElementById('reelDescription').value;
-            const videoFile = reelInput.files[0];
-
-            if (!videoFile) {
-                showMessage("يرجى اختيار فيديو أولاً", "bg-red-500/20 text-red-400");
-                return;
-            }
+        function handleUpload() {
+            const file = videoInput.files[0];
+            if(!file) return alert('يرجى اختيار فيديو');
 
             const formData = new FormData();
-            formData.append('video', videoFile);
-            formData.append('description', description);
+            formData.append('video', file);
+            formData.append('description', document.getElementById('description').value);
 
-            publishBtn.disabled = true;
-            publishBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري النشر...';
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/reels/create');
 
-            try {
-                // استبدل هذا الرابط بمسار API الفعلي لديك
-                const response = await fetch('/api/reels/create', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    showMessage("تم نشر الريل بنجاح!", "bg-green-500/20 text-green-400");
-                    setTimeout(() => window.location.href = '/reels', 1500);
-                } else {
-                    showMessage(result.error || "حدث خطأ أثناء النشر", "bg-red-500/20 text-red-400");
-                    publishBtn.disabled = false;
-                    publishBtn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i> نشر الريل الآن';
+            xhr.upload.onprogress = (e) => {
+                if(e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    document.getElementById('progressContainer').classList.remove('hidden');
+                    document.getElementById('progressBar').style.width = percent + '%';
+                    document.getElementById('progressText').innerText = percent + '% جاري الرفع';
                 }
-            } catch (error) {
-                showMessage("فشل الاتصال بالخادم", "bg-red-500/20 text-red-400");
-                publishBtn.disabled = false;
-                publishBtn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i> نشر الريل الآن';
-            }
-        });
+            };
 
-        function showMessage(text, classes) {
-            statusMessage.textContent = text;
-            statusMessage.className = `p-3 rounded-lg text-center text-sm ${classes}`;
-            statusMessage.classList.remove('hidden');
+            xhr.onload = () => {
+                const res = JSON.parse(xhr.responseText);
+                if(res.ok) window.location.href = '/reels';
+                else alert('خطأ في الرفع: ' + res.error);
+            };
+
+            xhr.send(formData);
         }
     </script>
 </body>
