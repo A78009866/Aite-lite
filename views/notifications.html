@@ -15,6 +15,7 @@
     .badge { background:#ef4444; color:white; font-size:12px; padding:4px 8px; border-radius:999px; }
     .empty { text-align:center; color:#94a3b8; padding:40px 0; }
     .bottom-nav { position:fixed; left:0; right:0; bottom:0; height:60px; background: rgba(20,20,20,0.7); border-top:1px solid rgba(255,255,255,0.04); display:flex; justify-content:center; align-items:center; }
+    .action-btn { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:8px; color:#e6eefb; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -26,7 +27,10 @@
       <div class="text-center">
         <h1 class="text-xl font-bold">الإشعارات</h1>
       </div>
-      <div style="width:40px"></div>
+      <div style="width:40px; display:flex; gap:8px; align-items:center; justify-content:flex-end;">
+        <button id="markAllReadBtn" class="action-btn" title="تعيين الكل كمقروء">تعيين الكل كمقروء</button>
+        <button id="clearAllBtn" class="action-btn" title="حذف كل الإشعارات">حذف الكل</button>
+      </div>
     </nav>
   </header>
 
@@ -67,6 +71,15 @@
       } else if (n.type === 'reel_like') {
         title = `<strong>${escapeHtml(n.from_username)}</strong> أعجب بريلك`;
         targetHint = 'عرض الريل';
+      } else if (n.type === 'post_comment') {
+        title = `<strong>${escapeHtml(n.from_username)}</strong> علّق: "${escapeHtml((n.commentContent||'').substring(0,80))}"`;
+        targetHint = 'عرض المنشور والتعليق';
+      } else if (n.type === 'reel_comment') {
+        title = `<strong>${escapeHtml(n.from_username)}</strong> علّق على ريلك: "${escapeHtml((n.commentContent||'').substring(0,80))}"`;
+        targetHint = 'عرض الريل والتعليق';
+      } else if (n.type === 'message') {
+        title = `<strong>${escapeHtml(n.from_username)}</strong> أرسل لك رسالة: "${escapeHtml((n.preview||'').substring(0,80))}"`;
+        targetHint = 'افتح المحادثة';
       } else {
         title = `<strong>${escapeHtml(n.from_username || 'مستخدم')}</strong> حدث جديد`;
         targetHint = '';
@@ -75,7 +88,7 @@
       const time = new Date(n.timestamp || Date.now()).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
       return `
-        <div class="notification-card ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-type="${n.type}" data-post-id="${n.postId || ''}" data-reel-id="${n.reelId || ''}">
+        <div class="notification-card ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-type="${n.type}" data-post-id="${n.postId || ''}" data-reel-id="${n.reelId || ''}" data-from="${n.from_user_id || ''}">
           <img src="${escapeHtml(n.from_profile_picture_url || '')}" class="notif-avatar" alt="">
           <div style="flex:1">
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
@@ -95,6 +108,7 @@
         const type = el.dataset.type;
         const postId = el.dataset.postId;
         const reelId = el.dataset.reelId;
+        const fromUser = el.dataset.from;
 
         // mark this notif read
         try {
@@ -107,10 +121,15 @@
         } catch (e) { console.error('mark read failed', e); }
 
         // redirect based on type
-        if (type === 'post_like' && postId) {
-          window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
-        } else if (type === 'reel_like' && reelId) {
-          window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+        if (type === 'post_like' || type === 'post_comment') {
+          if (postId) window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
+          else window.location.href = '/chat_list';
+        } else if (type === 'reel_like' || type === 'reel_comment') {
+          if (reelId) window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+          else window.location.href = '/reels';
+        } else if (type === 'message') {
+          if (fromUser) window.location.href = `/chat?contactId=${encodeURIComponent(fromUser)}`;
+          else window.location.href = '/chat_list';
         } else {
           window.location.href = '/chat_list';
         }
@@ -132,8 +151,7 @@
     es.addEventListener('notifications', (e) => {
       try {
         const payload = JSON.parse(e.data);
-        // تحديث واجهة العدد اللحظي إن رغبت (البادج يظهر في الصفحات الأخرى)
-        // عند وصول تحديث يمكن تحديث اللائحة هنا أو فقط إعادة جلب القائمة
+        // تحديث الواجهة: نعيد جلب القائمة لكي تعكس المحتوى (أسهل من محاولة تحديث محلي)
         fetchNotifications();
       } catch (err) {
         console.error('Failed to parse notifications SSE data', err);
@@ -143,6 +161,32 @@
       console.warn('Notifications SSE error', err);
     });
   }
+
+  // زر تعيين الكل كمقروء
+  document.getElementById('markAllReadBtn').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/notifications/mark_read', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}) // لا id => يعلّم الكل
+      });
+      if (res.ok) fetchNotifications();
+    } catch (e) { console.error('Mark all read failed', e); alert('فشل تعيين الكل كمقروء'); }
+  });
+
+  // زر حذف الكل
+  document.getElementById('clearAllBtn').addEventListener('click', async () => {
+    if (!confirm('هل تريد حذف كل الإشعارات؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'DELETE',
+        credentials: 'same-origin'
+      });
+      if (res.ok) fetchNotifications();
+      else throw new Error('delete failed');
+    } catch (e) { console.error('Clear all failed', e); alert('فشل حذف الإشعارات'); }
+  });
 </script>
 </body>
 </html>
