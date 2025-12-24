@@ -29,6 +29,12 @@
       position: relative;
     }
 
+    video {
+      -webkit-user-select: none;
+      user-select: none;
+      background: black;
+    }
+
     /* أنيميشن القلب */
     .big-heart {
       position: absolute; top: 50%; left: 50%;
@@ -43,6 +49,71 @@
       30% { transform: translate(-50%, -50%) scale(1.2); transform: rotate(10deg); }
       50% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
       100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+    }
+
+    /* زر التشغيل/الإيقاف المركزي */
+    .play-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      z-index: 30;
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(4px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+      transition: opacity 0.25s ease, transform 0.18s ease;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .play-btn.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .play-btn i {
+      font-size: 34px;
+      color: white;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+
+    /* شريط التقدم السفلي */
+    .video-progress {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 10px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      z-index: 30;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .video-progress .progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg,#ff2d55,#ff7a00);
+      transition: width 0.1s linear;
+    }
+    .video-progress .thumb {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      right: 0%;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      transform: translate(50%, -50%);
+      pointer-events: none;
+      opacity: 0.9;
     }
 
     /* نافذة التعليقات */
@@ -95,6 +166,11 @@
   let currentReelsData = [];
   let currentUserId = null; // تخزين معرف المستخدم الحالي للمقارنة
 
+  // صورة سوداء كـ poster (SVG data URI) لعرض شاشة سوداء قبل التشغيل
+  const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>'
+  );
+
   document.addEventListener('DOMContentLoaded', loadReels);
 
   async function loadReels() {
@@ -121,12 +197,26 @@
     const wrapper = document.getElementById('reelsWrapper');
     wrapper.innerHTML = reels.map((reel, index) => {
       const isOwner = reel.userId === currentUserId; // التحقق من ملكية الريل
+      // استخدم poster أسود أو يمكنك تبديله بمسار الصورة من الخادم إذا أضفت thumbnail لاحقاً
+      const poster = reel.thumbnailUrl || BLACK_POSTER;
 
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
-        <video src="${reel.videoUrl}" class="w-full h-full object-cover" playsinline loop muted></video>
+        <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
         
         <i class="fas fa-heart big-heart" id="bigHeart-${reel.reelId}"></i>
+
+        <!-- زر التشغيل المركزي -->
+        <div class="play-btn" id="playBtn-${reel.reelId}">
+          <i class="fas fa-play"></i>
+        </div>
+
+        <!-- شريط التقدم السفلي -->
+        <div class="video-progress" id="progress-${reel.reelId}">
+          <div class="progress" id="progressBar-${reel.reelId}"></div>
+          <div class="thumb" id="thumb-${reel.reelId}"></div>
+        </div>
+
         <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 pointer-events-none"></div>
 
         <div class="absolute left-4 bottom-24 flex flex-col items-center gap-6 z-20 pointer-events-auto">
@@ -168,24 +258,79 @@
 
   function setupVideoInteractions() {
     document.querySelectorAll('video').forEach(vid => {
+      const slide = vid.closest('.swiper-slide');
+      const reelId = slide.getAttribute('data-id');
+
+      // تحديث شريط التقدم عند التقدم
+      const progressBar = document.getElementById(`progressBar-${reelId}`);
+      const progressContainer = document.getElementById(`progress-${reelId}`);
+      const playBtn = document.getElementById(`playBtn-${reelId}`);
+      const thumb = document.getElementById(`thumb-${reelId}`);
+
+      // timeupdate => تحديث شريط التقدم
+      vid.addEventListener('timeupdate', () => {
+        if (!progressBar || !vid.duration || isNaN(vid.duration)) return;
+        const pct = (vid.currentTime / vid.duration) * 100;
+        progressBar.style.width = pct + '%';
+        if (thumb) thumb.style.right = (100 - pct) + '%';
+      });
+
+      // seek عند الضغط على شريط التقدم
+      if (progressContainer) {
+        progressContainer.addEventListener('click', (ev) => {
+          const rect = progressContainer.getBoundingClientRect();
+          const x = ev.clientX - rect.left;
+          const pct = x / rect.width;
+          if (vid.duration && !isNaN(vid.duration)) {
+            vid.currentTime = pct * vid.duration;
+            vid.play().catch(() => {});
+          }
+        });
+      }
+
+      // زر التشغيل المركزي يجب أن يعمل أيضاً
+      if (playBtn) {
+        playBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          togglePlayPause(vid, reelId, true);
+        });
+      }
+
+      // نميز النقر المفرد عن النقر المزدوج (دابل تاب يعجب)
       let lastTap = 0;
       vid.addEventListener('click', (e) => {
-        const now = new Date().getTime();
-        const timesince = now - lastTap;
-        if (timesince < 300 && timesince > 0) {
-          const reelId = vid.closest('.swiper-slide').getAttribute('data-id');
-          handleLike(reelId, true);
-          animateHeart(reelId);
+        const now = Date.now();
+        const delta = now - lastTap;
+        if (delta < 300 && delta > 0) {
+          // double tap -> like
+          const id = vid.closest('.swiper-slide').getAttribute('data-id');
+          handleLike(id, true);
+          animateHeart(id);
         } else {
-           if(vid.paused) vid.play(); else vid.pause();
+          // single tap -> toggle play/pause & show button briefly
+          const id = vid.closest('.swiper-slide').getAttribute('data-id');
+          togglePlayPause(vid, id, true);
         }
-        lastTap = new Date().getTime();
+        lastTap = now;
+      });
+
+      // إظهار زر التشغيل/الإيقاف عند توقف الفيديو أو عند الانتقال
+      vid.addEventListener('pause', () => {
+        showPlayBtnTemporarily(reelId, true);
+      });
+      vid.addEventListener('play', () => {
+        showPlayBtnTemporarily(reelId, false);
+      });
+
+      // إذا انتهى الفيديو نعكس حالة الزر
+      vid.addEventListener('ended', () => {
+        showPlayBtnTemporarily(reelId, true);
       });
     });
   }
 
   function initSwiper() {
-    if(swiperInstance) swiperInstance.destroy();
+    if(swiperInstance) swiperInstance.destroy(true, true);
     swiperInstance = new Swiper(".mySwiper", {
       direction: "vertical",
       mousewheel: true,
@@ -202,15 +347,64 @@
   }
 
   function pauseAllVideos() {
-    document.querySelectorAll('video').forEach(v => { v.pause(); v.currentTime = 0; });
+    document.querySelectorAll('video').forEach(v => { 
+      try { v.pause(); } catch(e) {}
+    });
   }
 
   function playCurrentVideo(swiper) {
     const activeSlide = swiper.slides[swiper.activeIndex];
     const video = activeSlide.querySelector('video');
     if (video) {
+      // حاول التشغيل وإلغاء كتم الصوت إن لزم
       video.muted = false;
-      video.play().catch(() => { video.muted = true; video.play(); });
+      video.play().catch(() => { video.muted = true; video.play().catch(()=>{}); });
+      // إخفاء زر التشغيل لأننا بدأنا التشغيل
+      const reelId = activeSlide.getAttribute('data-id');
+      showPlayBtnTemporarily(reelId, false);
+    }
+  }
+
+  function togglePlayPause(videoEl, reelId, showButton) {
+    const playBtn = document.getElementById(`playBtn-${reelId}`);
+    try {
+      if (videoEl.paused) {
+        videoEl.play().catch(()=>{});
+        if (playBtn) {
+          playBtn.classList.remove('show');
+          playBtn.querySelector('i').className = 'fas fa-pause';
+        }
+      } else {
+        videoEl.pause();
+        if (playBtn) {
+          playBtn.querySelector('i').className = 'fas fa-play';
+          showPlayBtnTemporarily(reelId, true);
+        }
+      }
+      if (showButton && playBtn) {
+        // عرض الزر لمدة قصيرة
+        playBtn.classList.add('show');
+        setTimeout(() => {
+          playBtn.classList.remove('show');
+        }, 1400);
+      }
+    } catch(e) {}
+  }
+
+  function showPlayBtnTemporarily(reelId, isPaused) {
+    const playBtn = document.getElementById(`playBtn-${reelId}`);
+    if (!playBtn) return;
+    const icon = playBtn.querySelector('i');
+    if (isPaused) {
+      icon.className = 'fas fa-play';
+      playBtn.classList.add('show');
+    } else {
+      icon.className = 'fas fa-pause';
+      playBtn.classList.remove('show');
+    }
+    // إذا أظهرناه نخفيه بعد فترة قصيرة (إذا هو غير سعر)
+    if (isPaused) {
+      setTimeout(() => { playBtn.classList.remove('show'); }, 1400);
     }
   }
 
@@ -220,6 +414,15 @@
     heart.classList.remove('animate');
     void heart.offsetWidth; 
     heart.classList.add('animate');
+    // تأكد من أن أيقونة اللايك تتحول للون أحمر
+    const icon = document.getElementById(`likeIcon-${reelId}`);
+    if(icon && !icon.classList.contains('text-red-500')) {
+      icon.classList.remove('far');
+      icon.classList.add('fas', 'text-red-500');
+      // تحديث العد محلياً (الخادم يحدثه كذلك)
+      const countEl = document.getElementById(`likeCount-${reelId}`);
+      if(countEl) countEl.textContent = parseInt(countEl.textContent || '0') + 1;
+    }
   }
 
   // حذف الريل
