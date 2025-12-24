@@ -8,78 +8,155 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    /* ... (نفس الـ CSS السابق تماماً لضمان الشكل الأسود الزجاجي) ... */
     :root {
       --glass-dark: rgba(20, 20, 20, 0.65);
       --glass-border: rgba(255, 255, 255, 0.08);
       --primary: #3b82f6;
     }
+    
+    /* إصلاح مشاكل التمرير والارتفاع */
     html, body {
-      height: 100%; margin: 0; padding: 0;
+      margin: 0; padding: 0;
       background-color: #000; color: #fff;
       font-family: 'Cairo', sans-serif;
-      overflow: hidden;
-    }
-    #reelsContainer {
       height: 100%;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory;
+      width: 100%;
+      overflow: hidden; /* يمنع تمرير الصفحة نفسها */
+    }
+
+    /* حاوية الريلز - هي التي تقبل التمرير */
+    #reelsContainer {
+      height: 100vh; /* ارتفاع كامل */
+      width: 100%;
+      overflow-y: scroll; /* تفعيل التمرير العمودي */
+      scroll-snap-type: y mandatory; /* تفعيل السناب */
       scrollbar-width: none;
-      -ms-overflow-style: none;
     }
     #reelsContainer::-webkit-scrollbar { display: none; }
-    
+
+    /* بطاقة الريل */
     .reel-card {
-      position: relative; width: 100%; height: 100%;
-      scroll-snap-align: start; scroll-snap-stop: always;
-      overflow: hidden; background: #000;
+      position: relative;
+      width: 100%;
+      height: 100vh; /* كل ريل يأخذ الشاشة كاملة */
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      background: #000;
+      overflow: hidden;
     }
-    .reel-media { width: 100%; height: 100%; object-fit: cover; display: block; }
-    
+
+    /* الميديا */
+    .reel-media {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+    }
+
+    /* تدرج لوني للنصوص */
     .gradient-overlay {
-      position: absolute; bottom: 0; left: 0; right: 0; height: 50%;
-      background: linear-gradient(to top, rgba(0,0,0,0.95), transparent);
+      position: absolute; bottom: 0; left: 0; right: 0; height: 60%;
+      background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
       pointer-events: none; z-index: 10;
     }
 
-    /* Controls & Info CSS (نفس السابق) */
-    .side-controls { position: absolute; bottom: 100px; right: 16px; z-index: 20; display: flex; flex-direction: column; gap: 20px; align-items: center; }
+    /* الأزرار الجانبية */
+    .side-controls {
+      position: absolute; bottom: 120px; right: 16px;
+      z-index: 30; display: flex; flex-direction: column; gap: 20px; align-items: center;
+    }
     .control-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
-    .control-icon-bg { width: 48px; height: 48px; border-radius: 50%; background: var(--glass-dark); backdrop-filter: blur(8px); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+    .control-icon-bg {
+      width: 45px; height: 45px; border-radius: 50%;
+      background: rgba(0, 0, 0, 0.4); /* خلفية داكنة شفافة */
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.2s;
+    }
     .control-icon-bg:active { transform: scale(0.9); }
-    .control-label { font-size: 12px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .control-label { font-size: 11px; font-weight: 600; text-shadow: 0 1px 2px black; }
 
-    .bottom-info { position: absolute; bottom: 20px; left: 16px; right: 80px; z-index: 20; pointer-events: none; }
+    /* المعلومات بالأسفل */
+    .bottom-info {
+      position: absolute; bottom: 20px; left: 16px; right: 70px;
+      z-index: 30; pointer-events: none;
+    }
     .bottom-info > * { pointer-events: auto; }
-    
-    /* Delete Badge */
-    .delete-badge { position: absolute; top: 20px; left: 20px; z-index: 30; background: rgba(220, 38, 38, 0.2); border: 1px solid rgba(220, 38, 38, 0.4); color: #fca5a5; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; display: none; backdrop-filter: blur(4px); }
 
-    /* Comments Sheet & Toast (نفس السابق) */
-    .comments-sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 75vh; background: #121212; border-top-left-radius: 24px; border-top-right-radius: 24px; z-index: 100; transform: translateY(105%); transition: transform 0.35s cubic-bezier(0.32, 1, 0.23, 1); display: flex; flex-direction: column; box-shadow: 0 -5px 40px rgba(0,0,0,0.6); border-top: 1px solid #333; }
+    /* زر الحذف - يظهر للمالك فقط */
+    .delete-badge {
+      position: absolute; top: 70px; left: 20px; z-index: 50;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
+      padding: 8px 16px;
+      border-radius: 30px;
+      font-size: 13px;
+      cursor: pointer;
+      backdrop-filter: blur(5px);
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    /* زر الإضافة الشفاف الرمادي */
+    .add-reel-btn {
+      position: fixed; top: 20px; right: 20px; z-index: 60;
+      width: 45px; height: 45px;
+      border-radius: 50%;
+      background: rgba(80, 80, 80, 0.3); /* رمادي شفاف */
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.8);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+      transition: 0.2s;
+    }
+    .add-reel-btn:active { transform: scale(0.95); background: rgba(80, 80, 80, 0.5); }
+
+    /* نافذة التعليقات */
+    .comments-sheet {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 70vh;
+      background: #111; border-top-left-radius: 20px; border-top-right-radius: 20px;
+      z-index: 100; transform: translateY(110%); transition: transform 0.3s ease-out;
+      display: flex; flex-direction: column; border-top: 1px solid #333;
+    }
     .comments-sheet.open { transform: translateY(0); }
-    .sheet-handle { width: 40px; height: 4px; background: #444; border-radius: 2px; margin: 12px auto; }
+    .sheet-handle { width: 40px; height: 5px; background: #444; border-radius: 3px; margin: 12px auto; }
     .comments-list { flex: 1; overflow-y: auto; padding: 0 16px 80px 16px; }
-    .comment-input-area { position: absolute; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px 16px 20px 16px; border-top: 1px solid #333; display: flex; align-items: center; gap: 10px; }
-    .modern-input { flex: 1; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 24px; padding: 10px 16px; color: #fff; font-size: 14px; outline: none; }
-    .send-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+    .comment-input-area {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: #111; padding: 15px; border-top: 1px solid #222;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .modern-input {
+      flex: 1; background: #222; border: none; border-radius: 20px;
+      padding: 10px 15px; color: #fff; outline: none;
+    }
+
+    /* أيقونات التشغيل والقلب */
+    .play-icon-overlay {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 4rem; opacity: 0; pointer-events: none; transition: 0.2s; z-index: 15;
+    }
+    .paused .play-icon-overlay { opacity: 0.7; }
     
-    /* Animations */
-    .play-icon-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 15; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
-    .paused .play-icon-overlay { opacity: 0.8; }
-    .heart-anim { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); font-size: 6rem; color: #ef4444; z-index: 25; pointer-events: none; animation: heartPopup 0.8s ease-out forwards; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-    @keyframes heartPopup { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 15% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 30% { transform: translate(-50%, -50%) scale(0.9); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.5) translateY(-50px); opacity: 0; } }
-    .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.9); color: #000; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px; z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
-    .toast.show { opacity: 1; }
+    .heart-anim {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
+      font-size: 6rem; color: #ef4444; z-index: 25; pointer-events: none;
+      animation: heartPopup 0.8s ease-out forwards;
+    }
+    @keyframes heartPopup {
+      0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+      15% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.5) translateY(-100px); opacity: 0; }
+    }
   </style>
 </head>
 <body>
 
-  <a href="/chat_list" class="fixed top-4 left-4 z-50 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 backdrop-blur text-white border border-white/10">
+  <a href="/chat_list" class="fixed top-5 left-5 z-50 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 backdrop-blur text-white border border-white/10">
     <i class="fas fa-arrow-right"></i>
   </a>
-  
-  <a href="/reels/create" class="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center rounded-full bg-blue-600/80 backdrop-blur text-white shadow-lg animate-pulse">
+
+  <a href="/reels/create" class="add-reel-btn">
     <i class="fas fa-plus"></i>
   </a>
 
@@ -89,321 +166,259 @@
   <div id="commentsSheet" class="comments-sheet">
     <div class="sheet-handle" id="closeCommentsHandle"></div>
     <div class="px-4 pb-2 border-b border-gray-800 flex justify-between items-center">
-      <h3 class="font-bold text-lg">التعليقات (<span id="commentsCountHeader">0</span>)</h3>
-      <button id="closeCommentsBtn" class="p-2 text-gray-400"><i class="fas fa-times"></i></button>
+      <h3 class="font-bold text-sm text-gray-300">التعليقات</h3>
+      <button id="closeCommentsBtn" class="text-gray-400 p-2"><i class="fas fa-times"></i></button>
     </div>
-    <div id="commentsList" class="comments-list mt-2 space-y-4"></div>
+    <div id="commentsList" class="comments-list mt-2"></div>
     <div class="comment-input-area">
-      <img id="myAvatarInput" src="https://via.placeholder.com/40" class="w-8 h-8 rounded-full border border-gray-600">
-      <input id="commentInput" type="text" class="modern-input" placeholder="أضف تعليقاً..." autocomplete="off">
-      <button id="sendCommentBtn" class="send-btn"><i class="fas fa-paper-plane text-sm"></i></button>
+      <input id="commentInput" type="text" class="modern-input" placeholder="اكتب تعليقاً..." autocomplete="off">
+      <button id="sendCommentBtn" class="text-blue-500 font-bold p-2">نشر</button>
     </div>
   </div>
-
-  <div id="toast" class="toast">تم النسخ بنجاح</div>
 
 <script>
   let currentUserId = null;
   let currentUserData = null;
   let isLoading = false;
+  let hasMore = true;
   let lastTimestamp = null;
-  let hasMore = true; // علامة لمعرفة إذا بقي المزيد في السيرفر
-  let activeReelId = null;
   
   const container = document.getElementById('reelsContainer');
-  const commentsSheet = document.getElementById('commentsSheet');
-  const commentsList = document.getElementById('commentsList');
-  const commentInput = document.getElementById('commentInput');
-  const sendBtn = document.getElementById('sendCommentBtn');
 
-  // Init
+  // 1. التهيئة المتسلسلة (لضمان ظهور زر الحذف)
   async function init() {
     try {
-      const pRes = await fetch('/api/profile');
-      if (pRes.ok) {
-        currentUserData = await pRes.json();
+      // ننتظر جلب البروفايل أولاً
+      const res = await fetch('/api/profile');
+      if (res.ok) {
+        currentUserData = await res.json();
         currentUserId = currentUserData.id;
-        document.getElementById('myAvatarInput').src = currentUserData.profile_picture_url;
+        console.log("Logged in as:", currentUserId);
       }
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.error("Profile Error", e);
+    }
+    
+    // بعد الانتهاء، نبدأ تحميل الريلز
     loadReels(true);
   }
+  
   init();
 
-  // Load Reels Logic (Updated for better fetching)
+  // 2. تحميل الريلز
   async function loadReels(initial = false) {
     if (isLoading || (!hasMore && !initial)) return;
     isLoading = true;
-    
-    // زيادة العدد لـ 20 لضمان جلب أكبر كمية ممكنة في الدفعة الواحدة
-    const limit = 20; 
-    const params = new URLSearchParams();
-    params.set('limit', limit);
+
+    const params = new URLSearchParams({ limit: 10 }); // جلب 10
     if (!initial && lastTimestamp) params.set('before', lastTimestamp);
 
     try {
-      const res = await fetch('/api/reels?' + params.toString());
+      // إضافة طابع زمني لمنع التخزين المؤقت
+      const res = await fetch('/api/reels?' + params.toString() + '&t=' + Date.now());
       const data = await res.json();
 
-      if (data.ok && data.reels && data.reels.length > 0) {
+      if (data.ok && data.reels.length > 0) {
         lastTimestamp = data.lastTimestamp;
         
-        // إذا كان عدد الراجع أقل من الحد، فهذا يعني أننا وصلنا للنهاية
-        if (data.reels.length < limit) {
-           hasMore = false;
-        }
-
         data.reels.forEach(reel => {
-          // منع التكرار في حال وجود خطأ في التوقيت
-          if (!document.querySelector(`.reel-card[data-id="${reel.reelId}"]`)) {
-             const reelEl = createReelCard(reel);
-             container.appendChild(reelEl);
+          // التحقق من التكرار
+          if (!container.querySelector(`[data-id="${reel.reelId}"]`)) {
+            container.appendChild(createReelElement(reel));
           }
         });
-        
-        setupVideoObserver();
-        
+
+        setupObserver();
+
+      } else if (initial) {
+        container.innerHTML = `
+          <div class="h-full flex flex-col items-center justify-center text-gray-500">
+            <p>لا توجد فيديوهات حالياً</p>
+            <a href="/reels/create" class="mt-4 text-blue-400 underline">انشر أول فيديو</a>
+          </div>`;
       } else {
-        hasMore = false; // لا يوجد المزيد
-        if (initial) {
-          container.innerHTML = `
-            <div class="h-full flex flex-col items-center justify-center text-gray-400">
-              <i class="fas fa-film text-5xl mb-4 opacity-50"></i>
-              <p class="text-lg font-bold">لا توجد ريلز حالياً</p>
-              <a href="/reels/create" class="mt-4 px-6 py-2 bg-blue-600 rounded-full text-white text-sm">كن أول من ينشر!</a>
-            </div>`;
-        }
+        hasMore = false;
       }
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     } finally {
       isLoading = false;
     }
   }
 
-  // --- (باقي الدوال: createReelCard, Interaction, Comments هي نفسها من الكود السابق) ---
-  // سأعيد كتابة دالة createReelCard لضمان وجودها هنا بشكل صحيح
+  // 3. إنشاء عنصر الريل (مع زر الحذف الصحيح)
+  function createReelElement(reel) {
+    const el = document.createElement('div');
+    el.className = 'reel-card';
+    el.dataset.id = reel.reelId;
 
-  function createReelCard(reel) {
-    const card = document.createElement('section');
-    card.className = 'reel-card';
-    card.dataset.id = reel.reelId;
+    // التحقق من الملكية
+    // تأكد أن السيرفر يرسل userId داخل كائن الريل
+    const isOwner = (currentUserId && String(reel.userId) === String(currentUserId));
+    
+    // HTML المحتوى
+    const media = reel.media.type === 'video' 
+      ? `<video class="reel-media" src="${reel.media.url}" loop playsinline></video>`
+      : `<img class="reel-media" src="${reel.media.url}">`;
 
-    let mediaHtml = reel.media.type === 'video' 
-      ? `<video class="reel-media" src="${reel.media.url}" loop playsinline preload="metadata"></video>` 
-      : `<img class="reel-media" src="${reel.media.url}" alt="Reel">`;
-
-    const isOwner = (currentUserId && reel.userId === currentUserId);
-    const deleteBtnHtml = isOwner 
-      ? `<button class="delete-badge" onclick="deleteReel('${reel.reelId}', this)"> <i class="fas fa-trash-alt mr-1"></i> حذف </button>` 
+    const deleteBtn = isOwner 
+      ? `<div class="delete-badge" onclick="deleteReel('${reel.reelId}', this)">
+           <i class="fas fa-trash"></i> حذف
+         </div>` 
       : '';
 
-    card.innerHTML = `
-      ${mediaHtml}
+    el.innerHTML = `
+      ${media}
       <div class="play-icon-overlay"><i class="fas fa-play"></i></div>
       <div class="gradient-overlay"></div>
-      ${deleteBtnHtml}
+      
+      ${deleteBtn}
+
       <div class="side-controls">
         <div class="control-item" onclick="toggleLike('${reel.reelId}', this)">
-          <div class="control-icon-bg"> <i class="fas fa-heart text-2xl ${reel.is_liked ? 'text-red-500' : 'text-white'}"></i> </div>
+          <div class="control-icon-bg">
+            <i class="fas fa-heart text-2xl ${reel.is_liked ? 'text-red-500' : 'text-white'}"></i>
+          </div>
           <span class="control-label likes-count">${reel.likes}</span>
         </div>
         <div class="control-item" onclick="openComments('${reel.reelId}')">
-          <div class="control-icon-bg"> <i class="fas fa-comment-dots text-2xl text-white"></i> </div>
-          <span class="control-label comments-count">${reel.commentsCount || 0}</span>
-        </div>
-        <div class="control-item" onclick="shareReel('${reel.reelId}')">
-          <div class="control-icon-bg"> <i class="fas fa-share text-xl text-white"></i> </div>
-          <span class="control-label">مشاركة</span>
+          <div class="control-icon-bg"><i class="fas fa-comment text-2xl text-white"></i></div>
+          <span class="control-label">${reel.commentsCount || 0}</span>
         </div>
       </div>
+
       <div class="bottom-info">
-        <div class="flex items-center gap-3 mb-3">
-          <img src="${reel.user.profile_picture_url}" class="w-10 h-10 rounded-full border border-white" alt="User">
-          <div>
-            <div class="font-bold text-shadow text-sm flex items-center gap-2">
-              ${reel.user.username}
-            </div>
-          </div>
+        <div class="flex items-center gap-2 mb-2">
+          <img src="${reel.user.profile_picture_url}" class="w-9 h-9 rounded-full border border-white/20">
+          <span class="font-bold text-sm text-shadow">${reel.user.username}</span>
         </div>
-        <div class="text-sm text-gray-100 line-clamp-2 leading-relaxed dir-rtl pl-2">
-          ${reel.description || ''}
-        </div>
+        <p class="text-sm text-gray-200 line-clamp-2 pl-2">${reel.description || ''}</p>
       </div>
     `;
 
-    const video = card.querySelector('video');
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.side-controls') || e.target.closest('.bottom-info') || e.target.closest('.delete-badge')) return;
-      handleCardClick(card, video, e);
-    });
-    return card;
-  }
-
-  // --- دوال التفاعل (نفس المنطق السابق) ---
-  let lastTap = 0;
-  function handleCardClick(card, video, e) {
-    const now = Date.now();
-    const doubleTap = (now - lastTap < 300);
-    lastTap = now;
-    if (doubleTap) {
-      animateHeart(card);
-      const likeBtn = card.querySelector('.control-item');
-      toggleLike(card.dataset.id, likeBtn, true);
-    } else {
-      setTimeout(() => {
-        if (Date.now() - lastTap >= 300) {
-          if (!video) return;
-          if (video.paused) { video.play(); card.classList.remove('paused'); } 
-          else { video.pause(); card.classList.add('paused'); }
-        }
-      }, 310);
-    }
-  }
-
-  function animateHeart(card) {
-    const heart = document.createElement('div');
-    heart.className = 'heart-anim';
-    heart.innerHTML = '<i class="fas fa-heart"></i>';
-    card.appendChild(heart);
-    setTimeout(() => heart.remove(), 800);
-  }
-
-  async function toggleLike(reelId, btnEl, forceLike = false) {
-    const icon = btnEl.querySelector('i');
-    const countSpan = btnEl.querySelector('.likes-count');
-    const isLiked = icon.classList.contains('text-red-500');
-    if (forceLike && isLiked) return;
-    if (isLiked) {
-      icon.classList.remove('text-red-500'); icon.classList.add('text-white');
-      countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
-    } else {
-      icon.classList.remove('text-white'); icon.classList.add('text-red-500');
-      countSpan.textContent = parseInt(countSpan.textContent) + 1;
-    }
-    try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST' }); } catch(e){}
-  }
-
-  async function deleteReel(reelId, btn) {
-    if (!confirm('هل أنت متأكد من حذف هذا الريل؟')) return;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    try {
-      const res = await fetch(`/api/reels/${reelId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.ok) { document.querySelector(`.reel-card[data-id="${reelId}"]`).remove(); showToast('تم الحذف'); }
-    } catch(e) { alert('خطأ'); }
-  }
-
-  function shareReel(reelId) {
-    const url = window.location.origin + '/reels?id=' + reelId;
-    navigator.clipboard.writeText(url);
-    showToast('تم نسخ الرابط');
-  }
-
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg; t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2000);
-  }
-
-  // --- دوال التعليقات (نفس المنطق السابق) ---
-  async function openComments(reelId) {
-    activeReelId = reelId;
-    commentsSheet.classList.add('open');
-    commentsList.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="fas fa-circle-notch fa-spin"></i></div>';
-    try {
-      const res = await fetch(`/api/reels/${reelId}/comments`);
-      const data = await res.json();
-      commentsList.innerHTML = '';
-      if (data.comments && data.comments.length > 0) {
-        document.getElementById('commentsCountHeader').textContent = data.comments.length;
-        data.comments.forEach(c => renderComment(c));
+    // أحداث الفيديو
+    const video = el.querySelector('video');
+    el.addEventListener('click', e => {
+      if(e.target.closest('.side-controls') || e.target.closest('.bottom-info') || e.target.closest('.delete-badge')) return;
+      
+      // منطق النقر المزدوج (لايك) والنقر المفرد (تشغيل/إيقاف)
+      const now = Date.now();
+      if (now - (el.lastClick || 0) < 300) {
+        animateHeart(el);
+        toggleLike(reel.reelId, el.querySelector('.side-controls .control-item'), true);
       } else {
-        document.getElementById('commentsCountHeader').textContent = '0';
-        commentsList.innerHTML = '<div class="text-center py-10 text-gray-500 text-sm">لا توجد تعليقات.</div>';
+        setTimeout(() => {
+          if (Date.now() - (el.lastClick || 0) >= 300) {
+            if (video) {
+              if (video.paused) { video.play(); el.classList.remove('paused'); }
+              else { video.pause(); el.classList.add('paused'); }
+            }
+          }
+        }, 310);
       }
-    } catch(e) { commentsList.innerHTML = 'فشل التحميل'; }
+      el.lastClick = now;
+    });
+
+    return el;
   }
 
-  document.getElementById('closeCommentsBtn').addEventListener('click', () => { commentsSheet.classList.remove('open'); activeReelId = null; });
-  document.getElementById('closeCommentsHandle').addEventListener('click', () => { commentsSheet.classList.remove('open'); activeReelId = null; });
-
-  sendBtn.addEventListener('click', sendComment);
-  commentInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendComment(); });
-
-  async function sendComment() {
-    const text = commentInput.value.trim();
-    if (!text || !activeReelId) return;
-    if (commentsList.innerText.includes('لا توجد تعليقات')) commentsList.innerHTML = '';
-    renderComment({ content: text, user: currentUserData, timestamp: Date.now() }, true);
-    commentInput.value = '';
+  // 4. حذف الريل
+  async function deleteReel(id, btn) {
+    if(!confirm("حذف هذا الفيديو نهائياً؟")) return;
+    btn.innerHTML = "جارِ الحذف...";
     try {
-      const res = await fetch(`/api/reels/${activeReelId}/comment`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ content: text })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        const card = document.querySelector(`.reel-card[data-id="${activeReelId}"]`);
-        if(card) card.querySelector('.comments-count').textContent = data.newComments;
+      const res = await fetch(`/api/reels/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        const card = container.querySelector(`[data-id="${id}"]`);
+        if (card) card.remove();
+      } else {
+        alert("فشل الحذف");
+        btn.innerHTML = '<i class="fas fa-trash"></i> حذف';
       }
-    } catch(e){}
+    } catch(e) { alert("خطأ"); }
   }
 
-  function renderComment(c, isPending = false) {
-    const div = document.createElement('div');
-    div.className = `flex gap-3 mb-4 ${isPending ? 'opacity-70' : ''}`;
-    div.innerHTML = `
-      <img src="${c.user.profile_picture_url}" class="w-8 h-8 rounded-full flex-shrink-0 bg-gray-700">
-      <div class="flex-1">
-        <div class="flex items-baseline gap-2">
-          <span class="text-sm font-bold text-gray-200">${c.user.username}</span>
-          <span class="text-xs text-gray-500">${formatTime(c.timestamp)}</span>
-        </div>
-        <p class="text-sm text-gray-300 mt-0.5 leading-snug">${escapeHtml(c.content)}</p>
-      </div>
-    `;
-    commentsList.appendChild(div);
-  }
-
-  function formatTime(ts) {
-    if (!ts) return '';
-    const sec = Math.floor((Date.now() - ts) / 1000);
-    if (sec < 60) return 'الآن';
-    const min = Math.floor(sec/60); if (min < 60) return min + ' د';
-    const hr = Math.floor(min/60); if (hr < 24) return hr + ' س';
-    return Math.floor(hr/24) + ' ي';
-  }
-  function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : ''; }
-
-  // --- Observer (التشغيل التلقائي + التحميل اللانهائي) ---
-  function setupVideoObserver() {
-    const options = { threshold: 0.6 };
+  // 5. مراقب التمرير (تشغيل الفيديو الظاهر فقط)
+  function setupObserver() {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        const card = entry.target;
-        const video = card.querySelector('video');
-        
+        const video = entry.target.querySelector('video');
         if (entry.isIntersecting) {
-          if (video) video.play().catch(() => {});
-          card.classList.remove('paused');
-          document.querySelectorAll('video').forEach(v => { if (v !== video) { v.pause(); v.currentTime = 0; } });
+          if (video) video.play().catch(()=>{});
+          entry.target.classList.remove('paused');
+          
+          // إيقاف البقية
+          document.querySelectorAll('video').forEach(v => {
+            if (v !== video) { v.pause(); v.currentTime = 0; }
+          });
 
-          // التحقق للتحميل التالي: إذا وصلنا لثالث ريل من الأخير، ابدأ التحميل
-          const allCards = Array.from(container.querySelectorAll('.reel-card'));
-          const index = allCards.indexOf(card);
-          if (index >= allCards.length - 3) {
-             loadReels();
+          // تحميل المزيد عند الاقتراب من النهاية
+          if (entry.target === container.lastElementChild) {
+            loadReels();
           }
         } else {
           if (video) video.pause();
         }
       });
-    }, options);
-    // مراقبة العناصر الجديدة فقط
-    document.querySelectorAll('.reel-card').forEach(card => observer.observe(card));
+    }, { threshold: 0.6 });
+
+    document.querySelectorAll('.reel-card').forEach(c => observer.observe(c));
   }
+
+  // --- دوال مساعدة (لايك، قلب، تعليقات) ---
+  function animateHeart(card) {
+    const h = document.createElement('div'); h.className = 'heart-anim';
+    h.innerHTML = '<i class="fas fa-heart"></i>'; card.appendChild(h);
+    setTimeout(() => h.remove(), 800);
+  }
+
+  async function toggleLike(id, btn, force) {
+    const icon = btn.querySelector('i');
+    const txt = btn.querySelector('.likes-count');
+    if (force && icon.classList.contains('text-red-500')) return;
+    
+    const isLiked = icon.classList.contains('text-red-500');
+    icon.className = isLiked ? 'fas fa-heart text-2xl text-white' : 'fas fa-heart text-2xl text-red-500';
+    txt.innerText = parseInt(txt.innerText) + (isLiked ? -1 : 1);
+    
+    await fetch(`/api/reels/${id}/like`, { method: 'POST' });
+  }
+
+  // دوال التعليقات (مبسطة)
+  const commentsSheet = document.getElementById('commentsSheet');
+  const commentsList = document.getElementById('commentsList');
+  let activeReelId = null;
+
+  async function openComments(id) {
+    activeReelId = id;
+    commentsSheet.classList.add('open');
+    commentsList.innerHTML = '<div class="text-center py-4 text-gray-500">تحميل...</div>';
+    const res = await fetch(`/api/reels/${id}/comments`);
+    const data = await res.json();
+    commentsList.innerHTML = '';
+    data.comments.forEach(c => {
+      commentsList.innerHTML += `
+        <div class="flex gap-2 mb-3">
+          <img src="${c.user.profile_picture_url}" class="w-8 h-8 rounded-full">
+          <div>
+            <div class="text-xs font-bold text-gray-300">${c.user.username}</div>
+            <div class="text-sm text-white">${c.content}</div>
+          </div>
+        </div>`;
+    });
+  }
+  
+  document.getElementById('closeCommentsBtn').onclick = () => commentsSheet.classList.remove('open');
+  document.getElementById('sendCommentBtn').onclick = async () => {
+    const input = document.getElementById('commentInput');
+    if(!input.value.trim()) return;
+    await fetch(`/api/reels/${activeReelId}/comment`, {
+      method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({content: input.value})
+    });
+    input.value = '';
+    openComments(activeReelId); // تحديث القائمة
+  };
+
 </script>
 </body>
 </html>
