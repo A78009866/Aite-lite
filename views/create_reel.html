@@ -1,89 +1,132 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aite - إنشاء ريل</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body { background: #000; color: white; font-family: sans-serif; }
-        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>إنشاء ريل — Aite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
+  <style>
+    body { background: linear-gradient(180deg, #000000 0%, #070707 100%); color: #e6eef8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .glass-card { background: rgba(10,10,12,0.45); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.06); }
+    .glass-input { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: #e6eef8; }
+    .hidden-file { display:none; }
+    .preview-video { max-height: 60vh; width:100%; border-radius: 12px; background: #000; object-fit: contain; }
+  </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4">
-    <div class="w-full max-w-md glass-card rounded-[2.5rem] p-8 shadow-2xl">
-        <div class="flex items-center mb-8">
-            <a href="/chat_list" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-right text-xl"></i></a>
-            <h1 class="flex-1 text-center text-xl font-bold">إنشاء ريل جديد</h1>
-        </div>
+<body class="min-h-screen flex items-center justify-center p-4">
 
-        <div id="dropZone" onclick="document.getElementById('videoInput').click()" class="relative border-2 border-dashed border-white/20 rounded-3xl aspect-[9/16] flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all overflow-hidden">
-            <input type="file" id="videoInput" accept="video/*" class="hidden">
-            <video id="preview" class="hidden w-full h-full object-cover"></video>
-            <div id="placeholder" class="text-center">
-                <i class="fas fa-cloud-upload-alt text-4xl text-blue-500 mb-2"></i>
-                <p class="text-gray-400 text-sm">اضغط لرفع فيديو</p>
-            </div>
-        </div>
-
-        <textarea id="description" class="w-full mt-6 bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all h-24" placeholder="اكتب وصفاً للريل..."></textarea>
-
-        <div id="progressContainer" class="hidden mt-4">
-            <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                <div id="progressBar" class="bg-blue-600 h-full w-0 transition-all"></div>
-            </div>
-            <p id="progressText" class="text-center text-xs text-gray-400 mt-2">0% جاري الرفع</p>
-        </div>
-
-        <button id="uploadBtn" onclick="handleUpload()" class="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-400 py-4 rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-transform">
-            نشر الريل
-        </button>
+  <div class="max-w-3xl w-full glass-card rounded-3xl p-6 shadow-xl">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold app-logo">إنشاء ريل</h1>
+      <a href="/reels" class="text-sm text-gray-300 hover:text-white">العودة إلى الريلز</a>
     </div>
 
-    <script>
-        const videoInput = document.getElementById('videoInput');
-        const preview = document.getElementById('preview');
-        const placeholder = document.getElementById('placeholder');
+    <form id="createReelForm" class="space-y-4" enctype="multipart/form-data">
+      <div>
+        <label class="block text-sm text-gray-300 mb-2">اختر ملف الفيديو</label>
+        <div class="flex items-center gap-3">
+          <button type="button" id="chooseBtn" class="px-4 py-2 rounded-full glass-input hover:bg-white/5 transition">
+            <i class="fas fa-upload ml-2"></i> اختر ملف
+          </button>
+          <span id="fileName" class="text-sm text-gray-400"></span>
+        </div>
+        <input id="mediaInput" name="media" accept="video/*,image/*,audio/*" type="file" class="hidden-file" />
+      </div>
 
-        videoInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if(file) {
-                preview.src = URL.createObjectURL(file);
-                preview.classList.remove('hidden');
-                placeholder.classList.add('hidden');
-                preview.play();
-            }
-        };
+      <div id="previewArea" class="hidden">
+        <label class="block text-sm text-gray-300 mb-2">معاينة</label>
+        <video id="previewVideo" class="preview-video rounded-lg" controls></video>
+      </div>
 
-        function handleUpload() {
-            const file = videoInput.files[0];
-            if(!file) return alert('يرجى اختيار فيديو');
+      <div>
+        <label class="block text-sm text-gray-300 mb-2">وصف الريل (اختياري)</label>
+        <textarea id="description" name="description" rows="4" class="w-full rounded-xl p-3 glass-input resize-none" placeholder="أضف وصفاً جذاباً للريل..."></textarea>
+      </div>
 
-            const formData = new FormData();
-            formData.append('video', file);
-            formData.append('description', document.getElementById('description').value);
+      <div class="flex items-center justify-between">
+        <div class="text-sm text-gray-400">يمكنك إضافة فيديو، صورة أو صوت. يدعم Cloudinary التحويل التلقائي.</div>
+        <div class="flex items-center gap-3">
+          <button type="button" id="cancelBtn" class="px-4 py-2 rounded-full bg-gray-700 hover:bg-gray-600">إلغاء</button>
+          <button type="submit" id="uploadBtn" class="px-6 py-2 rounded-full bg-blue-500 hover:bg-blue-600 font-semibold">
+            <i class="fas fa-cloud-upload-alt ml-2"></i> نشر الريل
+          </button>
+        </div>
+      </div>
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/reels/create');
+      <div id="statusMessage" class="text-center text-sm mt-2 hidden"></div>
+    </form>
+  </div>
 
-            xhr.upload.onprogress = (e) => {
-                if(e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    document.getElementById('progressContainer').classList.remove('hidden');
-                    document.getElementById('progressBar').style.width = percent + '%';
-                    document.getElementById('progressText').innerText = percent + '% جاري الرفع';
-                }
-            };
+<script>
+  const mediaInput = document.getElementById('mediaInput');
+  const chooseBtn = document.getElementById('chooseBtn');
+  const fileName = document.getElementById('fileName');
+  const previewArea = document.getElementById('previewArea');
+  const previewVideo = document.getElementById('previewVideo');
+  const createReelForm = document.getElementById('createReelForm');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const statusMessage = document.getElementById('statusMessage');
 
-            xhr.onload = () => {
-                const res = JSON.parse(xhr.responseText);
-                if(res.ok) window.location.href = '/reels';
-                else alert('خطأ في الرفع: ' + res.error);
-            };
+  chooseBtn.addEventListener('click', () => mediaInput.click());
+  mediaInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    fileName.textContent = file.name;
+    const url = URL.createObjectURL(file);
+    previewVideo.src = url;
+    previewArea.classList.remove('hidden');
+  });
 
-            xhr.send(formData);
-        }
-    </script>
+  cancelBtn.addEventListener('click', () => {
+    window.location.href = '/reels';
+  });
+
+  createReelForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = mediaInput.files[0];
+    if (!file) {
+      statusMessage.textContent = 'الرجاء اختيار ملف قبل النشر.';
+      statusMessage.classList.remove('hidden');
+      statusMessage.classList.remove('text-green-500'); statusMessage.classList.add('text-red-400');
+      return;
+    }
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري النشر';
+
+    const formData = new FormData();
+    formData.append('media', file);
+    formData.append('description', document.getElementById('description').value || '');
+
+    try {
+      const res = await fetch('/api/reels/create', {
+        method: 'POST',
+        body: formData
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        statusMessage.textContent = 'تم النشر بنجاح';
+        statusMessage.classList.remove('hidden');
+        statusMessage.classList.remove('text-red-400'); statusMessage.classList.add('text-green-400');
+        setTimeout(() => { window.location.href = '/reels'; }, 900);
+      } else {
+        statusMessage.textContent = json.error || 'فشل في نشر الريل.';
+        statusMessage.classList.remove('hidden');
+        statusMessage.classList.remove('text-green-500'); statusMessage.classList.add('text-red-400');
+      }
+    } catch (err) {
+      statusMessage.textContent = 'فشل الاتصال بالخادم.';
+      statusMessage.classList.remove('hidden');
+      statusMessage.classList.remove('text-green-500'); statusMessage.classList.add('text-red-400');
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt ml-2"></i> نشر الريل';
+    }
+  });
+</script>
+
 </body>
 </html>
