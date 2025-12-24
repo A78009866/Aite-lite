@@ -15,7 +15,7 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            padding-bottom: 0; /* أزلنا المساحة للشريط السفلي */
+            padding-bottom: 60px;
         }
 
         .glass-navbar {
@@ -38,7 +38,6 @@
             z-index: 1000;
         }
 
-        /* نمط الشريط السفلي الزجاجي الجديد (لم يعد مستخدماً في هذه الصفحة) */
         .glass-bottom-navbar {
             background-color: rgba(30, 30, 30, 0.6);
             backdrop-filter: blur(10px);
@@ -46,7 +45,6 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* نمط بطاقة المستخدم الزجاجية */
         .glass-user-card {
             background-color: rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(5px);
@@ -54,24 +52,40 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* 🌟 نمط الرسائل غير المقروءة */
         .glass-user-card.unread {
-            border-right: 4px solid #0d9488; /* شريط أخضر لتمييز الدردشة */
-            background-color: rgba(13, 148, 136, 0.1); /* خلفية خفيفة */
+            border-right: 4px solid #0d9488;
+            background-color: rgba(13, 148, 136, 0.06);
         }
         
-        /* 🌟 نمط بادج الرسائل غير المقروءة */
         .unread-badge {
-            background-color: #0d9488; /* لون أخضر/فيروزي */
+            background-color: #0d9488;
             color: white;
             font-size: 10px;
             font-weight: bold;
             padding: 3px 8px;
-            border-radius: 9999px; /* شكل حبة دواء */
+            border-radius: 9999px;
             min-width: 24px;
             text-align: center;
             line-height: 1;
             flex-shrink: 0;
+        }
+
+        /* notifications badge top */
+        .notif-badge {
+          position: absolute;
+          top: -6px;
+          left: -6px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 6px;
+          background: #ef4444;
+          color: #fff;
+          font-size: 12px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
         }
     </style>
 </head>
@@ -92,10 +106,14 @@
                 </span>
             </div>
             
-            <!-- زر الرجوع/الرئيسية في النافبار العلوي -->
-            <div class="flex items-center">
-                <a href="/chat_list" class="text-gray-400 hover:text-white transition duration-300 p-2" title="العودة للرئيسية" aria-label="العودة للرئيسية">
+            <div class="flex items-center gap-3 relative">
+                <a href="/chat_list" class="text-gray-400 hover:text-white p-2" title="العودة للرئيسية">
                     <i class="fas fa-arrow-right text-2xl"></i>
+                </a>
+
+                <a id="notifTop" href="/notifications" class="text-gray-300 hover:text-white p-2 relative" title="الإشعارات">
+                  <i class="fas fa-bell text-xl"></i>
+                  <span id="notifBadgeUsers" class="notif-badge" style="display:none">0</span>
                 </a>
             </div>
 
@@ -119,19 +137,41 @@
             <div class="text-center text-gray-500 p-4" id="loadingMessage">
                 <i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المستخدمين...
             </div>
-            </div>
+        </div>
 
     </main>
     
-    <!-- تمت إزالة الـ bottom navbar كما طلبت -->
+    <div class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-navbar">
+        <nav class="flex justify-around items-center max-w-lg mx-auto h-14">
+            <a href="/chat_list" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">الرئيسية</span>
+            </a>
+            
+            <a href="/users_list" class="flex flex-col items-center justify-center p-2 text-blue-400">
+                <i class="fas fa-comment-dots text-xl"></i>
+                <span class="text-xs mt-1">الدردشات</span>
+            </a>
+            
+            <a href="/reels" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
+                <i class="fas fa-clapperboard text-xl"></i>
+                <span class="text-xs mt-1">ريلز</span>
+            </a>
+            
+            <a href="/profile" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
+                <i class="fas fa-user-circle text-xl"></i>
+                <span class="text-xs mt-1">ملفي</span>
+            </a>
+        </nav>
+    </div>
+
 
     <script>
         const usersListContainer = document.getElementById('usersListContainer');
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
-        let currentUserId = null; // لتخزين ID المستخدم الحالي
+        let currentUserId = null;
 
-        // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
         function toggleProfileDropdown(event) {
             event.stopPropagation();
             profileDropdown.classList.toggle('hidden');
@@ -145,24 +185,17 @@
 
         document.addEventListener('click', closeProfileDropdownOnClickOutside);
         
-        // ******************** وظائف عرض قائمة المستخدمين (مُحدَّثة) ********************
-
         function createUserCard(user, currentUserId) {
             const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
             const unreadCount = user.unread_count || 0;
             const isUnread = unreadCount > 0;
             let lastMessageText = '<p class="text-gray-400 text-sm">ابدأ المحادثة...</p>';
 
-            // بناء محتوى الرسالة الأخيرة
             if (user.last_message) {
-                // الرسالة قد تكون نصية أو وسائط
                 let content = user.last_message.content 
                             ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
                             : '[ملف مرفق]';
-                            
                 const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
-                
-                // إضافة فئة max-w-full و text-ellipsis لضمان أن النص لا يخرج عن حد البطاقة
                 lastMessageText = `
                     <p class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
                         ${senderPrefix}${content}
@@ -190,18 +223,18 @@
             usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المستخدمين...</div>';
 
             try {
-                // 1. جلب ID المستخدم الحالي
                 const myProfileResponse = await fetch('/api/profile');
                 if (myProfileResponse.ok) {
                     const myProfile = await myProfileResponse.json();
                     currentUserId = myProfile.id;
+                    const profilePicElement = document.getElementById('userProfilePic');
+                    if (myProfile.profile_picture_url) { profilePicElement.src = myProfile.profile_picture_url; profilePicElement.alt = `صورة ${myProfile.username}`; }
                 } 
 
-                // 2. جلب قائمة المستخدمين (يجب أن يوفر الخادم الآن الرسالة الأخيرة وعدد غير المقروء)
                 const response = await fetch('/api/users');
                 const result = await response.json();
                 
-                usersListContainer.innerHTML = ''; // مسح رسالة التحميل
+                usersListContainer.innerHTML = '';
                 
                 if (response.ok && result.ok) {
                     let users = result.users || [];
@@ -211,24 +244,15 @@
                         return;
                     }
                     
-                    // 3. ترتيب المستخدمين: غير المقروء أولاً، ثم حسب وقت آخر رسالة (الأحدث أولاً)
                     users.sort((a, b) => {
                         const aUnread = a.unread_count || 0;
                         const bUnread = b.unread_count || 0;
-
-                        // الأولوية 1: الرسائل غير المقروءة (تنازلي)
-                        if (aUnread !== bUnread) {
-                            return bUnread - aUnread; 
-                        }
-
-                        // الأولوية 2: وقت آخر رسالة (الأحدث أولاً)
+                        if (aUnread !== bUnread) return bUnread - aUnread;
                         const aTime = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
                         const bTime = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
-
-                        return bTime - aTime; 
+                        return bTime - aTime;
                     });
 
-                    // 4. العرض
                     users.forEach(user => {
                         usersListContainer.innerHTML += createUserCard(user, currentUserId);
                     });
@@ -242,24 +266,40 @@
             }
         }
         
-        // جلب صورة الملف الشخصي للمستخدم الحالي في النافبار
+        // Notifications SSE (top badge)
+        (function setupNotifSSEUsers() {
+          if (!window.EventSource) return;
+          const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+          es.addEventListener('notifications', (e) => {
+            try {
+              const payload = JSON.parse(e.data);
+              const unread = payload.unread_count || 0;
+              const badge = document.getElementById('notifBadgeUsers');
+              if (unread > 0) {
+                badge.style.display = 'inline-flex';
+                badge.textContent = unread > 99 ? '99+' : String(unread);
+              } else badge.style.display = 'none';
+            } catch (err) { console.error('SSE parse error', err); }
+          });
+          es.addEventListener('error', (err) => { console.warn('Notifications SSE error', err); });
+        })();
+
+        // Initial unread fallback
+        (function initUnreadUsers(){
+          fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d && d.ok) {
+                const badge = document.getElementById('notifBadgeUsers');
+                if (d.unread_count > 0) { badge.style.display = 'inline-flex'; badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count); }
+              }
+            }).catch(()=>{});
+        })();
+
         document.addEventListener('DOMContentLoaded', () => {
-            fetch('/api/profile')
-                .then(response => response.ok ? response.json() : null)
-                .then(data => {
-                    const profilePicElement = document.getElementById('userProfilePic');
-                    if (data && data.profile_picture_url) {
-                        profilePicElement.src = data.profile_picture_url;
-                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                    }
-                }).catch(console.error);
-                
             fetchAndDisplayUsers();
-            
-            // تحديث قائمة المستخدمين كل 10 ثواني (أثناء التواجد في الصفحة)
             setInterval(fetchAndDisplayUsers, 10000);
         });
-        
     </script>
 </body>
 </html>
