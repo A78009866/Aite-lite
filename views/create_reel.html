@@ -10,9 +10,10 @@
   <style>
     :root {
       --primary: #3b82f6;
-      --glass-bg: rgba(20, 20, 20, 0.7);
-      --glass-border: rgba(255, 255, 255, 0.1);
+      --glass-bg: rgba(20, 20, 20, 0.6);
+      --glass-border: rgba(255, 255, 255, 0.08);
     }
+    
     body {
       background-color: #000;
       color: #fff;
@@ -20,254 +21,253 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow-x: hidden;
     }
-    
-    /* تأثير الزجاج للخلفيات */
-    .glass-panel {
-      background: var(--glass-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--glass-border);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+    /* تأثير الزجاج */
+    .glass-header {
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--glass-border);
     }
 
     /* منطقة الرفع */
-    .upload-area {
-      border: 2px dashed #333;
-      border-radius: 24px;
-      transition: all 0.3s ease;
-      background: rgba(255,255,255,0.02);
-      cursor: pointer;
+    .upload-container {
       position: relative;
-      overflow: hidden;
-      aspect-ratio: 9/16;
+      width: 100%;
+      aspect-ratio: 9/16; /* أبعاد الريلز القياسية */
       max-height: 60vh;
+      background: #0a0a0a;
+      border: 2px dashed #333;
+      border-radius: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.3s ease;
     }
-    .upload-area:hover, .upload-area.active {
-      border-color: var(--primary);
-      background: rgba(59, 130, 246, 0.05);
+    
+    .upload-container.has-file {
+      border: none;
+      background: #000;
+    }
+    
+    .upload-container:hover {
+      border-color: #555;
     }
 
-    /* حقل الإدخال */
-    .modern-input {
-      width: 100%;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid #333;
-      border-radius: 16px;
-      padding: 16px;
-      color: #fff;
-      font-size: 15px;
-      outline: none;
-      transition: 0.3s;
-      resize: none;
+    /* أيقونة الرفع */
+    .placeholder-content {
+      text-align: center;
+      color: #666;
+      transition: opacity 0.3s;
     }
-    .modern-input:focus {
+    .placeholder-icon {
+      font-size: 3rem;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    /* معاينة الفيديو */
+    #previewVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    /* زر الحذف */
+    .remove-btn {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      width: 35px; height: 35px;
+      border-radius: 50%;
+      display: none;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+      z-index: 10;
+    }
+
+    /* حقل الوصف */
+    .input-group {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 16px;
+      padding: 15px;
+      margin-top: 20px;
+      transition: 0.3s;
+    }
+    .input-group:focus-within {
       border-color: var(--primary);
-      background: rgba(0,0,0,0.4);
+      background: #0a0a0a;
+    }
+    .modern-textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: #fff;
+      outline: none;
+      resize: none;
+      font-size: 14px;
+      min-height: 60px;
     }
 
     /* زر النشر */
     .publish-btn {
+      margin-top: auto;
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      width: 100%;
+      padding: 16px;
       border-radius: 50px;
       font-weight: 700;
-      letter-spacing: 0.5px;
-      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
-      transition: transform 0.2s;
+      font-size: 16px;
+      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
+      transition: transform 0.2s, opacity 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
     }
     .publish-btn:active { transform: scale(0.98); }
-    .publish-btn:disabled { opacity: 0.6; cursor: not-allowed; grayscale: 1; }
+    .publish-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
-    /* معاينة الفيديو */
-    #videoPreview {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      display: none;
-      border-radius: 22px;
-    }
-    .remove-video-btn {
-      position: absolute; top: 10px; right: 10px;
-      background: rgba(0,0,0,0.6); color: #fff;
-      width: 32px; height: 32px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; z-index: 10;
-      backdrop-filter: blur(4px);
-      display: none; /* يظهر عند اختيار فيديو */
-    }
-
-    /* رسائل الحالة */
-    .status-msg {
-      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-      padding: 10px 24px; border-radius: 30px;
-      font-weight: 600; font-size: 14px;
-      opacity: 0; pointer-events: none; transition: opacity 0.3s;
-      z-index: 100;
-    }
-    .status-msg.show { opacity: 1; }
-    .status-msg.error { background: rgba(220, 38, 38, 0.9); color: white; }
-    .status-msg.success { background: rgba(22, 163, 74, 0.9); color: white; }
   </style>
 </head>
 <body>
 
-  <header class="flex items-center justify-between px-6 py-5 sticky top-0 z-50 bg-black/80 backdrop-blur-md">
-    <a href="/reels" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-white active:scale-95 transition">
+  <header class="glass-header sticky top-0 z-50 px-5 py-4 flex items-center justify-between">
+    <a href="/reels" class="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-95 transition">
       <i class="fas fa-arrow-right"></i>
     </a>
-    <h1 class="text-lg font-bold">إنشاء ريل جديد</h1>
+    <h1 class="font-bold text-lg">ريل جديد</h1>
     <div class="w-10"></div> </header>
 
-  <main class="flex-1 px-4 pb-8 max-w-md mx-auto w-full flex flex-col gap-6">
+  <main class="flex-1 p-5 max-w-lg mx-auto w-full flex flex-col">
     
-    <div class="relative w-full">
-      <input type="file" id="fileInput" accept="video/*,image/*" class="hidden">
+    <div class="upload-container" id="dropZone" onclick="document.getElementById('fileInput').click()">
       
-      <div id="uploadArea" class="upload-area" onclick="document.getElementById('fileInput').click()">
-        <div id="placeholderContent" class="flex flex-col items-center text-gray-400 text-center px-4">
-          <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 border border-white/10">
-            <i class="fas fa-cloud-upload-alt text-3xl text-blue-500"></i>
-          </div>
-          <p class="font-bold text-gray-200 text-lg mb-1">اضغط لرفع فيديو</p>
-          <p class="text-xs text-gray-500">يدعم MP4, MOV (أقصى مدة 60 ثانية)</p>
-        </div>
-
-        <video id="videoPreview" autoplay loop muted playsinline></video>
-        <img id="imagePreview" class="w-full h-full object-cover hidden rounded-[22px]" />
-        
-        <button id="removeBtn" class="remove-video-btn" onclick="event.stopPropagation(); removeFile();">
-          <i class="fas fa-times"></i>
-        </button>
+      <div class="placeholder-content" id="placeholder">
+        <i class="fas fa-cloud-upload-alt placeholder-icon"></i>
+        <p class="font-bold text-gray-300 text-lg">اختر فيديو</p>
+        <p class="text-xs text-gray-500 mt-1">MP4, MOV حتى 60 ثانية</p>
       </div>
+
+      <video id="previewVideo" autoplay loop muted playsinline></video>
+      
+      <button class="remove-btn" id="removeBtn" onclick="event.stopPropagation(); removeFile();">
+        <i class="fas fa-times"></i>
+      </button>
+
+      <input type="file" id="fileInput" accept="video/*" class="hidden">
     </div>
 
-    <div class="space-y-2">
-      <label class="text-sm font-semibold text-gray-400 mr-1">الوصف</label>
-      <textarea id="description" rows="3" class="modern-input" placeholder="اكتب وصفاً مثيراً للريل الخاص بك..."></textarea>
+    <div class="input-group">
+      <label class="block text-xs text-gray-500 mb-1 font-bold">الوصف (اختياري)</label>
+      <textarea id="descriptionInput" class="modern-textarea" placeholder="اكتب تعليقاً مثيراً للفيديو..."></textarea>
     </div>
 
-    <button id="publishBtn" class="publish-btn w-full py-4 text-white flex items-center justify-center gap-2 mt-auto">
-      <span id="btnText">نشر الريل</span>
-      <i id="btnIcon" class="fas fa-paper-plane"></i>
+    <button id="publishBtn" class="publish-btn">
+      <span>نشر الريل</span>
+      <i class="fas fa-paper-plane"></i>
     </button>
 
   </main>
 
-  <div id="statusMessage" class="status-msg"></div>
-
 <script>
+  // العناصر
   const fileInput = document.getElementById('fileInput');
-  const uploadArea = document.getElementById('uploadArea');
-  const videoPreview = document.getElementById('videoPreview');
-  const imagePreview = document.getElementById('imagePreview');
-  const placeholder = document.getElementById('placeholderContent');
+  const dropZone = document.getElementById('dropZone');
+  const placeholder = document.getElementById('placeholder');
+  const previewVideo = document.getElementById('previewVideo');
   const removeBtn = document.getElementById('removeBtn');
   const publishBtn = document.getElementById('publishBtn');
-  const descriptionInput = document.getElementById('description');
-  const statusMsg = document.getElementById('statusMessage');
-  
+  const descInput = document.getElementById('descriptionInput');
+
   let selectedFile = null;
 
-  // Handle File Selection
-  fileInput.addEventListener('change', (e) => {
+  // 1. عند اختيار ملف
+  fileInput.addEventListener('change', handleFileSelect);
+
+  function handleFileSelect(e) {
     const file = e.target.files[0];
-    if (file) handleFile(file);
-  });
+    if (!file) return;
 
-  // Drag and Drop (Desktop support)
-  uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('active'); });
-  uploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); uploadArea.classList.remove('active'); });
-  uploadArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadArea.classList.remove('active');
-    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-  });
-
-  function handleFile(file) {
-    // Basic validation
-    if (file.size > 50 * 1024 * 1024) { // 50MB limit
-      showToast('حجم الملف كبير جداً (أقصى حد 50 ميجا)', 'error');
+    // التحقق من النوع (فيديو فقط)
+    if (!file.type.startsWith('video/')) {
+      alert('الرجاء اختيار ملف فيديو صالح');
       return;
     }
 
     selectedFile = file;
+    const fileUrl = URL.createObjectURL(file);
+
+    // تحديث الواجهة
+    previewVideo.src = fileUrl;
+    previewVideo.style.display = 'block';
     placeholder.style.display = 'none';
     removeBtn.style.display = 'flex';
-
-    const url = URL.createObjectURL(file);
-
-    if (file.type.startsWith('video')) {
-      videoPreview.src = url;
-      videoPreview.style.display = 'block';
-      imagePreview.style.display = 'none';
-    } else if (file.type.startsWith('image')) {
-      imagePreview.src = url;
-      imagePreview.style.display = 'block';
-      videoPreview.style.display = 'none';
-    }
+    dropZone.classList.add('has-file');
   }
 
+  // 2. دالة حذف الملف المختار
   function removeFile() {
     selectedFile = null;
-    fileInput.value = '';
-    videoPreview.src = '';
-    imagePreview.src = '';
-    videoPreview.style.display = 'none';
-    imagePreview.style.display = 'none';
-    placeholder.style.display = 'flex';
+    fileInput.value = ''; // تصفير الحقل
+    previewVideo.src = '';
+    previewVideo.style.display = 'none';
+    placeholder.style.display = 'block';
     removeBtn.style.display = 'none';
+    dropZone.classList.remove('has-file');
   }
 
-  // Publish Logic
+  // 3. عند الضغط على نشر
   publishBtn.addEventListener('click', async () => {
     if (!selectedFile) {
-      showToast('الرجاء اختيار فيديو أولاً', 'error');
+      alert('يرجى اختيار فيديو أولاً!');
       return;
     }
 
+    // تفعيل وضع التحميل
     setLoading(true);
 
     const formData = new FormData();
     formData.append('media', selectedFile);
-    formData.append('description', descriptionInput.value);
+    formData.append('description', descInput.value);
 
     try {
-      const res = await fetch('/api/reels/create', {
+      const response = await fetch('/api/reels/create', {
         method: 'POST',
         body: formData
       });
-      const data = await res.json();
 
-      if (res.ok && data.ok) {
-        showToast('تم النشر بنجاح!', 'success');
-        setTimeout(() => window.location.href = '/reels', 1500);
+      const data = await response.json();
+
+      if (response.ok) {
+        // نجاح! توجيه لصفحة الريلز
+        // نستخدم timestamp لضمان عدم تحميل نسخة قديمة من الكاش
+        window.location.href = '/reels?refresh=' + Date.now();
       } else {
-        throw new Error(data.error || 'فشل النشر');
+        alert(data.error || 'حدث خطأ أثناء الرفع');
+        setLoading(false);
       }
-    } catch (err) {
-      showToast(err.message || 'حدث خطأ في الاتصال', 'error');
+    } catch (error) {
+      console.error(error);
+      alert('خطأ في الاتصال بالسيرفر');
       setLoading(false);
     }
   });
 
-  function setLoading(loading) {
-    publishBtn.disabled = loading;
-    if (loading) {
-      document.getElementById('btnText').textContent = 'جاري الرفع...';
-      document.getElementById('btnIcon').className = 'fas fa-spinner fa-spin';
+  function setLoading(isLoading) {
+    if (isLoading) {
+      publishBtn.disabled = true;
+      publishBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري الرفع...';
     } else {
-      document.getElementById('btnText').textContent = 'نشر الريل';
-      document.getElementById('btnIcon').className = 'fas fa-paper-plane';
+      publishBtn.disabled = false;
+      publishBtn.innerHTML = '<span>نشر الريل</span> <i class="fas fa-paper-plane"></i>';
     }
-  }
-
-  function showToast(msg, type) {
-    statusMsg.textContent = msg;
-    statusMsg.className = `status-msg show ${type}`;
-    setTimeout(() => statusMsg.classList.remove('show'), 3000);
   }
 </script>
 </body>
