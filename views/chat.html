@@ -9,36 +9,357 @@
 :root {
 --bg: #000;
 --glass-bg: rgba(255, 255, 255, 0.05);
+--glass-border: rgba(255, 255, 255, 0.1);
 --accent: #7dd3fc;
 --muted: #cbd5e1;
+--reply-bg: rgba(255, 255, 255, 0.08);
+--reply-border: rgba(255, 255, 255, 0.15);
+--reply-block-bg: rgba(255, 255, 255, 0.08);
+--reply-block-border: rgba(255, 255, 255, 0.15);
 }
-html, body { height:100%; margin:0; font-family:Inter, system-ui; background:var(--bg); color:var(--muted); direction:rtl; }
-.wrap { height:100dvh; display:flex; flex-direction:column; max-width:980px; margin:0 auto; position:relative; }
-.top { display:flex; align-items:center; gap:6px; justify-content:space-between; padding:6px 10px; background:var(--bg); border-bottom:1px solid rgba(255,255,255,0.1); height:50px; z-index:200; }
-.user-row { display:flex; align-items:center; gap:6px; flex:1; min-width:0; }
-.avatar { width:36px; height:36px; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); background:linear-gradient(135deg,#0b3146,#063048); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.avatar img { width:100%; height:100%; object-fit:cover; display:block; }
-.meta { display:flex; flex-direction:column; gap:2px; min-width:0; }
-.meta .name { font-weight:700; color:#e6f0fb; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.meta .sub { font-size:10px; color:#8aa5bd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.glass { flex:1; display:flex; flex-direction:column; background:transparent; border:none; overflow:hidden; position:relative; }
-.messages { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:12px; padding-bottom:80px; scroll-behavior:smooth; }
-.msg { max-width:80%; padding:8px 10px; border-radius:10px; font-size:13px; line-height:1.3; word-break:break-word; cursor:pointer; }
-.incoming { align-self:flex-start; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:var(--muted); }
-.outgoing { align-self:flex-end; background:rgba(10,100,150,0.3); color:#e6f7ff; border:1px solid rgba(255,255,255,0.03); }
-.msg-image, .msg-video { max-width:100%; height:auto; display:block; border-radius:6px; margin-top:6px; }
-.msg-audio-player { display:flex; align-items:center; gap:8px; width:220px; background:rgba(255,255,255,0.1); border-radius:10px; padding:6px; margin-top:4px; }
-.audio-play-btn { background:#e6f7ff; color:#0369a1; border:none; border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
-.composer { display:flex; flex-direction:column; gap:8px; padding:6px 10px; border-top:1px solid rgba(255,255,255,0.1); position:fixed; bottom:0; left:0; right:0; background:var(--bg); z-index:100; box-shadow:0 -4px 10px rgba(0,0,0,0.5); }
-.composer-input-row { display:flex; gap:6px; align-items:flex-end; }
-.composer textarea { flex:1; min-height:32px; max-height:100px; resize:none; padding:8px 12px; border-radius:18px; border:1px solid rgba(255,255,255,0.1); background:transparent; color:var(--muted); direction:rtl; font-size:16px; }
-.file-input-btn, .voice-btn { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--muted); padding:6px; border-radius:50%; cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-#file-preview { display:flex; align-items:center; gap:6px; padding:6px; background:rgba(255,255,255,0.05); border-radius:6px; border:1px solid rgba(255,255,255,0.1); font-size:12px; }
-.small { font-size:11px; color:#8aa5bd; }
-.recording-indicator { display:none; align-items:center; gap:6px; padding:8px 12px; border-radius:18px; background:rgba(185,28,28,0.4); font-size:12px; color:#fca5a5; flex:1; }
-.recording-dot { width:8px; height:8px; background-color:#ff6b6b; border-radius:50%; animation:pulse 1.5s infinite; }
-@keyframes pulse { 0%{opacity:1;} 50%{opacity:.3;} 100%{opacity:1;} }
-.notif-badge-chat { position:absolute; top:-6px; left:-6px; min-width:18px; height:18px; padding:0 6px; background:#ef4444; color:#fff; font-size:12px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; }
+html, body {
+height: 100%;
+margin: 0;
+font-family: 'Inter', system-ui;
+background-color: var(--bg);
+color: var(--muted);
+-webkit-font-smoothing: antialiased;
+direction: rtl;
+touch-action: pan-x pan-y;
+}
+.wrap {
+height: 100dvh;
+display: flex;
+flex-direction: column;
+max-width: 980px;
+margin: 0 auto;
+padding: 0;
+position: relative;
+}
+.top {
+display: flex;
+align-items: center;
+gap: 6px;
+justify-content: space-between;
+padding: 6px 10px;
+background: var(--bg);
+z-index: 200;
+border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+flex-shrink: 0;
+height: 50px; 
+}
+.user-row {
+display: flex;
+align-items: center;
+gap: 6px;
+flex: 1;
+min-width: 0;
+}
+.avatar {
+width: 36px;
+height: 36px;
+border-radius: 8px;
+overflow: hidden;
+border: 1px solid rgba(255, 255, 255, 0.06);
+background: linear-gradient(135deg, #0b3146, #063048);
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+}
+.avatar img {
+width: 100%;
+height: 100%;
+object-fit: cover;
+display: block;
+}
+.meta {
+display: flex;
+flex-direction: column;
+gap: 2px;
+min-width: 0;
+}
+.meta .name {
+font-weight: 700;
+color: #e6f0fb;
+font-size: 13px;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+.meta .sub {
+font-size: 10px;
+color: #8aa5bd;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+.glass {
+flex: 1;
+display: flex;
+flex-direction: column;
+background: transparent;
+border: none;
+overflow: hidden;
+position: relative;
+}
+.messages {
+flex: 1;
+overflow-y: auto;
+display: flex;
+flex-direction: column;
+gap: 8px;
+padding: 12px;
+padding-bottom: 80px;
+scroll-behavior: smooth;
+}
+.msg {
+max-width: 80%;
+padding: 8px 10px;
+border-radius: 10px;
+font-size: 13px;
+line-height: 1.3;
+word-break: break-word;
+cursor: pointer;
+}
+.incoming {
+align-self: flex-start;
+background: rgba(255, 255, 255, 0.05);
+border: 1px solid rgba(255, 255, 255, 0.08);
+color: var(--muted);
+}
+.outgoing {
+align-self: flex-end;
+background: rgba(10, 100, 150, 0.3);
+color: #e6f7ff;
+border: 1px solid rgba(255, 255, 255, 0.03);
+}
+.msg-image, .msg-video {
+max-width: 100%;
+height: auto;
+display: block;
+border-radius: 6px;
+margin-top: 6px;
+}
+.msg-audio-player {
+display: flex;
+align-items: center;
+gap: 8px;
+width: 220px;
+background: rgba(255, 255, 255, 0.1);
+border-radius: 10px;
+padding: 6px;
+margin-top: 4px;
+}
+.incoming .msg-audio-player {
+background: rgba(255, 255, 255, 0.05);
+border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.audio-play-btn {
+background: #e6f7ff;
+color: #0369a1;
+border: none;
+border-radius: 50%;
+width: 32px;
+height: 32px;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+flex-shrink: 0;
+}
+.incoming .audio-play-btn {
+background: var(--muted);
+color: var(--bg);
+}
+.audio-waveform-container {
+flex: 1;
+min-height: 40px;
+}
+.audio-time {
+font-size: 11px;
+color: #e6f7ffcc;
+}
+.incoming .audio-time {
+color: #cbd5e1cc;
+}
+.meta-time {
+font-size: 10px;
+color: #9fb3c8;
+margin-top: 4px;
+text-align: left;
+display: flex;
+align-items: center;
+justify-content: flex-end;
+gap: 4px;
+}
+.composer {
+display: flex;
+flex-direction: column;
+gap: 8px;
+padding: 6px 10px;
+border-top: 1px solid rgba(255, 255, 255, 0.1);
+position: fixed;
+bottom: 0;
+left: 0;
+right: 0;
+background-color: var(--bg);
+z-index: 100;
+box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.5);
+}
+.composer-input-row {
+display: flex;
+gap: 6px;
+align-items: flex-end;
+}
+.composer textarea {
+flex: 1;
+min-height: 32px;
+max-height: 100px;
+resize: none;
+padding: 8px 12px;
+border-radius: 18px;
+border: 1px solid rgba(255, 255, 255, 0.1);
+background: transparent;
+color: var(--muted);
+transition: all 0.2s ease;
+direction: rtl;
+font-size: 16px;
+}
+.composer textarea:focus {
+outline: none;
+border-color: var(--accent);
+}
+.composer-btn {
+width: 32px;
+height: 32px;
+background: linear-gradient(180deg, #06b6d4, #0891b2);
+color: #012;
+border: none;
+border-radius: 50%;
+cursor: pointer;
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+}
+.composer-btn:disabled {
+background: #444;
+cursor: not-allowed;
+}
+.file-input-btn, .voice-btn {
+background: rgba(255, 255, 255, 0.05);
+border: 1px solid rgba(255, 255, 255, 0.1);
+color: var(--muted);
+padding: 6px;
+border-radius: 50%;
+cursor: pointer;
+width: 32px;
+height: 32px;
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+}
+#file-preview {
+display: flex;
+align-items: center;
+gap: 6px;
+padding: 6px;
+background: rgba(255, 255, 255, 0.05);
+border-radius: 6px;
+border: 1px solid rgba(255, 255, 255, 0.1);
+font-size: 12px;
+}
+.small { font-size: 11px; color: #8aa5bd; }
+.recording-indicator {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 18px;
+    background: rgba(185, 28, 28, 0.4); 
+    font-size: 12px;
+    color: #fca5a5;
+    flex: 1;
+}
+.recording-dot {
+width: 8px;
+height: 8px;
+background-color: #ff6b6b;
+border-radius: 50%;
+animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+.btn { padding: 6px; font-size: 12px; }
+#reply-container {
+display: none;
+align-items: center;
+gap: 8px;
+padding: 6px 12px;
+border-radius: 12px;
+background: var(--reply-bg);
+border: 1px solid var(--reply-border);
+margin-top: -4px;
+}
+.reply-block {
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: var(--reply-block-bg);
+  border-right: 3px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+}
+.incoming .reply-block {
+  background: rgba(255, 255, 255, 0.05);
+  border-right: 3px solid #cbd5e1;
+}
+.reply-block-sender {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 11px;
+}
+.incoming .reply-block-sender { color: #cbd5e1; }
+.reply-block-text {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* New/Modified styles for Voice Preview */
+#audio-preview-container {
+    display: none;
+    flex: 1;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.08);
+}
+#audio-waveform-input {
+    flex: 1;
+    min-height: 30px;
+    margin: 5px 0;
+}
+.audio-preview-time {
+    font-size: 12px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+.audio-preview-cancel-btn {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
 </style>
 <script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
@@ -54,10 +375,6 @@ html, body { height:100%; margin:0; font-family:Inter, system-ui; background:var
 </div>
 </div>
 <div>
-  <a id="notifTopChat" href="/notifications" style="color:var(--muted);text-decoration:none;position:relative">
-    <i class="fas fa-bell"></i>
-    <span id="notifBadgeChat" class="notif-badge-chat" style="display:none">0</span>
-  </a>
 </div>
 </div>
 <div class="glass">
@@ -79,13 +396,19 @@ html, body { height:100%; margin:0; font-family:Inter, system-ui; background:var
 <div id="file-preview" style="display:none;">
     <span class="small" style="flex:1;">تم اختيار ملف</span>
     <button type="button" class="composer-btn btn" id="remove-file-btn" style="width:24px;height:24px;background:red;">
-        ✖
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
     </button>
 </div>
 
 <div class="composer-input-row">
 
-<label for="media-upload" class="file-input-btn" id="attachFileBtn" title="إرفاق ملف">📎</label>
+<label for="media-upload" class="file-input-btn" id="attachFileBtn" title="إرفاق ملف">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7v-2h4V7h2v4h4v2h-4v4h-2z"/>
+</svg>
+</label>
 <input type="file" id="media-upload" style="display:none;" accept="image/*,video/*,audio/*">
 
 <textarea id="msgInput" placeholder="اكتب رسالة..." aria-label="اكتب رسالة"></textarea>
@@ -98,19 +421,31 @@ html, body { height:100%; margin:0; font-family:Inter, system-ui; background:var
 <div id="audio-preview-container">
     <div id="audio-waveform-input"></div>
     <span id="audio-preview-time" class="audio-preview-time">0:00</span>
-    <button type="button" class="audio-preview-cancel-btn" title="إلغاء التسجيل">✖</button>
+    <button type="button" class="audio-preview-cancel-btn" title="إلغاء التسجيل">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
 </div>
 
+
 <button id="voiceBtn" class="voice-btn" type="button" title="تسجيل صوت">
-<svg width="16" height="16" viewBox="0 0 24 24"><path id="voiceIcon" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+<path id="voiceIcon" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
+</svg>
 </button>
 
-<button id="sendBtn" class="composer-btn" type="submit" title="إرسال" style="display:none;">📤</button>
+<button id="sendBtn" class="composer-btn" type="submit" title="إرسال" style="display:none;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+</svg>
+</button>
 </div>
 </form>
 </div>
 <script>
-function getQuery(name) { return new URLSearchParams(window.location.search).get(name); }
+function getQuery(name) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name);
+}
 
 const otherId = getQuery('contactId');
 const messagesEl = document.getElementById('messages');
@@ -127,11 +462,15 @@ const recordingIndicator = document.getElementById('recording-indicator');
 const recordingTimeEl = recordingIndicator.querySelector('span');
 const replyContainer = document.getElementById('reply-container');
 const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+
+
 const audioPreviewContainer = document.getElementById('audio-preview-container');
 const audioWaveformInput = document.getElementById('audio-waveform-input');
 const audioPreviewTime = document.getElementById('audio-preview-time');
-const audioPreviewCancelBtn = document.querySelector('.audio-preview-cancel-btn');
+const audioPreviewCancelBtn = audioPreviewContainer.querySelector('.audio-preview-cancel-btn');
 
+
+// State Variables
 let uploadedFile = null;
 let myId = null;
 let lastMessages = null;
@@ -142,16 +481,22 @@ let audioStream = null;
 let recordingTimer = null;
 let recordingSeconds = 0;
 let inputWaveSurfer = null;
-let audioWaveSurfers = {};
-const RECORDING_STATE = { IDLE: 'idle', RECORDING: 'recording', READY_TO_SEND: 'ready' };
+let audioWaveSurfers = {}; 
+
+const RECORDING_STATE = {
+    IDLE: 'idle',
+    RECORDING: 'recording',
+    READY_TO_SEND: 'ready'
+};
 let recordingState = RECORDING_STATE.IDLE;
 
+// Helper Functions
 function formatTime(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
     if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleDateString('ar-EG');
+    return date.toLocaleDateString('ar-EG', { month: 'numeric', day: 'numeric' });
 }
 function formatAudioTime(seconds) {
     if (isNaN(seconds)) return '0:00';
@@ -159,13 +504,19 @@ function formatAudioTime(seconds) {
     const sec = Math.floor(seconds % 60);
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
 }
-function escapeAttr(s) { if (!s && s !== 0) return ''; return String(s).replace(/"/g, '&quot;'); }
-
+function escapeHtml(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttr(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/"/g, '&quot;');
+}
 function createAudioPlayer(src, isIncoming) {
     return `
         <div class="msg-audio-player" onclick="event.stopPropagation()">
-            <button class="audio-play-btn" type="button" data-src="${escapeAttr(src)}" data-is-incoming="${isIncoming}">
-                ▶
+            <button class="audio-play-btn" type="button" data-src="${escapeAttr(src)}" data-is-incoming="${isIncoming}" data-player>
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
             </button>
             <div class="audio-waveform-container" data-src="${escapeAttr(src)}" data-is-incoming="${isIncoming}"></div>
             <span class="audio-time">0:00</span>
@@ -181,13 +532,14 @@ function createMessageElement(msg, myId) {
     el.addEventListener('click', () => { setReplyTo(msg); });
 
     let contentHtml = '';
+    
     if (msg.replied_to_id) {
         const repliedSender = msg.replied_to_sender || 'مستخدم';
         const repliedContent = msg.replied_to_content || 'رسالة محذوفة';
         contentHtml += `
             <div class="reply-block">
-                <span class="reply-block-sender">${repliedSender}</span>
-                <span class="reply-block-text">${repliedContent}</span>
+                <span class="reply-block-sender">${escapeHtml(repliedSender)}</span>
+                <span class="reply-block-text">${escapeHtml(repliedContent)}</span>
             </div>
         `;
     }
@@ -195,6 +547,7 @@ function createMessageElement(msg, myId) {
     if (msg.media && msg.media.url) {
         const mediaUrl = msg.media.url;
         const mediaType = msg.media.type || 'raw';
+
         if (mediaType.startsWith('image')) {
             contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة" onload="scrollToBottom()">`;
         } else if (mediaType.startsWith('audio') || mediaUrl.endsWith('.webm') || mediaUrl.endsWith('.mp3')) {
@@ -207,7 +560,7 @@ function createMessageElement(msg, myId) {
     }
 
     if (msg.content) {
-        contentHtml += `<p style="margin:${msg.media ? '6px 0 0 0' : '0'}">${msg.content}</p>`;
+        contentHtml += `<p style="margin:${msg.media ? '6px 0 0 0' : '0'}">${escapeHtml(msg.content)}</p>`;
     }
 
     const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
@@ -216,28 +569,49 @@ function createMessageElement(msg, myId) {
     el.innerHTML = contentHtml;
     return el;
 }
-function scrollToBottom() { requestAnimationFrame(()=>messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' })); }
+function scrollToBottom() {
+    requestAnimationFrame(() => {
+        messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+    });
+}
 function setReplyTo(msg) {
-    if (msg.messageId === replyToMessage?.id) { clearReplyTo(); return; }
+    if (msg.messageId === replyToMessage?.id) {
+        clearReplyTo();
+        return;
+    }
+    
     const isIncoming = (msg.senderId !== myId);
-    replyToMessage = { id: msg.messageId, content: msg.content || (msg.media?.type ? `[${msg.media.type}]` : 'ملف'), senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت', senderId: msg.senderId };
+    
+    replyToMessage = {
+        id: msg.messageId,
+        content: msg.content || (msg.media?.type ? `[${msg.media.type}]` : 'ملف مرفق'),
+        senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت',
+        senderId: msg.senderId
+    };
+
     document.getElementById('reply-sender').textContent = replyToMessage.senderName + ': ';
     document.getElementById('reply-text').textContent = replyToMessage.content;
     replyContainer.style.display = 'flex';
 }
-function clearReplyTo() { replyToMessage = null; replyContainer.style.display = 'none'; }
+function clearReplyTo() {
+    replyToMessage = null;
+    replyContainer.style.display = 'none';
+}
 cancelReplyBtn.onclick = clearReplyTo;
 
-/* Composer UI and recording functions (same as provided earlier) */
+// ---------------- UI/Composer Logic ----------------
 function updateComposerUI() {
+    // إخفاء الكل
     msgInput.style.display = 'none';
     recordingIndicator.style.display = 'none';
     audioPreviewContainer.style.display = 'none';
     attachFileBtn.style.display = 'none';
     voiceBtn.style.display = 'flex';
     sendBtn.style.display = 'none';
-
+    
+    // إظهار المطلوب حسب الحالة
     if (uploadedFile && recordingState !== RECORDING_STATE.READY_TO_SEND) {
+        // حالة ملف عادي مرفق (صورة/فيديو)
         msgInput.style.display = 'block';
         filePreview.style.display = 'flex';
         voiceBtn.style.display = 'none';
@@ -245,10 +619,11 @@ function updateComposerUI() {
         attachFileBtn.style.display = 'flex';
         return;
     }
-
+    
     filePreview.style.display = 'none';
 
     if (msgInput.value.trim().length > 0 && recordingState === RECORDING_STATE.IDLE) {
+        // حالة كتابة نص
         msgInput.style.display = 'block';
         attachFileBtn.style.display = 'flex';
         voiceBtn.style.display = 'none';
@@ -260,196 +635,381 @@ function updateComposerUI() {
         case RECORDING_STATE.IDLE:
             msgInput.style.display = 'block';
             attachFileBtn.style.display = 'flex';
-            voiceIcon.setAttribute('d','M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z');
+            voiceIcon.innerHTML = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>`;
             voiceBtn.classList.remove('recording-active');
             break;
+            
         case RECORDING_STATE.RECORDING:
             recordingIndicator.style.display = 'flex';
-            voiceIcon.setAttribute('d','M6 19h12v-6H6v6z');
+            voiceIcon.innerHTML = `<path d="M6 19h12v-6H6v6z"/>`; // Stop icon
             voiceBtn.classList.add('recording-active');
             attachFileBtn.style.display = 'none';
             break;
+            
         case RECORDING_STATE.READY_TO_SEND:
             audioPreviewContainer.style.display = 'flex';
-            voiceBtn.style.display = 'none';
-            sendBtn.style.display = 'flex';
+            voiceBtn.style.display = 'none'; // نخفي زر التسجيل/الإيقاف
+            sendBtn.style.display = 'flex'; // نظهر زر الإرسال
             attachFileBtn.style.display = 'flex';
             break;
     }
 }
 msgInput.addEventListener('input', updateComposerUI);
 
+// ---------------- Voice Recording Logic ----------------
 function startRecording() {
     if (recordingState !== RECORDING_STATE.IDLE) return;
+    
     audioChunks = [];
     recordingSeconds = 0;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        audioStream = stream;
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
-        mediaRecorder.start();
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        recordingState = RECORDING_STATE.RECORDING;
-        updateComposerUI();
-        recordingTimer = setInterval(() => {
-            recordingSeconds++;
-            recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`;
-        }, 1000);
-        mediaRecorder.onstop = stopRecording;
-    }).catch(err => { alert('تعذر الوصول إلى الميكروفون.'); recordingState = RECORDING_STATE.IDLE; updateComposerUI(); });
+    
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            audioStream = stream;
+            // استخدام "audio/webm" مع "codecs=opus" هو الخيار الأفضل
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
+            mediaRecorder.start();
+            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+            
+            recordingState = RECORDING_STATE.RECORDING;
+            updateComposerUI();
+
+            recordingTimer = setInterval(() => {
+                recordingSeconds++;
+                recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`;
+            }, 1000);
+            
+            // عند إيقاف التسجيل
+            mediaRecorder.onstop = stopRecording;
+
+        }).catch(err => { 
+            alert('تعذر الوصول إلى الميكروفون. تأكد من منح الإذن.'); 
+            recordingState = RECORDING_STATE.IDLE;
+            updateComposerUI();
+        });
 }
 
 function stopRecording() {
     clearInterval(recordingTimer);
     recordingTimeEl.textContent = `جاري التسجيل... 0:00`;
-    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-    if (audioStream) audioStream.getTracks().forEach(t => t.stop()), audioStream = null;
+    
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+    }
+    
+    if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+        audioStream = null;
+    }
+    
     if (audioChunks.length > 0) {
+        // إصلاح مشكلة الإرسال: إنشاء الملف الصوتي وتعيينه لـ uploadedFile
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        // استخدام اسم ملف ينتهي بـ .webm لضمان التعرف عليه كملف صوتي
         uploadedFile = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
+        
+        // إعداد المعاينة
         const audioURL = URL.createObjectURL(audioBlob);
+        
         if (inputWaveSurfer) inputWaveSurfer.destroy();
-        inputWaveSurfer = WaveSurfer.create({ container: audioWaveformInput, waveColor: '#7dd3fc', progressColor: '#06b6d4', cursorColor: 'transparent', barWidth: 2, height: 30, backend: 'MediaElement' });
+        inputWaveSurfer = WaveSurfer.create({
+            container: audioWaveformInput,
+            waveColor: '#7dd3fc',
+            progressColor: '#06b6d4',
+            cursorColor: 'transparent',
+            barWidth: 2, height: 30, barGap: 2, barRadius: 2,
+        });
+        
         inputWaveSurfer.load(audioURL);
-        inputWaveSurfer.on('ready', () => { audioPreviewTime.textContent = formatAudioTime(inputWaveSurfer.getDuration()); });
-        inputWaveSurfer.on('click', () => inputWaveSurfer.playPause());
+        inputWaveSurfer.on('ready', () => {
+             audioPreviewTime.textContent = formatAudioTime(inputWaveSurfer.getDuration());
+        });
+        
+        inputWaveSurfer.on('click', () => {
+             inputWaveSurfer.playPause();
+        });
+
         recordingState = RECORDING_STATE.READY_TO_SEND;
-    } else recordingState = RECORDING_STATE.IDLE;
+    } else {
+        // لم يتم التسجيل
+        recordingState = RECORDING_STATE.IDLE;
+    }
+    
     updateComposerUI();
 }
 
 function handleVoiceButton() {
-    if (recordingState === RECORDING_STATE.IDLE) startRecording();
-    else if (recordingState === RECORDING_STATE.RECORDING) stopRecording();
+    if (recordingState === RECORDING_STATE.IDLE) {
+        startRecording();
+    } else if (recordingState === RECORDING_STATE.RECORDING) {
+        stopRecording();
+    }
 }
-voiceBtn.addEventListener('click', handleVoiceButton);
-audioPreviewCancelBtn.onclick = () => { if (inputWaveSurfer) { inputWaveSurfer.destroy(); inputWaveSurfer = null; } uploadedFile = null; audioChunks = []; recordingState = RECORDING_STATE.IDLE; updateComposerUI(); };
 
 function removeFile() {
-    if (inputWaveSurfer) { inputWaveSurfer.destroy(); inputWaveSurfer = null; }
-    uploadedFile = null; audioChunks = []; recordingState = RECORDING_STATE.IDLE; fileUpload.value = ''; filePreview.innerHTML = ''; updateComposerUI();
+    if (inputWaveSurfer) {
+        inputWaveSurfer.destroy();
+        inputWaveSurfer = null;
+    }
+    uploadedFile = null; 
+    audioChunks = [];
+    recordingState = RECORDING_STATE.IDLE;
+    fileUpload.value = ''; // مسح اختيار الملف العادي أيضًا
+    filePreview.innerHTML = '';
+    updateComposerUI();
 }
-removeFileBtn.addEventListener('click', removeFile);
 
-fileUpload.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    removeFile();
-    uploadedFile = file;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-        let previewElement;
-        if (file.type.startsWith('image/')) { previewElement = document.createElement('img'); previewElement.src = ev.target.result; previewElement.style.maxHeight = '40px'; previewElement.style.borderRadius = '4px'; }
-        else if (file.type.startsWith('video/')) { previewElement = document.createElement('video'); previewElement.src = ev.target.result; previewElement.controls = true; previewElement.style.maxHeight = '40px'; previewElement.style.borderRadius = '4px'; }
-        else if (file.type.startsWith('audio/')) { previewElement = document.createElement('audio'); previewElement.src = ev.target.result; previewElement.controls = true; }
-        else { previewElement = document.createElement('span'); previewElement.textContent = file.name; }
-        filePreview.innerHTML = ''; filePreview.appendChild(previewElement);
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'composer-btn btn'; removeBtn.style.cssText = 'width:24px;height:24px;background:#ef4444;margin-inline-start:8px'; removeBtn.innerHTML = '×';
-        removeBtn.onclick = removeFile;
-        filePreview.appendChild(removeBtn);
-        updateComposerUI();
-    };
-    reader.readAsDataURL(file);
-});
+
+// ---------------- Main Logic Functions (Added/Restored) ----------------
 
 async function fetchOtherProfile() {
     try {
         const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
         const profile = await res.json();
+        
+        // الحصول على ID المستخدم الحالي (مهم لـ createMessageElement)
         const myProfileRes = await fetch('/api/profile', { credentials: 'same-origin' });
         const myProfile = await myProfileRes.json();
-        myId = myProfile.id;
+        myId = myProfile.id; 
+        
         if (res.ok && profile) {
             document.getElementById('other-name').textContent = profile.full_name || profile.username;
             document.getElementById('other-username').textContent = `@${profile.username}`;
-            document.getElementById('other-avatar').src = profile.profile_picture_url || '';
+            document.getElementById('other-avatar').src = profile.profile_picture_url;
             document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
         }
-    } catch (error) { console.error('Error fetching other profile:', error); document.getElementById('other-name').textContent = 'خطأ في التحميل'; }
+    } catch (error) {
+        console.error('Error fetching other profile:', error);
+        // عرض رسالة خطأ واضحة
+        document.getElementById('other-name').textContent = 'خطأ في التحميل';
+    }
 }
 
 async function markRead() {
     if (!myId || !otherId) return;
-    try { await fetch('/api/mark_read', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ other_id: otherId }) }); } catch (error) { console.warn('Could not mark messages as read:', error); }
+    try {
+        await fetch('/api/mark_read', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ other_id: otherId })
+        });
+    } catch (error) {
+        console.warn('Could not mark messages as read:', error);
+    }
 }
 
 let isFetchingMessages = false;
 async function fetchMessages() {
-    if (isFetchingMessages) return; isFetchingMessages = true;
+    if (isFetchingMessages) return; 
+    isFetchingMessages = true;
+
     try {
         const res = await fetch(`/api/messages/${otherId}`, { credentials: 'same-origin' });
         const result = await res.json();
+
         if (res.ok && result.ok && JSON.stringify(result.messages) !== JSON.stringify(lastMessages)) {
             lastMessages = result.messages;
-            messagesEl.innerHTML = '';
-            if (result.messages.length === 0) messagesEl.innerHTML = '<div class="small" style="text-align:center">ابدأ محادثة بإرسال أول رسالة!</div>';
-            else result.messages.forEach(msg => messagesEl.appendChild(createMessageElement(msg, myId)));
+            messagesEl.innerHTML = ''; 
+            
+            if (result.messages.length === 0) {
+                 messagesEl.innerHTML = '<div class="small" style="text-align:center">ابدأ محادثة بإرسال أول رسالة!</div>';
+            } else {
+                for (const msg of result.messages) {
+                    const el = createMessageElement(msg, myId);
+                    messagesEl.appendChild(el);
+                }
+            }
+
+            // تهيئة مشغلات الصوت للرسائل الجديدة/المحدثة
             initializeAudioPlayers();
             scrollToBottom();
-            await markRead();
+            
+            // يجب وضع markRead هنا لضمان وجود الرسائل قبل محاولة قراءتها
+            await markRead(); 
         }
-    } catch (error) { console.error('Error fetching messages:', error); if (messagesEl.children.length < 2) messagesEl.innerHTML = '<div class="small" style="text-align:center; color: #ef4444;">حدث خطأ في الاتصال. حاول تحديث الصفحة.</div>'; }
-    finally { isFetchingMessages = false; }
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        if (messagesEl.children.length < 2) { // إذا لم يتم تحميل أي شيء بعد
+             messagesEl.innerHTML = '<div class="small" style="text-align:center; color: #ef4444;">حدث خطأ في الاتصال. حاول تحديث الصفحة.</div>';
+        }
+    } finally {
+        isFetchingMessages = false;
+    }
 }
 
 function initializeAudioPlayers() {
+    // تدمير أي WaveSurfers سابقة لتجنب تداخل الذاكرة
     Object.values(audioWaveSurfers).forEach(ws => ws.destroy());
     audioWaveSurfers = {};
+
     document.querySelectorAll('.audio-waveform-container').forEach(container => {
         const src = container.dataset.src;
         const isIncoming = container.dataset.isIncoming === 'true';
-        if (!audioWaveSurfers[src]) {
-            const wavesurfer = WaveSurfer.create({ container: container, waveColor: isIncoming ? '#94a3b8' : '#7dd3fc', progressColor: isIncoming ? '#475569' : '#0891b2', cursorColor: 'transparent', barWidth: 2, height: 30, barGap: 2, barRadius: 2 });
+        
+        // إنشاء Wavesurfer واحد لكل مصدر صوت فريد
+        if (!audioWaveSurfers[src]) { 
+            const wavesurfer = WaveSurfer.create({
+                container: container,
+                waveColor: isIncoming ? '#94a3b8' : '#7dd3fc', 
+                progressColor: isIncoming ? '#475569' : '#0891b2',
+                cursorColor: 'transparent',
+                barWidth: 2, height: 30, barGap: 2, barRadius: 2,
+            });
             audioWaveSurfers[src] = wavesurfer;
             wavesurfer.load(src);
+
             const playerBtn = document.querySelector(`.audio-play-btn[data-src="${escapeAttr(src)}"]`);
             const timeEl = playerBtn.closest('.msg-audio-player').querySelector('.audio-time');
-            wavesurfer.on('ready', () => { timeEl.textContent = formatAudioTime(wavesurfer.getDuration()); });
-            playerBtn.onclick = (e) => { e.stopPropagation(); wavesurfer.playPause(); };
-            wavesurfer.on('play', () => { playerBtn.innerHTML = '⏸'; });
-            wavesurfer.on('pause', () => { playerBtn.innerHTML = '▶'; });
-            wavesurfer.on('audioprocess', (time) => { timeEl.textContent = formatAudioTime(time); });
-            wavesurfer.on('finish', () => { wavesurfer.setTime(0); });
+            
+            wavesurfer.on('ready', () => {
+                timeEl.textContent = formatAudioTime(wavesurfer.getDuration());
+            });
+            
+            playerBtn.onclick = (e) => {
+                e.stopPropagation();
+                wavesurfer.playPause();
+            };
+            
+            wavesurfer.on('play', () => {
+                playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; 
+            });
+            wavesurfer.on('pause', () => {
+                playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>`; 
+            });
+            wavesurfer.on('audioprocess', (time) => {
+                timeEl.textContent = formatAudioTime(time);
+            });
+            wavesurfer.on('finish', () => {
+                wavesurfer.setTime(0); 
+            });
         }
     });
 }
 
+// ---------------- Event Handlers (Restored/Modified) ----------------
+
+audioPreviewCancelBtn.onclick = removeFile;
+voiceBtn.addEventListener('click', handleVoiceButton);
+
+
 async function sendMessage() {
     let content = msgInput.value.trim();
+    
+    // إذا كان هناك تسجيل صوتي أو ملف مرفق، لا يلزم وجود محتوى نصي
     if (!content && !uploadedFile) return;
+    
     sendBtn.disabled = true;
-    const originalIcon = sendBtn.innerHTML; sendBtn.innerHTML = '⏳';
-    const formData = new FormData(); formData.append('other_id', otherId); if (content) formData.append('content', content); if (uploadedFile) formData.append('media', uploadedFile, uploadedFile.name);
-    if (replyToMessage) { formData.append('replied_to_id', replyToMessage.id); formData.append('replied_to_content', replyToMessage.content); formData.append('replied_to_sender', replyToMessage.senderName); }
+    const originalIcon = sendBtn.innerHTML;
+    sendBtn.innerHTML = '<div class="spin" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;"></div>';
+
+    const formData = new FormData();
+    formData.append('other_id', otherId); 
+    if (content) formData.append('content', content);
+    
+    // إرسال uploadedFile الذي قد يكون ملف وسائط عادي أو تسجيل صوتي (Blob)
+    if (uploadedFile) {
+        // نستخدم uploadedFile.name و uploadedFile.type للتأكد من إرسال البيانات الصحيحة للخادم
+        formData.append('media', uploadedFile, uploadedFile.name);
+    }
+    
+    if (replyToMessage) {
+        formData.append('replied_to_id', replyToMessage.id);
+        formData.append('replied_to_content', replyToMessage.content);
+        formData.append('replied_to_sender', replyToMessage.senderName);
+    }
+    
     try {
-        const res = await fetch('/api/messages/send', { method: 'POST', credentials: 'same-origin', body: formData });
+        const res = await fetch('/api/messages/send', {
+            method: 'POST', credentials: 'same-origin', body: formData
+        });
         const result = await res.json();
-        if (res.ok && result.ok && result.messageData) {
-            messagesEl.appendChild(createMessageElement(result.messageData, myId));
+        
+        if (res.ok && result.ok && result.messageData) { 
+            const el = createMessageElement(result.messageData, myId);
+            messagesEl.appendChild(el); 
+
             msgInput.value = '';
-            removeFile();
+            
+            // تنظيف بعد الإرسال
+            removeFile(); 
             clearReplyTo();
+            
             scrollToBottom();
-            lastMessages = null; await fetchMessages();
-        } else alert('فشل الإرسال: ' + (result.error || 'خطأ غير معروف'));
-    } catch (err) { alert('خطأ في الاتصال بالخادم. تأكد من أن الخادم يعمل.'); }
-    finally { sendBtn.disabled = false; sendBtn.innerHTML = originalIcon; updateComposerUI(); }
+            lastMessages = null; 
+            await fetchMessages(); // جلب الرسائل للتأكد من التحديث في الوقت الفعلي
+        } else {
+            alert('فشل الإرسال: ' + (result.error || 'خطأ غير معروف'));
+        }
+    } catch (err) {
+        alert('خطأ في الاتصال بالخادم. تأكد من أن الخادم يعمل.');
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = originalIcon;
+        updateComposerUI();
+    }
 }
 
-document.getElementById('sendForm').addEventListener('submit', e => { e.preventDefault(); sendMessage(); });
+removeFileBtn.addEventListener('click', () => {
+    uploadedFile = null;
+    fileUpload.value = '';
+    updateComposerUI();
+});
+
+fileUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        // إلغاء أي تسجيل صوتي سابق
+        removeFile(); 
+        
+        uploadedFile = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            let previewElement;
+            if (file.type.startsWith('image/')) { previewElement = document.createElement('img'); previewElement.src = e.target.result; previewElement.style.maxHeight = '40px'; previewElement.style.borderRadius = '4px'; }
+            else if (file.type.startsWith('video/')) { previewElement = document.createElement('video'); previewElement.src = e.target.result; previewElement.controls = true; previewElement.style.maxHeight = '40px'; previewElement.style.borderRadius = '4px'; }
+            else if (file.type.startsWith('audio/')) { previewElement = document.createElement('audio'); previewElement.src = e.target.result; previewElement.controls = true; }
+            else { previewElement = document.createElement('span'); previewElement.textContent = file.name; }
+            
+            filePreview.innerHTML = ''; // تنظيف المحتوى السابق
+            filePreview.appendChild(previewElement);
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'composer-btn btn';
+            removeBtn.style.cssText = 'width:24px;height:24px;background:#ef4444;margin-right:auto;';
+            removeBtn.innerHTML = '×';
+            removeBtn.onclick = removeFileBtn.onclick; // استخدام نفس دالة الإزالة
+            filePreview.appendChild(removeBtn);
+            
+            updateComposerUI();
+
+        };
+        reader.readAsDataURL(file);
+    } else {
+        removeFileBtn.onclick();
+    }
+});
+
+sendForm.addEventListener('submit', e => { e.preventDefault(); sendMessage(); });
 msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+
 
 (async function init() {
     if(!otherId) { window.location.href = '/chat_list'; return; }
+    
+    // التأكد من جلب ID المستخدم الحالي والملف الشخصي للطرف الآخر أولاً
     await fetchOtherProfile();
-    await fetchMessages();
-    setTimeout(scrollToBottom, 100);
-    updateComposerUI();
-    setInterval(async () => { if (document.visibilityState === 'visible') await fetchMessages(); }, 3000);
+    
+    // جلب الرسائل بعد التأكد من وجود myId
+    await fetchMessages(); 
+    
+    setTimeout(scrollToBottom, 100); 
+    updateComposerUI(); 
+    
+    // تحديث الرسائل بشكل دوري
+    setInterval(async () => { if (document.visibilityState === 'visible') await fetchMessages(); }, 3000); 
     window.addEventListener('focus', fetchMessages);
     window.addEventListener('focus', markRead);
 })();
-
 /* Notifications SSE badge */
 (function setupNotifSSEChat(){
   if(!window.EventSource) return;
