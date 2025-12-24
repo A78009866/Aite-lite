@@ -35,7 +35,6 @@
       background: black;
     }
 
-    /* أنيميشن القلب */
     .big-heart {
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%) scale(0);
@@ -51,7 +50,6 @@
       100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
     }
 
-    /* زر التشغيل/الإيقاف المركزي */
     .play-btn {
       position: absolute;
       top: 50%;
@@ -82,7 +80,7 @@
       text-shadow: 0 2px 6px rgba(0,0,0,0.6);
     }
 
-    /* شريط التقدم السفلي */
+    /* شريط التقدم: anchor على اليمين ليكبر باتجاه اليسار (RTL) */
     .video-progress {
       position: absolute;
       left: 12px;
@@ -95,15 +93,17 @@
       overflow: visible;
       cursor: pointer;
     }
-    /* تدرج أزرق */
     .video-progress .progress {
+      position: absolute;
+      top: 0;
+      right: 0;                /* anchor to right */
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #007AFF 0%, #00D4FF 100%);
       transition: width 0.08s linear;
       border-radius: 999px;
     }
-    /* دائرة تمشي مع الخط */
+    /* دائرة تمشي مع نهاية الجزء المملوء */
     .video-progress .thumb {
       position: absolute;
       top: 50%;
@@ -114,12 +114,11 @@
       background: linear-gradient(180deg, #00D4FF, #007AFF);
       border: 2px solid rgba(255,255,255,0.95);
       box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-      transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%); /* سنعيّن left بشكل (100 - pct)% */
       pointer-events: none;
       z-index: 35;
     }
 
-    /* نافذة التعليقات */
     .comments-sheet {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: #111; border-radius: 16px 16px 0 0;
@@ -167,9 +166,8 @@
 <script>
   let swiperInstance = null;
   let currentReelsData = [];
-  let currentUserId = null; // تخزين معرف المستخدم الحالي للمقارنة
+  let currentUserId = null;
 
-  // صورة سوداء كـ poster (SVG data URI) لعرض شاشة سوداء قبل التشغيل
   const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>'
   );
@@ -178,36 +176,23 @@
 
   async function loadReels() {
     try {
-      // مهم: إرسال الكوكيز (جلسة المستخدم) مع الطلب
       const res = await fetch('/api/reels/feed', { credentials: 'include' });
-
-      // إذا تمت إعادة توجيه الخادم (مثلاً إلى صفحة /login) نعيد التوجيه على العميل
-      if (res.redirected) {
-        console.warn('Fetch was redirected to', res.url);
-        window.location.href = res.url;
-        return;
-      }
-
+      if (res.redirected) { window.location.href = res.url; return; }
       const contentType = (res.headers.get('content-type') || '').toLowerCase();
-
       if (!res.ok) {
         const txt = await res.text();
-        console.error('Failed loading reels:', res.status, txt);
         document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">فشل في تحميل الريلز (خطأ ${res.status})</div>`;
+        console.error('loadReels failed', res.status, txt);
         return;
       }
-
-      // إذا لم يرجع JSON، اعرض رسالة أكثر وضوحاً (غالباً يعني أن الجلسة غير موجودة)
       if (!contentType.includes('application/json')) {
-        const text = await res.text();
-        console.error('Expected JSON but got:', text);
+        const txt = await res.text();
         document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">يجب تسجيل الدخول أو حدث خطأ في الخادم</div>`;
+        console.error('Expected JSON but got:', txt);
         return;
       }
-
       const data = await res.json();
-
-      if(data.ok && data.reels && data.reels.length > 0) {
+      if (data.ok && data.reels) {
         currentReelsData = data.reels;
         currentUserId = data.currentUserId || null;
         renderReels(data.reels);
@@ -215,8 +200,8 @@
       } else {
         document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
       }
-    } catch(e) {
-      console.error('Error in loadReels:', e);
+    } catch (e) {
+      console.error('Error in loadReels', e);
       document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">خطأ في التحميل</div>`;
     }
   }
@@ -224,22 +209,18 @@
   function renderReels(reels) {
     const wrapper = document.getElementById('reelsWrapper');
     wrapper.innerHTML = reels.map((reel, index) => {
-      const isOwner = reel.userId === currentUserId; // التحقق من ملكية الريل
-      // استخدم poster أسود أو يمكنك تبديله بمسار الصورة من الخادم إذا أضفت thumbnail لاحقاً
+      const isOwner = reel.userId === currentUserId;
       const poster = reel.thumbnailUrl || BLACK_POSTER;
-
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
         
         <i class="fas fa-heart big-heart" id="bigHeart-${reel.reelId}"></i>
 
-        <!-- زر التشغيل المركزي -->
         <div class="play-btn" id="playBtn-${reel.reelId}">
           <i class="fas fa-play"></i>
         </div>
 
-        <!-- شريط التقدم السفلي -->
         <div class="video-progress" id="progress-${reel.reelId}">
           <div class="progress" id="progressBar-${reel.reelId}"></div>
           <div class="thumb" id="thumb-${reel.reelId}"></div>
@@ -289,26 +270,27 @@
       const slide = vid.closest('.swiper-slide');
       const reelId = slide.getAttribute('data-id');
 
-      // تحديث شريط التقدم عند التقدم
       const progressBar = document.getElementById(`progressBar-${reelId}`);
       const progressContainer = document.getElementById(`progress-${reelId}`);
       const playBtn = document.getElementById(`playBtn-${reelId}`);
       const thumb = document.getElementById(`thumb-${reelId}`);
 
-      // timeupdate => تحديث شريط التقدم
       vid.addEventListener('timeupdate', () => {
         if (!progressBar || !vid.duration || isNaN(vid.duration)) return;
-        const pct = (vid.currentTime / vid.duration) * 100;
+        const pct = (vid.currentTime / vid.duration) * 100; // 0..100
+        // progressBar anchored to right, width grows leftwards
         progressBar.style.width = pct + '%';
-        if (thumb) thumb.style.left = pct + '%'; // الدائرة تتحرك مع التقدم
+        // thumb should be at the left edge of the filled part -> left = 100 - pct
+        if (thumb) thumb.style.left = (100 - pct) + '%';
       });
 
-      // seek عند الضغط على شريط التقدم
       if (progressContainer) {
         progressContainer.addEventListener('click', (ev) => {
           const rect = progressContainer.getBoundingClientRect();
-          const x = ev.clientX - rect.left;
-          const pct = x / rect.width;
+          const x = ev.clientX - rect.left; // distance from left
+          // since filled part goes right->left, pct = 1 - (x/width)
+          let pct = 1 - (x / rect.width);
+          if (pct < 0) pct = 0; if (pct > 1) pct = 1;
           if (vid.duration && !isNaN(vid.duration)) {
             vid.currentTime = pct * vid.duration;
             vid.play().catch(() => {});
@@ -316,7 +298,6 @@
         });
       }
 
-      // زر التشغيل المركزي يجب أن يعمل أيضاً
       if (playBtn) {
         playBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -324,36 +305,24 @@
         });
       }
 
-      // نميز النقر المفرد عن النقر المزدوج (دابل تاب يعجب)
       let lastTap = 0;
       vid.addEventListener('click', (e) => {
         const now = Date.now();
         const delta = now - lastTap;
         if (delta < 300 && delta > 0) {
-          // double tap -> like
           const id = vid.closest('.swiper-slide').getAttribute('data-id');
           handleLike(id, true);
           animateHeart(id);
         } else {
-          // single tap -> toggle play/pause & show button briefly
           const id = vid.closest('.swiper-slide').getAttribute('data-id');
           togglePlayPause(vid, id, true);
         }
         lastTap = now;
       });
 
-      // إظهار زر التشغيل/الإيقاف عند توقف الفيديو أو عند الانتقال
-      vid.addEventListener('pause', () => {
-        showPlayBtnTemporarily(reelId, true);
-      });
-      vid.addEventListener('play', () => {
-        showPlayBtnTemporarily(reelId, false);
-      });
-
-      // إذا انتهى الفيديو نعكس حالة الزر
-      vid.addEventListener('ended', () => {
-        showPlayBtnTemporarily(reelId, true);
-      });
+      vid.addEventListener('pause', () => { showPlayBtnTemporarily(reelId, true); });
+      vid.addEventListener('play', () => { showPlayBtnTemporarily(reelId, false); });
+      vid.addEventListener('ended', () => { showPlayBtnTemporarily(reelId, true); });
     });
   }
 
@@ -375,19 +344,15 @@
   }
 
   function pauseAllVideos() {
-    document.querySelectorAll('video').forEach(v => { 
-      try { v.pause(); } catch(e) {}
-    });
+    document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(e) {} });
   }
 
   function playCurrentVideo(swiper) {
     const activeSlide = swiper.slides[swiper.activeIndex];
     const video = activeSlide.querySelector('video');
     if (video) {
-      // حاول التشغيل وإلغاء كتم الصوت إن لزم
       video.muted = false;
       video.play().catch(() => { video.muted = true; video.play().catch(()=>{}); });
-      // إخفاء زر التشغيل لأننا بدأنا التشغيل
       const reelId = activeSlide.getAttribute('data-id');
       showPlayBtnTemporarily(reelId, false);
     }
@@ -398,23 +363,14 @@
     try {
       if (videoEl.paused) {
         videoEl.play().catch(()=>{});
-        if (playBtn) {
-          playBtn.classList.remove('show');
-          playBtn.querySelector('i').className = 'fas fa-pause';
-        }
+        if (playBtn) { playBtn.classList.remove('show'); playBtn.querySelector('i').className = 'fas fa-pause'; }
       } else {
         videoEl.pause();
-        if (playBtn) {
-          playBtn.querySelector('i').className = 'fas fa-play';
-          showPlayBtnTemporarily(reelId, true);
-        }
+        if (playBtn) { playBtn.querySelector('i').className = 'fas fa-play'; showPlayBtnTemporarily(reelId, true); }
       }
       if (showButton && playBtn) {
-        // عرض الزر لمدة قصيرة
         playBtn.classList.add('show');
-        setTimeout(() => {
-          playBtn.classList.remove('show');
-        }, 1400);
+        setTimeout(() => { playBtn.classList.remove('show'); }, 1400);
       }
     } catch(e) {}
   }
@@ -423,47 +379,33 @@
     const playBtn = document.getElementById(`playBtn-${reelId}`);
     if (!playBtn) return;
     const icon = playBtn.querySelector('i');
-    if (isPaused) {
-      icon.className = 'fas fa-play';
-      playBtn.classList.add('show');
-    } else {
-      icon.className = 'fas fa-pause';
-      playBtn.classList.remove('show');
-    }
-    // إذا أظهرناه نخفيه بعد فترة قصيرة (إذا هو غير سعر)
-    if (isPaused) {
-      setTimeout(() => { playBtn.classList.remove('show'); }, 1400);
-    }
+    if (isPaused) { icon.className = 'fas fa-play'; playBtn.classList.add('show'); }
+    else { icon.className = 'fas fa-pause'; playBtn.classList.remove('show'); }
+    if (isPaused) setTimeout(() => { playBtn.classList.remove('show'); }, 1400);
   }
 
   function animateHeart(reelId) {
     const heart = document.getElementById(`bigHeart-${reelId}`);
     if(!heart) return;
     heart.classList.remove('animate');
-    void heart.offsetWidth; 
+    void heart.offsetWidth;
     heart.classList.add('animate');
-    // تأكد من أن أيقونة اللايك تتحول للون أحمر
     const icon = document.getElementById(`likeIcon-${reelId}`);
     if(icon && !icon.classList.contains('text-red-500')) {
       icon.classList.remove('far');
       icon.classList.add('fas', 'text-red-500');
-      // تحديث العد محلياً (الخادم يحدثه كذلك)
       const countEl = document.getElementById(`likeCount-${reelId}`);
       if(countEl) countEl.textContent = parseInt(countEl.textContent || '0') + 1;
     }
   }
 
-  // حذف الريل
   window.deleteReel = async function(reelId) {
     if(!confirm('هل تريد حذف هذا الريل نهائياً؟')) return;
     try {
       const res = await fetch(`/api/reels/${reelId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json().catch(()=>({ ok: false, error: 'Invalid JSON' }));
       if(res.ok && data.ok) location.reload();
-      else {
-        console.error('Delete reel failed', res.status, data);
-        alert(data.error || 'خطأ في الحذف');
-      }
+      else { console.error('Delete reel failed', res.status, data); alert(data.error || 'خطأ في الحذف'); }
     } catch(e) { console.error('Delete reel error', e); alert('فشل الاتصال بالسيرفر'); }
   };
 
@@ -483,7 +425,6 @@
     try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST', credentials: 'include' }); } catch(e) { console.error('like error', e); }
   }
 
-  // --- إدارة التعليقات ---
   const backdrop = document.getElementById('backdrop');
   const sheet = document.getElementById('commentsSheet');
   const commentsList = document.getElementById('commentsList');
@@ -507,11 +448,7 @@
     }
   };
 
-  function closeCommentsSheet() {
-    backdrop.classList.remove('open');
-    sheet.classList.remove('open');
-    if(swiperInstance) swiperInstance.allowTouchMove = true;
-  }
+  function closeCommentsSheet() { backdrop.classList.remove('open'); sheet.classList.remove('open'); if(swiperInstance) swiperInstance.allowTouchMove = true; }
 
   function renderComments(comments) {
     commentsList.innerHTML = '';
@@ -541,7 +478,6 @@
     const content = input.value.trim();
     if(!content || !currentReelIdForComments) return;
     input.value = '';
-    
     try {
       const res = await fetch(`/api/reels/${currentReelIdForComments}/comment`, {
         method: 'POST',
@@ -550,7 +486,6 @@
         body: JSON.stringify({ content })
       });
       if (!res.ok) throw new Error('Failed to post comment: ' + res.status);
-      // جلب التعليقات المحدثة
       const res2 = await fetch(`/api/reels/${currentReelIdForComments}/comments`, { credentials: 'include' });
       const data = await res2.json();
       renderComments(data.comments);
@@ -559,12 +494,8 @@
 
   window.shareReel = function(reelId) {
     const shareUrl = window.location.origin + '/reels?id=' + reelId;
-    if (navigator.share) {
-      navigator.share({ title: 'شاهد هذا الريل', url: shareUrl });
-    } else {
-      navigator.clipboard.writeText(shareUrl);
-      alert('تم نسخ الرابط!');
-    }
+    if (navigator.share) navigator.share({ title: 'شاهد هذا الريل', url: shareUrl });
+    else { navigator.clipboard.writeText(shareUrl); alert('تم نسخ الرابط!'); }
   };
 </script>
 </body>
