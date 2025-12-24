@@ -7,7 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
-  
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
 
   <style>
@@ -80,7 +79,7 @@
       text-shadow: 0 2px 6px rgba(0,0,0,0.6);
     }
 
-    /* شريط التقدم: anchor على اليمين ليكبر باتجاه اليسار (RTL) */
+    /* شريط التقدم (RTL) */
     .video-progress {
       position: absolute;
       left: 12px;
@@ -96,14 +95,13 @@
     .video-progress .progress {
       position: absolute;
       top: 0;
-      right: 0;                /* anchor to right */
+      right: 0;
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #007AFF 0%, #00D4FF 100%);
       transition: width 0.08s linear;
       border-radius: 999px;
     }
-    /* دائرة تمشي مع نهاية الجزء المملوء */
     .video-progress .thumb {
       position: absolute;
       top: 50%;
@@ -114,7 +112,7 @@
       background: linear-gradient(180deg, #00D4FF, #007AFF);
       border: 2px solid rgba(255,255,255,0.95);
       box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-      transform: translate(-50%, -50%); /* سنعيّن left بشكل (100 - pct)% */
+      transform: translate(-50%, -50%);
       pointer-events: none;
       z-index: 35;
     }
@@ -132,15 +130,36 @@
       z-index: 40; display: none;
     }
     .overlay-backdrop.open { display: block; }
+
+    /* top bar */
+    .topbar {
+      position: fixed; top: 8px; left: 12px; right: 12px; z-index: 60;
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      pointer-events: none;
+    }
+    .topbar a, .topbar button { pointer-events: auto; }
+    .notif-badge {
+      position: absolute; top: -6px; left: -6px;
+      min-width: 18px; height: 18px; padding: 0 6px;
+      background: #ef4444; color: #fff; font-size: 12px; border-radius: 999px;
+      display:inline-flex; align-items:center; justify-content:center; line-height:1;
+    }
+
   </style>
 </head>
 <body>
 
-  <div class="fixed top-4 right-4 z-30">
-    <a href="/chat_list" class="text-white text-xl drop-shadow-lg p-2"><i class="fas fa-arrow-right"></i></a>
-  </div>
-  <div class="fixed top-4 left-4 z-30">
-      <a href="/create-reel" class="text-white text-2xl drop-shadow-lg p-2"><i class="fas fa-plus"></i></a>
+  <div class="topbar">
+    <div class="flex items-center gap-2">
+      <a href="/chat_list" class="text-white text-xl drop-shadow-lg p-2 bg-black/40 rounded-full"><i class="fas fa-arrow-right"></i></a>
+    </div>
+    <div class="flex items-center gap-2">
+      <a id="createReelBtn" href="/create-reel" class="text-white text-xl drop-shadow-lg p-2 bg-black/40 rounded-full"><i class="fas fa-plus"></i></a>
+      <a id="notifTop" href="/notifications" class="relative text-white text-xl drop-shadow-lg p-2 bg-black/40 rounded-full">
+        <i class="fas fa-bell"></i>
+        <span id="notifBadgeTop" class="notif-badge" style="display:none">0</span>
+      </a>
+    </div>
   </div>
 
   <div class="swiper mySwiper">
@@ -167,41 +186,25 @@
   let swiperInstance = null;
   let currentReelsData = [];
   let currentUserId = null;
-
-  const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>'
-  );
+  const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>');
 
   document.addEventListener('DOMContentLoaded', loadReels);
 
   async function loadReels() {
     try {
       const res = await fetch('/api/reels/feed', { credentials: 'include' });
-      if (res.redirected) { window.location.href = res.url; return; }
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-      if (!res.ok) {
-        const txt = await res.text();
-        document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">فشل في تحميل الريلز (خطأ ${res.status})</div>`;
-        console.error('loadReels failed', res.status, txt);
-        return;
-      }
-      if (!contentType.includes('application/json')) {
-        const txt = await res.text();
-        document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">يجب تسجيل الدخول أو حدث خطأ في الخادم</div>`;
-        console.error('Expected JSON but got:', txt);
-        return;
-      }
+      if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
       const data = await res.json();
-      if (data.ok && data.reels) {
+      currentUserId = data.currentUserId || null;
+      if(data.ok && data.reels && data.reels.length > 0) {
         currentReelsData = data.reels;
-        currentUserId = data.currentUserId || null;
         renderReels(data.reels);
         initSwiper();
       } else {
         document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
       }
-    } catch (e) {
-      console.error('Error in loadReels', e);
+    } catch(e) {
+      console.error(e);
       document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">خطأ في التحميل</div>`;
     }
   }
@@ -214,18 +217,12 @@
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
-        
         <i class="fas fa-heart big-heart" id="bigHeart-${reel.reelId}"></i>
-
-        <div class="play-btn" id="playBtn-${reel.reelId}">
-          <i class="fas fa-play"></i>
-        </div>
-
+        <div class="play-btn" id="playBtn-${reel.reelId}"><i class="fas fa-play"></i></div>
         <div class="video-progress" id="progress-${reel.reelId}">
           <div class="progress" id="progressBar-${reel.reelId}"></div>
           <div class="thumb" id="thumb-${reel.reelId}"></div>
         </div>
-
         <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 pointer-events-none"></div>
 
         <div class="absolute left-4 bottom-24 flex flex-col items-center gap-6 z-20 pointer-events-auto">
@@ -241,13 +238,7 @@
             <i class="fas fa-share text-3xl text-white drop-shadow-md"></i>
             <span class="text-xs font-bold">مشاركة</span>
           </div>
-          
-          ${isOwner ? `
-          <div class="flex flex-col items-center gap-1 cursor-pointer text-red-500" onclick="deleteReel('${reel.reelId}')">
-            <i class="fas fa-trash-can text-2xl drop-shadow-md"></i>
-            <span class="text-[10px] font-bold">حذف</span>
-          </div>
-          ` : ''}
+          ${isOwner ? `<div class="flex flex-col items-center gap-1 cursor-pointer text-red-500" onclick="deleteReel('${reel.reelId}')"><i class="fas fa-trash-can text-2xl drop-shadow-md"></i><span class="text-[10px] font-bold">حذف</span></div>` : ''}
         </div>
 
         <div class="absolute right-4 bottom-8 left-16 z-20 text-right pointer-events-none">
@@ -255,9 +246,7 @@
             <img src="${reel.user.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-white object-cover">
             <h3 class="font-bold text-white shadow-black drop-shadow-md text-base">@${reel.user.username}</h3>
           </div>
-          <p class="text-sm text-gray-200 line-clamp-2 leading-relaxed drop-shadow-md dir-rtl pr-1">
-            ${reel.description}
-          </p>
+          <p class="text-sm text-gray-200 line-clamp-2 leading-relaxed drop-shadow-md dir-rtl pr-1">${escapeHtml(reel.description)}</p>
         </div>
       </div>
     `}).join('');
@@ -269,7 +258,6 @@
     document.querySelectorAll('video').forEach(vid => {
       const slide = vid.closest('.swiper-slide');
       const reelId = slide.getAttribute('data-id');
-
       const progressBar = document.getElementById(`progressBar-${reelId}`);
       const progressContainer = document.getElementById(`progress-${reelId}`);
       const playBtn = document.getElementById(`playBtn-${reelId}`);
@@ -277,18 +265,15 @@
 
       vid.addEventListener('timeupdate', () => {
         if (!progressBar || !vid.duration || isNaN(vid.duration)) return;
-        const pct = (vid.currentTime / vid.duration) * 100; // 0..100
-        // progressBar anchored to right, width grows leftwards
+        const pct = (vid.currentTime / vid.duration) * 100;
         progressBar.style.width = pct + '%';
-        // thumb should be at the left edge of the filled part -> left = 100 - pct
         if (thumb) thumb.style.left = (100 - pct) + '%';
       });
 
       if (progressContainer) {
         progressContainer.addEventListener('click', (ev) => {
           const rect = progressContainer.getBoundingClientRect();
-          const x = ev.clientX - rect.left; // distance from left
-          // since filled part goes right->left, pct = 1 - (x/width)
+          const x = ev.clientX - rect.left;
           let pct = 1 - (x / rect.width);
           if (pct < 0) pct = 0; if (pct > 1) pct = 1;
           if (vid.duration && !isNaN(vid.duration)) {
@@ -403,7 +388,7 @@
     if(!confirm('هل تريد حذف هذا الريل نهائياً؟')) return;
     try {
       const res = await fetch(`/api/reels/${reelId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json().catch(()=>({ ok: false, error: 'Invalid JSON' }));
+      const data = await res.json().catch(()=>({ ok: false }));
       if(res.ok && data.ok) location.reload();
       else { console.error('Delete reel failed', res.status, data); alert(data.error || 'خطأ في الحذف'); }
     } catch(e) { console.error('Delete reel error', e); alert('فشل الاتصال بالسيرفر'); }
@@ -425,6 +410,7 @@
     try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST', credentials: 'include' }); } catch(e) { console.error('like error', e); }
   }
 
+  // Comments sheet
   const backdrop = document.getElementById('backdrop');
   const sheet = document.getElementById('commentsSheet');
   const commentsList = document.getElementById('commentsList');
@@ -438,7 +424,7 @@
 
     commentsList.innerHTML = '<div class="text-center mt-5"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
     try {
-      const res = await fetch(`/api/reels/${reelId}/comments`, { credentials: 'include' });
+      const res = await fetch(`/api/reels/${reelId}/comments`);
       if (!res.ok) throw new Error('Failed to fetch comments: ' + res.status);
       const data = await res.json();
       renderComments(data.comments);
@@ -448,7 +434,11 @@
     }
   };
 
-  function closeCommentsSheet() { backdrop.classList.remove('open'); sheet.classList.remove('open'); if(swiperInstance) swiperInstance.allowTouchMove = true; }
+  function closeCommentsSheet() {
+    backdrop.classList.remove('open');
+    sheet.classList.remove('open');
+    if(swiperInstance) swiperInstance.allowTouchMove = true;
+  }
 
   function renderComments(comments) {
     commentsList.innerHTML = '';
@@ -458,13 +448,13 @@
     }
     commentsList.innerHTML = comments.map(c => `
       <div class="flex gap-3 mb-4 w-full">
-        <img src="${c.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover">
+        <img src="${escapeHtml(c.profile_picture_url || 'https://via.placeholder.com/40')}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover">
         <div>
            <div class="flex items-center gap-2">
-             <span class="font-bold text-xs">${c.username}</span>
+             <span class="font-bold text-xs">${escapeHtml(c.username)}</span>
              <span class="text-[10px] text-gray-500">${new Date(c.timestamp).toLocaleTimeString()}</span>
            </div>
-           <p class="text-sm mt-1">${c.content}</p>
+           <p class="text-sm mt-1">${escapeHtml(c.content)}</p>
         </div>
       </div>
     `).join('');
@@ -494,9 +484,51 @@
 
   window.shareReel = function(reelId) {
     const shareUrl = window.location.origin + '/reels?id=' + reelId;
-    if (navigator.share) navigator.share({ title: 'شاهد هذا الريل', url: shareUrl });
-    else { navigator.clipboard.writeText(shareUrl); alert('تم نسخ الرابط!'); }
+    if (navigator.share) {
+      navigator.share({ title: 'شاهد هذا الريل', url: shareUrl });
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      alert('تم نسخ الرابط!');
+    }
   };
+
+  // Notifications SSE (badge)
+  (function setupNotifSSEReels() {
+    if (!window.EventSource) return;
+    const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+    es.addEventListener('notifications', (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        const unread = payload.unread_count || 0;
+        const badge = document.getElementById('notifBadgeTop');
+        if (unread > 0) {
+          badge.style.display = 'inline-flex';
+          badge.textContent = unread > 99 ? '99+' : String(unread);
+        } else {
+          badge.style.display = 'none';
+        }
+      } catch (err) { console.error('Failed to parse notifications SSE data', err); }
+    });
+    es.addEventListener('error', (err) => { console.warn('Notifications SSE error', err); });
+  })();
+
+  // initial unread count fallback
+  (function initUnreadReels() {
+    fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && d.ok) {
+          const badge = document.getElementById('notifBadgeTop');
+          if (d.unread_count > 0) { badge.style.display = 'inline-flex'; badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count); }
+        }
+      }).catch(()=>{});
+  })();
+
+  // small helpers
+  function escapeHtml(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 </script>
 </body>
 </html>
