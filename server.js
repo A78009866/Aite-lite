@@ -772,25 +772,18 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
   }
 });
+// ---------------- API: Reels Implementation ----------------
 
-// ---------------- API: Reels ----------------
-
-// Create a reel (expects 'media' file and optional 'description')
+// إنشاء ريل جديد
 app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, res) => {
   const userId = req.session.userId;
-  const description = (req.body.description || '').trim();
-
+  const description = req.body.description ? req.body.description.trim() : '';
+  
   if (!req.file) {
-    return res.status(400).json({ ok: false, error: 'الملف المطلوب (فيديو) مفقود.' });
+    return res.status(400).json({ ok: false, error: 'الفيديو مطلوب.' });
   }
 
   try {
-    const mediaUrl = req.file.path;
-    const mimeType = req.file.mimetype || '';
-    let mediaType = 'video';
-    if (mimeType.startsWith('image/')) mediaType = 'image';
-    else if (mimeType.startsWith('audio/')) mediaType = 'audio';
-
     const newReelRef = db.ref('reels').push();
     const reelId = newReelRef.key;
     const timestamp = admin.database.ServerValue.TIMESTAMP;
@@ -799,199 +792,128 @@ app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, r
       reelId: reelId,
       userId: userId,
       description: description,
-      media: { url: mediaUrl, type: mediaType },
       timestamp: timestamp,
       likes: 0,
       commentsCount: 0,
+      videoUrl: req.file.path,
+      mimeType: req.file.mimetype
     };
 
     await newReelRef.set(reelData);
-    await db.ref(`profiles/${userId}/reelsCount`).transaction((c) => (c || 0) + 1);
-
     res.json({ ok: true, reelId: reelId });
+
   } catch (error) {
     console.error('Error creating reel:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إنشاء الريل.' });
+    res.status(500).json({ ok: false, error: 'فشل في رفع الريل.' });
   }
 });
 
-// Get reels with pagination (limit, before timestamp)
-app.get('/api/reels', requireAuth, async (req, res) => {
+// جلب الريلز (Feed)
+app.get('/api/reels/feed', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
-  const limit = Math.min(Number(req.query.limit) || 10, 50);
-  const before = req.query.before ? Number(req.query.before) : null;
-
   try {
-    let queryRef = db.ref('reels').orderByChild('timestamp');
-    if (before) {
-      queryRef = queryRef.endAt(before - 1).limitToLast(limit);
-    } else {
-      queryRef = queryRef.limitToLast(limit);
-    }
+    // جلب آخر 20 ريل
+    const reelsSnap = await db.ref('reels').orderByChild('timestamp').limitToLast(20).once('value');
+    let reels = [];
+    reelsSnap.forEach(snap => reels.push(snap.val()));
+    reels.reverse(); // الأحدث أولاً
 
-    const reelsSnap = await queryRef.once('value');
-    const reels = [];
-    reelsSnap.forEach(childSnap => reels.push(childSnap.val()));
-    reels.sort((a, b) => b.timestamp - a.timestamp); // newest first
+    // جلب بيانات المستخدمين وحالة الإعجاب
+    const finalReels = await Promise.all(reels.map(async (reel) => {
+      const userSnap = await db.ref(`profiles/${reel.userId}`).once('value');
+      const userData = userSnap.val() || {};
+      
+      const likeSnap = await db.ref(`reels_likes/${reel.reelId}/${currentUserId}`).once('value');
+      const isLiked = likeSnap.exists();
 
-    // attach user profiles and liked status
-    const userIds = [...new Set(reels.map(r => r.userId))];
-    const profilePromises = userIds.map(id => db.ref(`profiles/${id}`).once('value'));
-    const profileSnapshots = await Promise.all(profilePromises);
-    const profiles = {};
-    profileSnapshots.forEach((snap, i) => profiles[userIds[i]] = snap.val());
-
-    const likedPromises = reels.map(r => db.ref(`reel_likes/${r.reelId}/${currentUserId}`).once('value'));
-    const likedSnapshots = await Promise.all(likedPromises);
-    const likedStatuses = {};
-    likedSnapshots.forEach((snap, i) => likedStatuses[reels[i].reelId] = snap.val() !== null);
-
-    const final = reels.map(r => ({
-      ...r,
-      is_liked: !!likedStatuses[r.reelId],
-      user: {
-        username: profiles[r.userId]?.username || 'مستخدم',
-        profile_picture_url: profiles[r.userId]?.profile_picture_url || DEFAULT_PROFILE_PIC_URL
-      }
+      return {
+        ...reel,
+        is_liked: isLiked,
+        user: {
+          username: userData.username || 'مستخدم',
+          profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150'
+        }
+      };
     }));
 
-    const lastTimestamp = final.length ? final[final.length - 1].timestamp : null;
-
-    res.json({ ok: true, reels: final, lastTimestamp: lastTimestamp });
+    res.json({ ok: true, reels: finalReels });
   } catch (error) {
-    console.error('Error fetching reels:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب الريلز.' });
+    res.status(500).json({ ok: false, error: 'Error fetching reels' });
   }
 });
 
-// Like/unlike a reel
+// الإعجاب بريل
 app.post('/api/reels/:reelId/like', requireAuth, async (req, res) => {
   const userId = req.session.userId;
-  const reelId = req.params.reelId;
-  if (!reelId) return res.status(400).json({ ok: false });
+  const { reelId } = req.params;
 
   const reelRef = db.ref(`reels/${reelId}`);
-  const userLikeRef = db.ref(`reel_likes/${reelId}/${userId}`);
+  const likeRef = db.ref(`reels_likes/${reelId}/${userId}`);
 
   try {
-    const reelSnapshot = await reelRef.once('value');
-    if (!reelSnapshot.exists()) return res.status(404).json({ ok: false });
-
-    const likeSnapshot = await userLikeRef.once('value');
-    const isLiked = likeSnapshot.val();
-    let likesUpdate = 0;
-    let action = '';
+    const likeSnap = await likeRef.once('value');
+    let isLiked = likeSnap.exists();
+    let increment = 0;
 
     if (isLiked) {
-      await userLikeRef.remove();
-      likesUpdate = -1;
-      action = 'unliked';
+      await likeRef.remove();
+      increment = -1;
     } else {
-      await userLikeRef.set(admin.database.ServerValue.TIMESTAMP);
-      likesUpdate = 1;
-      action = 'liked';
+      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
+      increment = 1;
     }
 
-    let newLikesCount = 0;
-    await reelRef.child('likes').transaction((currentCount) => {
-      newLikesCount = (currentCount || 0) + likesUpdate;
-      return newLikesCount < 0 ? 0 : newLikesCount;
-    });
+    await reelRef.child('likes').transaction(count => (count || 0) + increment);
+    
+    // إرجاع العدد الجديد
+    const updatedReel = await reelRef.once('value');
+    res.json({ ok: true, likes: updatedReel.val().likes, is_liked: !isLiked });
 
-    res.json({ ok: true, action: action, newLikes: newLikesCount });
   } catch (error) {
-    console.error('Error liking reel:', error);
     res.status(500).json({ ok: false });
   }
 });
 
-// Comment on a reel
+// التعليق على ريل
 app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
   const userId = req.session.userId;
-  const reelId = req.params.reelId;
-  const content = (req.body.content || '').trim();
+  const { reelId } = req.params;
+  const { content } = req.body;
 
-  if (!reelId || !content) return res.status(400).json({ ok: false });
+  if (!content) return res.status(400).json({ ok: false });
 
   try {
-    const reelRef = db.ref(`reels/${reelId}`);
-    const reelSnap = await reelRef.once('value');
-    if (!reelSnap.exists()) return res.status(404).json({ ok: false });
-
     const userSnap = await db.ref(`profiles/${userId}`).once('value');
-    const userData = userSnap.val();
+    const user = userSnap.val();
 
-    const newCommentRef = db.ref(`reel_comments/${reelId}`).push();
+    const commentRef = db.ref(`reels_comments/${reelId}`).push();
     const commentData = {
-      commentId: newCommentRef.key,
-      reelId: reelId,
-      userId: userId,
-      content: content,
-      timestamp: admin.database.ServerValue.TIMESTAMP,
-      user: {
-        username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
-      }
+      id: commentRef.key,
+      userId,
+      username: user.username,
+      profile_picture_url: user.profile_picture_url,
+      content,
+      timestamp: admin.database.ServerValue.TIMESTAMP
     };
 
-    await newCommentRef.set(commentData);
+    await commentRef.set(commentData);
+    await db.ref(`reels/${reelId}/commentsCount`).transaction(c => (c || 0) + 1);
 
-    let newCommentsCount = 0;
-    await reelRef.child('commentsCount').transaction((currentCount) => {
-      newCommentsCount = (currentCount || 0) + 1;
-      return newCommentsCount;
-    });
-
-    res.json({ ok: true, comment: commentData, newComments: newCommentsCount });
+    res.json({ ok: true, comment: commentData });
   } catch (error) {
-    console.error('Error commenting on reel:', error);
     res.status(500).json({ ok: false });
   }
 });
 
-// Get reel comments
+// جلب تعليقات ريل
 app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
-  const reelId = req.params.reelId;
+  const { reelId } = req.params;
   try {
-    const commentsSnap = await db.ref(`reel_comments/${reelId}`)
-      .orderByChild('timestamp')
-      .once('value');
-
+    const snap = await db.ref(`reels_comments/${reelId}`).orderByChild('timestamp').limitToLast(50).once('value');
     const comments = [];
-    commentsSnap.forEach(childSnap => comments.push(childSnap.val()));
-
+    snap.forEach(s => comments.push(s.val()));
     res.json({ ok: true, comments: comments });
   } catch (error) {
-    console.error('Error fetching reel comments:', error);
-    res.status(500).json({ ok: false });
-  }
-});
-
-// Delete reel (owner only)
-app.delete('/api/reels/:reelId', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const reelId = req.params.reelId;
-  if (!reelId) return res.status(400).json({ ok: false });
-
-  try {
-    const reelRef = db.ref(`reels/${reelId}`);
-    const reelSnap = await reelRef.once('value');
-    if (!reelSnap.exists()) return res.status(404).json({ ok: false, error: 'Reel not found' });
-
-    const reel = reelSnap.val();
-    if (reel.userId !== userId) {
-      return res.status(403).json({ ok: false, error: 'Forbidden' });
-    }
-
-    // remove reel and related nodes (likes/comments)
-    await reelRef.remove();
-    await db.ref(`reel_comments/${reelId}`).remove();
-    await db.ref(`reel_likes/${reelId}`).remove();
-    await db.ref(`profiles/${userId}/reelsCount`).transaction((c) => (c || 0) > 0 ? c - 1 : 0);
-
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Error deleting reel:', error);
     res.status(500).json({ ok: false });
   }
 });
