@@ -11,69 +11,158 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 
   <style>
-    :root { --bg: #000; --muted: #9ca3af; --accent: #06b6d4; }
-    html,body { height:100%; background:var(--bg); font-family:'Cairo',sans-serif; color:#fff; }
-    /* full-screen vertical snap container like Instagram Reels */
-    #reelsContainer {
-      height: 100vh;
-      overflow-y: auto;
-      scroll-snap-type: y mandatory;
-      -webkit-overflow-scrolling: touch;
+    :root {
+      --bg: #000;
+      --glass: rgba(255,255,255,0.04);
+      --glass-strong: rgba(255,255,255,0.06);
+      --muted: #9ca3af;
+      --accent: #06b6d4;
+      --danger: #ef4444;
     }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: linear-gradient(180deg,#000,#050505 60%);
+      font-family: 'Cairo', sans-serif;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow: hidden; /* make #reelsViewport the scroll container */
+    }
+
+    /* header */
+    header.appbar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      z-index: 70;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.05));
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+    }
+    header.appbar * { pointer-events: auto; }
+
+    /* viewport that scrolls (only this element scrolls) */
+    #reelsViewport {
+      position: absolute;
+      top: 56px; /* header height */
+      right: 0;
+      left: 0;
+      bottom: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: y mandatory;
+      background: transparent;
+    }
+
+    /* each reel takes the full available viewport (under header) */
     .reel {
       position: relative;
-      height: 100vh;
+      height: calc(100vh - 56px);
+      min-height: calc(100vh - 56px);
       scroll-snap-align: start;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: linear-gradient(180deg, rgba(0,0,0,0.0), rgba(0,0,0,0.15));
+      overflow: hidden;
+    }
+
+    /* content wrapper with glass effect */
+    .content-wrap {
+      width: 100%;
+      height: 100%;
+      max-width: 900px;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px) saturate(1.05);
+    }
+
+    .reel video, .reel img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
       background: #000;
     }
-    .reel video, .reel img {
-      max-height: 100%;
-      width: 100%;
-      object-fit: cover;
-    }
+
+    /* translucent gradient overlay for readability */
+    .top-gradient { position:absolute; inset:0; pointer-events:none;
+      background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.0) 30%); z-index:6; }
+    .bottom-gradient { position:absolute; inset:0; pointer-events:none;
+      background: linear-gradient(180deg, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.6) 100%); z-index:6; }
 
     /* overlay info */
     .overlay {
       position: absolute;
-      bottom: 24px;
+      bottom: 18px;
       right: 16px;
       left: 16px;
       display: flex;
       gap: 12px;
       align-items: flex-end;
+      z-index: 10;
       pointer-events: none;
     }
     .meta {
       flex: 1;
       pointer-events: auto;
-    }
-    .meta .username { font-weight:700; font-size: 15px; }
-    .meta .desc { color: var(--muted); margin-top: 6px; max-height: 4.4em; overflow: hidden; line-height:1.2; font-size: 13px; }
-    .actions {
-      width: 72px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 8px;
+    }
+    .meta .username { font-weight:700; font-size: 15px; }
+    .meta .desc {
+      color: var(--muted);
+      margin-top: 2px;
+      max-height: 5.6em;
+      overflow: hidden;
+      line-height:1.25;
+      font-size: 13px;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+    }
+
+    .actions {
+      width: 78px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
       align-items: center;
       pointer-events: auto;
     }
+
     .action-btn {
-      display:flex; flex-direction:column; align-items:center; gap:6px; color:#fff; cursor:pointer;
-      transform: translateZ(0);
+      display:flex; flex-direction:column; align-items:center; gap:6px;
+      color:#fff; cursor:pointer; user-select:none;
+      width:54px; height:54px; border-radius:14px; justify-content:center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+      transition: transform .12s ease, background .12s ease;
     }
+    .action-btn:active { transform: scale(.96); }
     .action-btn .count { font-size:12px; color:var(--muted); }
 
     .profile-thumb {
-      width:44px; height:44px; border-radius:9999px; overflow:hidden; border:2px solid rgba(255,255,255,0.06);
+      width:46px; height:46px; border-radius:9999px; overflow:hidden; border:2px solid rgba(255,255,255,0.06);
     }
 
     /* double-tap heart animation */
     .heart {
       position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;
-      transform: scale(0); opacity:0;
+      transform: scale(0); opacity:0; z-index: 20;
     }
     .heart.show { animation: pop 600ms ease forwards; }
     @keyframes pop {
@@ -86,12 +175,12 @@
     .comments-drawer {
       position: fixed;
       left: 0; right: 0; bottom: 0;
-      background: linear-gradient(180deg, rgba(10,10,10,0.96), rgba(0,0,0,0.98));
+      background: linear-gradient(180deg, rgba(6,6,6,0.95), rgba(0,0,0,0.98));
       border-top-left-radius: 16px; border-top-right-radius: 16px;
-      max-height: 70vh;
+      max-height: 72vh;
       transform: translateY(100%);
       transition: transform .28s ease;
-      z-index: 60;
+      z-index: 80;
       color: #fff;
       overflow: hidden;
       display:flex;
@@ -106,33 +195,24 @@
     .small-loader { width:18px; height:18px; border:3px solid rgba(255,255,255,0.08); border-top-color: var(--accent); border-radius:9999px; animation:spin 1s linear infinite;}
     @keyframes spin { to { transform: rotate(360deg);} }
 
-    /* page header */
-    header.appbar {
-      position: fixed;
-      top:0; right:0; left:0; z-index:70; display:flex; align-items:center; justify-content:space-between;
-      padding: 10px 14px; background: linear-gradient(0deg, rgba(0,0,0,0.0), rgba(0,0,0,0.35)); pointer-events:none;
-    }
-    header.appbar * { pointer-events:auto; }
-    .snap-indicator { font-size:12px; color:var(--muted); }
-
-    /* responsive adjustments */
+    /* responsive */
     @media (min-width: 900px) {
-      .reel { align-items:center; justify-content:center; }
-      .reel .content-wrap { width: 480px; height: calc(100vh - 40px); border-radius: 12px; overflow:hidden; background:#000; }
+      .content-wrap { width: 720px; border-radius: 16px; }
+      .actions { width: 88px; }
+      .profile-thumb { width:54px; height:54px; }
     }
   </style>
 </head>
-<body class="bg-black">
+<body>
 
   <header class="appbar">
     <a href="/chat_list" class="text-white text-lg flex items-center gap-2"><i class="fas fa-arrow-right"></i> العودة</a>
-    <div class="snap-indicator">ريلز — تصفح</div>
+    <div class="snap-indicator text-sm text-gray-300">ريلز — تصفح</div>
     <a href="/create-reel" class="text-white text-lg"><i class="fas fa-plus"></i></a>
   </header>
 
-  <!-- reels container -->
-  <main id="reelsContainer" class="pt-12">
-    <!-- Reels will be rendered here dynamically -->
+  <!-- scrollable viewport (only this element scrolls) -->
+  <main id="reelsViewport" aria-label="Reels viewport">
     <div id="emptyState" class="reel" style="display:none;">
       <div class="text-center p-4">
         <i class="fas fa-video-slash text-4xl text-gray-500 mb-4"></i>
@@ -163,8 +243,8 @@
   </aside>
 
 <script>
-  // Client for /api/reels integration
-  const container = document.getElementById('reelsContainer');
+  // DOM references
+  const viewport = document.getElementById('reelsViewport');
   const commentsDrawer = document.getElementById('commentsDrawer');
   const commentsBody = document.getElementById('commentsBody');
   const commentsLoader = document.getElementById('commentsLoader');
@@ -179,23 +259,22 @@
   let activeReelId = null;
   let commentsForReel = null;
 
-  // Helper: fetch with credentials (server uses session cookie)
+  // fetch wrapper (send session cookie)
   async function apiFetch(url, options = {}) {
     options.credentials = options.credentials || 'same-origin';
-    options.headers = options.headers || {};
     return fetch(url, options);
   }
 
-  // Render a single reel DOM
+  // Create reel element
   function createReelEl(reel) {
     const el = document.createElement('section');
     el.className = 'reel';
     el.dataset.reelId = reel.reelId;
 
     const contentWrap = document.createElement('div');
-    contentWrap.className = 'content-wrap w-full h-full relative';
+    contentWrap.className = 'content-wrap';
 
-    // Video element
+    // video (muted to allow autoplay)
     const video = document.createElement('video');
     video.src = reel.media?.url || '';
     video.setAttribute('playsinline', '');
@@ -204,9 +283,13 @@
     video.loop = true;
     video.controls = false;
     video.preload = 'metadata';
-    video.className = 'w-full h-full';
+    video.className = '';
 
-    // center double-tap heart
+    // gradients
+    const topG = document.createElement('div'); topG.className = 'top-gradient';
+    const bottomG = document.createElement('div'); bottomG.className = 'bottom-gradient';
+
+    // heart animation
     const heart = document.createElement('div');
     heart.className = 'heart';
     heart.innerHTML = '<i class="fas fa-heart text-white text-6xl" style="text-shadow:0 6px 18px rgba(0,0,0,0.6)"></i>';
@@ -214,89 +297,78 @@
     // overlay
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
-
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.innerHTML = `
-      <div class="flex items-center gap-3">
-        <div class="profile-thumb overflow-hidden">
-          <img src="${reel.user?.profile_picture_url || '/default_profile.png'}" alt="${reel.user?.username || 'مستخدم'}" class="w-full h-full object-cover"/>
+    overlay.innerHTML = `
+      <div class="meta">
+        <div class="flex items-center gap-3">
+          <div class="profile-thumb overflow-hidden" style="flex:0 0 auto;">
+            <img src="${escapeHtml(reel.user?.profile_picture_url || '/default_profile.png')}" alt="${escapeHtml(reel.user?.username || 'مستخدم')}" style="width:100%;height:100%;object-fit:cover"/>
+          </div>
+          <div>
+            <div class="username">${escapeHtml(reel.user?.username || 'مستخدم')}</div>
+            <div class="text-xs text-gray-400">${timeAgo(reel.timestamp)}</div>
+          </div>
         </div>
-        <div>
-          <div class="username">${escapeHtml(reel.user?.username || 'مستخدم')}</div>
-          <div class="text-xs text-gray-400"> ${timeAgo(reel.timestamp)} </div>
+        <div class="desc">${escapeHtml(reel.description || '')}</div>
+      </div>
+      <div class="actions">
+        <div class="action-btn like-btn" title="إعجاب">
+          <i class="fa-solid fa-heart text-2xl" style="color:${reel.is_liked ? '#ef4444' : 'white'}"></i>
+          <div class="count">${reel.likes || 0}</div>
         </div>
-      </div>
-      <div class="desc mt-3">${escapeHtml(reel.description || '')}</div>
-    `;
-
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-    actions.innerHTML = `
-      <div class="action-btn like-btn" title="إعجاب">
-        <i class="fa-solid fa-heart text-2xl" style="color:${reel.is_liked ? '#ef4444' : 'white'}"></i>
-        <div class="count">${reel.likes || 0}</div>
-      </div>
-      <div class="action-btn comment-btn" title="تعليقات">
-        <i class="fa-regular fa-comment text-2xl"></i>
-        <div class="count">${reel.commentsCount || 0}</div>
-      </div>
-      <div class="action-btn share-btn" title="مشاركة">
-        <i class="fa-solid fa-paper-plane text-2xl"></i>
-        <div class="count">مشاركة</div>
+        <div class="action-btn comment-btn" title="تعليقات">
+          <i class="fa-regular fa-comment text-2xl"></i>
+          <div class="count">${reel.commentsCount || 0}</div>
+        </div>
+        <div class="action-btn share-btn" title="مشاركة">
+          <i class="fa-solid fa-paper-plane text-2xl"></i>
+          <div class="count">مشاركة</div>
+        </div>
       </div>
     `;
-
-    overlay.appendChild(meta);
-    overlay.appendChild(actions);
 
     contentWrap.appendChild(video);
+    contentWrap.appendChild(topG);
+    contentWrap.appendChild(bottomG);
     contentWrap.appendChild(heart);
     contentWrap.appendChild(overlay);
     el.appendChild(contentWrap);
 
-    // Event handlers
-    // Play/pause handled by IntersectionObserver globally
-
-    // Double-tap to like
+    // event handlers
+    // double-tap / double-click
     let lastTap = 0;
     contentWrap.addEventListener('touchend', (ev) => {
       const now = Date.now();
       if (now - lastTap < 300) {
-        // double tap detected
         showHeart(heart);
-        toggleLike(reel, el, true);
+        toggleLike(reel, el);
       }
       lastTap = now;
     });
 
-    // Desktop double click
     contentWrap.addEventListener('dblclick', () => {
       showHeart(heart);
-      toggleLike(reel, el, true);
+      toggleLike(reel, el);
     });
 
-    // Like button
-    actions.querySelector('.like-btn').addEventListener('click', (e) => {
+    // like button
+    contentWrap.querySelector('.like-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      toggleLike(reel, el, false);
+      toggleLike(reel, el);
     });
 
-    // Comment button opens drawer
-    actions.querySelector('.comment-btn').addEventListener('click', (e) => {
+    // comment button
+    contentWrap.querySelector('.comment-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       openComments(reel);
     });
 
-    // share button copy link
-    actions.querySelector('.share-btn').addEventListener('click', (e) => {
+    // share button
+    contentWrap.querySelector('.share-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       const shareUrl = `${location.origin}/reels?r=${reel.reelId}`;
       navigator.clipboard?.writeText(shareUrl).then(() => {
         toast('تم نسخ رابط الريل');
-      }).catch(() => {
-        toast('تعذر نسخ الرابط');
-      });
+      }).catch(() => toast('تعذر نسخ الرابط'));
     });
 
     return el;
@@ -310,13 +382,12 @@
     setTimeout(() => heartEl.classList.remove('show'), 700);
   }
 
-  // Toggle like optimistically; if fromDoubleTap skip toggling UI twice
-  async function toggleLike(reel, reelEl, fromDoubleTap) {
+  // Toggle like (optimistic)
+  async function toggleLike(reel, reelEl) {
     const btn = reelEl.querySelector('.like-btn');
     const icon = btn.querySelector('i');
     const countEl = btn.querySelector('.count');
 
-    // optimistic update
     const prevLiked = !!reel.is_liked;
     reel.is_liked = !prevLiked;
     reel.likes = Math.max(0, (reel.likes || 0) + (reel.is_liked ? 1 : -1));
@@ -327,22 +398,21 @@
       const resp = await apiFetch(`/api/reels/${reel.reelId}/like`, { method: 'POST' });
       if (!resp.ok) throw new Error('Request failed');
       const data = await resp.json();
-      // update according to server response (in case of mismatch)
       if (data && data.newLikes !== undefined) {
         reel.likes = data.newLikes;
         countEl.textContent = reel.likes;
       }
     } catch (err) {
-      // revert
+      // revert if failed
       reel.is_liked = prevLiked;
-      reel.likes = Math.max(0, (reel.likes || 0) + (prevLiked ? 0 : -1) ); // best effort
+      reel.likes = Math.max(0, (reel.likes || 0) + (prevLiked ? 0 : -1));
       icon.style.color = reel.is_liked ? '#ef4444' : 'white';
       countEl.textContent = reel.likes;
       toast('فشل إجراء الإعجاب');
     }
   }
 
-  // Open comments drawer and load comments for a reel
+  // open comments drawer and render ALL comments robustly
   async function openComments(reel) {
     commentsDrawer.classList.add('open');
     commentsDrawer.setAttribute('aria-hidden', 'false');
@@ -350,6 +420,7 @@
     commentsBody.innerHTML = '';
     commentInput.value = '';
     commentsLoader.style.display = 'block';
+
     try {
       const resp = await apiFetch(`/api/reels/${reel.reelId}/comments`);
       const body = await resp.json();
@@ -358,17 +429,29 @@
         commentsBody.innerHTML = `<div class="p-3 text-gray-400">خطأ في جلب التعليقات</div>`;
         return;
       }
-      const comments = body.comments || [];
+
+      // server may return comments as array or object; normalize to array
+      let comments = body.comments || [];
+      if (!Array.isArray(comments)) {
+        comments = Object.values(comments || {});
+      }
+
+      // sort newest first (server returns ordered by timestamp but normalize anyway)
+      comments.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
+
       if (!comments.length) {
         commentsBody.innerHTML = `<div class="p-3 text-gray-400">لا توجد تعليقات بعد</div>`;
         return;
       }
+
+      // render all comments
+      const frag = document.createDocumentFragment();
       for (const c of comments) {
         const node = document.createElement('div');
         node.className = 'comment';
         node.innerHTML = `
           <div class="w-10 h-10 rounded-full overflow-hidden">
-            <img src="${c.user?.profile_picture_url || '/default_profile.png'}" class="w-full h-full object-cover"/>
+            <img src="${escapeHtml(c.user?.profile_picture_url || '/default_profile.png')}" class="w-full h-full object-cover"/>
           </div>
           <div>
             <div class="text-sm font-semibold">${escapeHtml(c.user?.username || 'مستخدم')}</div>
@@ -376,8 +459,10 @@
             <div class="text-xs text-gray-500 mt-1">${timeAgo(c.timestamp)}</div>
           </div>
         `;
-        commentsBody.appendChild(node);
+        frag.appendChild(node);
       }
+      commentsBody.appendChild(frag);
+
     } catch (err) {
       commentsLoader.style.display = 'none';
       commentsBody.innerHTML = `<div class="p-3 text-gray-400">خطأ في الاتصال</div>`;
@@ -405,13 +490,14 @@
       });
       const data = await resp.json();
       if (!data.ok) throw new Error('error');
-      // prepend the new comment locally to drawer
+
+      // prepend new comment locally
       const c = data.comment;
       const node = document.createElement('div');
       node.className = 'comment';
       node.innerHTML = `
         <div class="w-10 h-10 rounded-full overflow-hidden">
-          <img src="${c.user?.profile_picture_url || '/default_profile.png'}" class="w-full h-full object-cover"/>
+          <img src="${escapeHtml(c.user?.profile_picture_url || '/default_profile.png')}" class="w-full h-full object-cover"/>
         </div>
         <div>
           <div class="text-sm font-semibold">${escapeHtml(c.user?.username || 'مستخدم')}</div>
@@ -422,6 +508,20 @@
       commentsBody.insertBefore(node, commentsBody.firstChild);
       commentInput.value = '';
       toast('تم إرسال التعليق');
+
+      // update comments count shown on reel UI
+      const reelEl = document.querySelector(`.reel[data-reel-id="${commentsForReel.reelId}"]`);
+      if (reelEl) {
+        const countEl = reelEl.querySelector('.comment-btn .count');
+        if (countEl) {
+          // increment safely
+          const current = Number(countEl.textContent || 0) + 1;
+          countEl.textContent = current;
+          // also update local model
+          commentsForReel.commentsCount = current;
+        }
+      }
+
     } catch (err) {
       toast('فشل إرسال التعليق');
     } finally {
@@ -444,7 +544,7 @@
     return String(s).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
 
-  // Convert firebase timestamp (ServerValue.TIMESTAMP replaced on write) to relative time
+  // Convert timestamp to relative
   function timeAgo(ts) {
     if (!ts) return '';
     const t = Number(ts);
@@ -459,8 +559,8 @@
     return `${d}ي`;
   }
 
-  // IntersectionObserver to autoplay visible reel
-  const observerOptions = { root: container, threshold: 0.65 };
+  // IntersectionObserver to autoplay visible reel (root is viewport)
+  const observerOptions = { root: viewport, threshold: 0.66 };
   const io = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const reelEl = entry.target;
@@ -469,21 +569,21 @@
       if (entry.isIntersecting) {
         // pause previously active
         if (activeReelId && activeReelId !== reelEl.dataset.reelId) {
-          const prev = container.querySelector(`.reel[data-reel-id="${activeReelId}"]`);
+          const prev = viewport.querySelector(`.reel[data-reel-id="${activeReelId}"]`);
           if (prev) {
             const v = prev.querySelector('video');
             try { v?.pause(); } catch(e){}
           }
         }
         activeReelId = reelEl.dataset.reelId;
-        video.play().catch(()=>{ /* may fail on autoplay if not muted; we set muted:true */ });
+        video.play().catch(()=>{ /* autoplay may fail if not allowed; videos are muted by default */ });
       } else {
         try { video.pause(); } catch(e){}
       }
     });
   }, observerOptions);
 
-  // Load initial reels
+  // Load reels from server
   async function loadReels(limit = 8) {
     if (loading) return;
     loading = true;
@@ -498,14 +598,20 @@
       } else {
         emptyState.style.display = 'none';
       }
-      // append DOM
+
+      // append DOM elements
       for (const r of newReels) {
         reels.push(r);
         const el = createReelEl(r);
-        container.appendChild(el);
+        viewport.appendChild(el);
         io.observe(el);
       }
+
+      // update lastTimestamp safely
       lastTimestamp = body.lastTimestamp || (newReels.length ? newReels[newReels.length - 1].timestamp : lastTimestamp);
+
+      // if only one reel visible because viewport height isn't large enough: ensure container scroll works
+      // (no action needed here because CSS ensures viewport is scrollable)
     } catch (err) {
       console.error('Error loading reels', err);
       toast('خطأ في جلب الريلز');
@@ -514,44 +620,48 @@
     }
   }
 
-  // infinite scroll: when near bottom, load more
-  container.addEventListener('scroll', () => {
+  // infinite scroll when near bottom
+  viewport.addEventListener('scroll', () => {
     if (loading) return;
-    const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 300;
+    const nearBottom = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 300;
     if (nearBottom) loadReels(6);
   });
 
-  // initial call
+  // initial load
   loadReels(6);
 
-  // keyboard support for desktop: up/down
+  // keyboard support
   window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || e.key === 'PageDown') {
       e.preventDefault();
-      container.scrollBy({ top: container.clientHeight, behavior: 'smooth' });
+      viewport.scrollBy({ top: viewport.clientHeight, behavior: 'smooth' });
     } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
       e.preventDefault();
-      container.scrollBy({ top: -container.clientHeight, behavior: 'smooth' });
+      viewport.scrollBy({ top: -viewport.clientHeight, behavior: 'smooth' });
     } else if (e.key === 'k') {
-      // toggle mute on active reel
-      const active = container.querySelector(`.reel[data-reel-id="${activeReelId}"]`);
+      const active = viewport.querySelector(`.reel[data-reel-id="${activeReelId}"]`);
       if (active) {
         const v = active.querySelector('video');
-        if (v) v.muted = !v.muted;
-        toast(v.muted ? 'كتم' : 'صوت');
+        if (v) {
+          v.muted = !v.muted;
+          toast(v.muted ? 'كتم' : 'صوت');
+        }
       }
     }
   });
 
-  // Accessibility: pause all videos when page hidden
+  // pause videos on page hidden
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       document.querySelectorAll('video').forEach(v => v.pause());
     } else {
-      const active = container.querySelector(`.reel[data-reel-id="${activeReelId}"]`);
+      const active = viewport.querySelector(`.reel[data-reel-id="${activeReelId}"]`);
       active?.querySelector('video')?.play().catch(()=>{});
     }
   });
+
+  // make sure touch swipes are smooth on mobile
+  viewport.addEventListener('touchstart', ()=>{}, {passive:true});
 </script>
 
 </body>
