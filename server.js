@@ -329,6 +329,29 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
       last_message_sender_id: senderId
     });
 
+    // إنشاء إشعار للمستقبل يوجه إلى المحادثة
+    try {
+      const fromProfileSnap = await db.ref(`profiles/${senderId}`).once('value');
+      const fromProfile = fromProfileSnap.val() || {};
+      const notifRef = db.ref(`notifications/${contactId}`).push();
+      const notifData = {
+        id: notifRef.key,
+        type: 'message',
+        from_user_id: senderId,
+        from_username: fromProfile.username || 'مستخدم',
+        from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        postId: null,
+        reelId: null,
+        contact_id: senderId,
+        preview: previewText,
+        timestamp: admin.database.ServerValue.TIMESTAMP,
+        is_read: false
+      };
+      await notifRef.set(notifData);
+    } catch (nerr) {
+      console.error('Failed to create message notification:', nerr);
+    }
+
     messageData.timestamp = Date.now();
     res.json({ ok: true, message: 'Sent', messageData: messageData });
 
@@ -704,6 +727,32 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       return newCommentsCount;
     });
 
+    // إنشاء إشعار لمالك المنشور عند التعليق (إذا لم يكن المعلق هو المالك)
+    try {
+      const postData = postSnapshot.val();
+      if (postData.userId && postData.userId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${postData.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'post_comment',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: postId,
+          reelId: null,
+          commentId: commentData.commentId,
+          commentContent: commentData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create post_comment notification:', nerr);
+    }
+
     res.json({ ok: true, comment: commentData, newComments: newCommentsCount });
 
   } catch (error) {
@@ -987,6 +1036,33 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
     await commentRef.set(commentData);
     await db.ref(`reels/${reelId}/commentsCount`).transaction(c => (c || 0) + 1);
 
+    // إنشاء إشعار لمالك الريل عند التعليق
+    try {
+      const reelSnap = await db.ref(`reels/${reelId}`).once('value');
+      const reel = reelSnap.val();
+      if (reel && reel.userId && reel.userId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${reel.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'reel_comment',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: null,
+          reelId: reelId,
+          commentId: commentData.id,
+          commentContent: commentData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create reel_comment notification:', nerr);
+    }
+
     res.json({ ok: true, comment: commentData });
   } catch (error) {
     res.status(500).json({ ok: false });
@@ -1079,6 +1155,32 @@ app.post('/api/notifications/mark_read', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error marking notifications read:', error);
     res.status(500).json({ ok: false });
+  }
+});
+
+// حذف إشعار واحد
+app.delete('/api/notifications/:id', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const notifId = req.params.id;
+  if (!notifId) return res.status(400).json({ ok: false });
+  try {
+    await db.ref(`notifications/${userId}/${notifId}`).remove();
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// حذف كل الإشعارات
+app.delete('/api/notifications', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    await db.ref(`notifications/${userId}`).remove();
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف الإشعارات' });
   }
 });
 
