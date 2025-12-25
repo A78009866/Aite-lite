@@ -1547,7 +1547,55 @@ setInterval(async () => {
     console.error('Error in offline check interval:', error);
   }
 }, 60000); // Check every minute
+// ---------------- API: Admin endpoints (جديد) ----------------
 
+// Get all users (only admin)
+app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const snap = await db.ref('profiles').once('value');
+    const profiles = snap.val() || {};
+    const users = Object.values(profiles).map(u => ({
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name,
+      email: u.email,
+      profile_picture_url: u.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      is_online: !!u.is_online,
+      is_verified: !!u.is_verified,
+      bio: u.bio || ''
+    }));
+    res.json({ ok: true, users });
+  } catch (error) {
+    console.error('Error fetching admin users:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المستخدمين.' });
+  }
+});
+
+// Verify/unverify a user (only admin)
+// body: { verify: true/false }  (if omitted defaults to true)
+app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const verify = req.body && typeof req.body.verify !== 'undefined' ? !!req.body.verify : true;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'userId required' });
+
+  try {
+    const profileRef = db.ref(`profiles/${userId}`);
+    const snap = await profileRef.once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'User not found' });
+
+    await profileRef.update({ is_verified: verify });
+
+    // optional: return updated profile
+    const updatedSnap = await profileRef.once('value');
+    const updatedProfile = updatedSnap.val();
+
+    res.json({ ok: true, user: { id: updatedProfile.id, username: updatedProfile.username, is_verified: !!updatedProfile.is_verified } });
+  } catch (error) {
+    console.error('Error updating verification:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تحديث حالة التحقق.' });
+  }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
