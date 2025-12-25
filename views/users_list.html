@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aite - قائمة الأصدقاء</title>
+    <title>Aite - المحادثات</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -90,45 +90,28 @@
           justify-content: center;
         }
 
-        /* زر المراسلة الآن أخضر وناعِم ومناسب للهاتف */
-        .btn-message {
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          gap:8px;
-          background: #10b981; /* أخضر ناعم */
-          color: #fff;
-          padding: 6px 10px;
-          border-radius: 12px;
-          font-size: 13px;
-          border: none;
-          box-shadow: 0 2px 6px rgba(16,185,129,0.12);
-        }
-
-        /* أزرار القبول والرفض - صغيرة وناعمة */
-        .btn-accept {
-          background: #16a34a;
-          color: #fff;
-          padding: 6px 10px;
-          font-size: 13px;
-          border-radius: 12px;
-          border: none;
-        }
-        .btn-reject {
-          background: #ef4444;
-          color: #fff;
-          padding: 6px 10px;
-          font-size: 13px;
-          border-radius: 12px;
-          border: none;
+        /* make card clickable and show online dot */
+        .avatar-with-dot { position: relative; display: inline-block; }
+        .online-dot {
+          position: absolute;
+          top: -4px;
+          left: -4px;
+          width: 12px;
+          height: 12px;
+          background: #22c55e;
+          border: 2px solid #000;
+          border-radius: 999px;
+          box-shadow: 0 0 6px rgba(34,197,94,0.6);
+          display: inline-block;
         }
 
         /* تحسين عرض البطاقات على الهاتف */
         @media (max-width: 480px) {
           .glass-user-card { padding: 10px; }
-          .btn-message, .btn-accept, .btn-reject { padding: 5px 8px; font-size: 12px; border-radius: 10px; }
           .unread-badge { min-width: 20px; padding: 2px 6px; font-size: 11px; }
         }
+
+        a.chat-link { text-decoration:none; color:inherit; display:block; }
 
     </style>
 </head>
@@ -156,7 +139,7 @@
         
         <div class="absolute inset-0 flex justify-center items-center pointer-events-none">
             <span class="text-2xl font-extrabold text-white tracking-widest app-logo">
-                الأصدقاء
+                المحادثات
             </span>
         </div>
 
@@ -173,7 +156,7 @@
         
         <div id="usersListContainer" class="max-w-xl mx-auto mt-4 space-y-3">
             <div class="text-center text-gray-500 p-4" id="loadingMessage">
-                <i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل الأصدقاء...
+                <i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...
             </div>
             </div>
 
@@ -201,7 +184,7 @@
 
         document.addEventListener('click', closeProfileDropdownOnClickOutside);
         
-        // ******************** وظائف عرض قائمة الأصدقاء (مُحدَّثة) ********************
+        // ******************** وظائف عرض قائمة المحادثات ********************
 
         function createUserCard(user, currentUserId) {
             const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
@@ -211,14 +194,12 @@
 
             // بناء محتوى الرسالة الأخيرة
             if (user.last_message) {
-                // الرسالة قد تكون نصية أو وسائط
                 let content = user.last_message.content 
                             ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
                             : '[ملف مرفق]';
                             
                 const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
                 
-                // إضافة فئة max-w-full و text-ellipsis لضمان أن النص لا يخرج عن حد البطاقة
                 lastMessageText = `
                     <p class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
                         ${senderPrefix}${content}
@@ -226,23 +207,30 @@
                 `;
             }
 
+            const onlineDotHtml = user.is_online ? `<span class="online-dot" title="متصل الآن"></span>` : '';
+
             return `
-                <div class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
-                    <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover ml-4 border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
-                    <div class="flex-grow min-w-0">
-                        <p class="text-white font-semibold text-lg">${user.username}</p>
-                        ${lastMessageText}
+                <a href="${chatLink}" class="chat-link">
+                    <div class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
+                        <div style="margin-left:12px; position:relative;">
+                            <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
+                            ${onlineDotHtml}
+                        </div>
+                        <div class="flex-grow min-w-0">
+                            <p class="text-white font-semibold text-lg">${user.username}</p>
+                            ${lastMessageText}
+                        </div>
+                        <div class="flex flex-col items-end justify-center ml-2 h-12">
+                            ${isUnread ? `<span class="unread-badge mb-1">${unreadCount}</span>` : ''}
+                            <i class="fas fa-chevron-left text-gray-400 text-base ${isUnread ? 'mt-auto' : ''}"></i>
+                        </div>
                     </div>
-                    <div class="flex flex-col items-end justify-center ml-2 h-12">
-                        ${isUnread ? `<span class="unread-badge mb-1">${unreadCount}</span>` : ''}
-                        <a href="${chatLink}" class="btn-message">مراسلة</a>
-                    </div>
-                </div>
+                </a>
             `;
         }
 
         async function fetchAndDisplayFriends() {
-            usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل الأصدقاء...</div>';
+            usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...</div>';
 
             try {
                 // 1. جلب ID المستخدم الحالي
@@ -252,8 +240,8 @@
                     currentUserId = myProfile.id;
                 } 
 
-                // 2. جلب قائمة الأصدقاء
-                const response = await fetch('/api/users'); // now returns friends only
+                // 2. جلب قائمة الأصدقاء (المحادثات)
+                const response = await fetch('/api/users'); // now returns friends only with is_online
                 const result = await response.json();
                 
                 usersListContainer.innerHTML = ''; // مسح رسالة التحميل
@@ -262,34 +250,26 @@
                     let users = result.users || [];
                     
                     if (users.length === 0) {
-                        usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">ليس لديك أصدقاء بعد. زُر صفحة "كل المستخدمين" لإرسال طلب صداقة.</div>';
+                        usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">ليس لديك محادثات بعد.</div>';
                         return;
                     }
                     
-                    // 3. ترتيب المستخدمين: غير المقروء أولاً، ثم حسب وقت آخر رسالة (الأحدث أولاً)
+                    // ترتيب: غير المقروء أولاً ثم حسب آخر رسالة
                     users.sort((a, b) => {
                         const aUnread = a.unread_count || 0;
                         const bUnread = b.unread_count || 0;
-
-                        // الأولوية 1: الرسائل غير المقروءة (تنازلي)
-                        if (aUnread !== bUnread) {
-                            return bUnread - aUnread; 
-                        }
-
-                        // الأولوية 2: وقت آخر رسالة (الأحدث أولاً)
+                        if (aUnread !== bUnread) return bUnread - aUnread;
                         const aTime = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
                         const bTime = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
-
-                        return bTime - aTime; 
+                        return bTime - aTime;
                     });
 
-                    // 4. العرض
                     users.forEach(user => {
                         usersListContainer.innerHTML += createUserCard(user, currentUserId);
                     });
                     
                 } else {
-                    usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">فشل في جلب قائمة الأصدقاء.</div>';
+                    usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">فشل في جلب المحادثات.</div>';
                 }
             } catch (error) {
                 console.error('Error fetching friends:', error);
@@ -312,7 +292,7 @@
                 
             fetchAndDisplayFriends();
             
-            // تحديث قائمة المستخدمين كل 10 ثواني (أثناء التواجد في الصفحة)
+            // تحديث قائمة المحادثات كل 10 ثواني (أثناء التواجد في الصفحة)
             setInterval(fetchAndDisplayFriends, 10000);
 
             // initial friend-requests badge fetch
@@ -324,14 +304,12 @@
                 const r = await fetch('/api/friends/requests_count', { credentials: 'same-origin' });
                 const j = await r.json();
                 if (r.ok && j.ok) {
-                    // إضافة بادج صغير على زر البروفايل (إن رغبت)
                     let badge = document.getElementById('friendReqBadgeHeader');
                     if (!badge) {
                         badge = document.createElement('span');
                         badge.id = 'friendReqBadgeHeader';
                         badge.className = 'friend-req-badge';
                         badge.style.display = 'none';
-                        // append to profileMenuButton container for visibility
                         document.getElementById('profileMenuButton').appendChild(badge);
                     }
                     if (j.count > 0) {
