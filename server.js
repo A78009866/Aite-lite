@@ -176,26 +176,45 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.post('/register', upload.single('profile_picture'), async (req, res) => {
-  const { username, password } = req.body;
-  let profile_picture_url = 'https://via.placeholder.com/150';
+// استبدل هذا الجزء في server.js
+app.post('/register', upload.fields([{ name: 'profile_picture' }, { name: 'cover_photo' }]), async (req, res) => {
+  const { username, password, full_name } = req.body; // إضافة full_name هنا
+  let profile_picture_url = DEFAULT_PROFILE_PIC_URL; // استخدام الثابت المحدد في بداية الملف
+  let cover_photo_url = ''; // افتراضي فارغ
 
   try {
     if (!username || !password) {
       return res.redirect('/register?error=' + encodeURIComponent('Required fields missing.'));
     }
     const email = `${username}@trimer.io`;
-    if (req.file) profile_picture_url = req.file.path;
+
+    // معالجة الصور المرفوعة
+    if (req.files) {
+      if (req.files.profile_picture) {
+        profile_picture_url = req.files.profile_picture[0].path;
+      }
+      if (req.files.cover_photo) {
+        cover_photo_url = req.files.cover_photo[0].path;
+      }
+    }
 
     const userRecord = await firebaseAuth.createUser({
       email: email, password: password, displayName: username, photoURL: profile_picture_url
     });
 
     const profileData = {
-      id: userRecord.uid, username: username, full_name: username, email: email,
-      profile_picture_url: profile_picture_url, is_online: true, is_verified: false, bio: '',
+      id: userRecord.uid, 
+      username: username, 
+      full_name: full_name || username, // حفظ الاسم الكامل أو اسم المستخدم كاحتياط
+      email: email,
+      profile_picture_url: profile_picture_url, 
+      cover_photo_url: cover_photo_url, // حفظ صورة الغلاف
+      is_online: true, 
+      is_verified: false, 
+      bio: '',
       last_seen: admin.database.ServerValue.TIMESTAMP
     };
+    
     await db.ref('profiles/' + userRecord.uid).set(profileData);
 
     req.session.userId = userRecord.uid;
@@ -206,6 +225,7 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
     res.redirect('/register?error=' + encodeURIComponent(error.message));
   }
 });
+
 
 app.get('/logout', async (req, res) => {
   // Set Offline on Logout
