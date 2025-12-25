@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aite - اكتشف المستخدمين</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body { background:#000; color:#e4e6eb; font-family: Inter, system-ui, sans-serif; padding-bottom:100px; }
+    .glass-navbar { background-color: rgba(30,30,30,0.5); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .user-card { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); border-radius:12px; padding:12px; display:flex; gap:12px; align-items:center; }
+    .btn-ghost { background: transparent; border:1px solid rgba(255,255,255,0.06); color: #e4e6eb; padding:6px 10px; border-radius:8px; }
+    .btn-primary { background:#2563eb; color:white; padding:8px 12px; border-radius:8px; }
+    .small { font-size:13px; color:#94a3b8; }
+    .badge { background:#ef4444; color:white; padding:2px 8px; border-radius:999px; font-size:12px; }
+    @media (max-width:640px) {
+      .user-card { padding:10px; gap:8px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="glass-navbar sticky top-0 z-50 p-3">
+    <nav class="max-w-6xl mx-auto flex items-center justify-between">
+      <div>
+        <a href="/chat_list" class="text-gray-400 hover:text-white p-2"><i class="fas fa-arrow-right text-2xl"></i></a>
+      </div>
+      <div class="text-center"><h1 class="text-lg font-bold">اكتشف المستخدمين</h1></div>
+      <div style="width:40px"></div>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4 pb-36">
+    <div id="allUsersContainer" class="space-y-3">
+      <div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+    </div>
+  </main>
+
+<script>
+  async function fetchAllUsers() {
+    const container = document.getElementById('allUsersContainer');
+    container.innerHTML = '<div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+    try {
+      const res = await fetch('/api/users/all', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      if (!data.ok) throw new Error('bad');
+
+      if (!data.users || data.users.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-400 p-6">لا مستخدمين آخرين.</div>';
+        return;
+      }
+
+      container.innerHTML = data.users.map(u => {
+        let actionBtn = '';
+        if (u.is_friend) {
+          actionBtn = `<a href="/chat?contactId=${u.id}" class="btn-primary">مراسلة</a>`;
+        } else if (u.incoming_request) {
+          actionBtn = `<div class="flex gap-2"><button class="btn-ghost acceptBtn" data-from="${u.incoming_request.from_user_id}" data-id="${u.incoming_request.id}">قبول</button><button class="btn-ghost declineBtn" data-from="${u.incoming_request.from_user_id}">رفض</button></div>`;
+        } else if (u.outgoing_request) {
+          actionBtn = `<button class="btn-ghost" disabled>تم الإرسال</button>`;
+        } else {
+          actionBtn = `<button class="btn-primary sendReqBtn" data-to="${u.id}">أرسل طلب</button>`;
+        }
+
+        return `
+          <div class="user-card" data-user-id="${u.id}">
+            <img src="${u.profile_picture_url}" class="w-12 h-12 rounded-full object-cover" alt="${u.username}">
+            <div class="flex-grow min-w-0 text-right">
+              <div class="text-white font-semibold">${u.username} ${u.is_friend ? '<span class="small">· صديق</span>' : ''}</div>
+              <div class="small">${u.full_name || ''}</div>
+            </div>
+            <div class="flex items-center gap-2">
+              ${actionBtn}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // bind events
+      document.querySelectorAll('.sendReqBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const to = btn.dataset.to;
+          btn.disabled = true;
+          btn.textContent = 'جاري الإرسال...';
+          try {
+            const r = await fetch('/api/friends/request', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ to_user_id: to })
+            });
+            const j = await r.json();
+            if (r.ok && j.ok) {
+              fetchAllUsers();
+            } else {
+              alert(j.error || 'فشل الإرسال');
+              btn.disabled = false;
+              btn.textContent = 'أرسل طلب';
+            }
+          } catch (err) {
+            console.error(err);
+            alert('خطأ في الإرسال');
+            btn.disabled = false;
+            btn.textContent = 'أرسل طلب';
+          }
+        });
+      });
+
+      document.querySelectorAll('.acceptBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const from = btn.dataset.from;
+          btn.disabled = true;
+          try {
+            const r = await fetch('/api/friends/accept', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ from_user_id: from })
+            });
+            const j = await r.json();
+            if (r.ok && j.ok) fetchAllUsers();
+            else { alert(j.error || 'فشل'); btn.disabled = false; }
+          } catch (err) { console.error(err); alert('خطأ'); btn.disabled = false; }
+        });
+      });
+
+      document.querySelectorAll('.declineBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const from = btn.dataset.from;
+          btn.disabled = true;
+          try {
+            const r = await fetch('/api/friends/decline', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ from_user_id: from })
+            });
+            const j = await r.json();
+            if (r.ok && j.ok) fetchAllUsers();
+            else { alert(j.error || 'فشل'); btn.disabled = false; }
+          } catch (err) { console.error(err); alert('خطأ'); btn.disabled = false; }
+        });
+      });
+
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<div class="text-center text-red-500 p-6">فشل في جلب المستخدمين.</div>';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchAllUsers();
+    setInterval(fetchAllUsers, 20000);
+  });
+
+  // SSE: update friend request badge in any topbar if needed
+  (function setupSSEAllUsers() {
+    if (!window.EventSource) return;
+    const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+    es.addEventListener('notifications', (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        // if you have a badge element in the header you can update here
+        // e.g., document.getElementById('usersBadge').textContent = payload.unread_friend_requests_count || '';
+      } catch (err) { console.error(err); }
+    });
+  })();
+</script>
+</body>
+</html>
