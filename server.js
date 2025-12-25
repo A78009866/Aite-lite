@@ -121,6 +121,29 @@ function requireAuth(req, res, next) {
   return res.redirect('/login');
 }
 
+// ---------------- Admin middleware (جديد) ----------------
+// يسمح فقط للمستخدم الذي يطابق ADMIN_UID أو ADMIN_USERNAME بالوصول
+function requireAdmin(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    if (req.path.startsWith('/api/')) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return res.redirect('/login');
+  }
+
+  const adminUid = process.env.ADMIN_UID || null; // ضع UID الخاص بك في .env للاستخدام الأفضل
+  const adminUsername = process.env.ADMIN_USERNAME || 'brahim1582007'; // اسم المستخدم الافتراضي للأدمن
+
+  const email = req.session.email || '';
+  const usernameFromEmail = email.split('@')[0]; // username@trimer.io
+
+  const isAdmin = (adminUid && req.session.userId === adminUid) || (usernameFromEmail === adminUsername);
+
+  if (!isAdmin) {
+    if (req.path.startsWith('/api/')) return res.status(403).json({ ok: false, error: 'Forbidden' });
+    return res.status(403).send('403 Forbidden — ليس لديك صلاحية الوصول لهذه الصفحة.');
+  }
+  next();
+}
+
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
 
@@ -152,6 +175,12 @@ app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__di
 
 // Notifications page
 app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
+
+// ---------------- Admin Page route (جديد) ----------------
+// الصفحة محمية بطبقة requireAuth ثم requireAdmin
+app.get('/admin', requireAuth, requireAdmin, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'admin.html'));
+});
 
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
@@ -267,6 +296,56 @@ async function areFriends(userA, userB) {
   const snap = await db.ref(`friends/${userA}/${userB}`).once('value');
   return snap.exists();
 }
+
+// ---------------- API: Admin endpoints (جديد) ----------------
+
+// Get all users (only admin)
+app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const snap = await db.ref('profiles').once('value');
+    const profiles = snap.val() || {};
+    const users = Object.values(profiles).map(u => ({
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name,
+      email: u.email,
+      profile_picture_url: u.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      is_online: !!u.is_online,
+      is_verified: !!u.is_verified,
+      bio: u.bio || ''
+    }));
+    res.json({ ok: true, users });
+  } catch (error) {
+    console.error('Error fetching admin users:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المستخدمين.' });
+  }
+});
+
+// Verify/unverify a user (only admin)
+// body: { verify: true/false }  (if omitted defaults to true)
+app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const verify = req.body && typeof req.body.verify !== 'undefined' ? !!req.body.verify : true;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'userId required' });
+
+  try {
+    const profileRef = db.ref(`profiles/${userId}`);
+    const snap = await profileRef.once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'User not found' });
+
+    await profileRef.update({ is_verified: verify });
+
+    // optional: return updated profile
+    const updatedSnap = await profileRef.once('value');
+    const updatedProfile = updatedSnap.val();
+
+    res.json({ ok: true, user: { id: updatedProfile.id, username: updatedProfile.username, is_verified: !!updatedProfile.is_verified } });
+  } catch (error) {
+    console.error('Error updating verification:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تحديث حالة التحقق.' });
+  }
+});
 
 // ---------------- API: Chat & Messages ----------------
 
@@ -1547,55 +1626,7 @@ setInterval(async () => {
     console.error('Error in offline check interval:', error);
   }
 }, 60000); // Check every minute
-// ---------------- API: Admin endpoints (جديد) ----------------
 
-// Get all users (only admin)
-app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const snap = await db.ref('profiles').once('value');
-    const profiles = snap.val() || {};
-    const users = Object.values(profiles).map(u => ({
-      id: u.id,
-      username: u.username,
-      full_name: u.full_name,
-      email: u.email,
-      profile_picture_url: u.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-      is_online: !!u.is_online,
-      is_verified: !!u.is_verified,
-      bio: u.bio || ''
-    }));
-    res.json({ ok: true, users });
-  } catch (error) {
-    console.error('Error fetching admin users:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب المستخدمين.' });
-  }
-});
-
-// Verify/unverify a user (only admin)
-// body: { verify: true/false }  (if omitted defaults to true)
-app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (req, res) => {
-  const { userId } = req.params;
-  const verify = req.body && typeof req.body.verify !== 'undefined' ? !!req.body.verify : true;
-
-  if (!userId) return res.status(400).json({ ok: false, error: 'userId required' });
-
-  try {
-    const profileRef = db.ref(`profiles/${userId}`);
-    const snap = await profileRef.once('value');
-    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'User not found' });
-
-    await profileRef.update({ is_verified: verify });
-
-    // optional: return updated profile
-    const updatedSnap = await profileRef.once('value');
-    const updatedProfile = updatedSnap.val();
-
-    res.json({ ok: true, user: { id: updatedProfile.id, username: updatedProfile.username, is_verified: !!updatedProfile.is_verified } });
-  } catch (error) {
-    console.error('Error updating verification:', error);
-    res.status(500).json({ ok: false, error: 'فشل في تحديث حالة التحقق.' });
-  }
-});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
