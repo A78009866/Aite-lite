@@ -4,93 +4,232 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>إنشاء حساب جديد</title>
-    <!-- Favicon for the page -->
     <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/46/1000084215-removebg-preview.png">
-    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Custom styles for the dark theme registration page */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #18191a;
+            background-color: #000000;
+            background-image: 
+                radial-gradient(circle at 80% 10%, rgba(57, 130, 247, 0.12) 0%, transparent 25%),
+                radial-gradient(circle at 20% 90%, rgba(255, 60, 100, 0.08) 0%, transparent 25%);
             color: #e4e6eb;
+            overflow-x: hidden;
         }
 
-        .logo-img {
-            height: 60px; /* Increased logo height for clarity */
-            width: 60px;  /* Set width to make it a square */
-            object-fit: cover; /* Ensures the image covers the square area */
-            border-radius: 10px; /* Soft, rounded corners for the logo */
-            margin-left: 15px;
+        .glass-card {
+            background: rgba(20, 20, 20, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
         }
 
-        .toggle-password {
-            /* Positioning the eye icon inside the password input */
+        .glass-input {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #3982f7;
+            box-shadow: 0 0 10px rgba(57, 130, 247, 0.2);
+            outline: none;
+        }
+
+        .glow-btn {
+            background: linear-gradient(135deg, #3982f7 0%, #2a61b8 100%);
+            box-shadow: 0 4px 15px rgba(57, 130, 247, 0.4);
+            transition: all 0.3s ease;
+        }
+        .glow-btn:hover {
+            box-shadow: 0 6px 20px rgba(57, 130, 247, 0.6);
+            transform: translateY(-2px);
+        }
+        .glow-btn:disabled {
+            background: #444;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* --- تنسيق منطقة الصور الجديد --- */
+        .images-upload-wrapper {
+            position: relative;
+            width: 100%;
+            height: 200px; /* مساحة كافية للغلاف والبروفيل */
+            margin-bottom: 20px;
+        }
+
+        /* تنسيق الغلاف */
+        .cover-upload-area {
+            width: 100%;
+            height: 140px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px dashed rgba(255, 255, 255, 0.15);
             position: absolute;
-            top: 50%;
-            left: 12px; /* Positioned on the left for RTL layout */
-            transform: translateY(-50%);
+            top: 0;
+            left: 0;
+            overflow: hidden;
             cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
         }
+        .cover-upload-area:hover {
+            border-color: #3982f7;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        /* تنسيق البروفيل (في الوسط) */
+        .profile-upload-area {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            background: #1a1a1a; /* لون داكن كخلفية */
+            border: 4px solid rgba(30, 30, 30, 0.8); /* حدود لتفصلها عن الغلاف */
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%); /* توسيط أفقي */
+            cursor: pointer;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        .profile-upload-area:hover {
+            border-color: #3982f7;
+        }
+        .profile-upload-area::after {
+            /* طبقة شفافة لتبدو وكأنها مكان فارغ */
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* النصوص والأيقونات التوضيحية */
+        .placeholder-content {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.4);
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+        .placeholder-text {
+            font-size: 0.8rem;
+            margin-top: 5px;
+        }
+
+        .preview-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: none; /* مخفية حتى يتم الرفع */
+        }
+        
+        .hidden-input { display: none; }
     </style>
 </head>
 <body class="flex flex-col justify-center items-center min-h-screen p-5">
 
-    <!-- Logo and Brand Name Container -->
-    <div class="text-center mb-8">
-        <a class="text-4xl font-semibold text-gray-200 hover:text-gray-400 no-underline flex items-center" href="#">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" class="logo-img" alt="شعار Trimer">
+    <div class="text-center mb-6">
+        <a class="text-4xl font-bold text-white hover:text-gray-200 no-underline flex items-center justify-center gap-3" href="#">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" class="h-14 w-14 rounded-xl object-cover shadow-lg shadow-blue-500/20" alt="شعار Trimer">
             Trimer
         </a>
     </div>
 
-    <!-- Registration Form Container -->
-    <div class="bg-[#3a3b3c] p-8 rounded-lg shadow-2xl w-full max-w-sm">
-        <h2 class="text-center mb-6 text-2xl font-bold text-gray-100">إنشاء حساب جديد</h2>
+    <div class="glass-card p-8 rounded-2xl w-full max-w-md">
+        <h2 class="text-center mb-8 text-2xl font-bold text-white">إنشاء حساب جديد</h2>
         
         <form method="POST" action="/register" enctype="multipart/form-data" id="registrationForm">
-            <!-- Username Field -->
-            <div class="mb-5">
-                <label for="id_username" class="block mb-2 font-medium text-gray-400">اسم المستخدم</label>
-                <input type="text" name="username" id="id_username" class="w-full p-3 border border-[#3e4042] bg-[#242526] text-gray-200 rounded-lg focus:border-[#3982f7] focus:outline-none focus:ring-2 focus:ring-[#3982f7]/50" required placeholder="ادخل اسم المستخدم">
+            
+            <div class="images-upload-wrapper">
+                
+                <div class="cover-upload-area" onclick="document.getElementById('id_cover_photo').click()">
+                    <img id="coverPreviewImg" class="preview-img">
+                    <div class="placeholder-content" id="coverPlaceholder">
+                        <i class="fas fa-image text-2xl mb-1"></i>
+                        <div class="placeholder-text">اضغط لإضافة غلاف</div>
+                    </div>
+                </div>
+                <input type="file" name="cover_photo" id="id_cover_photo" class="hidden-input" accept="image/*" onchange="previewImage(this, 'coverPreviewImg', 'coverPlaceholder')">
+
+                <div class="profile-upload-area" onclick="document.getElementById('id_profile_picture').click()">
+                    <img id="profilePreviewImg" class="preview-img rounded-full">
+                    <div class="placeholder-content" id="profilePlaceholder">
+                        <i class="fas fa-camera text-xl"></i>
+                        <div class="placeholder-text text-[10px]">صورة</div>
+                    </div>
+                </div>
+                <input type="file" name="profile_picture" id="id_profile_picture" class="hidden-input" accept="image/*" onchange="previewImage(this, 'profilePreviewImg', 'profilePlaceholder')">
             </div>
 
-            <!-- Password Field -->
+            <div class="mb-5 mt-4">
+                <label for="id_fullname" class="block mb-2 text-sm font-medium text-gray-300">الاسم الكامل</label>
+                <input type="text" name="full_name" id="id_fullname" class="glass-input w-full p-3 rounded-xl" required placeholder="الاسم الكامل">
+            </div>
+
             <div class="mb-5">
-                <label for="id_password" class="block mb-2 font-medium text-gray-400">كلمة المرور</label>
+                <label for="id_username" class="block mb-2 text-sm font-medium text-gray-300">اسم المستخدم</label>
+                <input type="text" name="username" id="id_username" class="glass-input w-full p-3 rounded-xl" required placeholder="username">
+            </div>
+
+            <div class="mb-6">
+                <label for="id_password" class="block mb-2 text-sm font-medium text-gray-300">كلمة المرور</label>
                 <div class="relative">
-                    <input type="password" name="password" id="id_password" class="w-full p-3 pr-10 border border-[#3e4042] bg-[#242526] text-gray-200 rounded-lg focus:border-[#3982f7] focus:outline-none focus:ring-2 focus:ring-[#3982f7]/50" required placeholder="ادخل كلمة المرور">
-                    <i class="fas fa-eye toggle-password text-gray-500" data-target="id_password"></i>
+                    <input type="password" name="password" id="id_password" class="glass-input w-full p-3 rounded-xl" required placeholder="********">
+                    <i class="fas fa-eye toggle-password text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer" data-target="id_password"></i>
                 </div>
             </div>
 
-            <!-- Profile Picture Field -->
-            <div class="mb-6">
-                <label for="id_profile_picture" class="block mb-2 font-medium text-gray-400">صورة الملف الشخصي</label>
-                <input type="file" name="profile_picture" id="id_profile_picture" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#3982f7] file:text-white hover:file:bg-[#3071e2] cursor-pointer">
-            </div>
-
-            <!-- Submit Button -->
-            <button type="submit" id="submitBtn" class="w-full p-3 bg-[#3982f7] border-none rounded-lg text-white font-semibold cursor-pointer transition-all duration-300 hover:bg-[#3071e2] hover:-translate-y-0.5">
+            <button type="submit" id="submitBtn" class="glow-btn w-full p-3 rounded-xl text-white font-bold transition-all duration-300">
                 إنشاء حساب
             </button>
             
-            <!-- Loading Indicator -->
             <div id="loading-indicator" class="hidden text-center mt-4 text-gray-300">
-                <i class="fas fa-spinner fa-spin"></i> جاري التسجيل...
+                <i class="fas fa-spinner fa-spin text-[#3982f7]"></i> جاري التسجيل...
             </div>
         </form>
 
-        <!-- Link to Login Page -->
         <div class="text-center mt-6 text-sm text-gray-400">
-            لديك حساب بالفعل؟ <a href="/login" class="text-[#3982f7] no-underline font-medium hover:underline">تسجيل الدخول</a>
+            لديك حساب بالفعل؟ <a href="/login" class="text-[#3982f7] font-semibold hover:text-white transition-colors">تسجيل الدخول</a>
         </div>
     </div>
 
     <script>
-        // Script to toggle password visibility
+        // دالة المعاينة المحسنة
+        function previewImage(input, imgId, placeholderId) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById(imgId);
+                    const placeholder = document.getElementById(placeholderId);
+                    
+                    img.src = e.target.result;
+                    img.style.display = 'block'; // إظهار الصورة
+                    placeholder.style.display = 'none'; // إخفاء النص والأيقونة
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // إظهار/إخفاء كلمة المرور
         document.querySelectorAll('.toggle-password').forEach(item => {
             item.addEventListener('click', function () {
                 const targetId = this.getAttribute('data-target');
@@ -107,17 +246,13 @@
             });
         });
 
-        // Script to show loading indicator on form submission
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('registrationForm');
-            const submitBtn = document.getElementById('submitBtn');
-            const loadingIndicator = document.getElementById('loading-indicator');
-
-            form.addEventListener('submit', function(event) {
-                submitBtn.disabled = true;
-                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                loadingIndicator.classList.remove('hidden');
-            });
+        // مؤشر التحميل
+        document.getElementById('registrationForm').addEventListener('submit', function(event) {
+            const btn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading-indicator');
+            btn.disabled = true;
+            btn.innerHTML = 'جاري المعالجة...';
+            loading.classList.remove('hidden');
         });
     </script>
 </body>
