@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -82,13 +81,53 @@
           min-width: 18px;
           height: 18px;
           padding: 0 6px;
-          background: #f59e0b;
-          color: #000;
+          background: #ef4444; /* موحّد بالأحمر */
+          color: #fff;
           font-size: 12px;
           border-radius: 999px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
+        }
+
+        /* زر المراسلة الآن أخضر وناعِم ومناسب للهاتف */
+        .btn-message {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          gap:8px;
+          background: #10b981; /* أخضر ناعم */
+          color: #fff;
+          padding: 6px 10px;
+          border-radius: 12px;
+          font-size: 13px;
+          border: none;
+          box-shadow: 0 2px 6px rgba(16,185,129,0.12);
+        }
+
+        /* أزرار القبول والرفض - صغيرة وناعمة */
+        .btn-accept {
+          background: #16a34a;
+          color: #fff;
+          padding: 6px 10px;
+          font-size: 13px;
+          border-radius: 12px;
+          border: none;
+        }
+        .btn-reject {
+          background: #ef4444;
+          color: #fff;
+          padding: 6px 10px;
+          font-size: 13px;
+          border-radius: 12px;
+          border: none;
+        }
+
+        /* تحسين عرض البطاقات على الهاتف */
+        @media (max-width: 480px) {
+          .glass-user-card { padding: 10px; }
+          .btn-message, .btn-accept, .btn-reject { padding: 5px 8px; font-size: 12px; border-radius: 10px; }
+          .unread-badge { min-width: 20px; padding: 2px 6px; font-size: 11px; }
         }
 
     </style>
@@ -188,8 +227,7 @@
             }
 
             return `
-                <a href="${chatLink}" 
-                   class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
+                <div class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
                     <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover ml-4 border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
                     <div class="flex-grow min-w-0">
                         <p class="text-white font-semibold text-lg">${user.username}</p>
@@ -197,9 +235,9 @@
                     </div>
                     <div class="flex flex-col items-end justify-center ml-2 h-12">
                         ${isUnread ? `<span class="unread-badge mb-1">${unreadCount}</span>` : ''}
-                        <i class="fas fa-chevron-left text-gray-400 text-base ${isUnread ? 'mt-auto' : ''}"></i>
+                        <a href="${chatLink}" class="btn-message">مراسلة</a>
                     </div>
-                </a>
+                </div>
             `;
         }
 
@@ -286,10 +324,7 @@
                 const r = await fetch('/api/friends/requests_count', { credentials: 'same-origin' });
                 const j = await r.json();
                 if (r.ok && j.ok) {
-                    // find the users icon in bottom navbar (if exists)
-                    const msgBtn = document.getElementById('msgBadge'); // in some pages bottom msgBadge id exists, here not
-                    // instead, we will add a small floating badge near profile menu for visibility
-                    // But simpler: create or update an element in header
+                    // إضافة بادج صغير على زر البروفايل (إن رغبت)
                     let badge = document.getElementById('friendReqBadgeHeader');
                     if (!badge) {
                         badge = document.createElement('span');
