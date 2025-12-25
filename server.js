@@ -329,28 +329,9 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
       last_message_sender_id: senderId
     });
 
-    // إنشاء إشعار للمستقبل يوجه إلى المحادثة
-    try {
-      const fromProfileSnap = await db.ref(`profiles/${senderId}`).once('value');
-      const fromProfile = fromProfileSnap.val() || {};
-      const notifRef = db.ref(`notifications/${contactId}`).push();
-      const notifData = {
-        id: notifRef.key,
-        type: 'message',
-        from_user_id: senderId,
-        from_username: fromProfile.username || 'مستخدم',
-        from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-        postId: null,
-        reelId: null,
-        contact_id: senderId,
-        preview: previewText,
-        timestamp: admin.database.ServerValue.TIMESTAMP,
-        is_read: false
-      };
-      await notifRef.set(notifData);
-    } catch (nerr) {
-      console.error('Failed to create message notification:', nerr);
-    }
+    // ملاحظة: لم نعد ننشئ إشعارًا داخل notifications/... عند وصول رسالة.
+    // بدلاً من ذلك نعتمد على عداد unread_count في chats/{recipient}/{sender}
+    // و SSE المحدث الذي يرسل unread_messages_count للعميل.
 
     messageData.timestamp = Date.now();
     res.json({ ok: true, message: 'Sent', messageData: messageData });
@@ -1197,19 +1178,39 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
   });
   res.write('\n');
 
-  // تعريف المعالج الذي يرسل البيانات عند أي تغيير
-  const ref = db.ref(`notifications/${userId}`);
+  const notifRef = db.ref(`notifications/${userId}`);
+  const chatsRef = db.ref(`chats/${userId}`);
 
-  const handler = async (snapshot) => {
+  // دالة تجمع بيانات الإشعارات ومجموع الرسائل غير المقروءة وترسلها
+  const sendCombined = async () => {
     try {
+      const [notifSnap, chatsSnap] = await Promise.all([
+        notifRef.once('value'),
+        chatsRef.once('value')
+      ]);
+
       const items = [];
-      snapshot.forEach(child => {
+      notifSnap.forEach(child => {
         const v = child.val();
         items.push({ id: child.key, ...v });
       });
       items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      const unreadCount = items.filter(i => !i.is_read).length;
-      const payload = { unread_count: unreadCount, notifications: items };
+      const unreadNotificationsCount = items.filter(i => !i.is_read).length;
+
+      let unreadMessagesCount = 0;
+      chatsSnap.forEach(child => {
+        const v = child.val();
+        if (v && v.unread_count) {
+          unreadMessagesCount += Number(v.unread_count) || 0;
+        }
+      });
+
+      const payload = {
+        unread_count: unreadNotificationsCount,
+        notifications: items,
+        unread_messages_count: unreadMessagesCount
+      };
+
       res.write(`event: notifications\n`);
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
     } catch (err) {
@@ -1219,16 +1220,24 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
     }
   };
 
-  // ربط المستمع
-  ref.on('value', handler, err => {
-    console.error('SSE DB listener error:', err);
+  // ربط المستمعين على كلتا العقدتين: إشعارات والدردشات
+  notifRef.on('value', sendCombined, err => {
+    console.error('SSE notifications listener error:', err);
     res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
   });
+  chatsRef.on('value', sendCombined, err => {
+    console.error('SSE chats listener error:', err);
+    res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
+  });
+
+  // إرسال حالة أولية مباشرة
+  sendCombined();
 
   // تنظيف عند إغلاق الاتصال من قبل العميل
   req.on('close', () => {
     try {
-      ref.off('value', handler);
+      notifRef.off('value', sendCombined);
+      chatsRef.off('value', sendCombined);
     } catch (e) { /* ignore */ }
     res.end();
   });
