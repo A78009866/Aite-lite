@@ -152,29 +152,44 @@
           border: none;
         }
 
-        /* online dot styles */
-        .avatar-with-dot { position: relative; display: inline-block; }
+        @media (max-width:480px){
+          .btn-add-friend, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; }
+        }
+
+        /* Avatar with online dot (new for profile page) */
+        .avatar-with-dot { 
+          position: relative; 
+          display: inline-flex;
+        }
+
         .online-dot {
           position: absolute;
-          top: -8px;
-          left: -8px;
+          bottom: 4px;
+          left: 6px; /* show on left side to align visually with RTL profile layout */
           width: 14px;
           height: 14px;
           background: #22c55e;
           border: 2px solid #000;
           border-radius: 999px;
-          box-shadow: 0 0 8px rgba(34,197,94,0.6);
-          display: inline-block;
-        }
-        .profile-online-text {
-            color: #22c55e;
-            font-weight: 700;
-            font-size: 13px;
-            margin-top: 6px;
+          box-shadow: 0 0 6px rgba(34,197,94,0.6);
+          z-index: 10;
+          display: none;
         }
 
-        @media (max-width:480px){
-          .btn-add-friend, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; }
+        .online-dot-small {
+          width: 10px;
+          height: 10px;
+          bottom: 2px;
+          left: 4px;
+          border-width: 1.5px;
+        }
+
+        /* Status text next to username */
+        #profileStatus {
+          display: block;
+          margin-top: 6px;
+          color: #9ca3af;
+          font-size: 13px;
         }
 
     </style>
@@ -230,18 +245,19 @@
 
                 <div class="p-4 pt-0 -mt-20 relative">
                     
-                    <div class="avatar-with-dot" style="display:inline-block;">
+                    <!-- Wrapped profile image with avatar-with-dot so the online dot is positioned & organized -->
+                    <span class="avatar-with-dot">
                         <img id="profileImage" src="/assets/default_profile_pic.png" alt="صورة الملف الشخصي" 
                              class="w-32 h-32 rounded-full object-cover border-4 border-black shadow-lg mb-3 hover:ring-4 hover:ring-blue-400 transition duration-300">
-                        <span id="profile-online-dot" class="online-dot" style="display:none;"></span>
-                    </div>
+                        <span id="profileOnlineDot" class="online-dot online-dot-small" title="متصل الآن" aria-hidden="true"></span>
+                    </span>
                     
                     <div class="flex justify-between items-start">
                         <div>
                             <h1 id="profileUsername" class="text-3xl font-bold text-white">تحميل...</h1>
                             <p id="profileFullName" class="text-gray-400 text-lg">الاسم الكامل</p>
+                            <span id="profileStatus" class="">...</span>
                             <p id="profileBio" class="text-gray-300 mt-1 whitespace-pre-wrap">السيرة الذاتية...</p>
-                            <div id="profileOnlineText" class="profile-online-text" style="display:none;">متصل الآن</div>
                         </div>
                         
                         <div class="flex flex-col items-end gap-2">
@@ -330,6 +346,8 @@
         const chatButton = document.getElementById('chatButton');
         const friendActionContainer = document.getElementById('friendActionContainer');
         const pageTitle = document.getElementById('pageTitle');
+        const profileOnlineDot = document.getElementById('profileOnlineDot');
+        const profileStatusEl = document.getElementById('profileStatus');
 
         function toggleProfileDropdown(event) {
             event.stopPropagation();
@@ -353,6 +371,23 @@
             } else {
                 return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
             }
+        }
+
+        function formatLastSeen(lastSeenTs) {
+            if (!lastSeenTs) return '';
+            const now = Date.now();
+            const diff = Math.max(0, now - lastSeenTs);
+            const seconds = Math.floor(diff / 1000);
+            if (seconds < 60) return 'متصل منذ لحظات';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `آخر ظهور منذ ${minutes} دقيقة${minutes > 1 ? 'ً' : ''}`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `آخر ظهور منذ ${hours} ساعة${hours > 1 ? 'ً' : ''}`;
+            const days = Math.floor(hours / 24);
+            if (days < 7) return `آخر ظهور منذ ${days} يوم${days > 1 ? 'ً' : ''}`;
+            // older: show date
+            const d = new Date(lastSeenTs);
+            return `آخر ظهور في ${d.toLocaleDateString('ar-EG')}`;
         }
         
         // Create post card (same structure as before)
@@ -421,16 +456,11 @@
                 </button>
             ` : '';
 
-            const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online-dot-small" title="متصل الآن"></span>` : '';
-
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center">
-                            <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
-                                <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
-                                ${onlineDotHtml}
-                            </a>
+                            <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
                             <div>
                                 <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">@${post.user.username}</a>
                                 <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
@@ -565,34 +595,27 @@
             }
         }
 
-        function createCommentElement(comment) {
-            return `
-                <div class="flex items-start p-3 bg-[#242526] rounded-lg shadow-md">
-                    <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover ml-3 flex-shrink-0">
-                    <div class="flex-grow">
-                        <p class="text-white font-semibold text-sm">@${comment.user.username} <span class="text-gray-500 text-xs mr-2">${formatTimestamp(comment.timestamp)}</span></p>
-                        <p class="text-gray-200 mt-1 whitespace-pre-wrap">${comment.content}</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        async function fetchAndDisplayProfile() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const requestedUserId = urlParams.get('userId'); 
-            
-            // current user
+        // -------------------- Profile fetching & live status update --------------------
+        async function fetchCurrentUser() {
             try {
                 const currentUserResponse = await fetch('/api/profile');
                 if (currentUserResponse.ok) {
-                    const currentUserIdData = await currentUserResponse.json();
-                    currentUserId = currentUserIdData.id;
-                    document.getElementById('userProfilePic').src = currentUserIdData.profile_picture_url || '/assets/default_profile_pic.png';
+                    const data = await currentUserResponse.json();
+                    currentUserId = data.id;
+                    // update small top-right profile picture in header
+                    const smallPic = document.getElementById('userProfilePic');
+                    if (smallPic && data.profile_picture_url) smallPic.src = data.profile_picture_url;
                 }
-            } catch (error) {
-                 console.error('Failed to fetch current user profile:', error);
+            } catch (err) {
+                console.error('Failed to fetch current user:', err);
             }
-            
+        }
+
+        async function fetchAndDisplayProfile() {
+            await fetchCurrentUser(); // ensure we have currentUserId
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const requestedUserId = urlParams.get('userId'); 
             currentProfileId = requestedUserId || currentUserId;
             if (!currentProfileId) {
                 userPostsFeed.innerHTML = '<div class="text-center text-red-500 p-8">خطأ: لا يمكن تحديد الملف الشخصي.</div>';
@@ -616,17 +639,9 @@
                     
                     pageTitle.textContent = `Aite - @${data.username}`;
                     
-                    // Online indicator (dot + text)
-                    const onlineDot = document.getElementById('profile-online-dot');
-                    const onlineText = document.getElementById('profileOnlineText');
-                    if (data.is_online) {
-                        if (onlineDot) onlineDot.style.display = 'inline-block';
-                        if (onlineText) { onlineText.style.display = 'block'; onlineText.textContent = 'متصل الآن'; }
-                    } else {
-                        if (onlineDot) onlineDot.style.display = 'none';
-                        if (onlineText) onlineText.style.display = 'none';
-                    }
-                    
+                    // update online dot & status text
+                    updateProfileOnlineUI(data.is_online, data.last_seen);
+
                     // Show appropriate actions based on friendship/request status
                     friendActionContainer.innerHTML = '';
                     if (currentUserId && data.id === currentUserId) { 
@@ -709,7 +724,50 @@
                 userPostsFeed.innerHTML = '<div class="text-center text-red-500 p-8">حدث خطأ في جلب بيانات الملف الشخصي.</div>';
             }
         }
-        
+
+        function updateProfileOnlineUI(isOnline, lastSeen) {
+            // Toggle dot visibility
+            if (isOnline) {
+                profileOnlineDot.style.display = 'inline-block';
+                profileOnlineDot.setAttribute('title', 'متصل الآن');
+                profileStatusEl.textContent = 'متصل الآن';
+            } else {
+                profileOnlineDot.style.display = 'none';
+                // show last seen text if available
+                profileStatusEl.textContent = formatLastSeen(lastSeen) || '';
+            }
+        }
+
+        // Poll only the status part of the profile to keep the online indicator fresh.
+        let statusPollInterval = null;
+        async function pollProfileStatus() {
+            if (!currentProfileId) return;
+            try {
+                const r = await fetch(`/api/profile?userId=${currentProfileId}`, { cache: 'no-store' });
+                if (!r.ok) return;
+                const d = await r.json();
+                if (d && d.ok) {
+                    updateProfileOnlineUI(d.is_online, d.last_seen);
+                }
+            } catch (e) {
+                // ignore network flakiness
+            }
+        }
+
+        // start polling when viewing profile; stop when leaving page
+        function startStatusPolling() {
+            if (statusPollInterval) clearInterval(statusPollInterval);
+            // initial quick poll
+            pollProfileStatus();
+            statusPollInterval = setInterval(pollProfileStatus, 15000); // every 15s
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') pollProfileStatus();
+            });
+            window.addEventListener('beforeunload', () => {
+                if (statusPollInterval) clearInterval(statusPollInterval);
+            });
+        }
+
         async function fetchAndDisplayUserPosts(userId) {
             userPostsFeed.innerHTML = '<div class="text-center text-gray-500 p-8"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
             
@@ -739,6 +797,9 @@
                             initializePostWaveSurfer(ap.postId, ap.url);
                         });
                     }, 100); 
+
+                    // Start polling status once posts loaded
+                    startStatusPolling();
 
                 } else {
                     userPostsFeed.innerHTML = '<div class="text-center text-red-500 p-8">فشل في جلب المنشورات.</div>';
@@ -808,10 +869,7 @@
           es.addEventListener('notifications', (e) => {
             try {
               const payload = JSON.parse(e.data);
-              const unread = payload.unread_count || 0;
-              const pendingFR = payload.pending_friend_requests_count || 0;
-              // لم نعد نعرض أزرار الاشعارات والاصدقاء في النافبار، لذا لا نعرض شرائط هنا
-              // لو رغبت بالعرض في مكان آخر أعطني مكان العنصر
+              // we don't need to display badges here per UX decision, but SSE keeps session alive / receives updates
             } catch (err) {
               console.error('Failed to parse notifications SSE data', err);
             }
@@ -819,11 +877,6 @@
           es.addEventListener('error', (err) => {
             console.warn('Notifications SSE error', err);
           });
-        })();
-
-        // fallback initial unread count & friend requests count
-        (function initUnreadProfile() {
-          // لا حاجة لعرض العدادات في النافبار هنا حسب الطلب
         })();
 
         // Utility: open media viewer
