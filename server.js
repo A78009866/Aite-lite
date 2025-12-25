@@ -121,6 +121,19 @@ function requireAuth(req, res, next) {
   return res.redirect('/login');
 }
 
+// Helper to update presence
+async function setUserPresence(userId, online) {
+  if (!userId) return;
+  try {
+    await db.ref(`profiles/${userId}`).update({
+      is_online: !!online,
+      last_active: admin.database.ServerValue.TIMESTAMP
+    });
+  } catch (err) {
+    console.error('Failed to set presence for', userId, err);
+  }
+}
+
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
 
@@ -163,6 +176,10 @@ app.post('/login', async (req, res) => {
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
     await req.session.save();
+
+    // Mark user online
+    await setUserPresence(userRecord.uid, true);
+
     res.redirect('/chat_list');
   } catch (error) {
     res.redirect('/login?error=' + encodeURIComponent('Invalid username or password.'));
@@ -186,13 +203,18 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
 
     const profileData = {
       id: userRecord.uid, username: username, full_name: username, email: email,
-      profile_picture_url: profile_picture_url, is_online: false, is_verified: false, bio: '',
+      profile_picture_url: profile_picture_url, is_online: true, is_verified: false, bio: '',
+      postsCount: 0, last_active: admin.database.ServerValue.TIMESTAMP
     };
     await db.ref('profiles/' + userRecord.uid).set(profileData);
 
     req.session.userId = userRecord.uid;
     req.session.email = email;
     await req.session.save();
+
+    // user is online immediately after registering
+    await setUserPresence(userRecord.uid, true);
+
     res.redirect('/chat_list');
   } catch (error) {
     res.redirect('/register?error=' + encodeURIComponent(error.message));
@@ -200,10 +222,17 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie('connect.sid');
-    res.redirect('/login');
-  });
+  const uid = req.session && req.session.userId;
+  // Set offline then destroy session
+  (async () => {
+    if (uid) {
+      try { await setUserPresence(uid, false); } catch (e) { /* ignore */ }
+    }
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.redirect('/login');
+    });
+  })();
 });
 
 // ---------------- Helper: Friend Utilities ----------------
@@ -212,6 +241,35 @@ async function areFriends(userA, userB) {
   const snap = await db.ref(`friends/${userA}/${userB}`).once('value');
   return snap.exists();
 }
+
+// ---------------- API: Presence ----------------
+
+// Heartbeat endpoint — marks user online and updates last_active
+app.post('/api/presence/heartbeat', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    await setUserPresence(userId, true);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
+// Explicit set presence (online: true/false)
+app.post('/api/presence/set', async (req, res) => {
+  // allow this endpoint without requireAuth to support navigator.sendBeacon on unload
+  try {
+    const userId = (req.session && req.session.userId) || req.body.userId || null;
+    let online = req.body && typeof req.body.online !== 'undefined' ? !!req.body.online : true;
+    // If no session but sending offline and a userId provided, accept it
+    if (!userId) return res.status(400).json({ ok: false, error: 'userId missing in session or payload' });
+    await setUserPresence(userId, online);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Presence set error', err);
+    res.status(500).json({ ok: false });
+  }
+});
 
 // ---------------- API: Chat & Messages ----------------
 
