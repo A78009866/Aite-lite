@@ -76,38 +76,45 @@
             background: #6b7280;
         }
 
-        /* Avatar with online dot (profile + posts) */
-        .avatar-with-dot {
-          position: relative;
-          display: inline-flex;
-          vertical-align: middle;
+        /* --- تحسينات صور البروفايل ونقاط النشاط --- */
+        
+        /* حاوية الصورة لتسمح بالتموضع المطلق للنقطة داخلها */
+        .avatar-wrapper {
+            position: relative;
+            display: inline-block;
+            line-height: 0; /* لمنع مسافات إضافية */
         }
 
-        .online-dot {
-          position: absolute;
-          border-radius: 999px;
-          box-shadow: 0 0 8px rgba(34,197,94,0.65);
-          background: #22c55e;
-          border: 2px solid #000;
-          z-index: 10;
-          display: none;
+        /* النقطة الخضراء العامة */
+        .status-indicator {
+            position: absolute;
+            background-color: #22c55e; /* لون أخضر فاقع */
+            border-radius: 50%;
+            display: none; /* مخفي افتراضياً ويظهر بالجافاسكربت */
+            z-index: 10;
         }
 
-        /* Large dot for profile page: slightly above bottom edge */
-        .online-dot-large {
-          width: 18px;
-          height: 18px;
-          left: 8px;    /* RTL: place on left inner corner */
-          bottom: 14px; /* floats above the bottom edge */
+        /* تنسيق النقطة في صفحة البروفايل (كبيرة) */
+        .status-indicator.large {
+            width: 24px;
+            height: 24px;
+            bottom: 15px; /* رفع قليلاً من الحافة السفلية */
+            left: 10px;   /* في اليمين (أو اليسار حسب التفضيل، هنا وضعناها يساراً لتناسب RTL أو يميناً حسب التصميم) */
+            /* لنجعلها على اليسار (بداية السطر في العربية) أو اليمين. 
+               المعتاد عالمياً هو Bottom-Right. في RTL الـ Right هو بداية السطر أحياناً.
+               سنستخدم left هنا لأن الصورة محاذاة لليمين والنص يسارها، فالزاوية اليسرى للصورة هي الأقرب للمحتوى */
+            left: 5px; 
+            bottom: 12px;
+            border: 4px solid #000000; /* حدود بنفس لون خلفية الصفحة لتبدو مفصولة */
         }
 
-        /* Small dot for posts/avatar thumbnails */
-        .online-dot-post {
-          width: 11px;
-          height: 11px;
-          left: 6px;
-          bottom: 6px;
-          border-width: 1.5px;
+        /* تنسيق النقطة في المنشورات (صغيرة) */
+        .status-indicator.small {
+            width: 13px;
+            height: 13px;
+            bottom: 0px;
+            left: 0px; /* الزاوية السفلية اليسرى للصورة */
+            border: 2px solid #242526; /* حدود بلون خلفية الكرت */
         }
 
         /* Status text shown under username on profile */
@@ -118,10 +125,15 @@
           font-size: 13px;
         }
 
-        /* small responsive adjustments */
         @media (max-width: 480px) {
-          .online-dot-large { width: 16px; height: 16px; bottom: 12px; left: 6px; }
-          .online-dot-post { width: 9px; height: 9px; left: 4px; bottom: 4px; }
+           /* تعديلات للموبايل */
+           .status-indicator.large {
+               width: 20px;
+               height: 20px;
+               bottom: 12px;
+               left: 4px;
+               border-width: 3px;
+           }
         }
 
     </style>
@@ -173,12 +185,12 @@
 
                 <div class="p-4 pt-0 -mt-20 relative">
 
-                    <!-- Avatar wrapper: data-user-id will be set dynamically -->
-                    <span id="profileAvatarWrap" class="avatar-with-dot" data-user-id="">
+                    <div id="profileAvatarWrap" class="avatar-wrapper" data-user-id="">
                         <img id="profileImage" src="/assets/default_profile_pic.png" alt="صورة الملف الشخصي"
                              class="w-32 h-32 rounded-full object-cover border-4 border-black shadow-lg mb-3 hover:ring-4 hover:ring-blue-400 transition duration-300">
-                        <span id="profileOnlineDot" class="online-dot online-dot-large" title="متصل الآن" aria-hidden="true"></span>
-                    </span>
+                        
+                        <span id="profileOnlineDot" class="status-indicator large" title="متصل الآن"></span>
+                    </div>
 
                     <div class="flex justify-between items-start">
                         <div>
@@ -201,8 +213,7 @@
                             </a>
 
                             <div id="friendActionContainer" class="flex gap-2">
-                                <!-- Buttons added by JS -->
-                            </div>
+                                </div>
                         </div>
                     </div>
 
@@ -216,7 +227,6 @@
         </div>
     </main>
 
-    <!-- Media viewer -->
     <div id="mediaViewerModal" class="fixed inset-0 bg-black bg-opacity-90 z-[1000] hidden flex items-center justify-center p-4" onclick="closeMediaViewer()">
         <div class="relative w-full max-w-4xl max-h-full overflow-hidden" onclick="event.stopPropagation()">
             <button class="absolute top-4 right-4 text-white text-3xl z-10 hover:text-gray-300" onclick="closeMediaViewer()">&times;</button>
@@ -232,7 +242,6 @@
         </button>
     </div>
 
-    <!-- Comment modal -->
     <div id="commentModal" class="fixed inset-0 z-[1000] hidden flex items-end justify-center">
         <div id="commentModalBackdrop" class="fixed inset-0 bg-black bg-opacity-70" onclick="closeCommentModal()"></div>
         <div class="relative w-full max-w-lg h-5/6 bg-[#18191a] rounded-t-2xl shadow-2xl flex flex-col animate-slideUp">
@@ -256,10 +265,8 @@
 <script>
 /*
   ملف profile.html محدث:
-  - يعرض مؤشر النشاط (online) فوق صورة البروفايل في صفحة البروفايل (أكبر قليلاً).
-  - يعرض نفس المؤشر صغيرًا داخل بطاقات المنشور بجانب الصورة المصغرة.
-  - يستخدم polling لتحديث حالة is_online / last_seen لكل مستخدم عند عرض الصفحة.
-  - عند جلب المنشورات يتم إضافة عنصر المؤشر داخل avatar لكل منشور (data-user-id).
+  - تم تحسين ظهور مؤشر النشاط (Online Dot) ليكون مثل مواقع التواصل (فوق الصورة من الأسفل).
+  - تم تعديل طريقة عرض المنشورات لتشمل النقطة.
 */
 
 let currentProfileId = null;
@@ -313,7 +320,7 @@ function formatLastSeen(lastSeenTs) {
     return `آخر ظهور في ${d.toLocaleDateString('ar-EG')}`;
 }
 
-// إنشاء كرت المنشور مع تضمين avatar-with-dot و online dot داخلها
+// إنشاء كرت المنشور مع تضمين online dot بشكل صحيح
 function createPostCard(post) {
     let mediaContent = '';
 
@@ -360,17 +367,20 @@ function createPostCard(post) {
     const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
     const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
 
-    // online dot small inserted inside avatar
-    const onlineDotHtml = `<span class="online-dot online-dot-post" style="${post.user && post.user.is_online ? 'display:inline-block' : 'display:none'}" title="${post.user && post.user.is_online ? 'متصل الآن' : ''}"></span>`;
+    // نقطة الأونلاين للمنشور
+    const isOnline = post.user && post.user.is_online;
+    // نستخدم style display بدلاً من hidden class لسهولة التحكم عبر JS لاحقاً
+    const dotDisplay = isOnline ? 'block' : 'none';
 
     return `
         <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
             <div class="flex items-start justify-between mb-3">
                 <div class="flex items-center">
-                    <a href="/profile?userId=${post.userId}" class="avatar-with-dot" data-user-id="${post.userId}">
-                        <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
-                        ${onlineDotHtml}
+                    <a href="/profile?userId=${post.userId}" class="avatar-wrapper ml-3" data-user-id="${post.userId}">
+                        <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover border border-gray-600">
+                        <span class="status-indicator small" style="display: ${dotDisplay};" title="متصل الآن"></span>
                     </a>
+                    
                     <div>
                         <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">@${post.user.username}</a>
                         <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
@@ -654,17 +664,15 @@ function toggleFullscreen(postId, event) {
 // --- Presence UI helpers ---
 // Set online dot and profile status for a given user across the page
 function setUserOnlineUI(userId, isOnline, lastSeenTs) {
-    // update all avatars with data-user-id == userId
-    const selectors = document.querySelectorAll(`.avatar-with-dot[data-user-id="${userId}"]`);
+    // update all avatars with data-user-id == userId (includes posts)
+    const selectors = document.querySelectorAll(`.avatar-wrapper[data-user-id="${userId}"]`);
     selectors.forEach(av => {
-        const dot = av.querySelector('.online-dot');
+        const dot = av.querySelector('.status-indicator');
         if (!dot) return;
         if (isOnline) {
-            dot.style.display = 'inline-block';
-            dot.title = 'متصل الآن';
+            dot.style.display = 'block';
         } else {
             dot.style.display = 'none';
-            dot.title = lastSeenTs ? `آخر ظهور: ${new Date(lastSeenTs).toLocaleString('ar-EG')}` : '';
         }
     });
 
@@ -673,19 +681,22 @@ function setUserOnlineUI(userId, isOnline, lastSeenTs) {
     if (profileAvatarWrap && profileAvatarWrap.dataset.userId === userId) {
         const bigDot = document.getElementById('profileOnlineDot');
         const profileStatus = document.getElementById('profileStatus');
+        
         if (isOnline) {
-            if (bigDot) bigDot.style.display = 'inline-block';
+            if (bigDot) bigDot.style.display = 'block';
             if (profileStatus) profileStatus.textContent = 'متصل الآن';
+            if (profileStatus) profileStatus.className = 'text-green-500 font-semibold text-sm block mt-1';
         } else {
             if (bigDot) bigDot.style.display = 'none';
-            if (profileStatus) profileStatus.textContent = formatLastSeen(lastSeenTs) || '';
+            if (profileStatus) {
+                profileStatus.textContent = formatLastSeen(lastSeenTs) || '';
+                profileStatus.className = 'text-gray-400 text-sm block mt-1';
+            }
         }
     }
 }
 
-// Poll only the status (and last_seen) for the displayed profile, used to keep the profile dot fresh.
-// Additionally, we could poll a small list of users currently visible on the screen (posts' authors) to update their dots.
-// For simplicity we poll the profile and also refresh posts' author statuses in batch via /api/profile (when needed).
+// Poll only the status (and last_seen) for the displayed profile
 async function pollProfileStatus() {
     if (!currentProfileId) return;
     try {
@@ -856,9 +867,6 @@ async function fetchAndDisplayUserPosts(userId) {
 
                 // Start polling presence for this profile
                 startStatusPolling();
-
-                // After rendering posts, we could request presence for authors in posts to update their dots,
-                // but for simplicity we only poll the current profile. If needed, we can extend to fetch presence for post authors.
             }
         } else {
             userPostsFeed.innerHTML = '<div class="text-center text-red-500 p-8">فشل في جلب المنشورات.</div>';
@@ -869,7 +877,7 @@ async function fetchAndDisplayUserPosts(userId) {
     }
 }
 
-// SSE listener (keeps connection open and can be extended to include presence updates)
+// SSE listener
 (function setupNotifSSEProfile() {
     if (!window.EventSource) return;
     try {
@@ -877,11 +885,10 @@ async function fetchAndDisplayUserPosts(userId) {
         es.addEventListener('notifications', (e) => {
             try {
                 const payload = JSON.parse(e.data);
-                // If server sends presence updates inside payload.presenceUpdates, apply them:
+                // If needed, handle global notifications here
                 if (payload.presenceUpdates && Array.isArray(payload.presenceUpdates)) {
                     payload.presenceUpdates.forEach(p => setUserOnlineUI(p.userId, !!p.is_online, p.last_seen));
                 }
-                // otherwise we just use SSE to keep session and other badges in sync
             } catch (err) {
                 console.error('Failed to parse notifications SSE data', err);
             }
