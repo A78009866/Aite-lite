@@ -66,6 +66,7 @@ display: flex;
 align-items: center;
 justify-content: center;
 flex-shrink: 0;
+position: relative;
 }
 .avatar img {
 width: 100%;
@@ -360,7 +361,7 @@ margin-top: -4px;
     flex-shrink: 0;
 }
 
-/* Online dot styles (global) */
+/* online dot */
 .avatar-with-dot { position: relative; display: inline-block; }
 .online-dot {
   position: absolute;
@@ -374,6 +375,15 @@ margin-top: -4px;
   box-shadow: 0 0 6px rgba(34,197,94,0.6);
   display: inline-block;
 }
+
+/* small online next to name */
+.online-text {
+  color: #22c55e;
+  font-weight: 700;
+  font-size: 11px;
+  margin-left: 6px;
+}
+
 </style>
 <script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
@@ -382,7 +392,13 @@ margin-top: -4px;
 <div class="top">
 <div class="user-row">
 <a class="btn" href="/users_list" style="text-decoration:none;color:var(--muted);">◀</a>
-<a id="other-profile-link" href="#" class="avatar avatar-with-dot"><img id="other-avatar" src="https://via.placeholder.com/40/000000/FFFFFF?text=U" alt="avatar"><span id="other-online-dot" class="online-dot" style="display:none;"></span></a>
+
+<!-- Avatar with online dot -->
+<a id="other-profile-link" href="#" class="avatar avatar-with-dot" style="display:inline-flex;align-items:center;justify-content:center;">
+  <img id="other-avatar" src="https://via.placeholder.com/40/000000/FFFFFF?text=U" alt="avatar">
+  <span id="other-online-dot" class="online-dot" style="display:none;"></span>
+</a>
+
 <div class="meta">
 <div id="other-name" class="name">جارٍ التحميل...</div>
 <div id="other-username" class="sub small"></div>
@@ -788,13 +804,15 @@ async function fetchOtherProfile() {
         
         if (res.ok && profile) {
             document.getElementById('other-name').textContent = profile.full_name || profile.username;
-            document.getElementById('other-username').textContent = `@${profile.username}`;
+            // username + online indicator text
+            let usernameText = `@${profile.username || ''}`;
+            if (profile.is_online) usernameText += ' · متصل الآن';
+            document.getElementById('other-username').textContent = usernameText;
             document.getElementById('other-avatar').src = profile.profile_picture_url;
             document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
-            // show online dot if profile.is_online
+            // show/hide online dot next to avatar
             const dot = document.getElementById('other-online-dot');
-            if (profile.is_online) dot.style.display = 'inline-block';
-            else dot.style.display = 'none';
+            if (dot) dot.style.display = profile.is_online ? 'inline-block' : 'none';
         }
     } catch (error) {
         console.error('Error fetching other profile:', error);
@@ -1027,40 +1045,7 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
     setInterval(async () => { if (document.visibilityState === 'visible') await fetchMessages(); }, 3000); 
     window.addEventListener('focus', fetchMessages);
     window.addEventListener('focus', markRead);
-
-    // start presence heartbeat
-    startPresenceHeartbeat();
-
 })();
-
-/* Presence heartbeat helper */
-let presenceIntervalId = null;
-function startPresenceHeartbeat() {
-    // send initial heartbeat
-    fetch('/api/presence/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
-    // every 30 seconds
-    presenceIntervalId = setInterval(() => {
-        fetch('/api/presence/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
-    }, 30000);
-
-    // On page unload, try to mark offline via sendBeacon (best-effort)
-    window.addEventListener('beforeunload', () => {
-        try {
-            const payload = JSON.stringify({ online: false });
-            const blob = new Blob([payload], { type: 'application/json' });
-            if (navigator.sendBeacon) {
-                navigator.sendBeacon('/api/presence/set', blob);
-            } else {
-                // fallback synchronous fetch (may be blocked)
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', '/api/presence/set', false); // synchronous
-                xhr.setRequestHeader('Content-Type', 'application/json');
-                try { xhr.send(payload); } catch (e) {}
-            }
-        } catch (e) {}
-    });
-}
-
 /* Notifications SSE badge */
 (function setupNotifSSEChat(){
   if(!window.EventSource) return;
