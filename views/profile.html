@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -115,13 +114,46 @@
           min-width: 18px;
           height: 18px;
           padding: 0 6px;
-          background: #f59e0b;
-          color: #000;
+          background: #ef4444;
+          color: #fff;
           font-size: 12px;
           border-radius: 999px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
+        }
+
+        /* زر إضافة صديق صغير وناعم وأزرق فاتح */
+        .btn-add-friend {
+          background: #60a5fa;
+          color: #011627;
+          padding: 6px 10px;
+          font-size: 13px;
+          border-radius: 12px;
+          border: none;
+          box-shadow: 0 2px 6px rgba(96,165,250,0.12);
+        }
+
+        /* أزرار القبول والرفض صغيرة وناعمة بالألوان المطلوبة */
+        .btn-accept {
+          background: #16a34a;
+          color: #fff;
+          padding: 6px 10px;
+          font-size: 13px;
+          border-radius: 12px;
+          border: none;
+        }
+        .btn-reject {
+          background: #ef4444;
+          color: #fff;
+          padding: 6px 10px;
+          font-size: 13px;
+          border-radius: 12px;
+          border: none;
+        }
+
+        @media (max-width:480px){
+          .btn-add-friend, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; }
         }
 
     </style>
@@ -144,18 +176,7 @@
             </div>
             
             <div class="flex items-center space-x-4 space-x-reverse relative">
-                <!-- Notifications icon with badge in top bar -->
-                <a id="notifTopBtn" href="/notifications" class="text-gray-300 hover:text-white p-2 relative" title="الإشعارات">
-                    <i class="fas fa-bell text-xl"></i>
-                    <span id="notifBadgeProfile" class="notif-badge" style="display:none">0</span>
-                </a>
-
-                <!-- Users (friends) icon with friend requests badge -->
-                <a id="usersTopBtn" href="/users_list" class="text-gray-300 hover:text-white p-2 relative" title="الأصدقاء">
-                    <i class="fas fa-users text-xl"></i>
-                    <span id="friendReqBadgeProfile" class="friend-req-badge" style="display:none">0</span>
-                </a>
-
+                <!-- أزلنا أزرار الاشعارات والأصدقاء من نافيبار كما طُلِب -->
                 <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
                     <img id="userProfilePic" src="/assets/default_profile_pic.png" alt="صورة P" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
                 </button>
@@ -582,10 +603,10 @@
 
                         // Friend action buttons:
                         if (data.request_received) {
-                          // Show Accept / Reject
+                          // Show Accept / Reject (small & soft)
                           friendActionContainer.innerHTML = `
-                            <button id="acceptFriendBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg">قبول</button>
-                            <button id="rejectFriendBtn" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">رفض</button>
+                            <button id="acceptFriendBtn" class="btn-accept">قبول</button>
+                            <button id="rejectFriendBtn" class="btn-reject">رفض</button>
                           `;
                           document.getElementById('acceptFriendBtn').addEventListener('click', async () => {
                             try {
@@ -612,8 +633,8 @@
                             } catch (e) { alert('خطأ في الشبكة'); }
                           });
                         } else if (data.request_sent) {
-                          // Show Cancel request
-                          friendActionContainer.innerHTML = `<button id="cancelFriendBtn" class="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-2 px-4 rounded-lg">طلب مرسل</button>`;
+                          // Show Cancel request (small soft)
+                          friendActionContainer.innerHTML = `<button id="cancelFriendBtn" class="btn-add-friend">طلب مرسل</button>`;
                           document.getElementById('cancelFriendBtn').addEventListener('click', async () => {
                             try {
                               const r = await fetch('/api/friends/cancel', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
@@ -623,8 +644,8 @@
                             } catch (e) { alert('خطأ في الشبكة'); }
                           });
                         } else if (!data.is_friend) {
-                          // Show Add Friend
-                          friendActionContainer.innerHTML = `<button id="addFriendBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">إضافة صديق</button>`;
+                          // Show Add Friend (small soft blue)
+                          friendActionContainer.innerHTML = `<button id="addFriendBtn" class="btn-add-friend">إضافة صديق</button>`;
                           document.getElementById('addFriendBtn').addEventListener('click', async () => {
                             try {
                               const r = await fetch('/api/friends/request', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
@@ -748,16 +769,8 @@
               const payload = JSON.parse(e.data);
               const unread = payload.unread_count || 0;
               const pendingFR = payload.pending_friend_requests_count || 0;
-              const badge = document.getElementById('notifBadgeProfile');
-              if (unread > 0) {
-                badge.style.display = 'inline-flex';
-                badge.textContent = unread > 99 ? '99+' : String(unread);
-              } else {
-                badge.style.display = 'none';
-              }
-              const frBadge = document.getElementById('friendReqBadgeProfile');
-              if (pendingFR > 0) { frBadge.style.display = 'inline-flex'; frBadge.textContent = pendingFR > 99 ? '99+' : String(pendingFR); }
-              else frBadge.style.display = 'none';
+              // لم نعد نعرض أزرار الاشعارات والاصدقاء في النافبار، لذا لا نعرض شرائط هنا
+              // لو رغبت بالعرض في مكان آخر أعطني مكان العنصر
             } catch (err) {
               console.error('Failed to parse notifications SSE data', err);
             }
@@ -769,22 +782,7 @@
 
         // fallback initial unread count & friend requests count
         (function initUnreadProfile() {
-          fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
-            .then(r => r.ok ? r.json() : null)
-            .then(d => {
-              if (d && d.ok) {
-                const badge = document.getElementById('notifBadgeProfile');
-                if (d.unread_count > 0) { badge.style.display = 'inline-flex'; badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count); }
-              }
-            }).catch(()=>{});
-          fetch('/api/friends/requests_count', { credentials: 'same-origin' })
-            .then(r => r.ok ? r.json() : null)
-            .then(d => {
-              if (d && d.ok) {
-                const fr = document.getElementById('friendReqBadgeProfile');
-                if (d.count > 0) { fr.style.display = 'inline-flex'; fr.textContent = d.count > 99 ? '99+' : String(d.count); }
-              }
-            }).catch(()=>{});
+          // لا حاجة لعرض العدادات في النافبار هنا حسب الطلب
         })();
 
         // Utility: open media viewer
