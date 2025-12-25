@@ -152,6 +152,27 @@
           border: none;
         }
 
+        /* online dot styles */
+        .avatar-with-dot { position: relative; display: inline-block; }
+        .online-dot {
+          position: absolute;
+          top: -8px;
+          left: -8px;
+          width: 14px;
+          height: 14px;
+          background: #22c55e;
+          border: 2px solid #000;
+          border-radius: 999px;
+          box-shadow: 0 0 8px rgba(34,197,94,0.6);
+          display: inline-block;
+        }
+        .profile-online-text {
+            color: #22c55e;
+            font-weight: 700;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
         @media (max-width:480px){
           .btn-add-friend, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; }
         }
@@ -209,14 +230,18 @@
 
                 <div class="p-4 pt-0 -mt-20 relative">
                     
-                    <img id="profileImage" src="/assets/default_profile_pic.png" alt="صورة الملف الشخصي" 
-                         class="w-32 h-32 rounded-full object-cover border-4 border-black shadow-lg mb-3 hover:ring-4 hover:ring-blue-400 transition duration-300">
+                    <div class="avatar-with-dot" style="display:inline-block;">
+                        <img id="profileImage" src="/assets/default_profile_pic.png" alt="صورة الملف الشخصي" 
+                             class="w-32 h-32 rounded-full object-cover border-4 border-black shadow-lg mb-3 hover:ring-4 hover:ring-blue-400 transition duration-300">
+                        <span id="profile-online-dot" class="online-dot" style="display:none;"></span>
+                    </div>
                     
                     <div class="flex justify-between items-start">
                         <div>
                             <h1 id="profileUsername" class="text-3xl font-bold text-white">تحميل...</h1>
                             <p id="profileFullName" class="text-gray-400 text-lg">الاسم الكامل</p>
                             <p id="profileBio" class="text-gray-300 mt-1 whitespace-pre-wrap">السيرة الذاتية...</p>
+                            <div id="profileOnlineText" class="profile-online-text" style="display:none;">متصل الآن</div>
                         </div>
                         
                         <div class="flex flex-col items-end gap-2">
@@ -396,11 +421,16 @@
                 </button>
             ` : '';
 
+            const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online-dot-small" title="متصل الآن"></span>` : '';
+
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center">
-                            <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
+                            <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
+                                <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
+                                ${onlineDotHtml}
+                            </a>
                             <div>
                                 <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">@${post.user.username}</a>
                                 <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
@@ -585,6 +615,17 @@
                     document.getElementById('profileBio').textContent = data.bio || '';
                     
                     pageTitle.textContent = `Aite - @${data.username}`;
+                    
+                    // Online indicator (dot + text)
+                    const onlineDot = document.getElementById('profile-online-dot');
+                    const onlineText = document.getElementById('profileOnlineText');
+                    if (data.is_online) {
+                        if (onlineDot) onlineDot.style.display = 'inline-block';
+                        if (onlineText) { onlineText.style.display = 'block'; onlineText.textContent = 'متصل الآن'; }
+                    } else {
+                        if (onlineDot) onlineDot.style.display = 'none';
+                        if (onlineText) onlineText.style.display = 'none';
+                    }
                     
                     // Show appropriate actions based on friendship/request status
                     friendActionContainer.innerHTML = '';
