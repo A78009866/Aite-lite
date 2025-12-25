@@ -133,7 +133,7 @@ app.get('/check-status', (req, res) => {
 });
 
 app.get('/chat_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat_list.html')); });
-app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'users_list.html')); }); // friends list
+app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'users_list.html')); }); // friends (chats) list
 app.get('/all_users', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'all_users.html')); }); // all users + requests
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
@@ -239,7 +239,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
 
     const finalChats = chats.map(chat => ({
       ...chat,
-      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40' }
+      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40', is_online: false }
     }));
 
     finalChats.sort((a, b) => b.last_message_timestamp - a.last_message_timestamp);
@@ -414,7 +414,8 @@ app.get('/api/users', requireAuth, async (req, res) => {
         full_name: user.full_name,
         profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40',
         last_message: lastMessage,
-        unread_count: chatSummary.unread_count || 0
+        unread_count: chatSummary.unread_count || 0,
+        is_online: !!user.is_online
       };
     });
 
@@ -432,7 +433,7 @@ app.get('/api/users/all', requireAuth, async (req, res) => {
   try {
     const profilesSnap = await db.ref('profiles').once('value');
     const profiles = profilesSnap.val() || {};
-    const users = Object.values(profiles).filter(u => u.id !== currentUserId).map(user => ({ id: user.id, username: user.username, full_name: user.full_name, profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL }));
+    const users = Object.values(profiles).filter(u => u.id !== currentUserId).map(user => ({ id: user.id, username: user.username, full_name: user.full_name, profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_online: !!user.is_online }));
     const full = await Promise.all(users.map(async (u) => {
       const isFriendSnap = await db.ref(`friends/${currentUserId}/${u.id}`).once('value');
       const outgoing = await db.ref(`friend_requests/${u.id}/${currentUserId}`).once('value'); // request I sent to them
@@ -820,7 +821,8 @@ app.get('/api/posts', requireAuth, async (req, res) => {
       is_liked: likedStatuses[post.postId] || false,
       user: {
         username: profiles[post.userId]?.username || 'مستخدم',
-        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl,
+        is_online: !!profiles[post.userId]?.is_online
       }
     }));
 
@@ -923,7 +925,8 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       timestamp: admin.database.ServerValue.TIMESTAMP,
       user: {
         username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_online: !!userData.is_online
       }
     };
 
@@ -1045,7 +1048,8 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
       is_liked: likedStatuses[post.postId] || false,
       user: {
         username: userProfile?.username || 'مستخدم',
-        profile_picture_url: userProfile?.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+        profile_picture_url: userProfile?.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_online: !!userProfile?.is_online
       }
     }));
 
@@ -1115,7 +1119,8 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
         is_liked: likeSnap.exists(),
         user: {
           username: userData.username || 'مستخدم',
-          profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150'
+          profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150',
+          is_online: !!userData.is_online
         }
       };
     }));
