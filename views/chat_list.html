@@ -182,33 +182,69 @@
           line-height: 1;
         }
 
-/* Online green dot - التعديل الجديد */
-.avatar-with-dot { 
-  position: relative; 
-  display: inline-flex; /* لضمان أن الحاوية تأخذ حجم الصورة فقط */
-}
+        /* Online green dot - التعديل الجديد */
+        .avatar-with-dot { 
+          position: relative; 
+          display: inline-flex; /* لضمان أن الحاوية تأخذ حجم الصورة فقط */
+        }
 
-.online-dot {
-  position: absolute;
-  bottom: 2px;    /* بدلاً من top، نستخدم bottom لجعلها في الأسفل */
-  right: 2px;     /* بدلاً من left، نستخدم right لتظهر في الزاوية اليمنى */
-  width: 12px;
-  height: 12px;
-  background: #22c55e;
-  border: 2px solid #000;
-  border-radius: 999px;
-  box-shadow: 0 0 6px rgba(34,197,94,0.6);
-  z-index: 10;    /* لضمان ظهورها فوق الصورة */
-}
+        .online-dot {
+          position: absolute;
+          bottom: 2px;    /* بدلاً من top، نستخدم bottom لجعلها في الأسفل */
+          right: 2px;     /* بدلاً من left، نستخدم right لتظهر في الزاوية اليمنى */
+          width: 12px;
+          height: 12px;
+          background: #22c55e;
+          border: 2px solid #000;
+          border-radius: 999px;
+          box-shadow: 0 0 6px rgba(34,197,94,0.6);
+          z-index: 10;    /* لضمان ظهورها فوق الصورة */
+        }
 
-/* التعديل لنسخة النقطة الصغيرة */
-.online-dot-small {
-  width: 10px;
-  height: 10px;
-  bottom: 1px;
-  right: 1px;
-  border-width: 1.5px;
-}
+        /* التعديل لنسخة النقطة الصغيرة */
+        .online-dot-small {
+          width: 10px;
+          height: 10px;
+          bottom: 1px;
+          right: 1px;
+          border-width: 1.5px;
+        }
+
+        /* VERIFIED BADGE (Instagram-like but green) */
+        .verified-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 999px;
+          margin-left: 6px;
+          flex-shrink: 0;
+          box-shadow: 0 2px 6px rgba(16,185,129,0.25);
+          background: linear-gradient(135deg, #10b981 0%, #059669 60%, #047857 100%);
+          color: white;
+          font-size: 12px;
+          line-height: 1;
+        }
+
+        .verified-badge i {
+          transform: translateY(1px);
+        }
+
+        /* tooltip-like label on hover */
+        .verified-badge[data-title]:hover::after {
+          content: attr(data-title);
+          position: absolute;
+          background: rgba(0,0,0,0.8);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 6px;
+          font-size: 12px;
+          top: -36px;
+          right: 0;
+          white-space: nowrap;
+          z-index: 50;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -846,6 +882,8 @@ createModalEl.addEventListener('click', (e) => {
 
             const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online-dot-small" title="متصل الآن"></span>` : '';
 
+            const verifiedBadgeHtml = post.user && post.user.is_verified ? `<span class="verified-badge" data-title="موثق"><i class="fas fa-check"></i></span>` : '';
+
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
     <div class="flex items-start justify-between mb-3">
@@ -855,7 +893,7 @@ createModalEl.addEventListener('click', (e) => {
                 ${onlineDotHtml}
             </a>
             <div>
-                 <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username}</a>
+                 <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username} ${verifiedBadgeHtml}</a>
                 <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
             </div>
         </div>
@@ -903,9 +941,39 @@ createModalEl.addEventListener('click', (e) => {
                         return;
                     }
                     
+                    // نجمع معرفات المستخدمين الفريدة لتهيئة حالة التحقق منهم عبر /api/profile
+                    const posts = result.posts;
+                    const userIds = [...new Set(posts.map(p => p.userId))];
+
+                    const profileMap = {};
+                    try {
+                        const profilePromises = userIds.map(uid => fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' })
+                                                            .then(r => r.ok ? r.json() : null)
+                                                            .catch(() => null));
+                        const profileResults = await Promise.all(profilePromises);
+                        profileResults.forEach(pr => {
+                            if (pr && pr.ok) {
+                                profileMap[pr.id] = pr; // includes is_verified
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('Failed to fetch profiles for verification status', e);
+                    }
+
                     const audioPostsToInit = [];
 
-                    result.posts.forEach(post => {
+                    // دمج حالة is_verified داخل كائن post.user قبل العرض
+                    posts.forEach(post => {
+                        const prof = profileMap[post.userId];
+                        if (prof) {
+                            post.user = post.user || {};
+                            post.user.is_verified = !!prof.is_verified;
+                        } else {
+                            // افتراضي: false
+                            post.user = post.user || {};
+                            post.user.is_verified = !!post.user.is_verified;
+                        }
+
                         postsFeed.innerHTML += createPostCard(post);
                         
                         // جمع منشورات الصوت لتهيئة WaveSurfer
