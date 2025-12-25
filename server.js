@@ -121,39 +121,6 @@ function requireAuth(req, res, next) {
   return res.redirect('/login');
 }
 
-// ---------------- Friendship helpers ----------------
-
-// Check whether two users are friends
-async function areFriends(userA, userB) {
-  if (!userA || !userB) return false;
-  const snap = await db.ref(`friends/${userA}/${userB}`).once('value');
-  return snap.exists();
-}
-
-// Create mutual friendship
-async function makeFriends(userA, userB) {
-  const updates = {};
-  updates[`friends/${userA}/${userB}`] = true;
-  updates[`friends/${userB}/${userA}`] = true;
-  await db.ref().update(updates);
-}
-
-// Remove friend request (from -> to)
-async function removeFriendRequest(fromUser, toUser) {
-  await db.ref(`friend_requests/${toUser}/${fromUser}`).remove();
-}
-
-// Count pending friend requests for user (incoming)
-async function countPendingFriendRequests(userId) {
-  const snap = await db.ref(`friend_requests/${userId}`).once('value');
-  let count = 0;
-  snap.forEach(child => {
-    const v = child.val();
-    if (!v.is_responded) count++;
-  });
-  return count;
-}
-
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
 
@@ -167,7 +134,6 @@ app.get('/check-status', (req, res) => {
 
 app.get('/chat_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat_list.html')); });
 app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'users_list.html')); });
-app.get('/all_users', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'all_users.html')); }); // new page: list all users + friend requests
 app.get('/chat', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 app.get('/chat.html', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat.html')); });
 
@@ -239,266 +205,6 @@ app.get('/logout', (req, res) => {
   });
 });
 
-// ---------------- API: Friendship System ----------------
-
-// Get friends (for current user) - used by users_list page (friends only)
-app.get('/api/friends', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  try {
-    const friendsSnap = await db.ref(`friends/${userId}`).once('value');
-    const friendIds = [];
-    friendsSnap.forEach(child => {
-      if (child.key) friendIds.push(child.key);
-    });
-
-    const profiles = {};
-    const profilePromises = friendIds.map(id => db.ref(`profiles/${id}`).once('value'));
-    const snaps = await Promise.all(profilePromises);
-    snaps.forEach((s, idx) => {
-      profiles[friendIds[idx]] = s.val();
-    });
-
-    const usersList = friendIds.map(id => {
-      const p = profiles[id] || {};
-      return {
-        id: id,
-        username: p.username || 'مستخدم',
-        full_name: p.full_name || '',
-        profile_picture_url: p.profile_picture_url || 'https://via.placeholder.com/40'
-      };
-    });
-
-    res.json({ ok: true, friends: usersList });
-  } catch (error) {
-    console.error('Error in /api/friends:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب الأصدقاء.' });
-  }
-});
-
-// Get all users (for discovery page) with request/friend status
-app.get('/api/users/all', requireAuth, async (req, res) => {
-  const currentUserId = req.session.userId;
-  try {
-    const profilesSnap = await db.ref('profiles').once('value');
-    const profiles = profilesSnap.val() || {};
-
-    // get current user's friends
-    const friendsSnap = await db.ref(`friends/${currentUserId}`).once('value');
-    const myFriends = new Set();
-    friendsSnap.forEach(child => myFriends.add(child.key));
-
-    // incoming requests to me
-    const incomingSnap = await db.ref(`friend_requests/${currentUserId}`).once('value');
-    const incoming = {};
-    incomingSnap.forEach(child => {
-      incoming[child.key] = child.val();
-    });
-
-    // outgoing requests I've sent: we will scan friend_requests/{to}/{from} by scanning under all recipient nodes is heavier but ok for now
-    const outgoing = {};
-    const allRequestsSnap = await db.ref('friend_requests').once('value');
-    allRequestsSnap.forEach(toSnap => {
-      const toId = toSnap.key;
-      toSnap.forEach(fromSnap => {
-        const fromId = fromSnap.key;
-        const val = fromSnap.val();
-        if (fromId === currentUserId) {
-          outgoing[toId] = val;
-        }
-      });
-    });
-
-    const users = Object.values(profiles).filter(p => p.id !== currentUserId).map(p => {
-      const isFriend = myFriends.has(p.id);
-      const incomingReq = incoming[p.id] || null; // request FROM p.id -> me
-      const outgoingReq = outgoing[p.id] || null; // request FROM me -> p.id
-      return {
-        id: p.id,
-        username: p.username,
-        full_name: p.full_name,
-        profile_picture_url: p.profile_picture_url || 'https://via.placeholder.com/40',
-        is_friend: !!isFriend,
-        incoming_request: incomingReq ? { from_user_id: incomingReq.from_user_id, id: incomingReq.id } : null,
-        outgoing_request: outgoingReq ? { to_user_id: outgoingReq.to_user_id, id: outgoingReq.id } : null
-      };
-    });
-
-    res.json({ ok: true, users: users });
-  } catch (error) {
-    console.error('Error in /api/users/all:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب المستخدمين.' });
-  }
-});
-
-// Send friend request
-app.post('/api/friends/request', requireAuth, async (req, res) => {
-  const fromUserId = req.session.userId;
-  const { to_user_id } = req.body;
-
-  if (!to_user_id) return res.status(400).json({ ok: false, error: 'to_user_id required' });
-  if (to_user_id === fromUserId) return res.status(400).json({ ok: false, error: 'Cannot request yourself' });
-
-  try {
-    // check already friends
-    if (await areFriends(fromUserId, to_user_id)) {
-      return res.status(409).json({ ok: false, error: 'Already friends' });
-    }
-
-    // check existing request (either direction)
-    const existingToMeSnap = await db.ref(`friend_requests/${to_user_id}/${fromUserId}`).once('value');
-    if (existingToMeSnap.exists()) {
-      return res.status(409).json({ ok: false, error: 'Request already sent' });
-    }
-    const existingFromThemSnap = await db.ref(`friend_requests/${fromUserId}/${to_user_id}`).once('value');
-    if (existingFromThemSnap.exists()) {
-      // The other side already sent a request -> accept it automatically
-      await makeFriends(fromUserId, to_user_id);
-      await removeFriendRequest(to_user_id, fromUserId);
-      // notify requester (the original other)
-      try {
-        const fromProfileSnap = await db.ref(`profiles/${fromUserId}`).once('value');
-        const fromProfile = fromProfileSnap.val() || {};
-        const notifRef = db.ref(`notifications/${to_user_id}`).push();
-        const notifData = {
-          id: notifRef.key,
-          type: 'friend_request_accepted',
-          from_user_id: fromUserId,
-          from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          timestamp: admin.database.ServerValue.TIMESTAMP,
-          is_read: false
-        };
-        await notifRef.set(notifData);
-      } catch (nerr) {
-        console.error('Failed to create friend_request_accepted notification:', nerr);
-      }
-
-      return res.json({ ok: true, message: 'Friend request mutual -> now friends', action: 'accepted' });
-    }
-
-    // create request under friend_requests/{to}/{from}
-    const reqRef = db.ref(`friend_requests/${to_user_id}`).push();
-    const reqData = {
-      id: reqRef.key,
-      from_user_id: fromUserId,
-      to_user_id: to_user_id,
-      timestamp: admin.database.ServerValue.TIMESTAMP,
-      is_responded: false
-    };
-    await reqRef.set(reqData);
-
-    // create a notification for recipient
-    try {
-      const fromProfileSnap = await db.ref(`profiles/${fromUserId}`).once('value');
-      const fromProfile = fromProfileSnap.val() || {};
-      const notifRef = db.ref(`notifications/${to_user_id}`).push();
-      const notifData = {
-        id: notifRef.key,
-        type: 'friend_request',
-        from_user_id: fromUserId,
-        from_username: fromProfile.username || 'مستخدم',
-        from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-        timestamp: admin.database.ServerValue.TIMESTAMP,
-        is_read: false
-      };
-      await notifRef.set(notifData);
-    } catch (nerr) {
-      console.error('Failed to create friend_request notification:', nerr);
-    }
-
-    res.json({ ok: true, request: reqData });
-  } catch (error) {
-    console.error('Error in /api/friends/request:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إرسال طلب الصداقة.' });
-  }
-});
-
-// Accept friend request (current user accepts a request from from_user_id)
-app.post('/api/friends/accept', requireAuth, async (req, res) => {
-  const userId = req.session.userId; // recipient who will accept
-  const { from_user_id } = req.body;
-
-  if (!from_user_id) return res.status(400).json({ ok: false });
-
-  try {
-    const reqSnap = await db.ref(`friend_requests/${userId}/${from_user_id}`).once('value');
-    if (!reqSnap.exists()) return res.status(404).json({ ok: false, error: 'Request not found' });
-
-    // make mutual friends
-    await makeFriends(userId, from_user_id);
-
-    // remove friend request
-    await removeFriendRequest(from_user_id, userId);
-
-    // mark request responded (not necessary since removed), but create notification to other user
-    try {
-      const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
-      const fromProfile = fromProfileSnap.val() || {};
-      const notifRef = db.ref(`notifications/${from_user_id}`).push();
-      const notifData = {
-        id: notifRef.key,
-        type: 'friend_request_accepted',
-        from_user_id: userId,
-        from_username: fromProfile.username || 'مستخدم',
-        from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-        timestamp: admin.database.ServerValue.TIMESTAMP,
-        is_read: false
-      };
-      await notifRef.set(notifData);
-    } catch (nerr) {
-      console.error('Failed to create friend_request_accepted notification:', nerr);
-    }
-
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Error in /api/friends/accept:', error);
-    res.status(500).json({ ok: false, error: 'فشل في قبول الطلب.' });
-  }
-});
-
-// Decline/cancel friend request
-app.post('/api/friends/decline', requireAuth, async (req, res) => {
-  const userId = req.session.userId; // recipient who declines
-  const { from_user_id } = req.body;
-  if (!from_user_id) return res.status(400).json({ ok: false });
-  try {
-    await removeFriendRequest(from_user_id, userId);
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Error in /api/friends/decline:', error);
-    res.status(500).json({ ok: false });
-  }
-});
-
-// Get incoming/outgoing friend requests for current user
-app.get('/api/friends/requests', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  try {
-    const incomingSnap = await db.ref(`friend_requests/${userId}`).once('value');
-    const incoming = [];
-    incomingSnap.forEach(child => {
-      incoming.push(child.val());
-    });
-
-    // build outgoing by scanning friend_requests nodes (acceptable for small datasets)
-    const outgoing = [];
-    const allRequestsSnap = await db.ref('friend_requests').once('value');
-    allRequestsSnap.forEach(toSnap => {
-      const toId = toSnap.key;
-      toSnap.forEach(fromSnap => {
-        const fromId = fromSnap.key;
-        const val = fromSnap.val();
-        if (fromId === userId) outgoing.push(val);
-      });
-    });
-
-    res.json({ ok: true, incoming: incoming, outgoing: outgoing });
-  } catch (error) {
-    console.error('Error in /api/friends/requests:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب طلبات الصداقة.' });
-  }
-});
-
 // ---------------- API: Chat & Messages ----------------
 
 app.get('/api/chats', requireAuth, async (req, res) => {
@@ -542,15 +248,6 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
 
   if (!contactId) return res.status(400).json({ ok: false, error: 'Contact ID missing' });
 
-  // Enforce friendship: only friends can exchange messages
-  try {
-    const friends = await areFriends(userId, contactId);
-    if (!friends) return res.status(403).json({ ok: false, error: 'لا يمكنك الوصول للرسائل لأن هذا المستخدم ليس صديقك.' });
-  } catch (err) {
-    console.error('Friend check error', err);
-    return res.status(500).json({ ok: false });
-  }
-
   const chatRoomId = [userId, contactId].sort().join('_');
   const messagesRef = db.ref(`messages/${chatRoomId}`);
 
@@ -583,17 +280,6 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
 
   if (!contactId || (!content && !req.file)) {
     return res.status(400).json({ ok: false, error: 'No content to send.' });
-  }
-
-  // Enforce friendship: only friends can message
-  try {
-    const friends = await areFriends(senderId, contactId);
-    if (!friends) {
-      return res.status(403).json({ ok: false, error: 'يمكنك إرسال الرسائل فقط للأصدقاء.' });
-    }
-  } catch (err) {
-    console.error('Friend check error on send:', err);
-    return res.status(500).json({ ok: false, error: 'Internal error' });
   }
 
   if (req.file) {
@@ -643,6 +329,10 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
       last_message_sender_id: senderId
     });
 
+    // ملاحظة: لم نعد ننشئ إشعارًا داخل notifications/... عند وصول رسالة.
+    // بدلاً من ذلك نعتمد على عداد unread_count في chats/{recipient}/{sender}
+    // و SSE المحدث الذي يرسل unread_messages_count للعميل.
+
     messageData.timestamp = Date.now();
     res.json({ ok: true, message: 'Sent', messageData: messageData });
 
@@ -678,10 +368,7 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
 });
 
 // ---------------- API: Users & Profile ----------------
-// old /api/users will be kept as legacy but changed later; use /api/users/all to discover
 app.get('/api/users', requireAuth, async (req, res) => {
-  // keep backward-compatible behavior if used anywhere
-  // but prefer friends-only page to call /api/friends
   const currentUserId = req.session.userId;
   try {
     const profilesSnap = await db.ref('profiles').once('value');
@@ -1493,15 +1180,13 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
 
   const notifRef = db.ref(`notifications/${userId}`);
   const chatsRef = db.ref(`chats/${userId}`);
-  const friendReqRef = db.ref(`friend_requests/${userId}`);
 
   // دالة تجمع بيانات الإشعارات ومجموع الرسائل غير المقروءة وترسلها
   const sendCombined = async () => {
     try {
-      const [notifSnap, chatsSnap, friendReqSnap] = await Promise.all([
+      const [notifSnap, chatsSnap] = await Promise.all([
         notifRef.once('value'),
-        chatsRef.once('value'),
-        friendReqRef.once('value')
+        chatsRef.once('value')
       ]);
 
       const items = [];
@@ -1520,18 +1205,10 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
         }
       });
 
-      // count incoming friend requests (pending)
-      let pendingFriendRequestsCount = 0;
-      friendReqSnap.forEach(child => {
-        const v = child.val();
-        if (v && !v.is_responded) pendingFriendRequestsCount++;
-      });
-
       const payload = {
         unread_count: unreadNotificationsCount,
         notifications: items,
-        unread_messages_count: unreadMessagesCount,
-        unread_friend_requests_count: pendingFriendRequestsCount
+        unread_messages_count: unreadMessagesCount
       };
 
       res.write(`event: notifications\n`);
@@ -1543,17 +1220,13 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
     }
   };
 
-  // ربط المستمعين على كلتا العقدتين: إشعارات والدردشات وطلبات الصداقة
+  // ربط المستمعين على كلتا العقدتين: إشعارات والدردشات
   notifRef.on('value', sendCombined, err => {
     console.error('SSE notifications listener error:', err);
     res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
   });
   chatsRef.on('value', sendCombined, err => {
     console.error('SSE chats listener error:', err);
-    res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
-  });
-  friendReqRef.on('value', sendCombined, err => {
-    console.error('SSE friendReq listener error:', err);
     res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
   });
 
@@ -1565,7 +1238,6 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
     try {
       notifRef.off('value', sendCombined);
       chatsRef.off('value', sendCombined);
-      friendReqRef.off('value', sendCombined);
     } catch (e) { /* ignore */ }
     res.end();
   });
