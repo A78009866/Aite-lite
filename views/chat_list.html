@@ -145,6 +145,25 @@
   justify-content: center;
   line-height: 1;
 }
+
+/* message badge (new) */
+#msgBadge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  background: #06b6d4;
+  color: #012;
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
     </style>
 </head>
 <body class="min-h-screen">
@@ -204,9 +223,10 @@
                 <span class="text-xs mt-1"></span>
             </a>
             
-            <a href="/users_list" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
+            <a id="messagesBtn" href="/users_list" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300 relative">
                 <i class="fas fa-comment-dots text-xl"></i>
                 <span class="text-xs mt-1"></span>
+                <span id="msgBadge" style="display:none">0</span>
             </a>
             
             <!-- استبدال زر الملف الشخصي بزر ريلز -->
@@ -1041,7 +1061,7 @@ createModalEl.addEventListener('click', (e) => {
             fetchAndDisplayPosts();
         });
 
-        // ---------------- Notifications: SSE badge (فوري) ----------------
+        // ---------------- Notifications + Messages: SSE badge (فوري) ----------------
 
         (function setupNotifSSE() {
           if (!window.EventSource) return;
@@ -1052,13 +1072,24 @@ createModalEl.addEventListener('click', (e) => {
             try {
               const payload = JSON.parse(e.data);
               const unread = payload.unread_count || 0;
-              const badge = document.getElementById('notifBadge');
+              const unreadMessages = payload.unread_messages_count || 0;
+
+              const notifBadgeEl = document.getElementById('notifBadge');
               if (unread > 0) {
-                badge.style.display = 'inline-flex';
-                badge.textContent = unread > 99 ? '99+' : String(unread);
+                notifBadgeEl.style.display = 'inline-flex';
+                notifBadgeEl.textContent = unread > 99 ? '99+' : String(unread);
               } else {
-                badge.style.display = 'none';
+                notifBadgeEl.style.display = 'none';
               }
+
+              const msgBadgeEl = document.getElementById('msgBadge');
+              if (unreadMessages > 0) {
+                msgBadgeEl.style.display = 'inline-flex';
+                msgBadgeEl.textContent = unreadMessages > 99 ? '99+' : String(unreadMessages);
+              } else {
+                msgBadgeEl.style.display = 'none';
+              }
+
             } catch (err) {
               console.error('Failed to parse notifications SSE data', err);
             }
@@ -1070,8 +1101,9 @@ createModalEl.addEventListener('click', (e) => {
           });
         })();
 
-        // Fallback initial unread count (in case SSE connects slowly)
-        (function initUnreadCount() {
+        // Fallback initial unread counts (in case SSE connects slowly)
+        (function initUnreadCounts() {
+          // notifications unread
           fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
             .then(r => r.ok ? r.json() : null)
             .then(d => {
@@ -1080,6 +1112,20 @@ createModalEl.addEventListener('click', (e) => {
                 if (d.unread_count > 0) {
                   badge.style.display = 'inline-flex';
                   badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count);
+                }
+              }
+            }).catch(()=>{});
+
+          // chats unread total
+          fetch('/api/chats', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d && d.ok && Array.isArray(d.chats)) {
+                const totalUnread = d.chats.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+                const msgBadge = document.getElementById('msgBadge');
+                if (totalUnread > 0) {
+                  msgBadge.style.display = 'inline-flex';
+                  msgBadge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
                 }
               }
             }).catch(()=>{});
