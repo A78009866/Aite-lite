@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -106,6 +107,23 @@
             flex: 1;
         }
 
+        /* small badge for friend requests on pages that have a users icon */
+        .friend-req-badge {
+          position: absolute;
+          top: -6px;
+          left: -6px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 6px;
+          background: #f59e0b;
+          color: #000;
+          font-size: 12px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
     </style>
 </head>
 <body class="min-h-screen">
@@ -130,6 +148,12 @@
                 <a id="notifTopBtn" href="/notifications" class="text-gray-300 hover:text-white p-2 relative" title="الإشعارات">
                     <i class="fas fa-bell text-xl"></i>
                     <span id="notifBadgeProfile" class="notif-badge" style="display:none">0</span>
+                </a>
+
+                <!-- Users (friends) icon with friend requests badge -->
+                <a id="usersTopBtn" href="/users_list" class="text-gray-300 hover:text-white p-2 relative" title="الأصدقاء">
+                    <i class="fas fa-users text-xl"></i>
+                    <span id="friendReqBadgeProfile" class="friend-req-badge" style="display:none">0</span>
                 </a>
 
                 <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
@@ -174,16 +198,22 @@
                             <p id="profileBio" class="text-gray-300 mt-1 whitespace-pre-wrap">السيرة الذاتية...</p>
                         </div>
                         
-                        <a id="editProfileButton" href="/edit_profile" 
-                                class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-4 rounded-lg transition duration-300 flex items-center text-sm shadow-md">
-                            تعديل
-                        </a>
-                        
-                        <a id="chatButton" 
-                                class="hidden bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-md">
-                            <i class="fas fa-comment-dots ml-2"></i>
-                           مراسلة
-                        </a>
+                        <div class="flex flex-col items-end gap-2">
+                            <a id="editProfileButton" href="/edit_profile" 
+                                    class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-4 rounded-lg transition duration-300 flex items-center text-sm shadow-md">
+                                تعديل
+                            </a>
+                            
+                            <a id="chatButton" 
+                                    class="hidden bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-md">
+                                <i class="fas fa-comment-dots ml-2"></i>
+                                مراسلة
+                            </a>
+
+                            <div id="friendActionContainer" class="flex gap-2">
+                              <!-- Buttons added by JS: Add Friend / Requested / Accept / Reject -->
+                            </div>
+                        </div>
                     </div>
                     
                     </div>
@@ -252,6 +282,7 @@
         const profileMenuButton = document.getElementById('profileMenuButton'); 
         const editProfileButton = document.getElementById('editProfileButton'); 
         const chatButton = document.getElementById('chatButton');
+        const friendActionContainer = document.getElementById('friendActionContainer');
         const pageTitle = document.getElementById('pageTitle');
 
         function toggleProfileDropdown(event) {
@@ -534,13 +565,75 @@
                     
                     pageTitle.textContent = `Aite - @${data.username}`;
                     
+                    // Show appropriate actions based on friendship/request status
+                    friendActionContainer.innerHTML = '';
                     if (currentUserId && data.id === currentUserId) { 
                         editProfileButton.classList.remove('hidden');
                         chatButton.classList.add('hidden');
                     } else {
                         editProfileButton.classList.add('hidden');
-                        chatButton.href = `/chat?contactId=${currentProfileId}`;
-                        chatButton.classList.remove('hidden');
+                        // if friend -> show message button
+                        if (data.is_friend) {
+                            chatButton.href = `/chat?contactId=${currentProfileId}`;
+                            chatButton.classList.remove('hidden');
+                        } else {
+                            chatButton.classList.add('hidden');
+                        }
+
+                        // Friend action buttons:
+                        if (data.request_received) {
+                          // Show Accept / Reject
+                          friendActionContainer.innerHTML = `
+                            <button id="acceptFriendBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg">قبول</button>
+                            <button id="rejectFriendBtn" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">رفض</button>
+                          `;
+                          document.getElementById('acceptFriendBtn').addEventListener('click', async () => {
+                            try {
+                              const r = await fetch('/api/friends/accept', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_id: currentProfileId })});
+                              const j = await r.json();
+                              if (r.ok && j.ok) {
+                                alert('تمت الموافقة — أصبح هذا المستخدم صديقك.');
+                                fetchAndDisplayProfile();
+                              } else {
+                                alert('فشل في قبول الطلب.');
+                              }
+                            } catch (e) { alert('خطأ في الشبكة'); }
+                          });
+                          document.getElementById('rejectFriendBtn').addEventListener('click', async () => {
+                            try {
+                              const r = await fetch('/api/friends/reject', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_id: currentProfileId })});
+                              const j = await r.json();
+                              if (r.ok && j.ok) {
+                                alert('تم رفض الطلب.');
+                                fetchAndDisplayProfile();
+                              } else {
+                                alert('فشل في رفض الطلب.');
+                              }
+                            } catch (e) { alert('خطأ في الشبكة'); }
+                          });
+                        } else if (data.request_sent) {
+                          // Show Cancel request
+                          friendActionContainer.innerHTML = `<button id="cancelFriendBtn" class="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-2 px-4 rounded-lg">طلب مرسل</button>`;
+                          document.getElementById('cancelFriendBtn').addEventListener('click', async () => {
+                            try {
+                              const r = await fetch('/api/friends/cancel', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
+                              const j = await r.json();
+                              if (r.ok && j.ok) { alert('تم إلغاء الطلب.'); fetchAndDisplayProfile(); }
+                              else alert('فشل في إلغاء الطلب.');
+                            } catch (e) { alert('خطأ في الشبكة'); }
+                          });
+                        } else if (!data.is_friend) {
+                          // Show Add Friend
+                          friendActionContainer.innerHTML = `<button id="addFriendBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">إضافة صديق</button>`;
+                          document.getElementById('addFriendBtn').addEventListener('click', async () => {
+                            try {
+                              const r = await fetch('/api/friends/request', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
+                              const j = await r.json();
+                              if (r.ok && j.ok) { alert('تم إرسال طلب الصداقة.'); fetchAndDisplayProfile(); }
+                              else alert(j.error || 'فشل في إرسال الطلب.');
+                            } catch (e) { alert('خطأ في الشبكة'); }
+                          });
+                        }
                     }
                     
                     fetchAndDisplayUserPosts(currentProfileId);
@@ -654,6 +747,7 @@
             try {
               const payload = JSON.parse(e.data);
               const unread = payload.unread_count || 0;
+              const pendingFR = payload.pending_friend_requests_count || 0;
               const badge = document.getElementById('notifBadgeProfile');
               if (unread > 0) {
                 badge.style.display = 'inline-flex';
@@ -661,6 +755,9 @@
               } else {
                 badge.style.display = 'none';
               }
+              const frBadge = document.getElementById('friendReqBadgeProfile');
+              if (pendingFR > 0) { frBadge.style.display = 'inline-flex'; frBadge.textContent = pendingFR > 99 ? '99+' : String(pendingFR); }
+              else frBadge.style.display = 'none';
             } catch (err) {
               console.error('Failed to parse notifications SSE data', err);
             }
@@ -670,7 +767,7 @@
           });
         })();
 
-        // fallback initial unread count
+        // fallback initial unread count & friend requests count
         (function initUnreadProfile() {
           fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
             .then(r => r.ok ? r.json() : null)
@@ -678,6 +775,14 @@
               if (d && d.ok) {
                 const badge = document.getElementById('notifBadgeProfile');
                 if (d.unread_count > 0) { badge.style.display = 'inline-flex'; badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count); }
+              }
+            }).catch(()=>{});
+          fetch('/api/friends/requests_count', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d && d.ok) {
+                const fr = document.getElementById('friendReqBadgeProfile');
+                if (d.count > 0) { fr.style.display = 'inline-flex'; fr.textContent = d.count > 99 ? '99+' : String(d.count); }
               }
             }).catch(()=>{});
         })();
