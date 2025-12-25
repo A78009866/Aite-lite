@@ -147,7 +147,6 @@
 }
 
 /* message badge (new) */
-/* message badge (new) */
 #msgBadge {
   position: absolute;
   top: -6px;
@@ -167,7 +166,6 @@
 }
 
 /* friend request badge on users icon */
-/* جعل كل إشعارات الصفحة الحمراء كما طُلِب */
 #friendReqBadge {
   position: absolute;
   top: -6px;
@@ -184,6 +182,30 @@
   justify-content: center;
   line-height: 1;
 }
+
+/* Online green dot */
+.avatar-with-dot { position: relative; display: inline-block; }
+.online-dot {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 12px;
+  height: 12px;
+  background: #22c55e;
+  border: 2px solid #000;
+  border-radius: 999px;
+  box-shadow: 0 0 6px rgba(34,197,94,0.6);
+  display: inline-block;
+}
+
+/* small dot variant for post avatars */
+.online-dot-small {
+  width: 10px;
+  height: 10px;
+  top: -3px;
+  left: -3px;
+  border-width: 1.5px;
+}
     </style>
 </head>
 <body class="min-h-screen">
@@ -193,7 +215,10 @@
             
             <div class="flex items-center">
                 <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
-                    <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                    <span class="avatar-with-dot">
+                      <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                      <span id="meOnlineDot" class="online-dot" style="display:none;"></span>
+                    </span>
                 </button>
             </div>
             
@@ -204,13 +229,11 @@
             </div>
             
             <div class="flex items-center space-x-4 space-x-reverse">
-                <!-- تم تحويل زر إنشاء منشور إلى زر قائمة تعرض خيارين -->
                 <div class="relative">
                     <button id="createBtn" class="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded-full transition duration-300 shadow-lg flex items-center border border-gray-700" onclick="toggleCreateModal()">
     <i class="fas fa-plus ml-2"></i>
     إنشاء
 </button>
-                   
                 </div>
             </div>
 
@@ -821,13 +844,15 @@ createModalEl.addEventListener('click', (e) => {
             const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
             const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
 
+            const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online-dot-small" title="متصل الآن"></span>` : '';
 
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
     <div class="flex items-start justify-between mb-3">
         <div class="flex items-center">
-            <a href="/profile?userId=${post.userId}"> 
+            <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
                 <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300">
+                ${onlineDotHtml}
             </a>
             <div>
                  <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username}</a>
@@ -1078,10 +1103,13 @@ createModalEl.addEventListener('click', (e) => {
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
                     const profilePicElement = document.getElementById('userProfilePic');
+                    const meDot = document.getElementById('meOnlineDot');
                     if (data && data.profile_picture_url) {
                         profilePicElement.src = data.profile_picture_url;
                         profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
                         currentUserId = data.id;
+                        if (data.is_online) meDot.style.display = 'inline-block';
+                        else meDot.style.display = 'none';
                     }
                 }).catch(console.error);
                 
