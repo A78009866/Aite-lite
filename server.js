@@ -111,98 +111,6 @@ app.use(session({
   })
 }));
 
-// ---------------- Presence (is_online) Implementation ----------------
-// We'll mark users online when they're active (middleware + heartbeat endpoint).
-// We'll also mark offline on logout. Additionally a periodic cleanup will set
-// users offline when last_active is older than threshold.
-
-const onlineUpdateThrottleMs = 30 * 1000; // only write to DB at most every 30s per user
-const lastOnlineUpdate = {}; // in-memory throttle map: userId -> timestamp(ms)
-
-// Helper to mark user online (throttled)
-async function markUserOnline(userId) {
-  if (!userId) return;
-  try {
-    const now = Date.now();
-    if (lastOnlineUpdate[userId] && (now - lastOnlineUpdate[userId]) < onlineUpdateThrottleMs) return;
-    lastOnlineUpdate[userId] = now;
-    await db.ref(`profiles/${userId}`).update({
-      is_online: true,
-      last_active: admin.database.ServerValue.TIMESTAMP
-    });
-  } catch (err) {
-    console.error('markUserOnline error', err);
-  }
-}
-
-// Helper to mark user offline
-async function markUserOffline(userId) {
-  if (!userId) return;
-  try {
-    // remove throttle entry
-    delete lastOnlineUpdate[userId];
-    await db.ref(`profiles/${userId}`).update({
-      is_online: false,
-      last_active: admin.database.ServerValue.TIMESTAMP
-    });
-  } catch (err) {
-    console.error('markUserOffline error', err);
-  }
-}
-
-// Middleware: for any authenticated request, update presence (throttled)
-app.use(async (req, res, next) => {
-  try {
-    if (req.session && req.session.userId) {
-      // don't await to avoid blocking — but catch errors
-      markUserOnline(req.session.userId).catch(() => {});
-    }
-  } catch (e) {}
-  next();
-});
-
-// Heartbeat endpoint: client should call every ~30s while page/tab active
-app.post('/api/heartbeat', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  try {
-    await markUserOnline(userId);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ ok: false });
-  }
-});
-
-// Periodic cleanup: any profile marked is_online=true but last_active older than threshold -> mark offline
-const PRESENCE_INACTIVE_THRESHOLD_MS = 90 * 1000; // 90s without heartbeat => consider offline
-async function presenceCleanupTask() {
-  try {
-    const snap = await db.ref('profiles').orderByChild('is_online').equalTo(true).once('value');
-    const now = Date.now();
-    const updates = {};
-    snap.forEach(child => {
-      const v = child.val();
-      const uid = child.key;
-      const lastActive = v && v.last_active ? Number(v.last_active) : 0;
-      // last_active may be server timestamp (number)
-      if (!lastActive || (now - lastActive) > PRESENCE_INACTIVE_THRESHOLD_MS) {
-        updates[`${uid}/is_online`] = false;
-      }
-    });
-    if (Object.keys(updates).length > 0) {
-      // perform a multi-path update under 'profiles'
-      await db.ref('profiles').update(updates);
-      // remove those users from throttle map
-      Object.keys(updates).forEach(uid => { delete lastOnlineUpdate[uid]; });
-    }
-  } catch (err) {
-    console.error('presenceCleanupTask error', err);
-  }
-}
-
-// run cleanup every 60s
-setInterval(presenceCleanupTask, 60 * 1000);
-
-// ---------------- Auth helper ----------------
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
     return next();
@@ -255,8 +163,13 @@ app.post('/login', async (req, res) => {
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
     await req.session.save();
-    // Mark online immediately after login
-    markUserOnline(userRecord.uid).catch(() => {});
+    
+    // Set Online on Login
+    await db.ref(`profiles/${userRecord.uid}`).update({
+      is_online: true,
+      last_seen: admin.database.ServerValue.TIMESTAMP
+    });
+
     res.redirect('/chat_list');
   } catch (error) {
     res.redirect('/login?error=' + encodeURIComponent('Invalid username or password.'));
@@ -280,31 +193,52 @@ app.post('/register', upload.single('profile_picture'), async (req, res) => {
 
     const profileData = {
       id: userRecord.uid, username: username, full_name: username, email: email,
-      profile_picture_url: profile_picture_url, is_online: false, is_verified: false, bio: '',
+      profile_picture_url: profile_picture_url, is_online: true, is_verified: false, bio: '',
+      last_seen: admin.database.ServerValue.TIMESTAMP
     };
     await db.ref('profiles/' + userRecord.uid).set(profileData);
 
     req.session.userId = userRecord.uid;
     req.session.email = email;
     await req.session.save();
-    // Mark online after registration/login
-    markUserOnline(userRecord.uid).catch(() => {});
     res.redirect('/chat_list');
   } catch (error) {
     res.redirect('/register?error=' + encodeURIComponent(error.message));
   }
 });
 
-app.get('/logout', (req, res) => {
-  const uid = req.session && req.session.userId;
-  // Mark offline before destroying session
-  if (uid) {
-    markUserOffline(uid).catch(() => {});
+app.get('/logout', async (req, res) => {
+  // Set Offline on Logout
+  if (req.session && req.session.userId) {
+    try {
+      await db.ref(`profiles/${req.session.userId}`).update({
+        is_online: false,
+        last_seen: admin.database.ServerValue.TIMESTAMP
+      });
+    } catch (e) {
+      console.error('Error setting offline on logout', e);
+    }
   }
+
   req.session.destroy(() => {
     res.clearCookie('connect.sid');
     res.redirect('/login');
   });
+});
+
+// ---------------- Active Status Heartbeat ----------------
+// استقبال إشارة النشاط من العميل
+app.post('/api/status/heartbeat', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    await db.ref(`profiles/${userId}`).update({
+      is_online: true,
+      last_seen: admin.database.ServerValue.TIMESTAMP
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
 });
 
 // ---------------- Helper: Friend Utilities ----------------
@@ -746,14 +680,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       }
     } catch (e) { /* ignore */ }
 
-    // ensure fields we expect exist
-    const safeProfile = {
-      ...profileData,
-      is_online: !!profileData.is_online,
-      last_active: profileData.last_active || null
-    };
-
-    res.json({ ok: true, ...safeProfile, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived });
+    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -765,8 +692,6 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     const profileSnap = await db.ref('profiles').child(userId).once('value');
     const profile = profileSnap.val();
     if (!profile) return res.status(404).json({ ok: false });
-    // safety
-    profile.is_online = !!profile.is_online;
     res.json(profile);
   } catch (error) {
     res.status(500).json({ ok: false });
@@ -1574,6 +1499,35 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
   });
 });
 
+// ---------------- Active Status Cleaner ----------------
+// مهمة دورية للتحقق من المستخدمين غير النشطين
+const OFFLINE_THRESHOLD = 2 * 60 * 1000; // 2 minutes
+
+setInterval(async () => {
+  try {
+    const profilesRef = db.ref('profiles');
+    const snapshot = await profilesRef.orderByChild('is_online').equalTo(true).once('value');
+    
+    if (!snapshot.exists()) return;
+
+    const updates = {};
+    const now = Date.now();
+
+    snapshot.forEach(child => {
+      const user = child.val();
+      if (user.last_seen && (now - user.last_seen > OFFLINE_THRESHOLD)) {
+        updates[`${child.key}/is_online`] = false;
+      }
+    });
+
+    if (Object.keys(updates).length > 0) {
+      await profilesRef.update(updates);
+    }
+  } catch (error) {
+    console.error('Error in offline check interval:', error);
+  }
+}, 60000); // Check every minute
+
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
@@ -1582,4 +1536,4 @@ app.use((err, req, res, next) => {
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
-}); // تمت إضافة القوس الدائري والفاصلة المنقوبة
+});
