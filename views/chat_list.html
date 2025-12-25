@@ -892,7 +892,7 @@ createModalEl.addEventListener('click', (e) => {
             postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
             
             try {
-                const response = await fetch('/api/posts', { credentials: 'same-origin' });
+                const response = await fetch('/api/posts');
                 const result = await response.json();
                 
                 postsFeed.innerHTML = '';
@@ -1114,11 +1114,6 @@ createModalEl.addEventListener('click', (e) => {
                 }).catch(console.error);
                 
             fetchAndDisplayPosts();
-
-            // Start periodic refresh of posts to reflect presence changes and new content
-            startPostsPolling();
-            // Start heartbeat pings while page is active
-            startHeartbeat();
         });
 
         // ---------------- Notifications + Messages: SSE badge (فوري) ----------------
@@ -1157,13 +1152,6 @@ createModalEl.addEventListener('click', (e) => {
                 frBadgeEl.textContent = pendingFR > 99 ? '99+' : String(pendingFR);
               } else {
                 frBadgeEl.style.display = 'none';
-              }
-
-              // When notifications arrive, also refresh posts list so online indicators and counts are fresh
-              // (keeps presence responsive without adding another SSE channel)
-              // Only refresh if page visible
-              if (document.visibilityState === 'visible') {
-                fetchAndDisplayPosts();
               }
 
             } catch (err) {
@@ -1216,67 +1204,6 @@ createModalEl.addEventListener('click', (e) => {
               }
             }).catch(()=>{});
         })();
-
-
-        // ---------------- Presence Heartbeat & Polling ----------------
-        // Send heartbeat while page is active so server marks user as online (server throttles DB writes).
-        let heartbeatIntervalId = null;
-        const HEARTBEAT_INTERVAL_MS = 30 * 1000; // match server throttle approx.
-
-        async function sendHeartbeat() {
-          try {
-            await fetch('/api/heartbeat', { method: 'POST', credentials: 'same-origin' });
-          } catch (e) { /* ignore network errors */ }
-        }
-
-        function startHeartbeat() {
-          // send immediately and then every interval while visible
-          if (document.visibilityState === 'visible') {
-            sendHeartbeat();
-            if (!heartbeatIntervalId) heartbeatIntervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-          }
-          // listen for visibility changes to stop/start
-          document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-              sendHeartbeat();
-              if (!heartbeatIntervalId) heartbeatIntervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-            } else {
-              if (heartbeatIntervalId) { clearInterval(heartbeatIntervalId); heartbeatIntervalId = null; }
-            }
-          });
-          // also send a final heartbeat on beforeunload to mark offline quickly via logout flow if possible
-          window.addEventListener('beforeunload', () => {
-            // best-effort synchronous navigator.sendBeacon if available
-            try {
-              if (navigator.sendBeacon) {
-                navigator.sendBeacon('/api/heartbeat', null);
-              }
-            } catch (e) {}
-          });
-        }
-
-        // Poll posts periodically to update presence indicators and new posts
-        let postsPollingId = null;
-        const POSTS_POLL_INTERVAL_MS = 15 * 1000;
-
-        function startPostsPolling() {
-          // fetch once is already called; start interval while visible
-          if (!postsPollingId) {
-            postsPollingId = setInterval(() => {
-              if (document.visibilityState === 'visible') {
-                fetchAndDisplayPosts();
-              }
-            }, POSTS_POLL_INTERVAL_MS);
-          }
-          document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-              // fresh fetch on focus/visibility
-              fetchAndDisplayPosts();
-            }
-          });
-          // also fetch on focus
-          window.addEventListener('focus', fetchAndDisplayPosts);
-        }
 
     </script>
 </body>
