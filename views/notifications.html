@@ -14,33 +14,31 @@
     .notif-avatar { width:48px; height:48px; border-radius:50%; object-fit:cover; border:1px solid rgba(255,255,255,0.06); flex-shrink:0; }
     .badge { background:#ef4444; color:white; font-size:12px; padding:4px 8px; border-radius:999px; }
     .empty { text-align:center; color:#94a3b8; padding:40px 0; }
-    .bottom-nav { position:fixed; left:0; right:0; bottom:0; height:60px; background: rgba(20,20,20,0.7); border-top:1px solid rgba(255,255,255,0.04); display:flex; justify-content:center; align-items:center; }
-    .action-btn { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:8px; color:#e6eefb; cursor:pointer; font-size:13px; }
-    /* أصغر زر لتناسق أفضل */
-    .action-small { padding:6px 8px; font-size:12px; border-radius:8px; display:inline-flex; gap:6px; align-items:center; justify-content:center; }
-    /* زر حذف إشعار فردي */
-    .notif-delete-btn {
-      position: absolute;
-      top: 8px;
-      left: 8px; /* left لأن الصفحة dir=rtl، نضع الزر على "الجهة الإدارية" */
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.05);
-      color: #f87171;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: background 0.12s, transform 0.12s;
-      z-index: 5;
-    }
-    .notif-delete-btn:hover { background: rgba(255,255,255,0.04); transform: translateY(-1px); }
+    .action-small { padding:6px 8px; font-size:12px; border-radius:8px; display:inline-flex; gap:6px; align-items:center; justify-content:center; background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); color:#e6eefb; cursor:pointer; }
     .notif-card-content { flex:1; min-width:0; }
     .notif-title { font-size:14px; color:#e6eefb; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
     .notif-time { font-size:12px; color:#9fb3c8; }
     .notif-target { margin-top:6px; color:#9fb3c8; font-size:13px; }
+    /* small dropdown for actions */
+    .actions-dropdown {
+      position: absolute;
+      top: 48px;
+      left: 12px; /* because dir=rtl, put dropdown near left (visually start) */
+      background: rgba(20,20,20,0.95);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      z-index: 1200;
+      min-width: 160px;
+    }
+    .actions-dropdown button { width: 100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px 10px; border-radius:8px; background:transparent; border:none; color:#e6eefb; cursor:pointer; text-align:right; }
+    .actions-dropdown button:hover { background: rgba(255,255,255,0.02); }
+    /* action icon button */
+    .top-action-btn {
+      width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center;
+      background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); color:#e6eefb; cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -49,18 +47,27 @@
       <div class="flex items-center gap-3">
         <a href="/chat_list" class="text-gray-400 hover:text-white p-2"><i class="fas fa-arrow-right text-2xl"></i></a>
       </div>
+
       <div class="text-center">
         <h1 class="text-xl font-bold">الإشعارات</h1>
       </div>
-      <div style="width:40px; display:flex; gap:8px; align-items:center; justify-content:flex-end;">
-        <button id="markAllReadBtn" class="action-btn action-small" title="تعيين الكل كمقروء">
-          <i class="fas fa-check-double" style="font-size:12px"></i>
-          <span style="font-size:12px">تعيين الكل</span>
+
+      <div style="width:40px; display:flex; gap:8px; align-items:center; justify-content:flex-end; position:relative;">
+        <!-- Single action button that toggles small dropdown with both actions -->
+        <button id="actionsToggleBtn" class="top-action-btn" title="خيارات الإشعارات" aria-haspopup="true" aria-expanded="false">
+          <i class="fas fa-ellipsis-v"></i>
         </button>
-        <button id="clearAllBtn" class="action-btn action-small" title="حذف كل الإشعارات">
-          <i class="fas fa-trash" style="font-size:12px"></i>
-          <span style="font-size:12px">حذف الكل</span>
-        </button>
+
+        <div id="actionsDropdown" class="actions-dropdown hidden" role="menu" aria-label="خيارات الإشعارات">
+          <button id="markAllReadBtn" class="action-small" title="تعيين الكل كمقروء">
+            <span style="direction:ltr;"><i class="fas fa-check-double" style="font-size:13px"></i></span>
+            <span>تعيين الكل كمقروء</span>
+          </button>
+          <button id="clearAllBtn" class="action-small" style="margin-top:6px;" title="حذف كل الإشعارات">
+            <span style="direction:ltr;"><i class="fas fa-trash" style="font-size:13px;color:#f87171"></i></span>
+            <span>حذف الكل</span>
+          </button>
+        </div>
       </div>
     </nav>
   </header>
@@ -72,6 +79,7 @@
   </main>
 
 <script>
+  // Fetch and render notifications (no per-notif delete)
   async function fetchNotifications() {
     try {
       const res = await fetch('/api/notifications', { credentials: 'same-origin' });
@@ -119,7 +127,6 @@
 
       return `
         <div class="notification-card ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-type="${n.type}" data-post-id="${n.postId || ''}" data-reel-id="${n.reelId || ''}" data-from="${n.from_user_id || ''}">
-          <button class="notif-delete-btn" data-id="${n.id}" title="حذف الإشعار"><i class="fas fa-trash" style="font-size:12px"></i></button>
           <img src="${escapeHtml(n.from_profile_picture_url || '')}" class="notif-avatar" alt="">
           <div class="notif-card-content">
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
@@ -131,9 +138,6 @@
         </div>
       `;
     }).join('');
-
-    // attach click handlers for cards (delegated) in a safe way
-    // Card click (navigation) handled by parent click listener below
   }
 
   function escapeHtml(s) {
@@ -141,37 +145,11 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  // Delegated click handling:
+  // Delegated click handling on notification cards (navigation + mark read)
   document.addEventListener('click', async (ev) => {
-    const delBtn = ev.target.closest('.notif-delete-btn');
-    if (delBtn) {
-      ev.stopPropagation();
-      const notifId = delBtn.dataset.id;
-      if (!notifId) return;
-      if (!confirm('هل تريد حذف هذا الإشعار؟')) return;
-      try {
-        const res = await fetch(`/api/notifications/${encodeURIComponent(notifId)}`, {
-          method: 'DELETE',
-          credentials: 'same-origin'
-        });
-        if (res.ok) {
-          // إزالة البطاقة محليًا
-          const card = delBtn.closest('.notification-card');
-          if (card) card.remove();
-          // لو لم يبقِ بطاقات نعيد جلب الواجهة لتحديث الحالة
-          const container = document.getElementById('notifContainer');
-          if (!container.querySelector('.notification-card')) fetchNotifications();
-        } else {
-          alert('فشل حذف الإشعار');
-        }
-      } catch (e) {
-        console.error('Delete notification error', e);
-        alert('فشل الاتصال بالخادم');
-      }
-      return;
-    }
+    // if click is inside actions dropdown, ignore here
+    if (ev.target.closest('#actionsDropdown') || ev.target.closest('#actionsToggleBtn')) return;
 
-    // إذا كان النقر داخل بطاقة إشعار (وليس على زر الحذف) — التوجيه وعلامة كمقروء
     const card = ev.target.closest('.notification-card');
     if (card) {
       const id = card.dataset.id;
@@ -180,7 +158,7 @@
       const reelId = card.dataset.reelId;
       const fromUser = card.dataset.from;
 
-      // أولاً: تعليم هذا الإشعار كمقروء (لا ننتظر الاستجابة تماماً)
+      // Mark this notification read (fire-and-forget)
       if (id) {
         fetch('/api/notifications/mark_read', {
           method: 'POST',
@@ -190,7 +168,7 @@
         }).catch(()=>{});
       }
 
-      // redirect based on type
+      // Redirect based on type
       if (type === 'post_like' || type === 'post_comment') {
         if (postId) window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
         else window.location.href = '/chat_list';
@@ -206,41 +184,72 @@
     }
   });
 
-  // initial load
-  fetchNotifications();
-
-  // SSE: تحديث القائمة/عداد الإشعارات فورياً عند التغيير
+  // SSE: update list when notifications change
   if (window.EventSource) {
     const es = new EventSource('/api/notifications/stream', { withCredentials: true });
     es.addEventListener('notifications', (e) => {
       try {
-        // نعيد جلب القائمة لكي تعكس المحتوى (أسهل من محاولة تحديث محلي)
-        fetchNotifications();
-      } catch (err) {
-        console.error('Failed to parse notifications SSE data', err);
-      }
+        fetchNotifications(); // refresh to reflect DB state
+      } catch (err) { console.error('SSE parse error', err); }
     });
-    es.addEventListener('error', (err) => {
-      console.warn('Notifications SSE error', err);
-    });
+    es.addEventListener('error', (err) => { console.warn('Notifications SSE error', err); });
   }
 
-  // زر تعيين الكل كمقروء
-  document.getElementById('markAllReadBtn').addEventListener('click', async () => {
+  // Actions dropdown toggle
+  const actionsToggleBtn = document.getElementById('actionsToggleBtn');
+  const actionsDropdown = document.getElementById('actionsDropdown');
+
+  actionsToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = actionsDropdown.classList.contains('hidden');
+    if (isHidden) {
+      actionsDropdown.classList.remove('hidden');
+      actionsToggleBtn.setAttribute('aria-expanded', 'true');
+    } else {
+      actionsDropdown.classList.add('hidden');
+      actionsToggleBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  // Close dropdown on outside click or Esc
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#actionsDropdown') && !e.target.closest('#actionsToggleBtn')) {
+      actionsDropdown.classList.add('hidden');
+      actionsToggleBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      actionsDropdown.classList.add('hidden');
+      actionsToggleBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  // Mark all read
+  document.getElementById('markAllReadBtn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    actionsDropdown.classList.add('hidden');
+    actionsToggleBtn.setAttribute('aria-expanded', 'false');
     try {
       const res = await fetch('/api/notifications/mark_read', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}) // لا id => يعلّم الكل
+        body: JSON.stringify({}) // no id => mark all
       });
       if (res.ok) fetchNotifications();
       else throw new Error('mark all failed');
-    } catch (e) { console.error('Mark all read failed', e); alert('فشل تعيين الكل كمقروء'); }
+    } catch (err) {
+      console.error('Mark all read failed', err);
+      alert('فشل تعيين الكل كمقروء');
+    }
   });
 
-  // زر حذف الكل
-  document.getElementById('clearAllBtn').addEventListener('click', async () => {
+  // Clear all with confirmation
+  document.getElementById('clearAllBtn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    actionsDropdown.classList.add('hidden');
+    actionsToggleBtn.setAttribute('aria-expanded', 'false');
     if (!confirm('هل تريد حذف كل الإشعارات؟ لا يمكن التراجع عن هذا الإجراء.')) return;
     try {
       const res = await fetch('/api/notifications', {
@@ -249,9 +258,14 @@
       });
       if (res.ok) fetchNotifications();
       else { console.error('clear all failed', res.status); alert('فشل حذف الإشعارات'); }
-    } catch (e) { console.error('Clear all failed', e); alert('فشل حذف الإشعارات'); }
+    } catch (err) {
+      console.error('Clear all failed', err);
+      alert('فشل حذف الإشعارات');
+    }
   });
+
+  // initial load
+  fetchNotifications();
 </script>
 </body>
 </html>
-```
