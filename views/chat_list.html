@@ -108,12 +108,12 @@
         }
         /* تأثير ظهور النافذة */
         .modal-animate-in {
-            animation: modalFadeIn 0.28s ease-out;
+            animation: modalFadeIn 0.3s ease-out;
         }
 
         @keyframes modalFadeIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         /* نمط أزرار الخيارات داخل النافذة */
@@ -226,16 +226,14 @@
 }
 
 /* Comments modal customizations for cleaner glassy black look */
-/* Now full-screen modal layout with post card occupying top half */
 #commentModal .glass-comment-modal-content {
-  max-width: 100%;
+  max-width: 920px;
   width: 100%;
-  height: 100vh;
+  max-height: 88vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 0;
-  border-radius: 0;
 }
 #commentModal .modal-header {
   padding: 12px 16px;
@@ -243,26 +241,20 @@
   display:flex;
   align-items:center;
   justify-content:space-between;
-  background: linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3));
-  z-index: 20;
 }
-#commentModal .modal-header h3 { margin:0; font-size:18px; color:#fff; }
 #commentModal .comment-post-preview {
   padding: 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
-  max-height: 58vh; /* post card area */
+  max-height: 36vh;
   overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  background: transparent;
 }
 #commentModal .comment-list {
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 16px;
   gap:12px;
   display:flex;
   flex-direction:column;
-  max-height: calc(42vh - 80px); /* comments area */
-  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
 }
 .comment-item {
   display:flex;
@@ -331,15 +323,9 @@
   cursor:pointer;
 }
 
-/* when moving the original post into the modal give it a small style tweak */
-.moved-post-preview {
-  margin: 0;
-  border-radius: 12px;
-}
-
 /* small screens */
 @media (max-width:640px) {
-  #commentModal .glass-comment-modal-content { margin: 0; border-radius: 0; }
+  #commentModal .glass-comment-modal-content { margin: 12px; border-radius: 16px; }
   .comment-item img { width:40px; height:40px; }
   .verified-badge-img { width:14px; height:14px; }
 }
@@ -449,9 +435,8 @@
         </div>
     </div>
     
-    <!-- full-screen modal: shows the actual post card (moved) at top and comments below -->
-    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-0 glass-modal-bg" onclick="/* background click ignored to avoid accidental close */">
-        <div class="glass-comment-modal-content p-0 rounded-xl shadow-2xl modal-animate-in border border-white/20" onclick="event.stopPropagation()">
+    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
+        <div class="glass-comment-modal-content p-0 rounded-xl shadow-2xl max-w-lg w-full modal-animate-in border border-white/20" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3>التعليقات</h3>
                 <button id="closeCommentModalBtn" class="text-gray-400 hover:text-white transition duration-300 text-2xl p-2">
@@ -459,13 +444,12 @@
                 </button>
             </div>
 
-            <!-- Post preview area (we will move the original post card here) -->
+            <!-- عرض بطاقة المنشور أعلاه (مثل فيسبوك) -->
             <div id="commentPostPreview" class="comment-post-preview">
-                <!-- original post card will be moved here (so it remains interactive) -->
+                <!-- سيتم حقن نسخة مبسطة من بطاقة المنشور هنا عند الضغط على تعليق -->
             </div>
 
-            <!-- Comments scrollable area -->
-            <div id="commentsList" class="comment-list custom-scrollbar" style="flex:1; overflow-y:auto;">
+            <div id="commentsList" class="comment-list custom-scrollbar">
                 <!-- Comments will be injected here -->
             </div>
 
@@ -477,7 +461,7 @@
         </div>
     </div>
 
-    <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
+    <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl hidden w-40">
         <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
             <i class="fas fa-trash ml-3"></i>
             حذف المنشور
@@ -548,9 +532,6 @@
         const commentError = document.getElementById('commentError');
         const commentPostPreview = document.getElementById('commentPostPreview');
         let currentPostIdForComments = null; // لتتبع المنشور الحالي للتعليقات
-
-        // store for moved posts so we can restore them later
-        const movedPostStore = {}; // postId => { parent, nextSibling }
         
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 
@@ -594,14 +575,6 @@ createModalEl.addEventListener('click', (e) => {
             
             // مشغل الصوت والفيديو سيتعامل معه WaveSurfer أو المشغل المخصص في المنشور نفسه
             if (type === 'audio' || type === 'video') { 
-                // open a simple larger viewer for video/audio
-                mediaViewerContent.innerHTML = '';
-                if (type === 'video') {
-                  mediaViewerContent.innerHTML = `<video controls autoplay class="max-w-full max-h-full rounded-lg"><source src="${url}"></video>`;
-                } else if (type === 'audio') {
-                  mediaViewerContent.innerHTML = `<audio controls autoplay class="w-full"><source src="${url}"></audio>`;
-                }
-                mediaViewerModal.classList.remove('hidden');
                 return;
             }
 
@@ -826,7 +799,7 @@ createModalEl.addEventListener('click', (e) => {
             // 2. تبديل حالة التشغيل
             if (video.paused) {
                 video.play();
-                if (playOverlay) playOverlay.classList.add('hidden'); // إخفاء زر التشغيل المركزي
+                playOverlay.classList.add('hidden'); // إخفاء زر التشغيل المركزي
                 if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
                 if (controlsBar) controlsBar.classList.remove('opacity-0'); // إظهار شريط التحكم
                 activeVideo = video;
@@ -838,7 +811,7 @@ createModalEl.addEventListener('click', (e) => {
 
             } else {
                 video.pause();
-                if (playOverlay) playOverlay.classList.remove('hidden'); // إظهار زر التشغيل المركزي
+                playOverlay.classList.remove('hidden'); // إظهار زر التشغيل المركزي
                 if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
                 activeVideo = null;
             }
@@ -955,7 +928,7 @@ createModalEl.addEventListener('click', (e) => {
                         <div class="mt-3 relative w-full aspect-video rounded-lg overflow-hidden bg-black group">
                             <video id="video-${post.postId}" src="${post.media.url}" 
                                    class="w-full h-full object-contain" 
-                                   poster="${post.media.poster || 'https://via.placeholder.com/600x400?text=Video+Loading'}" 
+                                   poster="https://via.placeholder.com/600x400?text=Video+Loading" 
                                    preload="metadata"
                                    onclick="toggleVideoPlay('${post.postId}', event)">
                             </video>
@@ -1028,7 +1001,7 @@ createModalEl.addEventListener('click', (e) => {
 
                     <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
                         <span><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
-                        <span class="cursor-pointer hover:text-blue-400" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount} تعليق</span>
+                        <span class="cursor-pointer hover:text-blue-400" onclick="handleComment('${post.postId}')"><i class="fas fa-comments ml-1"></i> ${post.commentsCount} تعليق</span>
                     </div>
 
                     <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
@@ -1038,7 +1011,7 @@ createModalEl.addEventListener('click', (e) => {
                             <i class="${likeIconClass} ml-2 like-icon"></i> إعجاب
                         </button>
                         <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center" onclick="handleComment('${post.postId}')">
-                            <i class="far fa-comment-alt ml-2"></i> تعليق
+                            <i class="fas fa-comment ml-2"></i> تعليق
                         </button>
                     </div>
                 </div>
@@ -1138,114 +1111,63 @@ createModalEl.addEventListener('click', (e) => {
             }
         }
         
-        // Move the original post card into the modal (so it remains identical & interactive).
-        function movePostIntoModal(postId) {
-            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
-            if (!postCard) return false;
-
-            // store original location so we can restore it later
-            if (!movedPostStore[postId]) {
-                movedPostStore[postId] = {
-                    parent: postCard.parentNode,
-                    nextSibling: postCard.nextSibling
-                };
-            }
-
-            // hide the menu button inside the moved card to avoid position issues
-            postCard.querySelectorAll('.post-menu-button').forEach(btn => btn.style.display = 'none');
-            postCard.classList.add('moved-post-preview');
-
-            // append into preview container
-            commentPostPreview.innerHTML = '';
-            commentPostPreview.appendChild(postCard);
-
-            // pause other media outside
-            if (activeWaveSurfer) {
-                try { activeWaveSurfer.pause(); } catch(e){}
-                activeWaveSurfer = null;
-            }
-            if (activeVideo && !commentPostPreview.contains(activeVideo)) {
-                try { activeVideo.pause(); } catch(e){}
-                activeVideo = null;
-            }
-
-            return true;
-        }
-
-        // restore moved post back to original place
-        function restoreMovedPost(postId) {
-            const store = movedPostStore[postId];
-            if (!store) return;
-            const parent = store.parent;
-            const nextSibling = store.nextSibling;
-            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
-            if (!postCard) return;
-
-            // restore menu button visibility
-            postCard.querySelectorAll('.post-menu-button').forEach(btn => btn.style.display = '');
-            postCard.classList.remove('moved-post-preview');
-
-            if (nextSibling && parent.contains(nextSibling)) {
-                parent.insertBefore(postCard, nextSibling);
-            } else {
-                parent.appendChild(postCard);
-            }
-
-            // cleanup
-            delete movedPostStore[postId];
-        }
-
-        // updated: when clicking comments, open a full-screen modal that shows the actual post card on top and comments below
+        // ------------------ تحديث: عرض التعليقات على شكل بطاقة المنشور + التعليقات (مثل فيسبوك) ------------------
         async function handleComment(postId) { 
             currentPostIdForComments = postId;
 
-            // move the original post DOM node into modal for exact same look & behavior
-            const moved = movePostIntoModal(postId);
-            if (!moved) {
-                // fallback: if post not in DOM (rare), create a clone preview
-                populatePostPreviewForComments(postId);
+            // تحضير عرض بطاقة المنشور أعلاه داخل المودال
+            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+            commentPostPreview.innerHTML = '';
+            if (postCard) {
+                // أنشئ نسخة مبسطة لحفظ الستايل لكن منع أي تداخل أو تكرار معرفات
+                const clone = postCard.cloneNode(true);
+
+                // احذف عناصر التفاعل التي لا نريدها داخل المعاينة (أزرار، قوائم، إلخ)
+                clone.querySelectorAll('.post-menu-button, .post-like-button, .audio-play-button, .post-menu-button, #play-overlay-' + postId).forEach(n => n.remove());
+
+                // إذا كان هناك فيديو داخل المعاينة، قم بتعديل خصائصه (تعطيل الوظائف وتفعيل controls لمشاهدة)
+                const video = clone.querySelector('video');
+                if (video) {
+                    // تغيير id لمنع تضارب مع الفيديو الأصلي
+                    if (video.id) video.id = 'preview-video-' + (video.id.replace('video-', '') || postId);
+                    video.controls = true;
+                    video.removeAttribute('onclick');
+                    // إزالة عناصر التحكم المخصصة من المعاينة
+                    clone.querySelectorAll('[id^="controls-bar-"], [id^="progress-bar-"], [id^="time-display-"], [id^="control-icon-"], [id^="play-overlay-"]').forEach(el => el.remove());
+                }
+
+                // إزالة أي حاويات WaveSurfer من المعاينة
+                clone.querySelectorAll('[id^="waveform-"]').forEach(n => n.remove());
+
+                // إزالة أية id مكررة في عناصر داخلية
+                clone.querySelectorAll('[id]').forEach(el => {
+                    if (el.id && el.id.includes(postId)) {
+                        el.id = el.id.replace(postId, 'preview-' + postId);
+                    }
+                });
+
+                // أزل أي أحداث inline أو خصائص قد تسبب تعارضًا
+                clone.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
+
+                // ضع فاصل بصري خفيف إذا لزم
+                clone.classList.add('shadow-none');
+                commentPostPreview.appendChild(clone);
             }
 
+            // عرض التعليقات ثم فتح المودال
             await fetchAndDisplayComments(postId);
-
             commentModal.classList.remove('hidden'); 
-            // منع تمرير الخلفية أثناء فتح المودال
-            document.body.style.overflow = 'hidden';
-
-            // focus input for convenience
-            setTimeout(() => { newCommentInput.focus(); }, 120);
         }
 
         closeCommentModalBtn.addEventListener('click', () => {
-            // restore moved post if any
-            if (currentPostIdForComments && movedPostStore[currentPostIdForComments]) {
-                restoreMovedPost(currentPostIdForComments);
-            } else {
-                // if we used clone preview, clear it
-                commentPostPreview.innerHTML = '';
-            }
-
             commentModal.classList.add('hidden');
             currentPostIdForComments = null;
             newCommentInput.value = '';
             commentsList.innerHTML = '';
-            document.body.style.overflow = 'auto';
-        });
-
-        // allow Esc key to close modal
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !commentModal.classList.contains('hidden')) {
-                closeCommentModalBtn.click();
-            }
+            commentPostPreview.innerHTML = '';
         });
 
         // ******************** 7. وظائف التعليقات ********************
-
-        function escapeHtml(text) {
-            return String(text || '').replace(/[&<>"'`=\/]/g, function (s) {
-                return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;", "/":"&#x2F;", "`":"&#x60;", "=":"&#x3D;"}[s]);
-            });
-        }
 
         function createCommentHtml(comment) {
             const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
@@ -1255,13 +1177,17 @@ createModalEl.addEventListener('click', (e) => {
             // verified placeholder next to username (uses comment.userId)
             const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${comment.userId || comment.user?.id || ''}"></span>`;
 
+            const userProfile = comment.user || {};
+            const profilePic = userProfile.profile_picture_url || 'https://via.placeholder.com/40';
+            const username = userProfile.username || comment.username || 'مستخدم';
+
             return `
                 <div class="comment-item" data-comment-id="${comment.commentId || comment.id || ''}">
-                    <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="rounded-full">
+                    <img src="${profilePic}" alt="${username}" class="rounded-full">
                     <div class="comment-body">
                         <div class="comment-meta">
                             <div class="comment-username">
-                              <a href="/profile?userId=${comment.userId}" style="color:inherit; text-decoration:none;">${comment.user.username}</a>
+                              <a href="/profile?userId=${comment.userId}" style="color:inherit; text-decoration:none;">${escapeHtml(username)}</a>
                               ${verifiedPlaceholder}
                             </div>
                             <div class="comment-time">${commentDate}</div>
@@ -1288,7 +1214,6 @@ createModalEl.addEventListener('click', (e) => {
                         result.comments.forEach(comment => {
                             commentsList.innerHTML += createCommentHtml(comment);
                         });
-                        // ensure comments area scrolled to bottom
                         commentsList.scrollTop = commentsList.scrollHeight;
                         // Update verified badges for commenters
                         updateVerifiedBadges();
@@ -1335,10 +1260,16 @@ createModalEl.addEventListener('click', (e) => {
                     const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
                     if (postCard) {
                         const commentsSpan = postCard.querySelector('.flex.justify-between span:last-child');
-                        if (commentsSpan) commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`;
+                        if (commentsSpan) commentsSpan.innerHTML = `<i class="fas fa-comments ml-1"></i> ${result.newComments} تعليق`;
+                    }
+
+                    // تحديث عداد التعليقات داخل المعاينة في المودال إن وجد
+                    const preview = commentPostPreview.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
+                    if (preview) {
+                        const commentsSpanPreview = preview.querySelector('.flex.justify-between span:last-child');
+                        if (commentsSpanPreview) commentsSpanPreview.innerHTML = `<i class="fas fa-comments ml-1"></i> ${result.newComments} تعليق`;
                     }
                     
-                    // scroll comments to newly added comment
                     commentsList.scrollTop = commentsList.scrollHeight;
 
                 } else {
@@ -1397,50 +1328,15 @@ createModalEl.addEventListener('click', (e) => {
             }));
         }
 
-        // Populate a simplified preview of the post inside the comment modal (fallback)
-        function populatePostPreviewForComments(postId) {
-            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
-            if (!postCard) {
-                commentPostPreview.innerHTML = '<div class="text-center text-gray-500 p-4">لا يمكن عرض معاينة المنشور.</div>';
-                return;
-            }
-
-            // clone to avoid manipulating the original if moving wasn't possible
-            const clone = postCard.cloneNode(true);
-
-            // remove interactive menu button inside clone
-            clone.querySelectorAll('.post-menu-button').forEach(n => n.remove());
-
-            // For any <video> elements, replace with their poster image (so it doesn't auto-play)
-            clone.querySelectorAll('video').forEach(v => {
-                const poster = v.getAttribute('poster') || '';
-                const src = v.getAttribute('src') || '';
-                if (poster) {
-                    const img = document.createElement('img');
-                    img.src = poster;
-                    img.alt = 'video preview';
-                    img.className = 'w-full max-h-64 object-cover rounded-lg cursor-pointer';
-                    img.onclick = (e) => openMediaViewer(src, 'video', e);
-                    v.replaceWith(img);
-                } else {
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'w-full max-h-64 bg-black rounded-lg flex items-center justify-center';
-                    wrapper.innerHTML = `<i class="fas fa-video text-4xl text-white"></i>`;
-                    v.replaceWith(wrapper);
-                }
-            });
-
-            // Remove any element ids to avoid duplicates in DOM
-            clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-
-            commentPostPreview.innerHTML = '';
-            const container = document.createElement('div');
-            container.className = 'p-0';
-            container.appendChild(clone);
-            commentPostPreview.appendChild(container);
-
-            // Trigger verified badge update for post owner inside preview
-            updateVerifiedBadges();
+        // helper to escape HTML in comments / text
+        function escapeHtml(str) {
+            if (!str && str !== 0) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         // ******************** Initialization ********************
