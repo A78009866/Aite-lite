@@ -409,6 +409,7 @@
         let currentPostIdForComments = null;
 
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
+        const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
 
         const postsFeed = document.getElementById('postsFeed');
         const deleteModal = document.getElementById('deleteModal');
@@ -854,6 +855,37 @@
             }
         }
 
+        // Normalizes a raw comment object into a consistent shape
+        function normalizeComment(raw) {
+            const commentId = raw.commentId || raw.id || raw.key || '';
+            const content = raw.content || raw.commentContent || raw.text || '';
+            const timestamp = raw.timestamp || raw.time || Date.now();
+
+            let user = {};
+            if (raw.user && typeof raw.user === 'object' && Object.keys(raw.user).length > 0) {
+                user.userId = raw.user.userId || raw.user.id || raw.user.uid || '';
+                user.username = raw.user.username || raw.user.displayName || raw.user.name || '';
+                user.profile_picture_url = raw.user.profile_picture_url || raw.user.photoURL || DEFAULT_AVATAR;
+            } else {
+                // try top-level fields that some older entries might have
+                user.userId = raw.userId || raw.userID || raw.from_user_id || '';
+                user.username = raw.username || raw.from_username || raw.user_name || '';
+                user.profile_picture_url = raw.profile_picture_url || raw.profilePicture || DEFAULT_AVATAR;
+            }
+
+            // final safety defaults
+            user.userId = user.userId || '';
+            user.username = user.username || 'مستخدم';
+            user.profile_picture_url = user.profile_picture_url || DEFAULT_AVATAR;
+
+            return {
+                commentId,
+                content,
+                timestamp,
+                user
+            };
+        }
+
         async function fetchAndDisplayPosts() {
             postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
             
@@ -1012,17 +1044,17 @@
 
             return `
                 <div class="flex items-start group animate-[fadeIn_0.3s_ease-out]">
-                    <a href="/profile?userId=${comment.userId}" data-user-link-id="${comment.userId}">
+                    <a href="/profile?userId=${comment.user.userId}" data-user-link-id="${comment.user.userId}">
                         <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" 
                              class="w-9 h-9 rounded-full object-cover ml-3 flex-shrink-0 border border-gray-700">
                     </a>
                     <div class="flex flex-col max-w-[85%]">
                         <div class="bg-[#242526] px-3 py-2 rounded-2xl rounded-tr-none border border-gray-800">
                             <div class="flex items-center flex-wrap gap-1 mb-0.5">
-                                <a href="/profile?userId=${comment.userId}" data-user-name-id="${comment.userId}" class="text-white font-bold text-xs hover:underline">
+                                <a href="/profile?userId=${comment.user.userId}" data-user-name-id="${comment.user.userId}" class="text-white font-bold text-xs hover:underline">
                                     ${comment.user.username}
                                 </a>
-                                <span class="badge-container" data-badge-user-id="${comment.userId}">${verifiedHtml}</span>
+                                <span class="badge-container" data-badge-user-id="${comment.user.userId}">${verifiedHtml}</span>
                             </div>
                             <p class="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed" dir="auto">${comment.content}</p>
                         </div>
@@ -1046,7 +1078,10 @@
 
                 if (response.ok && result.ok) {
                     commentsListEl.innerHTML = '';
-                    const comments = result.comments || [];
+                    const rawComments = result.comments || [];
+                    
+                    // normalize all to a single shape
+                    const comments = rawComments.map(normalizeComment);
                     
                     if(badgeEl) badgeEl.innerText = comments.length;
 
@@ -1063,11 +1098,7 @@
                     } else {
                         // استخدام map بدلاً من forEach لضمان إنشاء سلسلة نصية واحدة صحيحة
                         const htmlBuffer = comments.map(comment => {
-                             // حماية ضد البيانات الناقصة
-                             if (!comment.user) {
-                                 comment.user = { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40' };
-                             }
-                             const isVerified = comment.user.is_verified || false;
+                             const isVerified = false; // will be updated in the background if needed
                              return createCommentHtml(comment, isVerified);
                         }).join('');
                         
@@ -1091,7 +1122,7 @@
         }
         
         async function updateCommentsVerification(comments) {
-             const userIds = [...new Set(comments.map(c => c.userId))];
+             const userIds = [...new Set(comments.map(c => (c.user && c.user.userId) ? c.user.userId : ''))].filter(Boolean);
              if(userIds.length === 0) return;
 
              try {
@@ -1133,36 +1164,16 @@
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    const commentsListEl = document.getElementById('commentsList');
-                    
-                    if (commentsListEl.querySelector('.fa-comments')) {
-                        commentsListEl.innerHTML = '';
-                    }
+                    // After successful post, re-fetch the entire comments list to avoid shape/count divergence
+                    await fetchAndDisplayComments(currentPostIdForComments);
 
-                    const amIVerified = false; 
-                    
-                    // append the new comment locally
-                    commentsListEl.innerHTML += createCommentHtml(result.comment, amIVerified);
-                    
-                    input.value = '';
-                    commentsListEl.scrollTop = commentsListEl.scrollHeight;
-                    
-                    // prefer server-provided newComments count if available
-                    let newCount = null;
+                    // If server returned a newComments count, ensure post card is updated (fallback kept)
                     if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
-                        newCount = Number(result.newComments);
-                    } else {
-                        // fallback: increment current badge value
-                        const badgeEl = document.getElementById('commentCountBadge');
-                        const prev = parseInt(badgeEl ? badgeEl.innerText || '0' : '0');
-                        newCount = prev + 1;
+                        updatePostCommentCount(currentPostIdForComments, Number(result.newComments));
                     }
 
-                    // update both modal badge and post card
-                    updatePostCommentCount(currentPostIdForComments, newCount);
-
-                    updateCommentsVerification([result.comment]);
-
+                    input.value = '';
+                    input.focus();
                 } else {
                     errorEl.textContent = result.error || 'فشل الإرسال';
                     errorEl.classList.remove('hidden');
@@ -1173,7 +1184,6 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-arrow-up text-sm"></i>';
-                input.focus();
             }
         }
         
