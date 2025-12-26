@@ -19,11 +19,10 @@
     .notif-title { font-size:14px; color:#e6eefb; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
     .notif-time { font-size:12px; color:#9fb3c8; }
     .notif-target { margin-top:6px; color:#9fb3c8; font-size:13px; }
-    /* small dropdown for actions */
     .actions-dropdown {
       position: absolute;
       top: 48px;
-      left: 12px; /* because dir=rtl, put dropdown near left (visually start) */
+      left: 12px;
       background: rgba(20,20,20,0.95);
       border: 1px solid rgba(255,255,255,0.06);
       border-radius: 10px;
@@ -34,7 +33,6 @@
     }
     .actions-dropdown button { width: 100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px 10px; border-radius:8px; background:transparent; border:none; color:#e6eefb; cursor:pointer; text-align:right; }
     .actions-dropdown button:hover { background: rgba(255,255,255,0.02); }
-    /* action icon button */
     .top-action-btn {
       width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center;
       background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); color:#e6eefb; cursor:pointer;
@@ -53,7 +51,6 @@
       </div>
 
       <div style="width:40px; display:flex; gap:8px; align-items:center; justify-content:flex-end; position:relative;">
-        <!-- Single action button that toggles small dropdown with both actions -->
         <button id="actionsToggleBtn" class="top-action-btn" title="خيارات الإشعارات" aria-haspopup="true" aria-expanded="false">
           <i class="fas fa-ellipsis-v"></i>
         </button>
@@ -101,32 +98,74 @@
     }
 
     container.innerHTML = notifs.map(n => {
+      // Build a human-friendly title/target depending on notification type
       let title = '';
       let targetHint = '';
-      if (n.type === 'post_like') {
-        title = `<strong>${escapeHtml(n.from_username)}</strong> أعجب بمنشورك`;
-        targetHint = 'عرض المنشور';
-      } else if (n.type === 'reel_like') {
-        title = `<strong>${escapeHtml(n.from_username)}</strong> أعجب بريلك`;
-        targetHint = 'عرض الريل';
-      } else if (n.type === 'post_comment') {
-        title = `<strong>${escapeHtml(n.from_username)}</strong> علّق: "${escapeHtml((n.commentContent||'').substring(0,80))}"`;
-        targetHint = 'عرض المنشور والتعليق';
-      } else if (n.type === 'reel_comment') {
-        title = `<strong>${escapeHtml(n.from_username)}</strong> علّق على ريلك: "${escapeHtml((n.commentContent||'').substring(0,80))}"`;
-        targetHint = 'عرض الريل والتعليق';
-      } else if (n.type === 'message') {
-        title = `<strong>${escapeHtml(n.from_username)}</strong> أرسل لك رسالة: "${escapeHtml((n.preview||'').substring(0,80))}"`;
-        targetHint = 'افتح المحادثة';
-      } else {
-        title = `<strong>${escapeHtml(n.from_username || 'مستخدم')}</strong> حدث جديد`;
-        targetHint = '';
+      const fromName = escapeHtml(n.from_username || n.from || 'مستخدم');
+      const snippet = escapeHtml((n.commentContent || n.replyContent || n.preview || '').substring(0,80));
+      const postId = n.postId || '';
+      const reelId = n.reelId || '';
+      const commentId = n.commentId || n.commentId || n.commentId; // consistency
+      const replyId = n.replyId || '';
+
+      switch (n.type) {
+        case 'post_like':
+          title = `<strong>${fromName}</strong> أعجب بمنشورك`;
+          targetHint = 'عرض المنشور';
+          break;
+        case 'reel_like':
+          title = `<strong>${fromName}</strong> أعجب بريلك`;
+          targetHint = 'عرض الريل';
+          break;
+        case 'post_comment':
+          title = `<strong>${fromName}</strong> علّق: "${snippet}"`;
+          targetHint = 'عرض المنشور والتعليق';
+          break;
+        case 'reel_comment':
+          title = `<strong>${fromName}</strong> علّق على ريلك: "${snippet}"`;
+          targetHint = 'عرض الريل والتعليق';
+          break;
+        case 'comment_reply':
+          // this type is used for both post and reel replies on server
+          title = `<strong>${fromName}</strong> ردّ على تعليقك: "${snippet}"`;
+          targetHint = (postId ? 'فتح التعليقات في المنشور' : (reelId ? 'فتح التعليقات في الريل' : 'عرض التعليق'));
+          break;
+        case 'comment_like':
+          title = `<strong>${fromName}</strong> أعجب بتعليقك`;
+          targetHint = (postId ? 'عرض التعليق في المنشور' : (reelId ? 'عرض التعليق في الريل' : 'عرض التعليق'));
+          break;
+        case 'friend_request':
+          title = `<strong>${fromName}</strong> أرسل لك طلب صداقة`;
+          targetHint = 'إدارة الطلبات';
+          break;
+        case 'friend_accept':
+          title = `<strong>${fromName}</strong> قبِل طلب صداقتك`;
+          targetHint = 'عرض الملف الشخصي';
+          break;
+        case 'message':
+          title = `<strong>${fromName}</strong> أرسل لك رسالة: "${snippet}"`;
+          targetHint = 'افتح المحادثة';
+          break;
+        default:
+          title = `<strong>${fromName}</strong> حدث جديد`;
+          targetHint = '';
       }
 
       const time = new Date(n.timestamp || Date.now()).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
+      // data attributes for click handler
+      const dataAttrs = [
+        `data-id="${escapeHtml(n.id || '')}"`,
+        `data-type="${escapeHtml(n.type || '')}"`,
+        `data-post-id="${escapeHtml(postId)}"`,
+        `data-reel-id="${escapeHtml(reelId)}"`,
+        `data-from="${escapeHtml(n.from_user_id || '')}"`,
+        `data-comment-id="${escapeHtml(n.commentId || n.commentId || '')}"`,
+        `data-reply-id="${escapeHtml(n.replyId || '')}"`
+      ].join(' ');
+
       return `
-        <div class="notification-card ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-type="${n.type}" data-post-id="${n.postId || ''}" data-reel-id="${n.reelId || ''}" data-from="${n.from_user_id || ''}">
+        <div class="notification-card ${n.is_read ? '' : 'unread'}" ${dataAttrs}>
           <img src="${escapeHtml(n.from_profile_picture_url || '')}" class="notif-avatar" alt="">
           <div class="notif-card-content">
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
@@ -141,7 +180,7 @@
   }
 
   function escapeHtml(s) {
-    if (!s && s !== 0) return '';
+    if (s === null || typeof s === 'undefined') return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
@@ -157,6 +196,8 @@
       const postId = card.dataset.postId;
       const reelId = card.dataset.reelId;
       const fromUser = card.dataset.from;
+      const commentId = card.dataset.commentId;
+      const replyId = card.dataset.replyId;
 
       // Mark this notification read (fire-and-forget)
       if (id) {
@@ -168,17 +209,66 @@
         }).catch(()=>{});
       }
 
-      // Redirect based on type
-      if (type === 'post_like' || type === 'post_comment') {
-        if (postId) window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
-        else window.location.href = '/chat_list';
-      } else if (type === 'reel_like' || type === 'reel_comment') {
-        if (reelId) window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
-        else window.location.href = '/reels';
-      } else if (type === 'message') {
-        if (fromUser) window.location.href = `/chat?contactId=${encodeURIComponent(fromUser)}`;
-        else window.location.href = '/chat_list';
-      } else {
+      // Decide navigation based on type and available ids.
+      // For comments/replies/likes on comments we try to open the post/reel and anchor to the specific comment.
+      try {
+        if (type === 'post_like') {
+          if (postId) {
+            window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
+            return;
+          }
+        } else if (type === 'reel_like') {
+          if (reelId) {
+            window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+            return;
+          }
+        } else if (type === 'post_comment' || type === 'comment_reply' || type === 'comment_like') {
+          // prefer postId, if present open chat_list with anchor possibly to comment
+          if (postId) {
+            let anchor = `post-${encodeURIComponent(postId)}`;
+            if (commentId) anchor += `-comment-${encodeURIComponent(commentId)}`;
+            else if (replyId) anchor += `-reply-${encodeURIComponent(replyId)}`;
+            window.location.href = `/chat_list#${anchor}`;
+            return;
+          }
+          // fallback to chat_list
+          window.location.href = '/chat_list';
+          return;
+        } else if (type === 'reel_comment' || (type === 'comment_reply' && reelId) || (type === 'comment_like' && reelId)) {
+          if (reelId) {
+            let url = `/reels?id=${encodeURIComponent(reelId)}`;
+            if (commentId) url += `&commentId=${encodeURIComponent(commentId)}`;
+            else if (replyId) url += `&replyId=${encodeURIComponent(replyId)}`;
+            window.location.href = url;
+            return;
+          }
+          window.location.href = '/reels';
+          return;
+        } else if (type === 'friend_accept') {
+          // Open profile of the user who accepted
+          if (fromUser) {
+            window.location.href = `/profile/${encodeURIComponent(fromUser)}`;
+            return;
+          }
+          window.location.href = '/users_list';
+          return;
+        } else if (type === 'friend_request') {
+          window.location.href = '/all_users';
+          return;
+        } else if (type === 'message') {
+          if (fromUser) {
+            window.location.href = `/chat?contactId=${encodeURIComponent(fromUser)}`;
+            return;
+          }
+          window.location.href = '/chat_list';
+          return;
+        } else {
+          // default fallback
+          window.location.href = '/chat_list';
+          return;
+        }
+      } catch (e) {
+        console.error('Navigation error for notification click', e);
         window.location.href = '/chat_list';
       }
     }
