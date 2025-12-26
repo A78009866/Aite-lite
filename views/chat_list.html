@@ -237,7 +237,14 @@
         .reply-item { margin-right: 40px; margin-top: 6px; background: #0f1416; padding: 6px; border-radius: 10px; border: 1px solid #222; }
         .small-avatar { width: 28px; height: 28px; border-radius: 999px; }
         .like-count { font-weight: 700; color: #9ca3af; font-size: 12px; }
-
+/* شارة التحقق داخل التعليقات في الهوم */
+.badge-container .verified-badge-img,
+.comment-item .verified-badge-img {
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
     </style>
 </head>
 <body class="min-h-screen">
@@ -879,64 +886,70 @@
         }
 
         // Create comment HTML (uses enriched comment object returned by server)
-        function createCommentHtml(comment, postId) {
-            const verifiedHtml = ''; // handled separately if desired
-            const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
-            const likeIcon = comment.is_liked ? 'fas' : 'far';
-            const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
-                <div class="reply-item flex items-start gap-2">
-                    <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
-                    <div class="flex-1">
-                        <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                        <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
-                    </div>
-                </div>
-            `).join('') : '';
+        // استبدل دالة createCommentHtml في chat_list.html بهذه النسخة:
+function createCommentHtml(comment, postId) {
+    const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
+    const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
+    const likeIcon = comment.is_liked ? 'fas' : 'far';
+    const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
+        <div class="reply-item flex items-start gap-2">
+            <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+            <div class="flex-1">
+                <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
+                <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+            </div>
+        </div>
+    `).join('') : '';
 
-            return `
-                <div class="comment-item" id="comment-${comment.commentId}">
-                    <div class="flex items-start gap-3">
-                        <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
-                        <div class="flex-1">
-                            <div class="flex items-center justify-between gap-2">
-                                <div>
-                                    <div class="text-sm font-bold text-white">${escapeHtml(comment.user.username)} ${verifiedHtml}</div>
-                                    <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
-                                </div>
-                                <div class="flex items-center gap-2 comment-actions">
-                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
-                                        <i class="${likeIcon} fa-heart"></i>
-                                        <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
-                                    </button>
-                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
-                                        <i class="fas fa-reply"></i>
-                                        <span class="text-xs">رد</span>
-                                    </button>
-                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
-                                        <i class="fas fa-angle-down"></i>
-                                        <span class="text-xs">عرض الردود</span>
-                                    </button>
-                                </div>
+    // badge container: important -> updateCommentsVerification() سيملؤه بصورة الشارة إذا كان المستخدم موثق
+    const badgeContainer = `<span class="badge-container" data-badge-user-id="${escapeAttr(comment.user.userId)}"></span>`;
+
+    return `
+        <div class="comment-item" id="comment-${comment.commentId}">
+            <div class="flex items-start gap-3">
+                <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
+                <div class="flex-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <div class="text-sm font-bold text-white">
+                                ${escapeHtml(comment.user.username)} ${badgeContainer}
                             </div>
-                            <div class="mt-2 text-sm text-gray-200">${escapeHtml(comment.content)}</div>
-
-                            <div id="replies-container-${comment.commentId}" class="mt-3 space-y-2">
-                                ${repliesPreviewHtml}
-                            </div>
-
-                            <div id="reply-box-${comment.commentId}" class="mt-2 hidden">
-                                <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
-                                    <img src="${document.getElementById('userProfilePic').src}" class="w-7 h-7 rounded-full" alt="me">
-                                    <input id="reply-input-${comment.commentId}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
-                                    <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReply('${postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
-                                </div>
-                            </div>
-
+                            <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
+                        </div>
+                        <div class="flex items-center gap-2 comment-actions">
+                            <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
+                                <i class="${likeIcon} fa-heart"></i>
+                                <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
+                            </button>
+                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
+                                <i class="fas fa-reply"></i>
+                                <span class="text-xs">رد</span>
+                            </button>
+                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                                <i class="fas fa-angle-down"></i>
+                                <span class="text-xs">عرض الردود</span>
+                            </button>
                         </div>
                     </div>
+                    <div class="mt-2 text-sm text-gray-200">${escapeHtml(comment.content)}</div>
+
+                    <div id="replies-container-${comment.commentId}" class="mt-3 space-y-2">
+                        ${repliesPreviewHtml}
+                    </div>
+
+                    <div id="reply-box-${comment.commentId}" class="mt-2 hidden">
+                        <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
+                            <img src="${document.getElementById('userProfilePic').src}" class="w-7 h-7 rounded-full" alt="me">
+                            <input id="reply-input-${comment.commentId}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
+                            <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReply('${postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+
                 </div>
-            `;
-        }
+            </div>
+        </div>
+    `;
+}
 
         // Toggle like on a comment (frontend)
         async function toggleCommentLike(postId, commentId, btnEl) {
