@@ -10,54 +10,32 @@
     body { background: #000; color: #e4e6eb; font-family: Inter, system-ui, sans-serif; }
     .glass-navbar { background-color: rgba(30,30,30,0.5); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.06); }
     .user-card { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04); border-radius: 12px; padding:10px; display:flex; gap:12px; align-items:center; justify-content:space-between; }
-    
-    /* جعلنا هذا الرابط بدلاً من div ليعمل كزر توجيه */
     .user-info { display:flex; gap:10px; align-items:center; min-width:0; text-decoration: none; color: inherit; transition: opacity 0.2s; }
     .user-info:hover { opacity: 0.8; }
-
     .user-name { font-weight:700; color:#e6eefb; }
     .user-sub { color:#9fb3c8; font-size:13px; }
     .action-btn { padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); color:#e6eefb; cursor:pointer; }
-    /* زر المراسلة أخضر وناعِم وصغير */
-    .action-btn.message {
-      background: #10b981;
-      color: #fff;
-      border: none;
-      padding: 6px 10px;
-      border-radius: 12px;
-      font-size: 13px;
-      box-shadow: 0 2px 6px rgba(16,185,129,0.12);
-      text-decoration: none; /* مهم لأن الزر قد يكون رابط a */
-    }
+    .action-btn.message { background: #10b981; color: #fff; border: none; padding: 6px 10px; border-radius: 12px; font-size: 13px; box-shadow: 0 2px 6px rgba(16,185,129,0.12); text-decoration: none; }
     .tab { padding:8px 12px; cursor:pointer; border-radius:999px; }
     .tab.active { background:#111827; border:1px solid rgba(255,255,255,0.04); }
-    .friend-req-badge {
-      position: absolute; top: -6px; left: -6px; min-width: 18px; height: 18px; padding: 0 6px; background: #ef4444; color:#fff; font-size:12px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center;
-    }
+    .friend-req-badge { position: absolute; top: -6px; left: -6px; min-width: 18px; height: 18px; padding: 0 6px; background: #ef4444; color:#fff; font-size:12px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; }
     .mobile-safe { padding-bottom:84px; }
+    .btn-accept { background: #16a34a; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 12px; border: none; }
+    .btn-reject { background: #ef4444; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 12px; border: none; }
+    @media (max-width:480px) { .action-btn.message, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; } }
 
-    /* أزرار القبول/الرفض صغيرة وناعمة */
-    .btn-accept {
-      background: #16a34a;
-      color: #fff;
-      padding: 6px 10px;
-      font-size: 13px;
-      border-radius: 12px;
-      border: none;
+    /* VERIFIED BADGE IMAGE */
+    .verified-badge-img {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      margin-left: 6px;
+      object-fit: cover;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.06);
+      vertical-align: middle;
     }
-    .btn-reject {
-      background: #ef4444;
-      color: #fff;
-      padding: 6px 10px;
-      font-size: 13px;
-      border-radius: 12px;
-      border: none;
-    }
-
-    @media (max-width:480px) {
-      .action-btn.message, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; }
-    }
-
   </style>
 </head>
 <body class="mobile-safe">
@@ -94,6 +72,7 @@
   </main>
 
 <script>
+  const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
   const tabAll = document.getElementById('tabAll');
   const tabRequests = document.getElementById('tabRequests');
   const allUsersContainer = document.getElementById('allUsersContainer');
@@ -127,12 +106,14 @@
           btnHtml = `<button class="action-btn" data-id="${u.id}" data-action="send">إضافة صديق</button>`;
         }
 
-        // تم تحويل div.user-info إلى a.user-info للإشارة للبروفايل
+        // placeholder for verified badge; will be updated later
+        const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${u.id}"></span>`;
+
         return `<div class="user-card">
           <a href="/profile?userId=${u.id}" class="user-info">
             <img src="${escapeHtml(u.profile_picture_url || '/assets/default_profile_pic.png')}" class="w-12 h-12 rounded-full object-cover">
             <div style="min-width:0">
-              <div class="user-name">@${escapeHtml(u.username)}</div>
+              <div class="user-name">@${escapeHtml(u.username)} ${verifiedPlaceholder}</div>
               <div class="user-sub">${escapeHtml(u.full_name || '')}</div>
             </div>
           </a>
@@ -167,6 +148,9 @@
         });
       });
 
+      // تحديث شارات التوثيق بعد العرض
+      updateVerifiedBadges();
+
     } catch (e) {
       allUsersContainer.innerHTML = '<div class="text-center text-red-500 p-6">فشل في تحميل المستخدمين.</div>';
     }
@@ -186,12 +170,13 @@
       }
 
       requestsContainer.innerHTML = data.requests.map(r => {
-        // تم تحويل div.user-info إلى a.user-info للإشارة للبروفايل
+        // placeholder for verified badge in requests list (profile might include is_verified)
+        const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${r.from}"></span>`;
         return `<div class="user-card">
           <a href="/profile?userId=${r.from}" class="user-info">
             <img src="${escapeHtml(r.profile_picture_url || '/assets/default_profile_pic.png')}" class="w-12 h-12 rounded-full object-cover">
             <div style="min-width:0">
-              <div class="user-name">@${escapeHtml(r.username)}</div>
+              <div class="user-name">@${escapeHtml(r.username)} ${verifiedPlaceholder}</div>
             </div>
           </a>
           <div>
@@ -224,6 +209,9 @@
           }
         });
       });
+
+      // update badges for request users too
+      updateVerifiedBadges();
 
       updateFriendReqBadge();
 
@@ -262,6 +250,33 @@
     });
     es.addEventListener('error', (err) => { /* ignore */ });
   })();
+
+  // ----------------- VERIFIED BADGES HELPERS -----------------
+  async function updateVerifiedBadges() {
+    const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
+    if (placeholders.length === 0) return;
+    await Promise.all(placeholders.map(async ph => {
+      const uid = ph.dataset.userId;
+      if (!uid) return;
+      try {
+        const res = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' });
+        if (!res.ok) { ph.remove(); return; }
+        const data = await res.json();
+        if (data && data.ok && data.is_verified) {
+          const img = document.createElement('img');
+          img.src = VERIFIED_IMG_URL;
+          img.alt = 'موثق';
+          img.title = 'موثق';
+          img.className = 'verified-badge-img';
+          ph.replaceWith(img);
+        } else {
+          ph.remove();
+        }
+      } catch (e) {
+        ph.remove();
+      }
+    }));
+  }
 
   // initial load
   document.addEventListener('DOMContentLoaded', () => {
