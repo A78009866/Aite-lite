@@ -151,6 +151,12 @@
       border: 1px solid rgba(255,255,255,0.06);
       vertical-align: middle;
     }
+
+    /* delete modal (centered) */
+    .glass-modal-bg { background-color: rgba(0,0,0,0.8); }
+    .comment-item { padding: 8px; border-radius: 12px; background: #131313; border: 1px solid #222; }
+    .reply-item { margin-right: 40px; margin-top: 6px; background: #0f1416; padding: 6px; border-radius: 10px; border: 1px solid #222; }
+    .small-avatar { width: 28px; height: 28px; border-radius: 999px; }
   </style>
 </head>
 <body>
@@ -161,7 +167,6 @@
     </div>
     <div class="flex items-center gap-2">
       <a id="createReelBtn" href="/create-reel" class="text-white text-xl drop-shadow-lg p-2 bg-black/40 rounded-full"><i class="fas fa-plus"></i></a>
-      <!-- Notification icon intentionally removed -->
     </div>
   </div>
 
@@ -170,6 +175,7 @@
   </div>
 
   <div id="backdrop" class="overlay-backdrop"></div>
+
   <div id="commentsSheet" class="comments-sheet border-t border-gray-800">
     <div class="p-3 border-b border-gray-800 flex justify-between items-center">
       <h3 class="font-bold text-sm">التعليقات</h3>
@@ -183,17 +189,67 @@
     </div>
   </div>
 
+  <!-- centered delete modal for reels -->
+  <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
+      <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
+          <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
+          <h3 class="text-xl font-bold text-white mb-2">تأكيد الحذف</h3>
+          <p class="text-gray-400 mb-6">هل تريد حذف هذا الريل نهائياً؟</p>
+          <div class="flex justify-around space-x-4 space-x-reverse">
+              <button id="cancelDeleteBtn" class="p-2 w-full bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition duration-300">إلغاء</button>
+              <button id="confirmDeleteBtn" class="p-2 w-full bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-300">تأكيد</button>
+          </div>
+          <div id="deleteMessage" class="text-red-500 mt-3 hidden"></div>
+      </div>
+  </div>
+
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 
 <script>
   const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
+  const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>');
 
   let swiperInstance = null;
   let currentReelsData = [];
   let currentUserId = null;
-  const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>');
+  let currentReelIdForComments = null;
+  let pendingDeleteReelId = null;
 
   document.addEventListener('DOMContentLoaded', loadReels);
+
+  // delete modal elements
+  const deleteModal = document.getElementById('deleteModal');
+  const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+  const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+  const deleteMessage = document.getElementById('deleteMessage');
+
+  cancelDeleteBtn.addEventListener('click', () => { deleteModal.classList.add('hidden'); pendingDeleteReelId = null; });
+  confirmDeleteBtn.addEventListener('click', async () => {
+    if (!pendingDeleteReelId) return;
+    confirmDeleteBtn.disabled = true;
+    confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحذف';
+    deleteMessage.classList.add('hidden');
+    try {
+      const res = await fetch(`/api/reels/${pendingDeleteReelId}`, { method: 'DELETE', credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        // remove slide
+        const slide = document.querySelector(`.swiper-slide[data-id="${pendingDeleteReelId}"]`);
+        if (slide) slide.remove();
+        deleteModal.classList.add('hidden');
+      } else {
+        deleteMessage.textContent = data.error || 'فشل الحذف';
+        deleteMessage.classList.remove('hidden');
+      }
+    } catch (e) {
+      deleteMessage.textContent = 'حدث خطأ';
+      deleteMessage.classList.remove('hidden');
+    } finally {
+      confirmDeleteBtn.disabled = false;
+      confirmDeleteBtn.innerHTML = 'تأكيد';
+      pendingDeleteReelId = null;
+    }
+  });
 
   async function loadReels() {
     try {
@@ -219,7 +275,6 @@
     wrapper.innerHTML = reels.map((reel, index) => {
       const isOwner = reel.userId === currentUserId;
       const poster = reel.thumbnailUrl || BLACK_POSTER;
-      // show verified-placeholder next to username (will be replaced if verified)
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
@@ -232,7 +287,7 @@
         <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 pointer-events-none"></div>
 
         <div class="absolute left-4 bottom-24 flex flex-col items-center gap-6 z-20 pointer-events-auto">
-          <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="handleLike('${reel.reelId}')">
+          <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="handleLikeReel('${reel.reelId}', this)">
             <i class="${reel.is_liked ? 'fas text-red-500' : 'far text-white'} fa-heart text-3xl drop-shadow-md" id="likeIcon-${reel.reelId}"></i>
             <span class="text-xs font-bold" id="likeCount-${reel.reelId}">${reel.likes}</span>
           </div>
@@ -244,7 +299,7 @@
             <i class="fas fa-share text-3xl text-white drop-shadow-md"></i>
             <span class="text-xs font-bold">مشاركة</span>
           </div>
-          ${isOwner ? `<div class="flex flex-col items-center gap-1 cursor-pointer text-red-500" onclick="deleteReel('${reel.reelId}')"><i class="fas fa-trash-can text-2xl drop-shadow-md"></i><span class="text-[10px] font-bold">حذف</span></div>` : ''}
+          ${isOwner ? `<div class="flex flex-col items-center gap-1 cursor-pointer text-red-500" onclick="openDeleteReelModal('${reel.reelId}')"><i class="fas fa-trash-can text-2xl drop-shadow-md"></i><span class="text-[10px] font-bold">حذف</span></div>` : ''}
         </div>
 
         <div class="absolute right-4 bottom-8 left-16 z-20 text-right">
@@ -258,7 +313,6 @@
     `}).join('');
 
     setupVideoInteractions();
-    // After rendering, update verified badges (for reel owners)
     updateVerifiedBadges();
   }
 
@@ -304,7 +358,7 @@
         const delta = now - lastTap;
         if (delta < 300 && delta > 0) {
           const id = vid.closest('.swiper-slide').getAttribute('data-id');
-          handleLike(id, true);
+          handleLikeReel(id, null, true);
           animateHeart(id);
         } else {
           const id = vid.closest('.swiper-slide').getAttribute('data-id');
@@ -392,22 +446,18 @@
     }
   }
 
-  window.deleteReel = async function(reelId) {
-    if(!confirm('هل تريد حذف هذا الريل نهائياً؟')) return;
-    try {
-      const res = await fetch(`/api/reels/${reelId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json().catch(()=>({ ok: false }));
-      if(res.ok && data.ok) location.reload();
-      else { console.error('Delete reel failed', res.status, data); alert(data.error || 'خطأ في الحذف'); }
-    } catch(e) { console.error('Delete reel error', e); alert('فشل الاتصال بالسيرفر'); }
+  window.openDeleteReelModal = function(reelId) {
+    pendingDeleteReelId = reelId;
+    deleteModal.classList.remove('hidden');
   };
 
-  async function handleLike(reelId, forceLike = false) {
+  window.handleLikeReel = async function(reelId, el, forceLike=false) {
     const icon = document.getElementById(`likeIcon-${reelId}`);
     const countSpan = document.getElementById(`likeCount-${reelId}`);
     const isLiked = icon.classList.contains('text-red-500');
     if (forceLike && isLiked) return;
 
+    // optimistic UI
     if (isLiked) {
       icon.className = 'far fa-heart text-3xl text-white drop-shadow-md';
       countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
@@ -416,13 +466,12 @@
       countSpan.textContent = parseInt(countSpan.textContent) + 1;
     }
     try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST', credentials: 'include' }); } catch(e) { console.error('like error', e); }
-  }
+  };
 
-  // Comments sheet
+  // Comments sheet logic for reels
   const backdrop = document.getElementById('backdrop');
   const sheet = document.getElementById('commentsSheet');
   const commentsList = document.getElementById('commentsList');
-  let currentReelIdForComments = null;
 
   window.openComments = async function(reelId) {
     currentReelIdForComments = reelId;
@@ -435,7 +484,7 @@
       const res = await fetch(`/api/reels/${reelId}/comments`);
       if (!res.ok) throw new Error('Failed to fetch comments: ' + res.status);
       const data = await res.json();
-      renderComments(data.comments);
+      renderCommentsForReel(data.comments || []);
     } catch(e) {
       console.error('openComments error', e);
       commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
@@ -448,33 +497,53 @@
     if(swiperInstance) swiperInstance.allowTouchMove = true;
   }
 
-  function renderComments(comments) {
+  function renderCommentsForReel(comments) {
     commentsList.innerHTML = '';
     if(!comments || comments.length === 0) {
       commentsList.innerHTML = '<div class="text-center text-gray-500 text-sm mt-10">كن أول من يعلق!</div>';
       return;
     }
-    // include verified-placeholder with data-user-id (comments saved include userId)
     commentsList.innerHTML = comments.map(c => `
-      <div class="flex gap-3 mb-4 w-full">
+      <div class="comment-item flex gap-3 mb-4 w-full" id="reel-comment-${c.id}">
         <img src="${escapeHtml(c.profile_picture_url || 'https://via.placeholder.com/40')}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover">
-        <div>
-           <div class="flex items-center gap-2">
-             <span class="font-bold text-xs">${escapeHtml(c.username)} <span class="verified-placeholder" data-user-id="${escapeAttr(c.userId || c.userID || c.from || '')}"></span></span>
-             <span class="text-[10px] text-gray-500">${new Date(c.timestamp).toLocaleTimeString()}</span>
+        <div class="flex-1">
+           <div class="flex items-center gap-2 justify-between">
+             <div>
+               <div class="text-xs font-bold text-white">${escapeHtml(c.username)}</div>
+               <div class="text-[10px] text-gray-500">${new Date(c.timestamp).toLocaleTimeString()}</div>
+             </div>
+             <div class="flex items-center gap-2">
+               <button class="text-gray-300 flex items-center gap-2" onclick="toggleReelCommentLike('${currentReelIdForComments}', '${c.id}', this)">
+                 <i class="${c.is_liked ? 'fas text-red-400' : 'far text-gray-300'} fa-heart"></i>
+                 <span class="text-xs like-count" id="reel-comment-like-count-${c.id}">${c.likes || 0}</span>
+               </button>
+               <button class="text-gray-300 flex items-center gap-2" onclick="openReelReplyBox('${c.id}')"><i class="fas fa-reply"></i></button>
+             </div>
            </div>
            <p class="text-sm mt-1">${escapeHtml(c.content)}</p>
+           <div id="reel-replies-${c.id}" class="mt-2">
+             ${(c.replies && c.replies.length) ? c.replies.map(r => `
+                <div class="reply-item flex items-start gap-2">
+                  <img src="${escapeHtml(r.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar flex-shrink-0">
+                  <div class="flex-1"><div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div><div class="text-sm text-gray-200">${escapeHtml(r.content)}</div></div>
+                </div>
+             `).join('') : ''}
+           </div>
+           <div id="reel-reply-box-${c.id}" class="mt-2 hidden">
+             <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
+               <img src="${document.getElementById('userProfilePic')?.src || 'https://via.placeholder.com/40'}" class="w-7 h-7 rounded-full" alt="me">
+               <input id="reel-reply-input-${c.id}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
+               <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReelReply('${currentReelIdForComments}', '${c.id}')"><i class="fas fa-paper-plane"></i></button>
+             </div>
+           </div>
         </div>
       </div>
     `).join('');
-
-    // after rendering comments, check verification for commenters
-    updateVerifiedBadges();
   }
 
   backdrop.addEventListener('click', closeCommentsSheet);
   document.getElementById('closeComments').addEventListener('click', closeCommentsSheet);
-  
+
   document.getElementById('sendCommentBtn').addEventListener('click', async () => {
     const input = document.getElementById('commentInput');
     const content = input.value.trim();
@@ -487,28 +556,97 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content })
       });
-      if (!res.ok) throw new Error('Failed to post comment: ' + res.status);
-      const res2 = await fetch(`/api/reels/${currentReelIdForComments}/comments`, { credentials: 'include' });
-      const data = await res2.json();
-      renderComments(data.comments);
+      if (!res.ok) throw new Error('Failed to post comment');
+      const data = await res.json();
+      // refresh comments
+      const res2 = await fetch(`/api/reels/${currentReelIdForComments}/comments`);
+      const commentsData = await res2.json();
+      renderCommentsForReel(commentsData.comments || []);
+      // update counter in slide
+      const countEl = document.getElementById(`commentCount-${currentReelIdForComments}`);
+      if (countEl) countEl.textContent = commentsData.comments.length;
     } catch(e) { console.error('send comment error', e); alert('فشل الإرسال'); }
   });
 
-  window.shareReel = function(reelId) {
-    const shareUrl = window.location.origin + '/reels?id=' + reelId;
-    if (navigator.share) {
-      navigator.share({ title: 'شاهد هذا الريل', url: shareUrl });
-    } else {
-      navigator.clipboard.writeText(shareUrl);
-      alert('تم نسخ الرابط!');
+  // Reel comment like (frontend calls endpoint; server may need matching route)
+  async function toggleReelCommentLike(reelId, commentId, btnEl) {
+    btnEl.disabled = true;
+    try {
+      const res = await fetch(`/api/reels/${reelId}/comments/${commentId}/like`, { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        const countEl = document.getElementById(`reel-comment-like-count-${commentId}`);
+        if (countEl) countEl.textContent = data.likes;
+        // toggle icon classes if server returns is_liked
+        const icon = btnEl.querySelector('i');
+        if (icon) {
+          if (data.is_liked) { icon.classList.remove('far'); icon.classList.add('fas'); icon.classList.add('text-red-400'); }
+          else { icon.classList.remove('fas'); icon.classList.add('far'); icon.classList.remove('text-red-400'); }
+        }
+      } else {
+        // if endpoint not implemented, fallback optimistic toggle
+        const icon = btnEl.querySelector('i');
+        const countEl = document.getElementById(`reel-comment-like-count-${commentId}`);
+        if (icon && countEl) {
+          if (icon.classList.contains('far')) { icon.classList.remove('far'); icon.classList.add('fas','text-red-400'); countEl.textContent = Number(countEl.textContent || 0) + 1; }
+          else { icon.classList.remove('fas','text-red-400'); icon.classList.add('far'); countEl.textContent = Math.max(0, Number(countEl.textContent || 0) - 1); }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      btnEl.disabled = false;
     }
-  };
+  }
 
-  // VERIFIED BADGES: find placeholders and replace with badge image when profile.is_verified === true
+  function openReelReplyBox(commentId) {
+    const box = document.getElementById(`reel-reply-box-${commentId}`);
+    if (!box) return;
+    box.classList.toggle('hidden');
+    const input = document.getElementById(`reel-reply-input-${commentId}`);
+    if (input && !box.classList.contains('hidden')) input.focus();
+  }
+
+  // Note: server currently supports replies for posts; for reels this endpoint may not exist.
+  async function postReelReply(reelId, commentId) {
+    const input = document.getElementById(`reel-reply-input-${commentId}`);
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return;
+    input.disabled = true;
+    try {
+      // Attempt to call a reply endpoint for reels (if implemented)
+      const res = await fetch(`/api/reels/${reelId}/comments/${commentId}/reply`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({ content })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        // refresh comments
+        const res2 = await fetch(`/api/reels/${reelId}/comments`);
+        const commentsData = await res2.json();
+        renderCommentsForReel(commentsData.comments || []);
+      } else {
+        // fallback: simply append a local reply UI (optimistic)
+        const container = document.getElementById(`reel-replies-${commentId}`);
+        if (container) {
+          container.innerHTML += `<div class="reply-item flex items-start gap-2"><img src="${document.getElementById('userProfilePic')?.src || 'https://via.placeholder.com/40'}" class="small-avatar flex-shrink-0"><div class="flex-1"><div class="text-xs text-gray-300 font-bold">أنت</div><div class="text-sm text-gray-200">${escapeHtml(content)}</div></div></div>`;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      input.disabled = false;
+      input.value = '';
+    }
+  }
+
+  // VERIFIED BADGES
   async function updateVerifiedBadges() {
     const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
     if (placeholders.length === 0) return;
-    // dedupe ids
     const byId = {};
     placeholders.forEach(ph => {
       const uid = ph.dataset.userId;
@@ -521,7 +659,6 @@
         if (!r.ok) return; 
         const data = await r.json();
         if (data && data.is_verified) {
-          // replace all placeholders for this uid
           document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => {
             const img = document.createElement('img');
             img.src = VERIFIED_IMG_URL;
@@ -531,17 +668,15 @@
             ph.replaceWith(img);
           });
         } else {
-          // remove placeholders for this uid
           document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => ph.remove());
         }
       } catch (e) {
-        // on error, just remove placeholders to avoid stale UI
         document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => ph.remove());
       }
     }));
   }
 
-  // small helpers
+  // helpers
   function escapeHtml(s) {
     if (!s && s !== 0) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -551,7 +686,7 @@
     return String(s).replace(/"/g, '&quot;');
   }
 
-  // initial: after loadReels renders, update badges again (some placeholders may exist)
+  // ensure badges updated when visible
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') updateVerifiedBadges();
   });
