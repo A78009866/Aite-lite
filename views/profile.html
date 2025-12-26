@@ -180,13 +180,12 @@
 
         .verified-badge-img {
           display: inline-block;
-          width: 18px;
-          height: 18px;
-          border-radius: 999px;
-          margin-left: 6px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          margin-right: 4px;
+          margin-left: 2px;
           object-fit: cover;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-          border: 1px solid rgba(255,255,255,0.06);
           vertical-align: middle;
         }
 
@@ -351,11 +350,10 @@ const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v176
 
 let currentProfileId = null;
 let currentUserId = null;
-let currentUserIsVerified = false; // لتخزين حالة المستخدم الحالي
 let activeWaveSurfer = null;
 let audioWaveSurfers = {};
 let activeVideo = null;
-let currentPostIdForComment = null;
+let currentPostIdForComments = null;
 let statusPollInterval = null;
 let PROFILE_VERIFIED = false; 
 
@@ -568,11 +566,11 @@ async function handleLike(postId, buttonElement) {
 }
 
 // ------------------------------------------------------------
-// منطق التعليقات الجديد (Bottom Sheet + Verification Badge)
+// منطق التعليقات الجديد (Profile Version)
 // ------------------------------------------------------------
 
 function handleComment(postId) { 
-    currentPostIdForComment = postId;
+    currentPostIdForComments = postId;
     
     // تعيين الصورة الحالية للمستخدم بجانب حقل الإدخال
     const myPic = document.getElementById('userProfilePic').src;
@@ -599,7 +597,7 @@ function closeCommentModal() {
     
     setTimeout(() => {
         modal.classList.add('hidden');
-        currentPostIdForComment = null;
+        currentPostIdForComments = null;
         if(document.getElementById('newCommentInput')) document.getElementById('newCommentInput').value = '';
         if(document.getElementById('commentsList')) document.getElementById('commentsList').innerHTML = '';
         if(document.getElementById('commentCountBadge')) document.getElementById('commentCountBadge').innerText = '0';
@@ -612,7 +610,7 @@ function createCommentHtml(comment, isVerified) {
     });
 
     const verifiedHtml = isVerified 
-        ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img w-3.5 h-3.5 mr-1 align-text-bottom inline-block" alt="Verified">` 
+        ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">` 
         : '';
 
     return `
@@ -627,7 +625,7 @@ function createCommentHtml(comment, isVerified) {
                         <a href="/profile?userId=${comment.userId}" class="text-white font-bold text-xs hover:underline">
                             ${comment.user.username}
                         </a>
-                        ${verifiedHtml}
+                        <span class="badge-container" data-badge-user-id="${comment.userId}">${verifiedHtml}</span>
                     </div>
                     <p class="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed" dir="auto">${comment.content}</p>
                 </div>
@@ -663,32 +661,22 @@ async function fetchAndDisplayComments(postId) {
                         <p class="text-xs">كن أول من يعلق!</p>
                     </div>`;
             } else {
-                const userIds = [...new Set(comments.map(c => c.userId))];
-                
-                // جلب حالات التوثيق للمعلقين
-                const verificationMap = {};
-                try {
-                    const profiles = await Promise.all(
-                        userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.json()))
-                    );
-                    profiles.forEach(p => {
-                        if(p && p.id) verificationMap[p.id] = !!p.is_verified;
-                    });
-                } catch (e) {
-                    console.warn("Could not fetch verification status for comments", e);
-                }
-
                 let htmlBuffer = '';
                 comments.forEach(comment => {
-                    const isVerified = verificationMap[comment.userId] || false;
+                    const isVerified = comment.user.is_verified || false;
                     htmlBuffer += createCommentHtml(comment, isVerified);
                 });
                 
                 commentsListEl.innerHTML = htmlBuffer;
                 
                 setTimeout(() => {
-                    commentsListEl.scrollTop = commentsListEl.scrollHeight;
+                    if(commentsListEl.lastElementChild) {
+                        commentsListEl.scrollTop = commentsListEl.scrollHeight;
+                    }
                 }, 100);
+
+                // Background check for badges
+                updateCommentsVerification(comments);
             }
         } else {
             commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">فشل تحميل التعليقات.</div>';
@@ -699,20 +687,41 @@ async function fetchAndDisplayComments(postId) {
     }
 }
 
+async function updateCommentsVerification(comments) {
+     const userIds = [...new Set(comments.map(c => c.userId))];
+     if(userIds.length === 0) return;
+
+     try {
+        const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.ok ? r.json() : null).catch(()=>null));
+        const profiles = await Promise.all(promises);
+        
+        profiles.forEach(p => {
+            if(p && p.id && p.is_verified) {
+                const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${p.id}"]`);
+                containers.forEach(cont => {
+                    if(cont.innerHTML.trim() === '') {
+                        cont.innerHTML = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">`;
+                    }
+                });
+            }
+        });
+     } catch(e) { }
+}
+
 async function postComment() {
     const input = document.getElementById('newCommentInput');
     const btn = document.getElementById('postCommentBtn');
     const errorEl = document.getElementById('commentError');
     
     const content = input.value.trim();
-    if (!content || !currentPostIdForComment) return;
+    if (!content || !currentPostIdForComments) return;
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     errorEl.classList.add('hidden');
 
     try {
-        const response = await fetch(`/api/posts/${currentPostIdForComment}/comment`, {
+        const response = await fetch(`/api/posts/${currentPostIdForComments}/comment`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: content })
@@ -727,23 +736,17 @@ async function postComment() {
                 commentsListEl.innerHTML = '';
             }
 
-            // إضافة التعليق الجديد
-            // نستخدم currentUserIsVerified التي يتم تعيينها عند تحميل الصفحة
-            commentsListEl.innerHTML += createCommentHtml(result.comment, currentUserIsVerified);
+            const amIVerified = false; // Placeholder
+            
+            commentsListEl.innerHTML += createCommentHtml(result.comment, amIVerified);
             
             input.value = '';
             commentsListEl.scrollTop = commentsListEl.scrollHeight;
             
-            const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComment}"]`);
-            if (postCard) {
-                const commentsSpan = postCard.querySelector('.fa-comment-dots').parentNode;
-                if(result.newComments) {
-                     // يمكن تحديث العدد في البطاقة إذا لزم
-                }
-            }
-            
             const badgeEl = document.getElementById('commentCountBadge');
             if(badgeEl) badgeEl.innerText = parseInt(badgeEl.innerText || 0) + 1;
+            
+            updateCommentsVerification([result.comment]);
 
         } else {
             errorEl.textContent = result.error || 'فشل الإرسال';
@@ -894,7 +897,6 @@ async function fetchCurrentUser() {
         const data = await resp.json();
         if (data && data.id) {
             currentUserId = data.id;
-            currentUserIsVerified = !!data.is_verified; // حفظ حالة التوثيق للمستخدم الحالي
             const smallPic = document.getElementById('userProfilePic');
             if (smallPic && data.profile_picture_url) smallPic.src = data.profile_picture_url;
         }
