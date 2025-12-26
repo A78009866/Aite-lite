@@ -197,6 +197,92 @@
         @media (max-width: 480px) {
            .status-indicator.large { width: 20px; height: 20px; bottom: 12px; left: 4px; border-width: 3px; }
         }
+
+        /* ----------------- Friend buttons (improvements) ----------------- */
+        .friendActionContainer { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; }
+
+        .btn-add-friend {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: linear-gradient(90deg, #06b6d4 0%, #4f46e5 100%);
+            color: #fff;
+            padding: .45rem .9rem;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: .95rem;
+            box-shadow: 0 8px 24px rgba(79,70,229,0.18);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: transform .15s ease, box-shadow .15s ease, opacity .12s ease;
+            cursor: pointer;
+        }
+        .btn-add-friend i { font-size: 0.95rem; }
+
+        .btn-add-friend:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 36px rgba(79,70,229,0.24);
+        }
+        .btn-add-friend:active {
+            transform: translateY(-1px);
+        }
+        .btn-add-friend[disabled] {
+            opacity: .6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Cancel/request-sent button style variant */
+        .btn-request-sent {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+            color: #e5e7eb;
+            padding: .4rem .85rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(255,255,255,0.06);
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-request-sent i { color: #f59e0b; }
+
+        /* Accept / Reject */
+        .btn-accept {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: linear-gradient(90deg,#10b981,#059669);
+            color: #fff;
+            padding: .35rem .7rem;
+            border-radius: 10px;
+            border: none;
+            font-weight: 700;
+            box-shadow: 0 8px 20px rgba(6,95,70,0.18);
+            cursor: pointer;
+        }
+        .btn-accept i { font-size: .9rem; }
+
+        .btn-reject {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: transparent;
+            color: #f87171;
+            padding: .35rem .7rem;
+            border-radius: 10px;
+            border: 1px solid rgba(248,113,113,0.12);
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-reject i { color: #f87171; }
+
+        /* small responsive tweak */
+        @media (max-width: 420px) {
+            .btn-add-friend { padding: .35rem .7rem; font-size:.9rem; gap:.35rem; }
+            .btn-accept, .btn-reject { padding: .3rem .6rem; font-size: .85rem; }
+            .friendActionContainer { gap: 6px; }
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -1129,8 +1215,8 @@ async function fetchAndDisplayProfile() {
 
                 if (data.request_received) {
                     friendActionContainer.innerHTML = `
-                      <button id="acceptFriendBtn" class="btn-accept">قبول</button>
-                      <button id="rejectFriendBtn" class="btn-reject">رفض</button>
+                      <button id="acceptFriendBtn" class="btn-accept"><i class="fas fa-user-check ml-2"></i>قبول</button>
+                      <button id="rejectFriendBtn" class="btn-reject"><i class="fas fa-times ml-2"></i>رفض</button>
                     `;
                     document.getElementById('acceptFriendBtn').addEventListener('click', async () => {
                         try {
@@ -1149,7 +1235,7 @@ async function fetchAndDisplayProfile() {
                         } catch (e) { alert('خطأ في الشبكة'); }
                     });
                 } else if (data.request_sent) {
-                    friendActionContainer.innerHTML = `<button id="cancelFriendBtn" class="btn-add-friend">طلب مرسل</button>`;
+                    friendActionContainer.innerHTML = `<button id="cancelFriendBtn" class="btn-request-sent"><i class="fas fa-clock ml-2"></i>طلب مرسل</button>`;
                     document.getElementById('cancelFriendBtn').addEventListener('click', async () => {
                         try {
                             const r = await fetch('/api/friends/cancel', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
@@ -1158,7 +1244,7 @@ async function fetchAndDisplayProfile() {
                         } catch (e) { alert('خطأ في الشبكة'); }
                     });
                 } else if (!data.is_friend) {
-                    friendActionContainer.innerHTML = `<button id="addFriendBtn" class="btn-add-friend">إضافة صديق</button>`;
+                    friendActionContainer.innerHTML = `<button id="addFriendBtn" class="btn-add-friend"><i class="fas fa-user-plus ml-2"></i>إضافة صديق</button>`;
                     document.getElementById('addFriendBtn').addEventListener('click', async () => {
                         try {
                             const r = await fetch('/api/friends/request', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
