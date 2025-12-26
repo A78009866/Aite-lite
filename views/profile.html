@@ -98,13 +98,8 @@
         .status-indicator.large {
             width: 24px;
             height: 24px;
-            bottom: 15px; /* رفع قليلاً من الحافة السفلية */
-            left: 10px;   /* في اليمين (أو اليسار حسب التفضيل، هنا وضعناها يساراً لتناسب RTL أو يميناً حسب التصميم) */
-            /* لنجعلها على اليسار (بداية السطر في العربية) أو اليمين. 
-               المعتاد عالمياً هو Bottom-Right. في RTL الـ Right هو بداية السطر أحياناً.
-               سنستخدم left هنا لأن الصورة محاذاة لليمين والنص يسارها، فالزاوية اليسرى للصورة هي الأقرب للمحتوى */
-            left: 5px; 
             bottom: 12px;
+            left: 5px; 
             border: 4px solid #000000; /* حدود بنفس لون خلفية الصفحة لتبدو مفصولة */
         }
 
@@ -123,6 +118,32 @@
           margin-top: 6px;
           color: #9ca3af;
           font-size: 13px;
+        }
+
+        /* VERIFIED BADGE IMAGE (Instagram-like but green) */
+        .verified-badge-img {
+          display: inline-block;
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          margin-left: 6px;
+          object-fit: cover;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+          border: 1px solid rgba(255,255,255,0.06);
+          vertical-align: middle;
+        }
+        .verified-badge-img[title]:hover::after {
+          content: attr(title);
+          position: absolute;
+          background: rgba(0,0,0,0.8);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 6px;
+          font-size: 12px;
+          top: -36px;
+          right: 0;
+          white-space: nowrap;
+          z-index: 50;
         }
 
         @media (max-width: 480px) {
@@ -264,10 +285,12 @@
 
 <script>
 /*
-  ملف profile.html محدث:
-  - تم تحسين ظهور مؤشر النشاط (Online Dot) ليكون مثل مواقع التواصل (فوق الصورة من الأسفل).
-  - تم تعديل طريقة عرض المنشورات لتشمل النقطة.
+  ملف profile.html محدث لعرض شارة التحقق الخضراء:
+  - يستخدم VERIFIED_IMG_URL لصورة الشارة التي زودتني بها.
+  - يعرض الشارة بجانب اسم الملف الشخصي وفي بطاقات المنشورات وفي التعليقات (إن توفرت).
 */
+
+const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 
 let currentProfileId = null;
 let currentUserId = null;
@@ -276,6 +299,7 @@ let audioWaveSurfers = {};
 let activeVideo = null;
 let currentPostIdForComment = null;
 let statusPollInterval = null;
+let PROFILE_VERIFIED = false; // حفظ حالة التحقق للمستخدم المعروض في الصفحة
 
 function toggleProfileDropdown(event) {
     event.stopPropagation();
@@ -320,7 +344,7 @@ function formatLastSeen(lastSeenTs) {
     return `آخر ظهور في ${d.toLocaleDateString('ar-EG')}`;
 }
 
-// إنشاء كرت المنشور مع تضمين online dot بشكل صحيح
+// إنشاء كرت المنشور مع تضمين online dot و badge التحقق
 function createPostCard(post) {
     let mediaContent = '';
 
@@ -369,8 +393,9 @@ function createPostCard(post) {
 
     // نقطة الأونلاين للمنشور
     const isOnline = post.user && post.user.is_online;
-    // نستخدم style display بدلاً من hidden class لسهولة التحكم عبر JS لاحقاً
     const dotDisplay = isOnline ? 'block' : 'none';
+
+    const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
 
     return `
         <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
@@ -382,7 +407,7 @@ function createPostCard(post) {
                     </a>
                     
                     <div>
-                        <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">@${post.user.username}</a>
+                        <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">@${post.user.username} ${verifiedBadgeHtml}</a>
                         <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
                     </div>
                 </div>
@@ -536,11 +561,12 @@ async function fetchComments(postId) {
 }
 
 function createCommentElement(comment) {
+    const verifiedBadgeHtml = comment.user && comment.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
     return `
         <div class="flex items-start p-3 bg-[#242526] rounded-lg shadow-md">
             <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover ml-3 flex-shrink-0">
             <div class="flex-grow">
-                <p class="text-white font-semibold text-sm">@${comment.user.username} <span class="text-gray-500 text-xs mr-2">${formatTimestamp(comment.timestamp)}</span></p>
+                <p class="text-white font-semibold text-sm">@${comment.user.username} ${verifiedBadgeHtml} <span class="text-gray-500 text-xs mr-2">${formatTimestamp(comment.timestamp)}</span></p>
                 <p class="text-gray-200 mt-1 whitespace-pre-wrap">${comment.content}</p>
             </div>
         </div>
@@ -662,9 +688,7 @@ function toggleFullscreen(postId, event) {
 }
 
 // --- Presence UI helpers ---
-// Set online dot and profile status for a given user across the page
 function setUserOnlineUI(userId, isOnline, lastSeenTs) {
-    // update all avatars with data-user-id == userId (includes posts)
     const selectors = document.querySelectorAll(`.avatar-wrapper[data-user-id="${userId}"]`);
     selectors.forEach(av => {
         const dot = av.querySelector('.status-indicator');
@@ -676,7 +700,6 @@ function setUserOnlineUI(userId, isOnline, lastSeenTs) {
         }
     });
 
-    // if viewing the profile of this user, update big dot & status text
     const profileAvatarWrap = document.getElementById('profileAvatarWrap');
     if (profileAvatarWrap && profileAvatarWrap.dataset.userId === userId) {
         const bigDot = document.getElementById('profileOnlineDot');
@@ -756,12 +779,18 @@ async function fetchAndDisplayProfile() {
         const data = await response.json();
 
         if (response.ok && data.ok) {
+            PROFILE_VERIFIED = !!data.is_verified;
+
             // update avatar wrap data attribute and image
             const profileAvatarWrap = document.getElementById('profileAvatarWrap');
             profileAvatarWrap.dataset.userId = data.id;
             document.getElementById('profileImage').src = data.profile_picture_url || '/assets/default_profile_pic.png';
             if (data.cover_photo_url) document.getElementById('coverPhotoContainer').style.backgroundImage = `url('${data.cover_photo_url}')`;
-            document.getElementById('profileUsername').textContent = `@${data.username}`;
+
+            // show username + verified badge if any
+            const profileUsernameEl = document.getElementById('profileUsername');
+            profileUsernameEl.innerHTML = `@${data.username}` + (data.is_verified ? ` <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '');
+
             document.getElementById('profileFullName').textContent = data.full_name || 'لا يوجد اسم كامل';
             document.getElementById('profileBio').textContent = data.bio || '';
             document.getElementById('pageTitle').textContent = `Aite - @${data.username}`;
@@ -856,6 +885,10 @@ async function fetchAndDisplayUserPosts(userId) {
             } else {
                 const audioPostsToInit = [];
                 result.posts.forEach(post => {
+                    // ensure is_verified present for post user (use PROFILE_VERIFIED as fallback)
+                    post.user = post.user || {};
+                    if (typeof post.user.is_verified === 'undefined') post.user.is_verified = !!PROFILE_VERIFIED;
+
                     userPostsFeed.innerHTML += createPostCard(post);
                     if (post.media && post.media.type === 'audio') audioPostsToInit.push({ postId: post.postId, url: post.media.url });
                 });
@@ -885,7 +918,6 @@ async function fetchAndDisplayUserPosts(userId) {
         es.addEventListener('notifications', (e) => {
             try {
                 const payload = JSON.parse(e.data);
-                // If needed, handle global notifications here
                 if (payload.presenceUpdates && Array.isArray(payload.presenceUpdates)) {
                     payload.presenceUpdates.forEach(p => setUserOnlineUI(p.userId, !!p.is_online, p.last_seen));
                 }
@@ -903,7 +935,6 @@ async function fetchAndDisplayUserPosts(userId) {
 
 // Hook up comment button events after DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    // wire comment post button
     const postCommentBtn = document.getElementById('postCommentBtn');
     if (postCommentBtn) postCommentBtn.addEventListener('click', postComment);
 
