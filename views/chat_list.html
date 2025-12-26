@@ -342,7 +342,7 @@
                 </button>
             </div>
             
-            <div id="commentsList" class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#18191a]">
+            <div id="commentsList" class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#18191a] min-h-0">
                 </div>
 
             <div class="p-3 border-t border-gray-800 bg-[#18191a]">
@@ -1063,7 +1063,6 @@
                     commentsListEl.innerHTML = '';
                     const comments = result.comments || [];
                     
-                    // تحديث العداد الداخلي ليطابق العدد الفعلي المجلوب
                     if(badgeEl) badgeEl.innerText = comments.length;
 
                     if (comments.length === 0) {
@@ -1074,23 +1073,24 @@
                                 <p class="text-xs">كن أول من يعلق!</p>
                             </div>`;
                     } else {
-                        let htmlBuffer = '';
-                        comments.forEach(comment => {
-                            // عرض التعليق فوراً (التحقق لاحقاً)
-                            const isVerified = comment.user.is_verified || false;
-                            htmlBuffer += createCommentHtml(comment, isVerified);
-                        });
+                        // استخدام map بدلاً من forEach لضمان إنشاء سلسلة نصية واحدة صحيحة
+                        const htmlBuffer = comments.map(comment => {
+                             // حماية ضد البيانات الناقصة
+                             if (!comment.user) {
+                                 comment.user = { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40' };
+                             }
+                             const isVerified = comment.user.is_verified || false;
+                             return createCommentHtml(comment, isVerified);
+                        }).join('');
                         
                         commentsListEl.innerHTML = htmlBuffer;
                         
-                        // تمرير للأسفل
                         setTimeout(() => {
                             if(commentsListEl.lastElementChild) {
                                 commentsListEl.scrollTop = commentsListEl.scrollHeight;
                             }
                         }, 100);
 
-                        // جلب حالة التوثيق في الخلفية (لضمان ظهور العلامة حتى لو لم تكن في كائن التعليق)
                         updateCommentsVerification(comments);
                     }
                 } else {
@@ -1102,19 +1102,16 @@
             }
         }
         
-        // دالة تحديث الشارات في الخلفية
         async function updateCommentsVerification(comments) {
              const userIds = [...new Set(comments.map(c => c.userId))];
              if(userIds.length === 0) return;
 
              try {
-                // جلب كل البروفايلات
                 const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.ok ? r.json() : null).catch(()=>null));
                 const profiles = await Promise.all(promises);
                 
                 profiles.forEach(p => {
                     if(p && p.id && p.is_verified) {
-                        // تحديث كل ظهور لهذا المستخدم في القائمة
                         const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${p.id}"]`);
                         containers.forEach(cont => {
                             if(cont.innerHTML.trim() === '') {
@@ -1154,8 +1151,6 @@
                         commentsListEl.innerHTML = '';
                     }
 
-                    // هنا نفترض مبدئياً عدم التوثيق أو نعتمد على currentUser الذي جلبناه
-                    // سنتركها فارغة ثم ستتحدث تلقائياً لو تم استدعاء دالة تحديث
                     const amIVerified = false; 
                     
                     commentsListEl.innerHTML += createCommentHtml(result.comment, amIVerified);
@@ -1163,16 +1158,9 @@
                     input.value = '';
                     commentsListEl.scrollTop = commentsListEl.scrollHeight;
                     
-                    const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
-                    if (postCard) {
-                        // تحديث العداد الخارجي
-                        // لا يمكننا تحديث الرقم بدقة دون معرفة العدد القديم، لكن يمكننا تركه للتحديث عند إعادة التحميل
-                    }
-                    
                     const badgeEl = document.getElementById('commentCountBadge');
                     if(badgeEl) badgeEl.innerText = parseInt(badgeEl.innerText || 0) + 1;
 
-                    // تشغيل تحديث الخلفية لنفسي لتظهر الشارة
                     updateCommentsVerification([result.comment]);
 
                 } else {
@@ -1215,7 +1203,6 @@
             fetchAndDisplayPosts();
         });
 
-        // ---------------- Notifications + Messages: SSE badge ----------------
         (function setupNotifSSE() {
           if (!window.EventSource) return;
           const es = new EventSource('/api/notifications/stream', { withCredentials: true });
@@ -1261,7 +1248,6 @@
           });
         })();
 
-        // Fallback initial unread counts
         (function initUnreadCounts() {
           fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
             .then(r => r.ok ? r.json() : null)
