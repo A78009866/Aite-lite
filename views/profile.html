@@ -327,7 +327,7 @@
                 </button>
             </div>
             
-            <div id="commentsList" class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#18191a]">
+            <div id="commentsList" class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#18191a] min-h-0">
                 </div>
 
             <div class="p-3 border-t border-gray-800 bg-[#18191a]">
@@ -661,11 +661,14 @@ async function fetchAndDisplayComments(postId) {
                         <p class="text-xs">كن أول من يعلق!</p>
                     </div>`;
             } else {
-                let htmlBuffer = '';
-                comments.forEach(comment => {
+                // إصلاح: استخدام map.join بدلاً من forEach لضمان عرض كل التعليقات
+                const htmlBuffer = comments.map(comment => {
+                    if (!comment.user) {
+                        comment.user = { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40' };
+                    }
                     const isVerified = comment.user.is_verified || false;
-                    htmlBuffer += createCommentHtml(comment, isVerified);
-                });
+                    return createCommentHtml(comment, isVerified);
+                }).join('');
                 
                 commentsListEl.innerHTML = htmlBuffer;
                 
@@ -675,7 +678,6 @@ async function fetchAndDisplayComments(postId) {
                     }
                 }, 100);
 
-                // Background check for badges
                 updateCommentsVerification(comments);
             }
         } else {
