@@ -719,38 +719,6 @@
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
-        function seekVideo(postId, event) {
-            event.stopPropagation();
-            const video = document.getElementById(`video-${postId}`);
-            const progressContainer = event.currentTarget;
-            
-            if (!video || !video.duration) return;
-
-            const rect = progressContainer.getBoundingClientRect();
-            const clickX = event.clientX - rect.left;
-            const percentage = clickX / rect.width;
-            video.currentTime = video.duration * percentage;
-            if (video.paused) {
-                toggleVideoPlay(postId, event);
-            }
-        }
-
-        function toggleFullscreen(postId, event) {
-            event.stopPropagation();
-            const video = document.getElementById(`video-${postId}`);
-            if (video) {
-                if (video.requestFullscreen) {
-                    video.requestFullscreen();
-                } else if (video.mozRequestFullScreen) {
-                    video.mozRequestFullScreen();
-                } else if (video.webkitRequestFullscreen) {
-                    video.webkitRequestFullscreen();
-                } else if (video.msRequestFullscreen) {
-                    video.msRequestFullscreen();
-                }
-            }
-        }
-
         function formatTimestamp(timestamp) {
             const date = new Date(timestamp);
             const now = new Date();
@@ -850,7 +818,7 @@
 
                     <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
                         <span><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
-                        <span class="cursor-pointer hover:text-blue-400" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount} تعليق</span>
+                        <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
                     </div>
 
                     <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
@@ -867,6 +835,23 @@
                     </div>
                 </div>
             `;
+        }
+
+        // Helper to update comment count shown on post card and in modal badge
+        function updatePostCommentCount(postId, count) {
+            // update count in post card (feed)
+            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+            if (postCard) {
+                const commentSpan = postCard.querySelector('.comment-count-display');
+                if (commentSpan) {
+                    commentSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${count} تعليق`;
+                }
+            }
+            // update modal badge if open for this post
+            const badgeEl = document.getElementById('commentCountBadge');
+            if (badgeEl && currentPostIdForComments === postId) {
+                badgeEl.innerText = count;
+            }
         }
 
         async function fetchAndDisplayPosts() {
@@ -1065,6 +1050,9 @@
                     
                     if(badgeEl) badgeEl.innerText = comments.length;
 
+                    // synchronize post card's comment count with actual comments length
+                    updatePostCommentCount(postId, comments.length);
+
                     if (comments.length === 0) {
                         commentsListEl.innerHTML = `
                             <div class="flex flex-col items-center justify-center py-10 text-gray-500 opacity-70">
@@ -1153,13 +1141,25 @@
 
                     const amIVerified = false; 
                     
+                    // append the new comment locally
                     commentsListEl.innerHTML += createCommentHtml(result.comment, amIVerified);
                     
                     input.value = '';
                     commentsListEl.scrollTop = commentsListEl.scrollHeight;
                     
-                    const badgeEl = document.getElementById('commentCountBadge');
-                    if(badgeEl) badgeEl.innerText = parseInt(badgeEl.innerText || 0) + 1;
+                    // prefer server-provided newComments count if available
+                    let newCount = null;
+                    if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
+                        newCount = Number(result.newComments);
+                    } else {
+                        // fallback: increment current badge value
+                        const badgeEl = document.getElementById('commentCountBadge');
+                        const prev = parseInt(badgeEl ? badgeEl.innerText || '0' : '0');
+                        newCount = prev + 1;
+                    }
+
+                    // update both modal badge and post card
+                    updatePostCommentCount(currentPostIdForComments, newCount);
 
                     updateCommentsVerification([result.comment]);
 
