@@ -87,6 +87,9 @@ font-size: 13px;
 white-space: nowrap;
 overflow: hidden;
 text-overflow: ellipsis;
+display:flex;
+align-items:center;
+gap:6px;
 }
 .meta .sub {
 font-size: 10px;
@@ -569,10 +572,9 @@ function createAudioPlayer(src, isIncoming) {
     `;
 }
 function createMessageElement(msg, myId) {
+    // NOTE: Verified badge is intentionally NOT shown inside messages.
+    // Verified badges appear next to the profile/name at the top of the chat only.
     const isIncoming = (msg.senderId !== myId);
-    const isVerified = !!verifiedMap[msg.senderId];
-    const verifiedBadgeHtml = isVerified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
-
     const el = document.createElement('div');
     el.className = 'msg ' + (isIncoming ? 'incoming' : 'outgoing');
     el.dataset.messageId = msg.messageId;
@@ -584,15 +586,9 @@ function createMessageElement(msg, myId) {
     if (msg.replied_to_id) {
         const repliedSender = msg.replied_to_sender || 'مستخدم';
         const repliedContent = msg.replied_to_content || 'رسالة محذوفة';
-        // append verified badge next to replied sender if it matches a known verified user
-        let repliedBadge = '';
-        // If replied_to_sender is a username, try to detect if it matches the other user's username
-        if (msg.replied_to_sender && otherProfileUsername && msg.replied_to_sender === otherProfileUsername && verifiedMap[otherId]) {
-            repliedBadge = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">`;
-        }
         contentHtml += `
             <div class="reply-block">
-                <span class="reply-block-sender">${escapeHtml(repliedSender)} ${repliedBadge}</span>
+                <span class="reply-block-sender">${escapeHtml(repliedSender)}</span>
                 <span class="reply-block-text">${escapeHtml(repliedContent)}</span>
             </div>
         `;
@@ -615,12 +611,6 @@ function createMessageElement(msg, myId) {
 
     if (msg.content) {
         contentHtml += `<p style="margin:${msg.media ? '6px 0 0 0' : '0'}">${escapeHtml(msg.content)}</p>`;
-    }
-
-    // if there's no reply block and the sender is verified, show badge near the start of the content
-    if (!msg.replied_to_id && isVerified) {
-        // insert a small badge before the meta-time by appending it to contentHtml
-        contentHtml += `<div style="margin-top:4px;">${verifiedBadgeHtml}</div>`;
     }
 
     const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
@@ -824,6 +814,18 @@ function removeFile() {
 
 let otherProfileUsername = null; // store other user's username for reply matching
 
+// Update header name to include verified badge (if verified)
+function renderHeaderName(name, isVerified) {
+    const nameEl = document.getElementById('other-name');
+    // escape
+    const escaped = escapeHtml(name);
+    if (isVerified) {
+        nameEl.innerHTML = `${escaped} <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">`;
+    } else {
+        nameEl.textContent = escaped;
+    }
+}
+
 async function fetchOtherProfile() {
     try {
         const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
@@ -835,7 +837,9 @@ async function fetchOtherProfile() {
         myId = myProfile.id; 
         
         if (res.ok && profile) {
-            document.getElementById('other-name').textContent = profile.full_name || profile.username;
+            // show name + verified badge via helper
+            renderHeaderName(profile.full_name || profile.username, !!profile.is_verified);
+
             // username + online indicator text
             let usernameText = `@${profile.username || ''}`;
             if (profile.is_online) usernameText += ' · متصل الآن';
@@ -1107,13 +1111,15 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
       const payload = JSON.parse(e.data);
       const unread = payload.unread_count||0;
       const badge = document.getElementById('notifBadgeChat');
-      if(unread>0){ badge.style.display='inline-flex'; badge.textContent = unread>99 ? '99+' : String(unread); }
-      else badge.style.display='none';
+      if(badge){
+        if(unread>0){ badge.style.display='inline-flex'; badge.textContent = unread>99 ? '99+' : String(unread); }
+        else badge.style.display='none';
+      }
     } catch(err){ console.error('SSE parse error', err); }
   });
   es.addEventListener('error', (err)=>{ console.warn('Notifications SSE error', err); });
 })();
-(function initUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}).catch(()=>{}); })();
+(function initUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
 </script>
 </body>
 </html>
