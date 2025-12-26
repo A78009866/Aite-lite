@@ -241,7 +241,8 @@ app.post('/register', upload.fields([{ name: 'profile_picture' }, { name: 'cover
       is_online: true, 
       is_verified: false, 
       bio: '',
-      last_seen: admin.database.ServerValue.TIMESTAMP
+      last_seen: admin.database.ServerValue.TIMESTAMP,
+      postsCount: 0
     };
     
     await db.ref('profiles/' + userRecord.uid).set(profileData);
@@ -295,6 +296,37 @@ async function areFriends(userA, userB) {
   if (!userA || !userB) return false;
   const snap = await db.ref(`friends/${userA}/${userB}`).once('value');
   return snap.exists();
+}
+
+// ---------------- Helper: Normalize stored comments ----------------
+function normalizeStoredComment(val) {
+  // val: raw object from DB
+  const commentId = val.commentId || val.id || val.key || '';
+  const content = val.content || val.commentContent || val.text || '';
+  const timestamp = (typeof val.timestamp === 'number') ? val.timestamp : (val.timestamp ? Number(val.timestamp) : Date.now());
+
+  let user = {};
+  if (val.user && typeof val.user === 'object') {
+    user.userId = val.user.userId || val.user.id || val.user.uid || val.userId || '';
+    user.username = val.user.username || val.user.displayName || val.user.name || val.username || 'مستخدم';
+    user.profile_picture_url = val.user.profile_picture_url || val.user.photoURL || val.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+  } else {
+    user.userId = val.userId || val.userID || val.from_user_id || '';
+    user.username = val.username || val.from_username || 'مستخدم';
+    user.profile_picture_url = val.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+  }
+
+  user.userId = user.userId || '';
+  user.username = user.username || 'مستخدم';
+  user.profile_picture_url = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+
+  return {
+    commentId,
+    postId: val.postId || '',
+    content,
+    timestamp,
+    user
+  };
 }
 
 // ---------------- API: Admin endpoints (جديد) ----------------
@@ -481,7 +513,9 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
       last_message_sender_id: senderId
     });
 
-    messageData.timestamp = Date.now();
+    // Convert timestamp to numeric for response
+    const now = Date.now();
+    messageData.timestamp = now;
     res.json({ ok: true, message: 'Sent', messageData: messageData });
 
   } catch (error) {
@@ -952,11 +986,13 @@ app.get('/api/posts', requireAuth, async (req, res) => {
 
     const finalPosts = posts.map(post => ({
       ...post,
+      commentsCount: post.commentsCount || 0,
       is_liked: likedStatuses[post.postId] || false,
       user: {
         username: profiles[post.userId]?.username || 'مستخدم',
         profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl,
-        is_online: !!profiles[post.userId]?.is_online
+        is_online: !!profiles[post.userId]?.is_online,
+        is_verified: !!profiles[post.userId]?.is_verified
       }
     }));
 
@@ -1034,48 +1070,53 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   }
 });
 
-// Comment on post
+// Comment on post (UPDATED: normalize, return newComments)
 app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
   const { content } = req.body;
 
-  if (!postId || !content) return res.status(400).json({ ok: false });
+  if (!postId || !content) return res.status(400).json({ ok: false, error: 'Missing postId or content' });
 
   try {
     const postRef = db.ref(`posts/${postId}`);
     const postSnapshot = await postRef.once('value');
-    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false, error: 'Post not found' });
 
     const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
-    const userData = userSnapshot.val();
+    const userData = userSnapshot.val() || {};
 
     const newCommentRef = db.ref(`comments/${postId}`).push();
+    const commentId = newCommentRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    // Store a consistent normalized comment shape in DB
     const commentData = {
-      commentId: newCommentRef.key,
+      commentId: commentId,
       postId: postId,
       userId: userId,
       content: content.trim(),
-      timestamp: admin.database.ServerValue.TIMESTAMP,
+      timestamp: timestamp,
       user: {
+        userId: userId,
         username: userData.username || 'مستخدم',
         profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-        is_online: !!userData.is_online
       }
     };
 
     await newCommentRef.set(commentData);
 
+    // increment commentsCount on post (transaction to be safe)
     let newCommentsCount = 0;
     await postRef.child('commentsCount').transaction((currentCount) => {
       newCommentsCount = (currentCount || 0) + 1;
       return newCommentsCount;
     });
 
-    // إنشاء إشعار لمالك المنشور عند التعليق (إذا لم يكن المعلق هو المالك)
+    // create notification for post owner (if commenter !== owner)
     try {
       const postData = postSnapshot.val();
-      if (postData.userId && postData.userId !== userId) {
+      if (postData && postData.userId && postData.userId !== userId) {
         const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
         const fromProfile = fromProfileSnap.val() || {};
         const notifRef = db.ref(`notifications/${postData.userId}`).push();
@@ -1087,7 +1128,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
           from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
           postId: postId,
           reelId: null,
-          commentId: commentData.commentId,
+          commentId: commentId,
           commentContent: commentData.content,
           timestamp: admin.database.ServerValue.TIMESTAMP,
           is_read: false
@@ -1098,14 +1139,20 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       console.error('Failed to create post_comment notification:', nerr);
     }
 
-    res.json({ ok: true, comment: commentData, newComments: newCommentsCount });
+    // Read back the stored comment (so timestamp is resolved) and return normalized
+    const savedSnap = await db.ref(`comments/${postId}`).child(commentId).once('value');
+    const savedVal = savedSnap.val() || commentData;
+    const normalized = normalizeStoredComment(savedVal);
+
+    res.json({ ok: true, comment: normalized, newComments: newCommentsCount });
 
   } catch (error) {
-    res.status(500).json({ ok: false });
+    console.error('Error adding comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إضافة التعليق.' });
   }
 });
 
-// Get post comments
+// Get post comments (UPDATED: normalize)
 app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
   const postId = req.params.postId;
   try {
@@ -1114,11 +1161,15 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
       .once('value');
 
     const comments = [];
-    commentsSnap.forEach(childSnap => comments.push(childSnap.val()));
+    commentsSnap.forEach(childSnap => {
+      const v = childSnap.val();
+      comments.push(normalizeStoredComment(v));
+    });
 
     res.json({ ok: true, comments: comments });
   } catch (error) {
-    res.status(500).json({ ok: false });
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
   }
 });
 
@@ -1138,6 +1189,10 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
 
     await postRef.remove();
     await db.ref(`profiles/${userId}/postsCount`).transaction((c) => (c || 0) > 0 ? c - 1 : 0);
+
+    // also remove comments/likes/other related nodes to keep DB clean
+    await db.ref(`comments/${postId}`).remove();
+    await db.ref(`likes/${postId}`).remove();
 
     res.json({ ok: true });
   } catch (error) {
@@ -1179,11 +1234,13 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
 
     const finalPosts = posts.map(post => ({
       ...post,
+      commentsCount: post.commentsCount || 0,
       is_liked: likedStatuses[post.postId] || false,
       user: {
         username: userProfile?.username || 'مستخدم',
         profile_picture_url: userProfile?.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-        is_online: !!userProfile?.is_online
+        is_online: !!userProfile?.is_online,
+        is_verified: !!userProfile?.is_verified
       }
     }));
 
@@ -1250,11 +1307,13 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
       
       return {
         ...reel,
+        commentsCount: reel.commentsCount || 0,
         is_liked: likeSnap.exists(),
         user: {
           username: userData.username || 'مستخدم',
           profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150',
-          is_online: !!userData.is_online
+          is_online: !!userData.is_online,
+          is_verified: !!userData.is_verified
         }
       };
     }));
