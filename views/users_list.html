@@ -102,6 +102,19 @@
           z-index: 10;
         }
 
+        /* VERIFIED BADGE IMAGE */
+        .verified-badge-img {
+          display: inline-block;
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          margin-left: 6px;
+          object-fit: cover;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+          border: 1px solid rgba(255,255,255,0.06);
+          vertical-align: middle;
+        }
+
         /* تحسين عرض البطاقات على الهاتف */
         @media (max-width: 480px) {
           .glass-user-card { padding: 10px; }
@@ -155,19 +168,19 @@
             <div class="text-center text-gray-500 p-4" id="loadingMessage">
                 <i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...
             </div>
-            </div>
+        </div>
 
     </main>
     
 
 
     <script>
+        const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const usersListContainer = document.getElementById('usersListContainer');
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
         let currentUserId = null; // لتخزين ID المستخدم الحالي
 
-        // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
         function toggleProfileDropdown(event) {
             event.stopPropagation();
             profileDropdown.classList.toggle('hidden');
@@ -206,6 +219,9 @@
 
             const onlineDotHtml = user.is_online ? `<span class="online-dot" title="متصل الآن"></span>` : '';
 
+            // placeholder for verified badge — will be filled later by updateVerifiedBadges()
+            const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${user.id}"></span>`;
+
             return `
                 <a href="${chatLink}" class="chat-link">
                     <div class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
@@ -214,7 +230,7 @@
                             ${onlineDotHtml}
                         </div>
                         <div class="flex-grow min-w-0">
-                            <p class="text-white font-semibold text-lg">${user.username}</p>
+                            <p class="text-white font-semibold text-lg">${user.username} ${verifiedPlaceholder}</p>
                             ${lastMessageText}
                         </div>
                         <div class="flex flex-col items-end justify-center ml-2 h-12">
@@ -264,7 +280,10 @@
                     users.forEach(user => {
                         usersListContainer.innerHTML += createUserCard(user, currentUserId);
                     });
-                    
+
+                    // بعد العرض، حدّث شعارات التوثيق
+                    updateVerifiedBadges();
+
                 } else {
                     usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">فشل في جلب المحادثات.</div>';
                 }
@@ -339,6 +358,34 @@
           });
           es.addEventListener('error', (err) => { console.warn('Notifications SSE error', err); });
         })();
+
+        // ----------------- VERIFIED BADGES HELPERS -----------------
+        // Fetch profile for each placeholder and insert badge if is_verified
+        async function updateVerifiedBadges() {
+          const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
+          if (placeholders.length === 0) return;
+          await Promise.all(placeholders.map(async ph => {
+            const uid = ph.dataset.userId;
+            if (!uid) return;
+            try {
+              const res = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' });
+              if (!res.ok) return;
+              const data = await res.json();
+              if (data && data.ok && data.is_verified) {
+                const img = document.createElement('img');
+                img.src = VERIFIED_IMG_URL;
+                img.alt = 'موثق';
+                img.title = 'موثق';
+                img.className = 'verified-badge-img';
+                ph.replaceWith(img);
+              } else {
+                ph.remove();
+              }
+            } catch (e) {
+              ph.remove();
+            }
+          }));
+        }
 
       </script>
 </body>
