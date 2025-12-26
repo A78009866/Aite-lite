@@ -72,8 +72,6 @@
                 margin: 0 auto;
                 border-radius: 16px;
                 border: 1px solid rgba(255, 255, 255, 0.1);
-                top: auto;
-                bottom: auto;
                 transform: scale(0.95);
                 opacity: 0;
                 transition: all 0.2s ease-out;
@@ -232,6 +230,14 @@
           object-fit: cover;
           vertical-align: middle;
         }
+
+        /* Comments UI tweaks */
+        .comment-item { padding: 8px; border-radius: 12px; background: #131313; border: 1px solid #222; }
+        .comment-actions button { font-size: 12px; }
+        .reply-item { margin-right: 40px; margin-top: 6px; background: #0f1416; padding: 6px; border-radius: 10px; border: 1px solid #222; }
+        .small-avatar { width: 28px; height: 28px; border-radius: 999px; }
+        .like-count { font-weight: 700; color: #9ca3af; font-size: 12px; }
+
     </style>
 </head>
 <body class="min-h-screen">
@@ -304,6 +310,7 @@
         </nav>
     </div>
 
+    <!-- Centered delete confirmation modal (glass) -->
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
             <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
@@ -317,6 +324,7 @@
         </div>
     </div>
 
+    <!-- Media viewer -->
     <div id="mediaViewerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2 glass-modal-bg" onclick="closeMediaViewer(event)">
         <button class="absolute top-4 left-4 text-white text-3xl z-50 p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition" onclick="closeMediaViewer(event)">
             <i class="fas fa-times"></i>
@@ -325,6 +333,7 @@
         </div>
     </div>
     
+    <!-- Comment modal (bottom sheet) -->
     <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-end md:items-center justify-center glass-modal-bg transition-opacity duration-300">
         <div id="commentModalContent" class="glass-comment-modal-content w-full md:w-auto" onclick="event.stopPropagation()">
             
@@ -360,6 +369,7 @@
         </div>
     </div>
 
+    <!-- Post menu (context) -->
     <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
         <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
             <i class="fas fa-trash ml-3"></i>
@@ -367,6 +377,7 @@
         </button>
     </div>
 
+    <!-- Create modal -->
     <div id="createModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 glass-modal-bg">
         <div class="glass-comment-modal-content p-8 rounded-3xl shadow-2xl max-w-sm w-full modal-animate-in border border-white/20" style="position: relative; height: auto; transform: none; background-color: rgba(30,30,30,0.9);" onclick="event.stopPropagation()">
             
@@ -422,7 +433,7 @@
         const mediaViewerContent = document.getElementById('mediaViewerContent');
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
-        
+
         function toggleProfileDropdown(event) {
             event.stopPropagation();
             profileDropdown.classList.toggle('hidden');
@@ -536,8 +547,14 @@
             }
             
             const rect = menuButton.getBoundingClientRect();
-            postMenu.style.top = `${rect.bottom + 5}px`;
-            postMenu.style.left = `${rect.left}px`;
+            // position center on small screens
+            if (window.innerWidth < 640) {
+                postMenu.style.top = `${window.innerHeight/2 - 80}px`;
+                postMenu.style.left = `${window.innerWidth/2 - 80}px`;
+            } else {
+                postMenu.style.top = `${rect.bottom + 5}px`;
+                postMenu.style.left = `${rect.left}px`;
+            }
             
             postMenu.dataset.postId = postId;
 
@@ -720,20 +737,6 @@
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
-        function formatTimestamp(timestamp) {
-            const date = new Date(timestamp);
-            const now = new Date();
-            const diffInHours = (now - date) / (1000 * 60 * 60);
-
-            if (diffInHours < 24) {
-                return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-            } else if (diffInHours < 7 * 24) {
-                return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-            } else {
-                return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
-            }
-        }
-
         function createPostCard(post) {
             let mediaContent = '';
             
@@ -791,8 +794,16 @@
 
             const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
             const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
-            const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online-dot-small" title="متصل الآن"></span>` : '';
+            const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online_dot_small" title="متصل الآن"></span>` : '';
             const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
+
+            // Show post-menu (three dots) only for post owner
+            const menuButtonHtml = (post.userId === currentUserId) ? `
+                <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
+                        onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+            ` : '';
 
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
@@ -807,10 +818,7 @@
                                 <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
                             </div>
                         </div>
-                        <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
-                                onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)">
-                            <i class="fas fa-ellipsis-v"></i>
-                        </button>
+                        ${menuButtonHtml}
                     </div>
 
                     <p class="text-gray-200 whitespace-pre-wrap">${post.content}</p>
@@ -855,7 +863,178 @@
             }
         }
 
-        // Normalizes a raw comment object into a consistent shape
+        // Format timestamp helper
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffInHours = (now - date) / (1000 * 60 * 60);
+
+            if (diffInHours < 24) {
+                return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            } else if (diffInHours < 7 * 24) {
+                return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+            } else {
+                return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+            }
+        }
+
+        // Create comment HTML (uses enriched comment object returned by server)
+        function createCommentHtml(comment, postId) {
+            const verifiedHtml = ''; // handled separately if desired
+            const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
+            const likeIcon = comment.is_liked ? 'fas' : 'far';
+            const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
+                <div class="reply-item flex items-start gap-2">
+                    <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                    <div class="flex-1">
+                        <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
+                        <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                    </div>
+                </div>
+            `).join('') : '';
+
+            return `
+                <div class="comment-item" id="comment-${comment.commentId}">
+                    <div class="flex items-start gap-3">
+                        <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-white">${escapeHtml(comment.user.username)} ${verifiedHtml}</div>
+                                    <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
+                                </div>
+                                <div class="flex items-center gap-2 comment-actions">
+                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
+                                        <i class="${likeIcon} fa-heart"></i>
+                                        <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
+                                    </button>
+                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
+                                        <i class="fas fa-reply"></i>
+                                        <span class="text-xs">رد</span>
+                                    </button>
+                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                                        <i class="fas fa-angle-down"></i>
+                                        <span class="text-xs">عرض الردود</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-200">${escapeHtml(comment.content)}</div>
+
+                            <div id="replies-container-${comment.commentId}" class="mt-3 space-y-2">
+                                ${repliesPreviewHtml}
+                            </div>
+
+                            <div id="reply-box-${comment.commentId}" class="mt-2 hidden">
+                                <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
+                                    <img src="${document.getElementById('userProfilePic').src}" class="w-7 h-7 rounded-full" alt="me">
+                                    <input id="reply-input-${comment.commentId}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
+                                    <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReply('${postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Toggle like on a comment (frontend)
+        async function toggleCommentLike(postId, commentId, btnEl) {
+            btnEl.disabled = true;
+            try {
+                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST', credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const countEl = document.getElementById(`comment-like-count-${commentId}`);
+                    if (countEl) countEl.textContent = data.likes;
+                    if (data.is_liked) {
+                        btnEl.classList.remove('text-gray-400');
+                        btnEl.classList.add('text-red-400');
+                        const i = btnEl.querySelector('i');
+                        if (i) { i.classList.remove('far'); i.classList.add('fas'); }
+                    } else {
+                        btnEl.classList.remove('text-red-400');
+                        btnEl.classList.add('text-gray-400');
+                        const i = btnEl.querySelector('i');
+                        if (i) { i.classList.remove('fas'); i.classList.add('far'); }
+                    }
+                } else {
+                    console.warn('Like comment failed', data);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btnEl.disabled = false;
+            }
+        }
+
+        // Open reply input under a comment
+        function openReplyBox(commentId) {
+            const box = document.getElementById(`reply-box-${commentId}`);
+            if (!box) return;
+            box.classList.toggle('hidden');
+            const input = document.getElementById(`reply-input-${commentId}`);
+            if (input && !box.classList.contains('hidden')) input.focus();
+        }
+
+        // Post a reply to a comment
+        async function postReply(postId, commentId) {
+            const input = document.getElementById(`reply-input-${commentId}`);
+            if (!input) return;
+            const content = input.value.trim();
+            if (!content) return;
+            const btn = input.nextElementSibling; // not reliable cross markup; disable via general approach
+            input.disabled = true;
+            try {
+                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ content })
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    // Refresh comments list
+                    await fetchAndDisplayComments(postId);
+                } else {
+                    alert(data.error || 'فشل في إرسال الرد');
+                    input.disabled = false;
+                }
+            } catch (e) {
+                console.error(e);
+                alert('فشل في الاتصال');
+                input.disabled = false;
+            }
+        }
+
+        // Fetch and show all replies for a comment (in-place)
+        async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
+            try {
+                triggerBtn.disabled = true;
+                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/replies`, { credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const container = document.getElementById(`replies-container-${commentId}`);
+                    if (container) {
+                        container.innerHTML = data.replies.map(r => `
+                            <div class="reply-item flex items-start gap-2">
+                                <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                                <div class="flex-1">
+                                    <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
+                                    <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                triggerBtn.disabled = false;
+            }
+        }
+
+        // Normalize a raw comment (legacy fallback) - kept for safety
         function normalizeComment(raw) {
             const commentId = raw.commentId || raw.id || raw.key || '';
             const content = raw.content || raw.commentContent || raw.text || '';
@@ -867,13 +1046,11 @@
                 user.username = raw.user.username || raw.user.displayName || raw.user.name || '';
                 user.profile_picture_url = raw.user.profile_picture_url || raw.user.photoURL || DEFAULT_AVATAR;
             } else {
-                // try top-level fields that some older entries might have
                 user.userId = raw.userId || raw.userID || raw.from_user_id || '';
                 user.username = raw.username || raw.from_username || raw.user_name || '';
                 user.profile_picture_url = raw.profile_picture_url || raw.profilePicture || DEFAULT_AVATAR;
             }
 
-            // final safety defaults
             user.userId = user.userId || '';
             user.username = user.username || 'مستخدم';
             user.profile_picture_url = user.profile_picture_url || DEFAULT_AVATAR;
@@ -886,6 +1063,7 @@
             };
         }
 
+        // Fetch and display posts (feed)
         async function fetchAndDisplayPosts() {
             postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
             
@@ -1033,39 +1211,7 @@
             }, 300);
         }
 
-        function createCommentHtml(comment, isVerified) {
-            const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
-                month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric'
-            });
-
-            const verifiedHtml = isVerified 
-                ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">` 
-                : '';
-
-            return `
-                <div class="flex items-start group animate-[fadeIn_0.3s_ease-out]">
-                    <a href="/profile?userId=${comment.user.userId}" data-user-link-id="${comment.user.userId}">
-                        <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" 
-                             class="w-9 h-9 rounded-full object-cover ml-3 flex-shrink-0 border border-gray-700">
-                    </a>
-                    <div class="flex flex-col max-w-[85%]">
-                        <div class="bg-[#242526] px-3 py-2 rounded-2xl rounded-tr-none border border-gray-800">
-                            <div class="flex items-center flex-wrap gap-1 mb-0.5">
-                                <a href="/profile?userId=${comment.user.userId}" data-user-name-id="${comment.user.userId}" class="text-white font-bold text-xs hover:underline">
-                                    ${comment.user.username}
-                                </a>
-                                <span class="badge-container" data-badge-user-id="${comment.user.userId}">${verifiedHtml}</span>
-                            </div>
-                            <p class="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed" dir="auto">${comment.content}</p>
-                        </div>
-                        <div class="flex items-center gap-3 mt-1 mr-1">
-                            <span class="text-gray-500 text-[10px]">${commentDate}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
+        // Fetch comments (uses new enriched endpoint)
         async function fetchAndDisplayComments(postId) {
             const commentsListEl = document.getElementById('commentsList');
             const badgeEl = document.getElementById('commentCountBadge');
@@ -1073,15 +1219,12 @@
             commentsListEl.innerHTML = '<div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>';
             
             try {
-                const response = await fetch(`/api/posts/${postId}/comments`);
+                const response = await fetch(`/api/posts/${postId}/comments`, { credentials: 'same-origin' });
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
                     commentsListEl.innerHTML = '';
-                    const rawComments = result.comments || [];
-                    
-                    // normalize all to a single shape
-                    const comments = rawComments.map(normalizeComment);
+                    const comments = result.comments || [];
                     
                     if(badgeEl) badgeEl.innerText = comments.length;
 
@@ -1096,14 +1239,21 @@
                                 <p class="text-xs">كن أول من يعلق!</p>
                             </div>`;
                     } else {
-                        // استخدام map بدلاً من forEach لضمان إنشاء سلسلة نصية واحدة صحيحة
-                        const htmlBuffer = comments.map(comment => {
-                             const isVerified = false; // will be updated in the background if needed
-                             return createCommentHtml(comment, isVerified);
-                        }).join('');
-                        
+                        // render comments using createCommentHtml
+                        const htmlBuffer = comments.map(c => createCommentHtml(c, postId)).join('');
                         commentsListEl.innerHTML = htmlBuffer;
-                        
+
+                        // After rendering, ensure "عرض كل الردود" buttons are visible when repliesCount > recentReplies.length
+                        comments.forEach(c => {
+                            try {
+                                const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
+                                if (btn) {
+                                    if ((c.repliesCount || 0) > (c.recentReplies ? c.recentReplies.length : 0)) btn.classList.remove('hidden');
+                                    else btn.classList.add('hidden');
+                                }
+                            } catch(e){}
+                        });
+
                         setTimeout(() => {
                             if(commentsListEl.lastElementChild) {
                                 commentsListEl.scrollTop = commentsListEl.scrollHeight;
@@ -1158,6 +1308,7 @@
                 const response = await fetch(`/api/posts/${currentPostIdForComments}/comment`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ content: content })
                 });
 
@@ -1308,6 +1459,16 @@
                 sendHeartbeat();
             }
         });
+
+        // small helpers
+        function escapeHtml(s) {
+            if (!s && s !== 0) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function escapeAttr(s) {
+            if (!s && s !== 0) return '';
+            return String(s).replace(/"/g, '&quot;');
+        }
 
     </script>
 </body>
