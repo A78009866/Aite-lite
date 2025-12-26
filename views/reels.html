@@ -138,13 +138,19 @@
       pointer-events: none;
     }
     .topbar a, .topbar button { pointer-events: auto; }
-    .notif-badge {
-      position: absolute; top: -6px; left: -6px;
-      min-width: 18px; height: 18px; padding: 0 6px;
-      background: #ef4444; color: #fff; font-size: 12px; border-radius: 999px;
-      display:inline-flex; align-items:center; justify-content:center; line-height:1;
-    }
 
+    /* VERIFIED BADGE IMAGE */
+    .verified-badge-img {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      margin-left: 6px;
+      object-fit: cover;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.06);
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -155,7 +161,7 @@
     </div>
     <div class="flex items-center gap-2">
       <a id="createReelBtn" href="/create-reel" class="text-white text-xl drop-shadow-lg p-2 bg-black/40 rounded-full"><i class="fas fa-plus"></i></a>
-      <!-- Notification icon removed as requested -->
+      <!-- Notification icon intentionally removed -->
     </div>
   </div>
 
@@ -180,6 +186,8 @@
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 
 <script>
+  const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
+
   let swiperInstance = null;
   let currentReelsData = [];
   let currentUserId = null;
@@ -211,6 +219,7 @@
     wrapper.innerHTML = reels.map((reel, index) => {
       const isOwner = reel.userId === currentUserId;
       const poster = reel.thumbnailUrl || BLACK_POSTER;
+      // show verified-placeholder next to username (will be replaced if verified)
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
@@ -239,9 +248,9 @@
         </div>
 
         <div class="absolute right-4 bottom-8 left-16 z-20 text-right">
-          <a href="/profile?userId=${reel.userId}" class="flex items-center gap-3 mb-2 pointer-events-auto cursor-pointer" style="text-decoration:none;color:inherit;">
-            <img src="${reel.user.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-white object-cover">
-            <h3 class="font-bold text-white shadow-black drop-shadow-md text-base">@${reel.user.username}</h3>
+          <a href="/profile?userId=${encodeURIComponent(reel.userId)}" class="flex items-center gap-3 mb-2 pointer-events-auto cursor-pointer" style="text-decoration:none;color:inherit;">
+            <img src="${escapeHtml(reel.user.profile_picture_url || 'https://via.placeholder.com/40')}" class="w-10 h-10 rounded-full border border-white object-cover">
+            <h3 class="font-bold text-white shadow-black drop-shadow-md text-base">@${escapeHtml(reel.user.username)} <span class="verified-placeholder" data-user-id="${escapeAttr(reel.userId)}"></span></h3>
           </a>
           <p class="text-sm text-gray-200 line-clamp-2 leading-relaxed drop-shadow-md dir-rtl pr-1">${escapeHtml(reel.description)}</p>
         </div>
@@ -249,6 +258,8 @@
     `}).join('');
 
     setupVideoInteractions();
+    // After rendering, update verified badges (for reel owners)
+    updateVerifiedBadges();
   }
 
   function setupVideoInteractions() {
@@ -376,7 +387,7 @@
     if(icon && !icon.classList.contains('text-red-500')) {
       icon.classList.remove('far');
       icon.classList.add('fas', 'text-red-500');
-      const countEl = document.getElementById(`likeCount-${reel.reelId}`) || document.getElementById(`likeCount-${reelId}`);
+      const countEl = document.getElementById(`likeCount-${reelId}`);
       if(countEl) countEl.textContent = parseInt(countEl.textContent || '0') + 1;
     }
   }
@@ -443,18 +454,22 @@
       commentsList.innerHTML = '<div class="text-center text-gray-500 text-sm mt-10">كن أول من يعلق!</div>';
       return;
     }
+    // include verified-placeholder with data-user-id (comments saved include userId)
     commentsList.innerHTML = comments.map(c => `
       <div class="flex gap-3 mb-4 w-full">
         <img src="${escapeHtml(c.profile_picture_url || 'https://via.placeholder.com/40')}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover">
         <div>
            <div class="flex items-center gap-2">
-             <span class="font-bold text-xs">${escapeHtml(c.username)}</span>
+             <span class="font-bold text-xs">${escapeHtml(c.username)} <span class="verified-placeholder" data-user-id="${escapeAttr(c.userId || c.userID || c.from || '')}"></span></span>
              <span class="text-[10px] text-gray-500">${new Date(c.timestamp).toLocaleTimeString()}</span>
            </div>
            <p class="text-sm mt-1">${escapeHtml(c.content)}</p>
         </div>
       </div>
     `).join('');
+
+    // after rendering comments, check verification for commenters
+    updateVerifiedBadges();
   }
 
   backdrop.addEventListener('click', closeCommentsSheet);
@@ -489,13 +504,57 @@
     }
   };
 
-  // removed top notification badge code as requested
+  // VERIFIED BADGES: find placeholders and replace with badge image when profile.is_verified === true
+  async function updateVerifiedBadges() {
+    const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
+    if (placeholders.length === 0) return;
+    // dedupe ids
+    const byId = {};
+    placeholders.forEach(ph => {
+      const uid = ph.dataset.userId;
+      if (uid) byId[uid] = true;
+    });
+    const ids = Object.keys(byId).filter(id => id);
+    await Promise.all(ids.map(async uid => {
+      try {
+        const r = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'include' });
+        if (!r.ok) return; 
+        const data = await r.json();
+        if (data && data.is_verified) {
+          // replace all placeholders for this uid
+          document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => {
+            const img = document.createElement('img');
+            img.src = VERIFIED_IMG_URL;
+            img.alt = 'موثق';
+            img.title = 'موثق';
+            img.className = 'verified-badge-img';
+            ph.replaceWith(img);
+          });
+        } else {
+          // remove placeholders for this uid
+          document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => ph.remove());
+        }
+      } catch (e) {
+        // on error, just remove placeholders to avoid stale UI
+        document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => ph.remove());
+      }
+    }));
+  }
 
   // small helpers
   function escapeHtml(s) {
     if (!s && s !== 0) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  function escapeAttr(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/"/g, '&quot;');
+  }
+
+  // initial: after loadReels renders, update badges again (some placeholders may exist)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') updateVerifiedBadges();
+  });
 </script>
 </body>
 </html>
