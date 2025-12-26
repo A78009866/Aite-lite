@@ -18,7 +18,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
             padding-bottom: 80px; 
-            overflow-x: hidden; /* لمنع التمرير العرضي */
+            overflow-x: hidden;
         }
 
         .glass-navbar {
@@ -41,34 +41,29 @@
             z-index: 1000;
         }
 
-        /* ---------------------------------------------------------
-           تنسيقات نافذة التعليقات الجديدة (Bottom Sheet)
-           --------------------------------------------------------- */
+        /* تنسيقات نافذة التعليقات (Bottom Sheet) */
         .glass-comment-modal-content {
-            background-color: #18191a; /* لون داكن صلب لأداء أفضل */
+            background-color: #18191a;
             border-top: 1px solid rgba(255, 255, 255, 0.15);
             box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
             display: flex;
             flex-direction: column;
-            /* الافتراضي للجوال: نافذة سفلية */
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
             top: auto; 
-            height: 75vh; /* ارتفاع النافذة */
+            height: 75vh;
             border-radius: 20px 20px 0 0;
             transform: translateY(100%);
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 60;
         }
 
-        /* حالة الفتح */
         .glass-comment-modal-content.open {
             transform: translateY(0);
         }
 
-        /* تخصيص للشاشات الكبيرة (Desktop) */
         @media (min-width: 768px) {
             .glass-comment-modal-content {
                 position: relative;
@@ -89,7 +84,6 @@
             }
         }
 
-        /* مقبض السحب (للزينة فقط) في الجوال */
         .modal-handle {
             width: 40px;
             height: 4px;
@@ -98,7 +92,6 @@
             margin: 12px auto 8px auto;
         }
         
-        /* خلفية النافذة المعتمة */
         .glass-modal-bg {
             background-color: rgba(0, 0, 0, 0.8);
             backdrop-filter: blur(5px);
@@ -106,7 +99,6 @@
             transition: opacity 0.3s;
         }
 
-        /* زر الإغلاق الدائري */
         .close-btn-circle {
             background: rgba(255,255,255,0.1);
             width: 30px;
@@ -121,8 +113,6 @@
         .close-btn-circle:hover {
             background: rgba(255,255,255,0.2);
         }
-
-        /* --------------------------------------------------------- */
 
         .media-container {
             max-height: 80vh; 
@@ -234,13 +224,12 @@
         /* VERIFIED BADGE */
         .verified-badge-img {
           display: inline-block;
-          width: 18px;
-          height: 18px;
-          border-radius: 999px;
-          margin-left: 6px; /* زيادة المسافة قليلاً */
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          margin-right: 4px;
+          margin-left: 2px;
           object-fit: cover;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-          border: 1px solid rgba(255,255,255,0.06);
           vertical-align: middle;
         }
     </style>
@@ -249,7 +238,6 @@
 
     <header class="sticky top-0 z-50 glass-navbar p-3">
         <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
-            
             <div class="flex items-center">
                 <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
                     <span class="avatar-with-dot">
@@ -289,38 +277,30 @@
     </header>
 
     <main class="max-w-6xl mx-auto p-4">
-        
         <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
             </div>
-
     </main>
     
     <div class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-navbar">
         <nav class="flex justify-around items-center max-w-lg mx-auto h-14 relative">
-            
             <a href="/chat_list" class="flex flex-col items-center justify-center p-2 text-blue-400">
                 <i class="fas fa-home text-xl"></i>
             </a>
-            
             <a id="messagesBtn" href="/users_list" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300 relative">
                 <i class="fas fa-comment-dots text-xl"></i>
                 <span id="msgBadge" style="display:none">0</span>
             </a>
-            
             <a href="/reels" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300">
                 <i class="fas fa-clapperboard text-xl"></i>
             </a>
-
             <a id="notifBtn" href="/notifications" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300 relative">
                 <i class="fas fa-bell text-xl"></i>
                 <span id="notifBadge" style="display:none">0</span>
             </a>
-
             <a id="usersBtn" href="/all_users" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition duration-300 relative">
                 <i class="fas fa-users text-xl"></i>
                 <span id="friendReqBadge" style="display:none">0</span>
             </a>
-
         </nav>
     </div>
 
@@ -426,6 +406,7 @@
         let currentUserId = null; 
         let activeWaveSurfer = null; 
         let activeVideo = null; 
+        let currentPostIdForComments = null;
 
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 
@@ -441,10 +422,6 @@
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
         
-        // متغيرات التعليقات
-        let currentPostIdForComments = null;
-        
-        // ******************** وظائف النافذة الزجاجية للملف الشخصي ********************
         function toggleProfileDropdown(event) {
             event.stopPropagation();
             profileDropdown.classList.toggle('hidden');
@@ -458,7 +435,6 @@
 
         document.addEventListener('click', closeProfileDropdownOnClickOutside);
 
-        // وظائف قائمة الإنشاء
         const createModalEl = document.getElementById('createModal');
 
         function toggleCreateModal() {
@@ -476,7 +452,6 @@
             }
         });
         
-        // ******************** 1. وظائف عرض الوسائط (Media Viewer) ********************
         function openMediaViewer(url, type, event) {
             event.stopPropagation();
             if (type === 'audio' || type === 'video') return;
@@ -504,8 +479,6 @@
                 mediaViewerContent.innerHTML = '';
             }
         }
-
-        // ******************** 2. وظائف حذف المنشور ********************
 
         function openDeleteModal(postId, event) {
             event.stopPropagation();
@@ -553,8 +526,6 @@
             }
         });
 
-        // ******************** 3. وظائف قائمة خيارات المنشور ********************
-
         function togglePostMenu(postId, userId, event, menuButton) {
             event.stopPropagation();
             
@@ -586,7 +557,6 @@
             }
         });
 
-        // ******************** 4. وظائف WaveSurfer للصوت ********************
         function initializePostWaveSurfer(postId, url) {
             const container = document.getElementById(`waveform-${postId}`);
             if (!container) return;
@@ -650,11 +620,8 @@
             }
         }
         
-        // ******************** 4.1. وظائف تحكم الفيديو ********************
-        
         function toggleVideoPlay(postId, event) {
             event.stopPropagation();
-            
             const video = document.getElementById(`video-${postId}`);
             const playOverlay = document.getElementById(`play-overlay-${postId}`);
             const controlIcon = document.getElementById(`control-icon-${postId}`);
@@ -784,9 +751,6 @@
             }
         }
 
-
-        // ******************** 5. وظائف عرض المنشورات ********************
-
         function formatTimestamp(timestamp) {
             const date = new Date(timestamp);
             const now = new Date();
@@ -863,17 +827,17 @@
 
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
-    <div class="flex items-start justify-between mb-3">
-        <div class="flex items-center">
-            <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
-                <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300">
-                ${onlineDotHtml}
-            </a>
-            <div>
-                 <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username} ${verifiedBadgeHtml}</a>
-                <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
-            </div>
-        </div>
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center">
+                            <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
+                                <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300">
+                                ${onlineDotHtml}
+                            </a>
+                            <div>
+                                 <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username} ${verifiedBadgeHtml}</a>
+                                <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
+                            </div>
+                        </div>
                         <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
                                 onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)">
                             <i class="fas fa-ellipsis-v"></i>
@@ -1014,7 +978,9 @@
             }
         }
         
-        // ******************** 7. وظائف التعليقات الجديدة والمحسنة ********************
+        /* =========================================================
+           منطق التعليقات الجديد (Fix: عرض الكل فوراً + تحديث العداد)
+           ========================================================= */
 
         function handleComment(postId) { 
             currentPostIdForComments = postId;
@@ -1056,22 +1022,22 @@
             });
 
             const verifiedHtml = isVerified 
-                ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img w-3.5 h-3.5 mr-1 align-text-bottom inline-block" alt="Verified">` 
+                ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">` 
                 : '';
 
             return `
                 <div class="flex items-start group animate-[fadeIn_0.3s_ease-out]">
-                    <a href="/profile?userId=${comment.userId}">
+                    <a href="/profile?userId=${comment.userId}" data-user-link-id="${comment.userId}">
                         <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" 
                              class="w-9 h-9 rounded-full object-cover ml-3 flex-shrink-0 border border-gray-700">
                     </a>
                     <div class="flex flex-col max-w-[85%]">
                         <div class="bg-[#242526] px-3 py-2 rounded-2xl rounded-tr-none border border-gray-800">
                             <div class="flex items-center flex-wrap gap-1 mb-0.5">
-                                <a href="/profile?userId=${comment.userId}" class="text-white font-bold text-xs hover:underline">
+                                <a href="/profile?userId=${comment.userId}" data-user-name-id="${comment.userId}" class="text-white font-bold text-xs hover:underline">
                                     ${comment.user.username}
                                 </a>
-                                ${verifiedHtml}
+                                <span class="badge-container" data-badge-user-id="${comment.userId}">${verifiedHtml}</span>
                             </div>
                             <p class="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed" dir="auto">${comment.content}</p>
                         </div>
@@ -1097,6 +1063,7 @@
                     commentsListEl.innerHTML = '';
                     const comments = result.comments || [];
                     
+                    // تحديث العداد الداخلي ليطابق العدد الفعلي المجلوب
                     if(badgeEl) badgeEl.innerText = comments.length;
 
                     if (comments.length === 0) {
@@ -1107,31 +1074,24 @@
                                 <p class="text-xs">كن أول من يعلق!</p>
                             </div>`;
                     } else {
-                        const userIds = [...new Set(comments.map(c => c.userId))];
-                        
-                        const verificationMap = {};
-                        try {
-                            const profiles = await Promise.all(
-                                userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.json()))
-                            );
-                            profiles.forEach(p => {
-                                if(p && p.id) verificationMap[p.id] = !!p.is_verified;
-                            });
-                        } catch (e) {
-                            console.warn("Could not fetch verification status for comments", e);
-                        }
-
                         let htmlBuffer = '';
                         comments.forEach(comment => {
-                            const isVerified = verificationMap[comment.userId] || false;
+                            // عرض التعليق فوراً (التحقق لاحقاً)
+                            const isVerified = comment.user.is_verified || false;
                             htmlBuffer += createCommentHtml(comment, isVerified);
                         });
                         
                         commentsListEl.innerHTML = htmlBuffer;
                         
+                        // تمرير للأسفل
                         setTimeout(() => {
-                            commentsListEl.scrollTop = commentsListEl.scrollHeight;
+                            if(commentsListEl.lastElementChild) {
+                                commentsListEl.scrollTop = commentsListEl.scrollHeight;
+                            }
                         }, 100);
+
+                        // جلب حالة التوثيق في الخلفية (لضمان ظهور العلامة حتى لو لم تكن في كائن التعليق)
+                        updateCommentsVerification(comments);
                     }
                 } else {
                     commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">فشل تحميل التعليقات.</div>';
@@ -1140,6 +1100,30 @@
                 console.error(error);
                 commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">خطأ في الاتصال.</div>';
             }
+        }
+        
+        // دالة تحديث الشارات في الخلفية
+        async function updateCommentsVerification(comments) {
+             const userIds = [...new Set(comments.map(c => c.userId))];
+             if(userIds.length === 0) return;
+
+             try {
+                // جلب كل البروفايلات
+                const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.ok ? r.json() : null).catch(()=>null));
+                const profiles = await Promise.all(promises);
+                
+                profiles.forEach(p => {
+                    if(p && p.id && p.is_verified) {
+                        // تحديث كل ظهور لهذا المستخدم في القائمة
+                        const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${p.id}"]`);
+                        containers.forEach(cont => {
+                            if(cont.innerHTML.trim() === '') {
+                                cont.innerHTML = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">`;
+                            }
+                        });
+                    }
+                });
+             } catch(e) { console.warn('Background verification check failed', e); }
         }
 
         async function postComment() {
@@ -1170,7 +1154,8 @@
                         commentsListEl.innerHTML = '';
                     }
 
-                    // هنا يجب مثالياً جلب حالة التوثيق للمستخدم الحالي، سنفترض False حالياً حتى يتم التحديث
+                    // هنا نفترض مبدئياً عدم التوثيق أو نعتمد على currentUser الذي جلبناه
+                    // سنتركها فارغة ثم ستتحدث تلقائياً لو تم استدعاء دالة تحديث
                     const amIVerified = false; 
                     
                     commentsListEl.innerHTML += createCommentHtml(result.comment, amIVerified);
@@ -1180,14 +1165,15 @@
                     
                     const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
                     if (postCard) {
-                        const commentsSpan = postCard.querySelector('.fa-comment-dots').parentNode;
-                        if(result.newComments) {
-                             // يمكن تحديث نص الزر هنا إذا أردت
-                        }
+                        // تحديث العداد الخارجي
+                        // لا يمكننا تحديث الرقم بدقة دون معرفة العدد القديم، لكن يمكننا تركه للتحديث عند إعادة التحميل
                     }
                     
                     const badgeEl = document.getElementById('commentCountBadge');
                     if(badgeEl) badgeEl.innerText = parseInt(badgeEl.innerText || 0) + 1;
+
+                    // تشغيل تحديث الخلفية لنفسي لتظهر الشارة
+                    updateCommentsVerification([result.comment]);
 
                 } else {
                     errorEl.textContent = result.error || 'فشل الإرسال';
@@ -1312,7 +1298,6 @@
             }).catch(()=>{});
         })();
 
-        // ---------------- Active Status Heartbeat ----------------
         function sendHeartbeat() {
             fetch('/api/status/heartbeat', { method: 'POST' })
                 .then(r => r.json())
