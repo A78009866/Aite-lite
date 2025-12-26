@@ -60,15 +60,22 @@
         }
         .toggle-password:hover { color: #3982f7; }
 
-        /* Button Glow */
+        /* Button Glow & States */
         .glow-btn {
             background: linear-gradient(135deg, #3982f7 0%, #2a61b8 100%);
             box-shadow: 0 4px 15px rgba(57, 130, 247, 0.4);
             transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
-        .glow-btn:hover {
+        .glow-btn:hover:not(:disabled) {
             box-shadow: 0 6px 20px rgba(57, 130, 247, 0.6);
             transform: translateY(-2px);
+        }
+        .glow-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
         }
     </style>
 </head>
@@ -84,7 +91,7 @@
     <div class="glass-card p-10 rounded-2xl w-full max-w-sm relative z-10">
         <h2 class="text-center mb-8 text-3xl font-bold text-white tracking-wide">تسجيل الدخول</h2>
         
-        <form method="post" action="/login">
+        <form id="loginForm" method="post" action="/login">
             <div class="mb-6 group">
                 <label for="id_username" class="block mb-2 text-sm font-medium text-gray-300 group-hover:text-[#3982f7] transition-colors">اسم المستخدم</label>
                 <input type="text" name="username" id="id_username" class="glass-input w-full p-4 rounded-xl" required autofocus placeholder="ادخل اسم المستخدم">
@@ -98,8 +105,9 @@
                 </div>
             </div>
 
-            <button type="submit" class="glow-btn w-full p-4 rounded-xl text-white font-bold text-lg cursor-pointer">
-                دخول
+            <button type="submit" id="submitBtn" class="glow-btn w-full p-4 rounded-xl text-white font-bold text-lg cursor-pointer flex justify-center items-center gap-2">
+                <span id="btnText">دخول</span>
+                <i id="btnSpinner" class="fas fa-spinner fa-spin hidden"></i>
             </button>
         </form>
 
@@ -109,6 +117,7 @@
     </div>
 
     <script>
+        // إظهار/إخفاء كلمة المرور
         document.querySelectorAll('.toggle-password').forEach(item => {
             item.addEventListener('click', function () {
                 const targetId = this.getAttribute('data-target');
@@ -124,7 +133,18 @@
                 }
             });
         });
+
+        // التعامل مع زر الإرسال والمؤشر
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const btn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+
+            // تعطيل الزر وإظهار المؤشر
+            btn.disabled = true;
+            btnText.textContent = "جاري الدخول...";
+            btnSpinner.classList.remove('hidden');
+        });
     </script>
 </body>
 </html>
-
