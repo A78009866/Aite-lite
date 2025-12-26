@@ -462,7 +462,7 @@ function createPostCard(post) {
             ${mediaContent}
             <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
                 <span><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
-                <span class="cursor-pointer hover:text-blue-400" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount} تعليق</span>
+                <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
             </div>
             <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
                 <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button" data-is-liked="${post.is_liked}" onclick="handleLike('${post.postId}', this)">
@@ -569,6 +569,23 @@ async function handleLike(postId, buttonElement) {
 // منطق التعليقات الجديد (Profile Version)
 // ------------------------------------------------------------
 
+// Helper to update comment count shown on post card and in modal badge
+function updatePostCommentCount(postId, count) {
+    // update count in post card (feed/profile)
+    const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+    if (postCard) {
+        const commentSpan = postCard.querySelector('.comment-count-display');
+        if (commentSpan) {
+            commentSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${count} تعليق`;
+        }
+    }
+    // update modal badge if open for this post
+    const badgeEl = document.getElementById('commentCountBadge');
+    if (badgeEl && currentPostIdForComments === postId) {
+        badgeEl.innerText = count;
+    }
+}
+
 function handleComment(postId) { 
     currentPostIdForComments = postId;
     
@@ -652,6 +669,9 @@ async function fetchAndDisplayComments(postId) {
             const comments = result.comments || [];
             
             if(badgeEl) badgeEl.innerText = comments.length;
+
+            // synchronize post card count
+            updatePostCommentCount(postId, comments.length);
 
             if (comments.length === 0) {
                 commentsListEl.innerHTML = `
@@ -745,8 +765,17 @@ async function postComment() {
             input.value = '';
             commentsListEl.scrollTop = commentsListEl.scrollHeight;
             
-            const badgeEl = document.getElementById('commentCountBadge');
-            if(badgeEl) badgeEl.innerText = parseInt(badgeEl.innerText || 0) + 1;
+            // If server returned a newComments count, use it; otherwise increment
+            let newCount = null;
+            if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
+                newCount = Number(result.newComments);
+            } else {
+                const badgeEl = document.getElementById('commentCountBadge');
+                const prev = parseInt(badgeEl ? badgeEl.innerText || '0' : '0');
+                newCount = prev + 1;
+            }
+
+            updatePostCommentCount(currentPostIdForComments, newCount);
             
             updateCommentsVerification([result.comment]);
 
