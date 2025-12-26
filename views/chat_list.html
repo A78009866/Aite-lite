@@ -108,12 +108,12 @@
         }
         /* تأثير ظهور النافذة */
         .modal-animate-in {
-            animation: modalFadeIn 0.3s ease-out;
+            animation: modalFadeIn 0.28s ease-out;
         }
 
         @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         /* نمط أزرار الخيارات داخل النافذة */
@@ -226,14 +226,16 @@
 }
 
 /* Comments modal customizations for cleaner glassy black look */
+/* Now full-screen modal layout with post card occupying top half */
 #commentModal .glass-comment-modal-content {
-  max-width: 720px;
+  max-width: 100%;
   width: 100%;
-  max-height: 88vh;
+  height: 100vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 0;
+  border-radius: 0;
 }
 #commentModal .modal-header {
   padding: 12px 16px;
@@ -241,13 +243,17 @@
   display:flex;
   align-items:center;
   justify-content:space-between;
+  background: linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3));
+  z-index: 20;
 }
 #commentModal .modal-header h3 { margin:0; font-size:18px; color:#fff; }
 #commentModal .comment-post-preview {
   padding: 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
-  max-height: 36vh;
+  max-height: 58vh; /* post card area */
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: transparent;
 }
 #commentModal .comment-list {
   overflow-y: auto;
@@ -255,6 +261,8 @@
   gap:12px;
   display:flex;
   flex-direction:column;
+  max-height: calc(42vh - 80px); /* comments area */
+  -webkit-overflow-scrolling: touch;
 }
 .comment-item {
   display:flex;
@@ -323,9 +331,15 @@
   cursor:pointer;
 }
 
+/* when moving the original post into the modal give it a small style tweak */
+.moved-post-preview {
+  margin: 0;
+  border-radius: 12px;
+}
+
 /* small screens */
 @media (max-width:640px) {
-  #commentModal .glass-comment-modal-content { margin: 12px; border-radius: 16px; }
+  #commentModal .glass-comment-modal-content { margin: 0; border-radius: 0; }
   .comment-item img { width:40px; height:40px; }
   .verified-badge-img { width:14px; height:14px; }
 }
@@ -435,9 +449,9 @@
         </div>
     </div>
     
-    <!-- modal for comments positioned from bottom -->
-    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-end justify-center p-4 glass-modal-bg">
-        <div class="glass-comment-modal-content p-0 rounded-xl shadow-2xl max-w-lg w-full modal-animate-in border border-white/20" onclick="event.stopPropagation()">
+    <!-- full-screen modal: shows the actual post card (moved) at top and comments below -->
+    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-0 glass-modal-bg" onclick="/* background click ignored to avoid accidental close */">
+        <div class="glass-comment-modal-content p-0 rounded-xl shadow-2xl modal-animate-in border border-white/20" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3>التعليقات</h3>
                 <button id="closeCommentModalBtn" class="text-gray-400 hover:text-white transition duration-300 text-2xl p-2">
@@ -445,11 +459,12 @@
                 </button>
             </div>
 
-            <!-- Post preview shown at top of the modal -->
+            <!-- Post preview area (we will move the original post card here) -->
             <div id="commentPostPreview" class="comment-post-preview">
-                <!-- will be injected with simplified clone of the post -->
+                <!-- original post card will be moved here (so it remains interactive) -->
             </div>
 
+            <!-- Comments scrollable area -->
             <div id="commentsList" class="comment-list custom-scrollbar" style="flex:1; overflow-y:auto;">
                 <!-- Comments will be injected here -->
             </div>
@@ -533,6 +548,9 @@
         const commentError = document.getElementById('commentError');
         const commentPostPreview = document.getElementById('commentPostPreview');
         let currentPostIdForComments = null; // لتتبع المنشور الحالي للتعليقات
+
+        // store for moved posts so we can restore them later
+        const movedPostStore = {}; // postId => { parent, nextSibling }
         
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 
@@ -576,6 +594,14 @@ createModalEl.addEventListener('click', (e) => {
             
             // مشغل الصوت والفيديو سيتعامل معه WaveSurfer أو المشغل المخصص في المنشور نفسه
             if (type === 'audio' || type === 'video') { 
+                // open a simple larger viewer for video/audio
+                mediaViewerContent.innerHTML = '';
+                if (type === 'video') {
+                  mediaViewerContent.innerHTML = `<video controls autoplay class="max-w-full max-h-full rounded-lg"><source src="${url}"></video>`;
+                } else if (type === 'audio') {
+                  mediaViewerContent.innerHTML = `<audio controls autoplay class="w-full"><source src="${url}"></audio>`;
+                }
+                mediaViewerModal.classList.remove('hidden');
                 return;
             }
 
@@ -800,7 +826,7 @@ createModalEl.addEventListener('click', (e) => {
             // 2. تبديل حالة التشغيل
             if (video.paused) {
                 video.play();
-                playOverlay.classList.add('hidden'); // إخفاء زر التشغيل المركزي
+                if (playOverlay) playOverlay.classList.add('hidden'); // إخفاء زر التشغيل المركزي
                 if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
                 if (controlsBar) controlsBar.classList.remove('opacity-0'); // إظهار شريط التحكم
                 activeVideo = video;
@@ -812,7 +838,7 @@ createModalEl.addEventListener('click', (e) => {
 
             } else {
                 video.pause();
-                playOverlay.classList.remove('hidden'); // إظهار زر التشغيل المركزي
+                if (playOverlay) playOverlay.classList.remove('hidden'); // إظهار زر التشغيل المركزي
                 if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
                 activeVideo = null;
             }
@@ -929,7 +955,7 @@ createModalEl.addEventListener('click', (e) => {
                         <div class="mt-3 relative w-full aspect-video rounded-lg overflow-hidden bg-black group">
                             <video id="video-${post.postId}" src="${post.media.url}" 
                                    class="w-full h-full object-contain" 
-                                   poster="https://via.placeholder.com/600x400?text=Video+Loading" 
+                                   poster="${post.media.poster || 'https://via.placeholder.com/600x400?text=Video+Loading'}" 
                                    preload="metadata"
                                    onclick="toggleVideoPlay('${post.postId}', event)">
                             </video>
@@ -1112,23 +1138,105 @@ createModalEl.addEventListener('click', (e) => {
             }
         }
         
-        // updated: when clicking comments, open a modal that shows the post at top and comments below
+        // Move the original post card into the modal (so it remains identical & interactive).
+        function movePostIntoModal(postId) {
+            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+            if (!postCard) return false;
+
+            // store original location so we can restore it later
+            if (!movedPostStore[postId]) {
+                movedPostStore[postId] = {
+                    parent: postCard.parentNode,
+                    nextSibling: postCard.nextSibling
+                };
+            }
+
+            // hide the menu button inside the moved card to avoid position issues
+            postCard.querySelectorAll('.post-menu-button').forEach(btn => btn.style.display = 'none');
+            postCard.classList.add('moved-post-preview');
+
+            // append into preview container
+            commentPostPreview.innerHTML = '';
+            commentPostPreview.appendChild(postCard);
+
+            // pause other media outside
+            if (activeWaveSurfer) {
+                try { activeWaveSurfer.pause(); } catch(e){}
+                activeWaveSurfer = null;
+            }
+            if (activeVideo && !commentPostPreview.contains(activeVideo)) {
+                try { activeVideo.pause(); } catch(e){}
+                activeVideo = null;
+            }
+
+            return true;
+        }
+
+        // restore moved post back to original place
+        function restoreMovedPost(postId) {
+            const store = movedPostStore[postId];
+            if (!store) return;
+            const parent = store.parent;
+            const nextSibling = store.nextSibling;
+            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+            if (!postCard) return;
+
+            // restore menu button visibility
+            postCard.querySelectorAll('.post-menu-button').forEach(btn => btn.style.display = '');
+            postCard.classList.remove('moved-post-preview');
+
+            if (nextSibling && parent.contains(nextSibling)) {
+                parent.insertBefore(postCard, nextSibling);
+            } else {
+                parent.appendChild(postCard);
+            }
+
+            // cleanup
+            delete movedPostStore[postId];
+        }
+
+        // updated: when clicking comments, open a full-screen modal that shows the actual post card on top and comments below
         async function handleComment(postId) { 
             currentPostIdForComments = postId;
-            populatePostPreviewForComments(postId);
+
+            // move the original post DOM node into modal for exact same look & behavior
+            const moved = movePostIntoModal(postId);
+            if (!moved) {
+                // fallback: if post not in DOM (rare), create a clone preview
+                populatePostPreviewForComments(postId);
+            }
+
             await fetchAndDisplayComments(postId);
+
             commentModal.classList.remove('hidden'); 
             // منع تمرير الخلفية أثناء فتح المودال
             document.body.style.overflow = 'hidden';
+
+            // focus input for convenience
+            setTimeout(() => { newCommentInput.focus(); }, 120);
         }
 
         closeCommentModalBtn.addEventListener('click', () => {
+            // restore moved post if any
+            if (currentPostIdForComments && movedPostStore[currentPostIdForComments]) {
+                restoreMovedPost(currentPostIdForComments);
+            } else {
+                // if we used clone preview, clear it
+                commentPostPreview.innerHTML = '';
+            }
+
             commentModal.classList.add('hidden');
             currentPostIdForComments = null;
             newCommentInput.value = '';
             commentsList.innerHTML = '';
-            commentPostPreview.innerHTML = '';
             document.body.style.overflow = 'auto';
+        });
+
+        // allow Esc key to close modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !commentModal.classList.contains('hidden')) {
+                closeCommentModalBtn.click();
+            }
         });
 
         // ******************** 7. وظائف التعليقات ********************
@@ -1180,6 +1288,7 @@ createModalEl.addEventListener('click', (e) => {
                         result.comments.forEach(comment => {
                             commentsList.innerHTML += createCommentHtml(comment);
                         });
+                        // ensure comments area scrolled to bottom
                         commentsList.scrollTop = commentsList.scrollHeight;
                         // Update verified badges for commenters
                         updateVerifiedBadges();
@@ -1229,6 +1338,7 @@ createModalEl.addEventListener('click', (e) => {
                         if (commentsSpan) commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`;
                     }
                     
+                    // scroll comments to newly added comment
                     commentsList.scrollTop = commentsList.scrollHeight;
 
                 } else {
@@ -1287,7 +1397,7 @@ createModalEl.addEventListener('click', (e) => {
             }));
         }
 
-        // Populate a simplified preview of the post inside the comment modal
+        // Populate a simplified preview of the post inside the comment modal (fallback)
         function populatePostPreviewForComments(postId) {
             const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
             if (!postCard) {
@@ -1295,23 +1405,16 @@ createModalEl.addEventListener('click', (e) => {
                 return;
             }
 
-            // clone to avoid manipulating the original
+            // clone to avoid manipulating the original if moving wasn't possible
             const clone = postCard.cloneNode(true);
 
-            // remove interactive elements that may conflict (ids, buttons, audio/video controls)
-            // remove post menu button
+            // remove interactive menu button inside clone
             clone.querySelectorAll('.post-menu-button').forEach(n => n.remove());
-            // remove like/comment buttons area at bottom (optional)
-            clone.querySelectorAll('.post-like-button').forEach(n => n.remove());
-            clone.querySelectorAll('button[onclick^="handleComment"]').forEach(n => n.remove());
-            // remove audio play buttons & waveform to avoid conflicting players
-            clone.querySelectorAll('.audio-play-button, .waveform-post').forEach(n => n.remove());
 
             // For any <video> elements, replace with their poster image (so it doesn't auto-play)
             clone.querySelectorAll('video').forEach(v => {
                 const poster = v.getAttribute('poster') || '';
                 const src = v.getAttribute('src') || '';
-                // try to use poster if available, otherwise show a placeholder with a click to open media viewer
                 if (poster) {
                     const img = document.createElement('img');
                     img.src = poster;
