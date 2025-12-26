@@ -366,6 +366,7 @@ let statusPollInterval = null;
 let PROFILE_VERIFIED = false; 
 let currentPostIdToDelete = null;
 
+/* ---------------- UI helpers ---------------- */
 function toggleProfileDropdown(event) {
     event.stopPropagation();
     const profileDropdown = document.getElementById('profileDropdown');
@@ -393,7 +394,7 @@ function formatTimestamp(timestamp) {
     }
 }
 
-/* ---------------- Delete modal logic (centered glass) ---------------- */
+/* ---------------- Delete modal logic ---------------- */
 const deleteModal = document.getElementById('deleteModal');
 const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
@@ -593,15 +594,22 @@ function createPostCard(post) {
     `;
 }
 
-/* ----------------- Comment UI helpers (profile) ----------------- */
+/* ----------------- Comment UI (like & reply) ----------------- */
 
-function createCommentHtml(comment, isVerified=false) {
+/*
+  The comment UI & actions below were aligned with the working implementation
+  from the main feed. This ensures "like comment" and "reply" behave the same
+  in the profile page.
+*/
+
+function createCommentHtml(comment, postIdForSafety = '') {
+    // comment is expected to be the enriched normalized comment from the server:
+    // { commentId, postId, content, timestamp, user: { userId, username, profile_picture_url }, likes, is_liked, repliesCount, recentReplies }
+    const postId = comment.postId || postIdForSafety || '';
     const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
         month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric'
     });
-
-    const verifiedHtml = isVerified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق">` : '';
-
+    const verifiedHtml = ''; // optionally filled by updateCommentsVerification()
     const likeBtnClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
     const likeIconClass = comment.is_liked ? 'fas' : 'far';
 
@@ -626,13 +634,17 @@ function createCommentHtml(comment, isVerified=false) {
                             <div class="text-xs text-gray-500">${commentDate}</div>
                         </div>
                         <div class="flex items-center gap-2 comment-actions">
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likeBtnClass}" onclick="toggleCommentLike('${comment.postId || ''}', '${comment.commentId}', this)">
+                            <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likeBtnClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
                                 <i class="${likeIconClass} fa-heart"></i>
                                 <span class="text-xs like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
                             </button>
                             <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
                                 <i class="fas fa-reply"></i>
                                 <span class="text-xs">رد</span>
+                            </button>
+                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                                <i class="fas fa-angle-down"></i>
+                                <span class="text-xs">عرض الردود</span>
                             </button>
                         </div>
                     </div>
@@ -646,7 +658,7 @@ function createCommentHtml(comment, isVerified=false) {
                         <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
                             <img src="${document.getElementById('userProfilePic').src}" class="w-7 h-7 rounded-full" alt="me">
                             <input id="reply-input-${comment.commentId}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
-                            <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReply('${comment.postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
+                            <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReply('${postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
                         </div>
                     </div>
 
@@ -656,11 +668,14 @@ function createCommentHtml(comment, isVerified=false) {
     `;
 }
 
+// Toggle like/unlike on a comment (frontend)
 async function toggleCommentLike(postId, commentId, btnEl) {
     btnEl.disabled = true;
     try {
-        // profile comments use posts endpoints
-        const res = await fetch(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST', credentials: 'same-origin' });
+        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
         const data = await res.json();
         if (res.ok && data.ok) {
             const countEl = document.getElementById(`comment-like-count-${commentId}`);
@@ -686,6 +701,7 @@ async function toggleCommentLike(postId, commentId, btnEl) {
     }
 }
 
+// Open reply input under a comment
 function openReplyBox(commentId) {
     const box = document.getElementById(`reply-box-${commentId}`);
     if (!box) return;
@@ -694,6 +710,7 @@ function openReplyBox(commentId) {
     if (input && !box.classList.contains('hidden')) input.focus();
 }
 
+// Post a reply to a comment
 async function postReply(postId, commentId) {
     const input = document.getElementById(`reply-input-${commentId}`);
     if (!input) return;
@@ -701,7 +718,7 @@ async function postReply(postId, commentId) {
     if (!content) return;
     input.disabled = true;
     try {
-        const res = await fetch(`/api/posts/${postId}/comments/${commentId}/reply`, {
+        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/reply`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
@@ -709,6 +726,7 @@ async function postReply(postId, commentId) {
         });
         const data = await res.json();
         if (res.ok && data.ok) {
+            // refresh comments list to show the new reply
             await fetchAndDisplayComments(postId);
         } else {
             alert(data.error || 'فشل في إرسال الرد');
@@ -721,7 +739,34 @@ async function postReply(postId, commentId) {
     }
 }
 
-/* ----------------- Comments fetching (profile) ----------------- */
+// Fetch and show all replies for a comment (in-place)
+async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
+    try {
+        triggerBtn.disabled = true;
+        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            const container = document.getElementById(`replies-container-${commentId}`);
+            if (container) {
+                container.innerHTML = data.replies.map(r => `
+                    <div class="reply-item flex items-start gap-2">
+                        <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                        <div class="flex-1">
+                            <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
+                            <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        triggerBtn.disabled = false;
+    }
+}
+
+/* ----------------- Fetch & display comments (profile) ----------------- */
 async function fetchAndDisplayComments(postId) {
     const commentsListEl = document.getElementById('commentsList');
     const badgeEl = document.getElementById('commentCountBadge');
@@ -729,18 +774,18 @@ async function fetchAndDisplayComments(postId) {
     commentsListEl.innerHTML = '<div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>';
     
     try {
-        const response = await fetch(`/api/posts/${postId}/comments`);
+        const response = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, { credentials: 'same-origin' });
         const result = await response.json();
 
         if (response.ok && result.ok) {
             commentsListEl.innerHTML = '';
-            const rawComments = result.comments || [];
+            const comments = result.comments || [];
             
-            if(badgeEl) badgeEl.innerText = rawComments.length;
+            if(badgeEl) badgeEl.innerText = comments.length;
 
-            updatePostCommentCount(postId, rawComments.length);
+            updatePostCommentCount(postId, comments.length);
 
-            if (rawComments.length === 0) {
+            if (comments.length === 0) {
                 commentsListEl.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-10 text-gray-500 opacity-70">
                         <i class="far fa-comments text-4xl mb-3"></i>
@@ -748,11 +793,11 @@ async function fetchAndDisplayComments(postId) {
                         <p class="text-xs">كن أول من يعلق!</p>
                     </div>`;
             } else {
-                const htmlBuffer = rawComments.map(c => createCommentHtml(c, false)).join('');
+                const htmlBuffer = comments.map(c => createCommentHtml(c, postId)).join('');
                 commentsListEl.innerHTML = htmlBuffer;
 
-                // show "عرض الردود" if repliesCount > recentReplies.length
-                rawComments.forEach(c => {
+                // After rendering, ensure "عرض كل الردود" buttons are visible when repliesCount > recentReplies.length
+                comments.forEach(c => {
                     try {
                         const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
                         if (btn) {
@@ -768,7 +813,8 @@ async function fetchAndDisplayComments(postId) {
                     }
                 }, 100);
 
-                updateCommentsVerification(rawComments);
+                // background check for verified badges
+                updateCommentsVerification(comments);
             }
         } else {
             commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">فشل تحميل التعليقات.</div>';
@@ -779,6 +825,7 @@ async function fetchAndDisplayComments(postId) {
     }
 }
 
+/* ---------------- Update verification badges for commenters ---------------- */
 async function updateCommentsVerification(comments) {
      const userIds = [...new Set(comments.map(c => (c.user && c.user.userId) ? c.user.userId : ''))].filter(Boolean);
      if(userIds.length === 0) return;
@@ -789,15 +836,24 @@ async function updateCommentsVerification(comments) {
         
         profiles.forEach(p => {
             if(p && p.id && p.is_verified) {
-                const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${p.id}"]`);
-                containers.forEach(cont => {
-                    if(cont.innerHTML.trim() === '') {
-                        cont.innerHTML = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">`;
+                // find comment blocks for this user and insert badge if missing
+                const commentEls = document.querySelectorAll(`.comment-item img[src][alt]`);
+                // We'll search by username match as fallback
+                commentEls.forEach(img => {
+                    const parent = img.closest('.comment-item');
+                    if (!parent) return;
+                    const nameEl = parent.querySelector('.text-sm.font-bold');
+                    if (!nameEl) return;
+                    if (nameEl.textContent.trim().startsWith(p.username)) {
+                        // append badge if not exists
+                        if (!nameEl.querySelector('img.verified-badge-img')) {
+                            nameEl.innerHTML = `${escapeHtml(p.username)} <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق">`;
+                        }
                     }
                 });
             }
         });
-     } catch(e) { }
+     } catch(e) { console.warn('Background verification check failed', e); }
 }
 
 /* ----------------- Posts list and initial load ----------------- */
@@ -820,7 +876,7 @@ async function fetchAndDisplayUserPosts(userId) {
     userPostsFeed.innerHTML = '<div class="text-center text-gray-500 p-8"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
 
     try {
-        const response = await fetch(`/api/posts/user/${userId}`);
+        const response = await fetch(`/api/posts/user/${encodeURIComponent(userId)}`, { credentials: 'same-origin' });
         const result = await response.json();
 
         userPostsFeed.innerHTML = '';
@@ -857,7 +913,7 @@ async function handleLike(postId, buttonElement) {
     const likeIcon = buttonElement.querySelector('.like-icon');
     buttonElement.disabled = true;
     try {
-        const res = await fetch(`/api/posts/${postId}/like`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/like`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
         const data = await res.json();
         if (res.ok && data.ok) {
             if (data.action === 'liked') {
@@ -937,19 +993,24 @@ async function postComment() {
     errorEl.classList.add('hidden');
 
     try {
-        const response = await fetch(`/api/posts/${currentPostIdForComments}/comment`, {
+        const response = await fetch(`/api/posts/${encodeURIComponent(currentPostIdForComments)}/comment`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ content: content })
         });
 
         const result = await response.json();
 
         if (response.ok && result.ok) {
+            // After successful post, re-fetch the entire comments list to avoid shape/count divergence
             await fetchAndDisplayComments(currentPostIdForComments);
+
+            // If server returned a newComments count, ensure post card is updated (fallback kept)
             if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
                 updatePostCommentCount(currentPostIdForComments, Number(result.newComments));
             }
+
             input.value = '';
             input.focus();
         } else {
@@ -1004,7 +1065,7 @@ document.addEventListener('click', (event) => {
 
 async function fetchCurrentUser() {
     try {
-        const resp = await fetch('/api/profile');
+        const resp = await fetch('/api/profile', { credentials: 'same-origin' });
         if (!resp.ok) return;
         const data = await resp.json();
         if (data && data.id) {
@@ -1029,7 +1090,7 @@ async function fetchAndDisplayProfile() {
     }
 
     try {
-        const response = await fetch(`/api/profile?userId=${currentProfileId}`);
+        const response = await fetch(`/api/profile?userId=${encodeURIComponent(currentProfileId)}`, { credentials: 'same-origin' });
         const data = await response.json();
 
         if (response.ok && data.ok) {
@@ -1181,7 +1242,7 @@ function startStatusPolling() {
 async function pollProfileStatus() {
     if (!currentProfileId) return;
     try {
-        const r = await fetch(`/api/profile?userId=${currentProfileId}`, { cache: 'no-store' });
+        const r = await fetch(`/api/profile?userId=${encodeURIComponent(currentProfileId)}`, { cache: 'no-store' });
         if (!r.ok) return;
         const d = await r.json();
         if (d && d.ok) {
@@ -1192,26 +1253,6 @@ async function pollProfileStatus() {
 }
 
 /* ----------------- Init ----------------- */
-(function setupNotifSSEProfile() {
-    if (!window.EventSource) return;
-    try {
-        const es = new EventSource('/api/notifications/stream', { withCredentials: true });
-        es.addEventListener('notifications', (e) => {
-            try {
-                const payload = JSON.parse(e.data);
-                if (payload.presenceUpdates && Array.isArray(payload.presenceUpdates)) {
-                    payload.presenceUpdates.forEach(p => setUserOnlineUI(p.userId, !!p.is_online, p.last_seen));
-                }
-            } catch (err) {
-                console.error('Failed to parse notifications SSE data', err);
-            }
-        });
-        es.addEventListener('error', (err) => {
-            console.warn('Notifications SSE error', err);
-        });
-    } catch (e) {
-    }
-})();
 
 document.addEventListener('DOMContentLoaded', () => {
     const postCommentBtn = document.getElementById('postCommentBtn');
