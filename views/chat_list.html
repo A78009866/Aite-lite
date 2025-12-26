@@ -237,6 +237,109 @@
           white-space: nowrap;
           z-index: 50;
         }
+
+        /* ========== Comments Bottom Sheet (new) ========== */
+        .overlay-backdrop {
+          position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+          z-index: 40; display: none;
+        }
+        .overlay-backdrop.open { display: block; }
+
+        .comments-sheet {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 60vh;
+          max-height: 80vh;
+          background: linear-gradient(180deg, rgba(10,10,12,0.95), rgba(16,16,18,0.98));
+          border-radius: 16px 16px 0 0;
+          transform: translateY(100%);
+          transition: transform 0.28s cubic-bezier(.2,.9,.2,1);
+          z-index: 50;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 -20px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+          overflow: hidden;
+        }
+        .comments-sheet.open { transform: translateY(0%); }
+
+        .comments-sheet .sheet-header {
+          padding: 12px 14px;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+        }
+
+        .comments-sheet .sheet-drag {
+          width: 44px;
+          height: 5px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.06);
+          margin: 6px auto 0;
+        }
+
+        .comments-sheet .sheet-body {
+          padding: 12px;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .comments-sheet .sheet-footer {
+          position: sticky;
+          bottom: 0;
+          background: linear-gradient(180deg, rgba(0,0,0,0.0), rgba(0,0,0,0.6));
+          padding: 10px;
+          border-top: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .comments-sheet .comment-row {
+          display:flex;
+          gap:12px;
+          align-items:flex-start;
+        }
+        .comments-sheet .comment-row img {
+          width:36px;height:36px;border-radius:999px;object-fit:cover;
+        }
+        .comments-sheet .comment-bubble {
+          background: rgba(255,255,255,0.03);
+          padding:10px 12px;
+          border-radius:10px;
+          color:#e6e7ea;
+          font-size:14px;
+          max-width: 100%;
+        }
+
+        .comment-input {
+          display:flex;
+          gap:8px;
+          align-items:center;
+        }
+        .comment-input input[type="text"] {
+          flex:1;
+          background:#111;
+          color:#fff;
+          border-radius:999px;
+          padding:10px 14px;
+          border:1px solid rgba(255,255,255,0.04);
+          outline:none;
+          font-size:14px;
+        }
+        .comment-input button {
+          background: linear-gradient(180deg,#007AFF,#00D4FF);
+          color:#000;
+          padding:8px 12px;
+          font-weight:700;
+          border-radius:999px;
+          border:none;
+        }
+
+        @media (min-width: 900px) {
+          .comments-sheet { width: 720px; left: 50%; transform: translate(-50%, 100%); border-radius: 12px 12px 12px 12px; }
+          .comments-sheet.open { transform: translate(-50%, 0%); }
+        }
+        /* ========== end comments styles ========== */
     </style>
 </head>
 <body class="min-h-screen">
@@ -343,34 +446,26 @@
         </div>
     </div>
     
-    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
-        <div class="glass-comment-modal-content p-6 rounded-xl shadow-2xl max-w-lg w-full h-[90vh] flex flex-col" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center pb-4 border-b border-gray-700">
-                <h3 class="text-2xl font-bold text-white">التعليقات</h3>
-                <button id="closeCommentModalBtn" class="text-gray-400 hover:text-white transition duration-300 text-3xl">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div id="commentsList" class="flex-grow overflow-y-auto py-4 space-y-4 custom-scrollbar">
-                </div>
+    <!-- Comments Bottom Sheet / Overlay -->
+    <div id="commentBackdrop" class="overlay-backdrop"></div>
 
-            <div class="pt-4 border-t border-gray-700 flex items-center">
-                <input type="text" id="newCommentInput" placeholder="أضف تعليقًا..." class="flex-grow p-3 bg-gray-800 text-white rounded-r-full focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700" dir="rtl">
-                <button id="postCommentBtn" class="p-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-l-full transition duration-300 flex-shrink-0">
-                    <i class="fas fa-paper-plane text-lg"></i>
-                </button>
-            </div>
-            <div id="commentError" class="text-red-500 mt-2 text-center hidden"></div>
+    <div id="commentsSheet" class="comments-sheet" aria-hidden="true">
+      <div class="sheet-drag" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <h3 class="font-bold text-sm text-white">التعليقات</h3>
+        <button id="closeCommentsBtn" class="text-gray-400 p-2"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="commentsList" class="sheet-body custom-scrollbar"></div>
+      <div class="sheet-footer">
+        <div class="flex items-center comment-input">
+          <input type="text" id="newCommentInput" placeholder="أضف تعليقاً..." class="text-sm" dir="rtl">
+          <button id="postCommentBtn" class="px-3 py-2">نشر</button>
         </div>
+        <div id="commentError" class="text-red-500 mt-2 hidden text-center text-sm"></div>
+      </div>
     </div>
+    <!-- End comments sheet -->
 
-    <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
-        <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
-            <i class="fas fa-trash ml-3"></i>
-            حذف المنشور
-        </button>
-    </div>
 <div id="createModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 glass-modal-bg">
     <div class="glass-comment-modal-content p-8 rounded-3xl shadow-2xl max-w-sm w-full modal-animate-in border border-white/20" onclick="event.stopPropagation()">
         
@@ -429,12 +524,13 @@
         const createMenu = document.getElementById('createMenu');
         const createBtn = document.getElementById('createBtn');
 
-        // المتغيرات الجديدة للتعليقات
-        const commentModal = document.getElementById('commentModal');
-        const closeCommentModalBtn = document.getElementById('closeCommentModalBtn');
+        // المتغيرات الجديدة للتعليقات (bottom sheet)
+        const commentBackdrop = document.getElementById('commentBackdrop');
+        const commentsSheet = document.getElementById('commentsSheet');
         const commentsList = document.getElementById('commentsList');
         const newCommentInput = document.getElementById('newCommentInput');
         const postCommentBtn = document.getElementById('postCommentBtn');
+        const closeCommentsBtn = document.getElementById('closeCommentsBtn');
         const commentError = document.getElementById('commentError');
         let currentPostIdForComments = null; // لتتبع المنشور الحالي للتعليقات
         
@@ -1042,71 +1138,79 @@ createModalEl.addEventListener('click', (e) => {
             }
         }
         
+        // New: open comments bottom sheet
         async function handleComment(postId) { 
             currentPostIdForComments = postId;
-            await fetchAndDisplayComments(postId);
-            commentModal.classList.remove('hidden'); 
+            openCommentsSheet(postId);
         }
 
-        closeCommentModalBtn.addEventListener('click', () => {
-            commentModal.classList.add('hidden');
+        // Open bottom sheet and load comments
+        async function openCommentsSheet(postId) {
+            // show backdrop & sheet
+            commentBackdrop.classList.add('open');
+            commentsSheet.classList.add('open');
+            commentsSheet.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden'; // prevent background scroll on mobile
+
+            commentsList.innerHTML = '<div class="text-center mt-5"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
+            commentError.classList.add('hidden');
+
+            try {
+                const res = await fetch(`/api/posts/${postId}/comments`);
+                if (!res.ok) throw new Error('Failed to fetch comments: ' + res.status);
+                const data = await res.json();
+                if (data && data.ok) {
+                    renderCommentsInSheet(data.comments || []);
+                } else {
+                    renderCommentsInSheet([]);
+                }
+            } catch (e) {
+                console.error('openComments error', e);
+                commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
+            }
+        }
+
+        function closeCommentsSheet() {
+            commentBackdrop.classList.remove('open');
+            commentsSheet.classList.remove('open');
+            commentsSheet.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = 'auto';
             currentPostIdForComments = null;
             newCommentInput.value = '';
             commentsList.innerHTML = '';
-        });
+        }
 
-        // ******************** 7. وظائف التعليقات ********************
+        closeCommentsBtn.addEventListener('click', closeCommentsSheet);
+        commentBackdrop.addEventListener('click', closeCommentsSheet);
 
-        function createCommentHtml(comment) {
-            const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
-                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        function renderCommentsInSheet(comments) {
+            commentsList.innerHTML = '';
+            if(!comments || comments.length === 0) {
+              commentsList.innerHTML = '<div class="text-center text-gray-500 text-sm mt-6">كن أول من يعلق!</div>';
+              return;
+            }
+
+            comments.forEach(c => {
+              const time = c.timestamp ? new Date(c.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : '';
+              const snippet = `
+                <div class="comment-row mb-4">
+                  <img src="${c.user ? (c.user.profile_picture_url || 'https://via.placeholder.com/40') : (c.profile_picture_url || 'https://via.placeholder.com/40')}" alt="avatar">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-xs">${c.user ? (c.user.username || '') : (c.username || '')}</span>
+                      <span class="text-[10px] text-gray-500">${time}</span>
+                    </div>
+                    <div class="comment-bubble mt-1">${escapeHtml(c.content || '')}</div>
+                  </div>
+                </div>
+              `;
+              commentsList.innerHTML += snippet;
             });
 
-            return `
-                <div class="flex items-start">
-                    <img src="${comment.user.profile_picture_url}" alt="${comment.user.username}" class="w-8 h-8 rounded-full object-cover ml-3 flex-shrink-0">
-                    <div class="flex-grow bg-gray-700 p-3 rounded-lg">
-                        <div class="flex justify-between items-center mb-1">
-                            <a href="/profile?userId=${comment.userId}" class="text-white font-semibold text-sm hover:text-blue-400">${comment.user.username}</a>
-                            <span class="text-gray-400 text-xs">${commentDate}</span>
-                        </div>
-                        <p class="text-gray-200 whitespace-pre-wrap text-sm">${comment.content}</p>
-                    </div>
-                </div>
-            `;
+            // scroll to bottom
+            commentsList.scrollTop = commentsList.scrollHeight;
         }
 
-        async function fetchAndDisplayComments(postId) {
-            commentsList.innerHTML = '<div class="text-center text-gray-500 p-4">جاري تحميل التعليقات...</div>';
-            commentError.classList.add('hidden');
-            
-            try {
-                const response = await fetch(`/api/posts/${postId}/comments`);
-                const result = await response.json();
-
-                if (response.ok && result.ok) {
-                    commentsList.innerHTML = '';
-                    if (result.comments.length === 0) {
-                        commentsList.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد تعليقات حتى الآن.</div>';
-                    } else {
-                        result.comments.forEach(comment => {
-                            commentsList.innerHTML += createCommentHtml(comment);
-                        });
-                        commentsList.scrollTop = commentsList.scrollHeight;
-                    }
-                } else {
-                    commentError.textContent = result.error || 'فشل في جلب التعليقات.';
-                    commentError.classList.remove('hidden');
-                    commentsList.innerHTML = '';
-                }
-
-            } catch (error) {
-                commentError.textContent = 'حدث خطأ في الاتصال بالخادم.';
-                commentError.classList.remove('hidden');
-                commentsList.innerHTML = '';
-            }
-        }
-        
         async function postComment() {
             const content = newCommentInput.value.trim();
             if (!content || !currentPostIdForComments) return;
@@ -1125,19 +1229,42 @@ createModalEl.addEventListener('click', (e) => {
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    if (commentsList.querySelector('.text-center.text-gray-500')) {
-                        commentsList.innerHTML = '';
-                    }
-                    commentsList.innerHTML += createCommentHtml(result.comment);
+                    // append new comment visually
+                    const c = result.comment;
+                    const time = c.timestamp ? new Date(c.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : '';
+                    const html = `
+                        <div class="comment-row mb-4">
+                          <img src="${c.user ? (c.user.profile_picture_url || 'https://via.placeholder.com/40') : 'https://via.placeholder.com/40'}" alt="avatar">
+                          <div>
+                            <div class="flex items-center gap-2">
+                              <span class="font-bold text-xs">${c.user ? (c.user.username || '') : ''}</span>
+                              <span class="text-[10px] text-gray-500">${time}</span>
+                            </div>
+                            <div class="comment-bubble mt-1">${escapeHtml(c.content || '')}</div>
+                          </div>
+                        </div>
+                    `;
+                    // remove empty placeholder if exists
+                    const emptyEl = commentsList.querySelector('.text-center.text-gray-500');
+                    if (emptyEl) emptyEl.remove();
+
+                    commentsList.innerHTML += html;
+                    commentsList.scrollTop = commentsList.scrollHeight;
                     newCommentInput.value = '';
-                    
+
+                    // update comments count in post card if present
                     const postCard = document.querySelector(`div[data-post-id="${currentPostIdForComments}"]`);
                     if (postCard) {
                         const commentsSpan = postCard.querySelector('.flex.justify-between span:last-child');
-                        if (commentsSpan) commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${result.newComments} تعليق`;
+                        if (commentsSpan) {
+                            // try to extract number then increment
+                            const text = commentsSpan.textContent || '';
+                            const m = text.match(/(\d+)/);
+                            let n = m ? parseInt(m[1]) : 0;
+                            n = n + 1;
+                            commentsSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${n} تعليق`;
+                        }
                     }
-                    
-                    commentsList.scrollTop = commentsList.scrollHeight;
 
                 } else {
                     commentError.textContent = result.error || 'فشل في إضافة التعليق.';
@@ -1149,7 +1276,7 @@ createModalEl.addEventListener('click', (e) => {
                 commentError.classList.remove('hidden');
             } finally {
                 postCommentBtn.disabled = false;
-                postCommentBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
+                postCommentBtn.innerHTML = 'نشر';
             }
         }
         
@@ -1287,6 +1414,12 @@ createModalEl.addEventListener('click', (e) => {
                 sendHeartbeat();
             }
         });
+
+        // small helper
+        function escapeHtml(s) {
+            if (!s && s !== 0) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
 
     </script>
 </body>
