@@ -223,8 +223,59 @@
             text-decoration: none;
         }
 
-        .btn-accept { background: #16a34a; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 12px; border: none; font-weight:700; }
-        .btn-reject { background: #ef4444; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 12px; border: none; font-weight:700; }
+        /* Add-friend pill (primary) */
+        .btn-add-friend {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: linear-gradient(90deg, #06b6d4 0%, #4f46e5 100%);
+            color: #fff;
+            padding: .45rem .9rem;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: .95rem;
+            box-shadow: 0 8px 24px rgba(79,70,229,0.18);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: transform .15s ease, box-shadow .15s ease, opacity .12s ease;
+            cursor: pointer;
+        }
+        .btn-add-friend:hover { transform: translateY(-3px); box-shadow: 0 12px 36px rgba(79,70,229,0.24); }
+        .btn-add-friend:active { transform: translateY(-1px); }
+
+        /* Accept / Reject styled like add-friend but colored */
+        .btn-accept {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            padding: .45rem .9rem;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: .95rem;
+            box-shadow: 0 8px 24px rgba(6,95,70,0.16);
+            border: 1px solid rgba(255,255,255,0.04);
+            cursor: pointer;
+            transition: transform .12s ease, box-shadow .12s ease;
+        }
+        .btn-accept:hover { transform: translateY(-3px); box-shadow: 0 12px 36px rgba(6,95,70,0.22); }
+
+        .btn-reject {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+            color: #fff;
+            padding: .45rem .9rem;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: .95rem;
+            box-shadow: 0 8px 24px rgba(220,38,38,0.12);
+            border: 1px solid rgba(255,255,255,0.04);
+            cursor: pointer;
+            transition: transform .12s ease, box-shadow .12s ease;
+        }
+        .btn-reject:hover { transform: translateY(-3px); box-shadow: 0 12px 36px rgba(220,38,38,0.18); }
 
         @media (max-width:480px) {
           .action-btn.message, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; }
@@ -236,6 +287,41 @@
           height: 18px;
           margin-left: 6px;
         }
+
+        /* ---------------- Glass toast (for friendly feedback) ---------------- */
+        .glass-toast {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            bottom: 28px;
+            min-width: 180px;
+            max-width: 90%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            color: #fff;
+            background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform .28s cubic-bezier(.2,.9,.2,1), opacity .18s ease;
+        }
+        .glass-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+        .glass-toast .icon {
+            width: 36px; height: 36px; display:flex; align-items:center; justify-content:center; border-radius:8px;
+            background: rgba(255,255,255,0.03);
+            flex-shrink: 0;
+        }
+        .glass-toast.success .icon { background: linear-gradient(90deg,#06b6d4,#4f46e5); }
+        .glass-toast.error .icon { background: linear-gradient(90deg,#ef4444,#dc2626); }
+        .glass-toast.info .icon { background: linear-gradient(90deg,#60a5fa,#0ea5e9); }
+        .glass-toast .msg { font-weight:700; font-size:14px; color: #f8fafc; text-align:center; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -306,7 +392,7 @@
                                 تعديل
                             </a>
 
-                            <!-- keep chatButton but we will switch its classes dynamically -->
+                            <!-- restored original chat button classes -->
                             <a id="chatButton"
                                class="hidden bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-md">
                                 <i class="fas fa-comment-dots ml-2"></i>
@@ -327,6 +413,12 @@
 
         </div>
     </main>
+
+    <!-- Glass toast container (single element) -->
+    <div id="glassToast" class="glass-toast" aria-live="polite" role="status" style="display:none;">
+        <div class="icon"><i id="glassToastIcon" class="fas fa-info"></i></div>
+        <div class="msg" id="glassToastMsg">رسالة</div>
+    </div>
 
     <!-- Centered delete confirmation modal (glass) -->
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
@@ -405,6 +497,29 @@ let currentPostIdForComments = null;
 let statusPollInterval = null;
 let PROFILE_VERIFIED = false; 
 let currentPostIdToDelete = null;
+let toastTimeoutId = null;
+
+/* ---------------- Glass toast helper ---------------- */
+function showGlassToast(message, type = 'info', duration = 3000) {
+    const toast = document.getElementById('glassToast');
+    const icon = document.getElementById('glassToastIcon');
+    const msg = document.getElementById('glassToastMsg');
+    if (!toast || !icon || !msg) return;
+    msg.textContent = message;
+    toast.className = `glass-toast ${type}`;
+    // choose icon by type
+    if (type === 'success') icon.className = 'fas fa-check';
+    else if (type === 'error') icon.className = 'fas fa-times';
+    else icon.className = 'fas fa-info';
+    toast.style.display = 'flex';
+    // trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+    if (toastTimeoutId) clearTimeout(toastTimeoutId);
+    toastTimeoutId = setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => { toast.style.display = 'none'; }, 220);
+    }, duration);
+}
 
 /* ---------------- UI helpers ---------------- */
 function toggleProfileDropdown(event) {
@@ -769,12 +884,12 @@ async function postReply(postId, commentId) {
             // refresh comments list to show the new reply
             await fetchAndDisplayComments(postId);
         } else {
-            alert(data.error || 'فشل في إرسال الرد');
+            showGlassToast(data.error || 'فشل في إرسال الرد', 'error');
             input.disabled = false;
         }
     } catch (e) {
         console.error(e);
-        alert('فشل في الاتصال');
+        showGlassToast('فشل في الاتصال', 'error');
         input.disabled = false;
     }
 }
@@ -1161,10 +1276,12 @@ async function fetchAndDisplayProfile() {
             } else {
                 editProfileButton.classList.add('hidden');
 
-                // Update chatButton appearance to match all_users style when visible
+                // restore chat button to original appearance when visible
                 if (data.is_friend) {
                     chatButton.href = `/chat?contactId=${currentProfileId}`;
-                    chatButton.className = 'action-btn message';
+                    chatButton.className = 'action-btn message'; // keep message behavior for composition but style to match "all users" list
+                    // If you want the exact original green pill instead of action-btn.message, uncomment next line:
+                    // chatButton.className = 'bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-300 flex items-center shadow-md';
                     chatButton.classList.remove('hidden');
                 } else {
                     chatButton.classList.add('hidden');
@@ -1176,20 +1293,24 @@ async function fetchAndDisplayProfile() {
                       <button id="rejectFriendBtn" class="btn-reject"><i class="fas fa-times ml-2"></i>رفض</button>
                     `;
                     document.getElementById('acceptFriendBtn').addEventListener('click', async () => {
+                        const btn = document.getElementById('acceptFriendBtn');
+                        btn.disabled = true;
                         try {
                             const r = await fetch('/api/friends/accept', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تمت الموافقة — أصبح هذا المستخدم صديقك.'); fetchAndDisplayProfile(); }
-                            else alert('فشل في قبول الطلب.');
-                        } catch (e) { alert('خطأ في الشبكة'); }
+                            if (r.ok && j.ok) { showGlassToast('تمت الموافقة — أصبح هذا المستخدم صديقك.', 'success'); fetchAndDisplayProfile(); }
+                            else { showGlassToast(j.error || 'فشل في قبول الطلب.', 'error'); fetchAndDisplayProfile(); }
+                        } catch (e) { showGlassToast('خطأ في الشبكة', 'error'); fetchAndDisplayProfile(); }
                     });
                     document.getElementById('rejectFriendBtn').addEventListener('click', async () => {
+                        const btn = document.getElementById('rejectFriendBtn');
+                        btn.disabled = true;
                         try {
                             const r = await fetch('/api/friends/reject', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تم رفض الطلب.'); fetchAndDisplayProfile(); }
-                            else alert('فشل في رفض الطلب.');
-                        } catch (e) { alert('خطأ في الشبكة'); }
+                            if (r.ok && j.ok) { showGlassToast('تم رفض الطلب.', 'info'); fetchAndDisplayProfile(); }
+                            else { showGlassToast(j.error || 'فشل في رفض الطلب.', 'error'); fetchAndDisplayProfile(); }
+                        } catch (e) { showGlassToast('خطأ في الشبكة', 'error'); fetchAndDisplayProfile(); }
                     });
                 } else if (data.request_sent) {
                     // show a subtle "request sent" action button style
@@ -1201,20 +1322,34 @@ async function fetchAndDisplayProfile() {
                             btn.textContent = 'جاري الإلغاء...';
                             const r = await fetch('/api/friends/cancel', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تم إلغاء الطلب.'); fetchAndDisplayProfile(); } else { alert('فشل في إلغاء الطلب.'); fetchAndDisplayProfile(); }
-                        } catch (e) { alert('خطأ في الشبكة'); fetchAndDisplayProfile(); }
+                            if (r.ok && j.ok) { showGlassToast('تم إلغاء الطلب.', 'info'); fetchAndDisplayProfile(); } else { showGlassToast('فشل في إلغاء الطلب.', 'error'); fetchAndDisplayProfile(); }
+                        } catch (e) { showGlassToast('خطأ في الشبكة', 'error'); fetchAndDisplayProfile(); }
                     });
                 } else if (!data.is_friend) {
-                    friendActionContainer.innerHTML = `<button id="addFriendBtn" class="action-btn"><i class="fas fa-user-plus ml-2"></i>إضافة صديق</button>`;
+                    friendActionContainer.innerHTML = `<button id="addFriendBtn" class="btn-add-friend"><i class="fas fa-user-plus ml-2"></i>إضافة صديق</button>`;
                     document.getElementById('addFriendBtn').addEventListener('click', async (ev) => {
                         const btn = ev.currentTarget;
                         try {
                             btn.disabled = true;
-                            btn.textContent = 'جاري الإرسال...';
+                            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري الإرسال`;
                             const r = await fetch('/api/friends/request', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تم إرسال طلب الصداقة.'); fetchAndDisplayProfile(); } else { alert(j.error || 'فشل في إرسال الطلب.'); fetchAndDisplayProfile(); }
-                        } catch (e) { alert('خطأ في الشبكة'); fetchAndDisplayProfile(); }
+                            if (r.ok && j.ok) {
+                                // show glass toast instead of alert
+                                showGlassToast('تم إرسال طلب الصداقة.', 'success');
+                                // refresh to reflect new state
+                                fetchAndDisplayProfile();
+                            } else {
+                                showGlassToast(j.error || 'فشل في إرسال الطلب.', 'error');
+                                btn.disabled = false;
+                                // re-render to be safe
+                                fetchAndDisplayProfile();
+                            }
+                        } catch (e) {
+                            showGlassToast('خطأ في الشبكة', 'error');
+                            btn.disabled = false;
+                            fetchAndDisplayProfile();
+                        }
                     });
                 }
             }
