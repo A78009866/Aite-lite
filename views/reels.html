@@ -199,7 +199,14 @@
   let swiperInstance = null;
   let currentReelsData = [];
   let currentUserId = null;
+  let currentReelIdForComments = null;
   const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>');
+
+  // Persisted local map for comment likes so UI doesn't "lose" like state when re-rendering
+  function getLocalLikesMap() {
+    try { return JSON.parse(localStorage.getItem('reel_comment_likes') || '{}'); } catch(e){ return {}; }
+  }
+  function setLocalLikesMap(m) { try { localStorage.setItem('reel_comment_likes', JSON.stringify(m)); } catch(e){} }
 
   document.addEventListener('DOMContentLoaded', loadReels);
 
@@ -227,7 +234,6 @@
     wrapper.innerHTML = reels.map((reel, index) => {
       const isOwner = reel.userId === currentUserId;
       const poster = reel.thumbnailUrl || BLACK_POSTER;
-      // show verified-placeholder next to username (will be replaced if verified)
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
@@ -266,7 +272,6 @@
     `}).join('');
 
     setupVideoInteractions();
-    // After rendering, update verified badges (for reel owners)
     updateVerifiedBadges();
   }
 
@@ -430,7 +435,6 @@
   const backdrop = document.getElementById('backdrop');
   const sheet = document.getElementById('commentsSheet');
   const commentsList = document.getElementById('commentsList');
-  let currentReelIdForComments = null;
 
   // --- Open comments: fetch comments and render UI with like/reply support ---
   window.openComments = async function(reelId) {
@@ -444,7 +448,8 @@
       const res = await fetch(`/api/reels/${encodeURIComponent(reelId)}/comments`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch comments: ' + res.status);
       const data = await res.json();
-      renderComments(reelId, data.comments || []);
+      const comments = data.comments || [];
+      renderComments(reelId, comments);
     } catch(e) {
       console.error('openComments error', e);
       commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
@@ -455,9 +460,57 @@
     backdrop.classList.remove('open');
     sheet.classList.remove('open');
     if(swiperInstance) swiperInstance.allowTouchMove = true;
+    currentReelIdForComments = null;
   }
 
-  // Render comments with like & reply buttons
+  // Create top-level comment element HTML
+  function createReelCommentElement(comment, reelId) {
+    const commentId = comment.id || comment.commentId || '';
+    const username = comment.username || comment.user?.username || 'مستخدم';
+    const avatar = comment.profile_picture_url || comment.user?.profile_picture_url || 'https://via.placeholder.com/40';
+    const time = comment.timestamp ? new Date(comment.timestamp).toLocaleTimeString() : '';
+    const serverLikes = typeof comment.likes !== 'undefined' ? comment.likes : 0;
+
+    const localMap = getLocalLikesMap();
+    const key = `${reelId}:${commentId}`;
+    const localLiked = !!localMap[key];
+    const displayedLikes = serverLikes + (localLiked ? 1 : 0);
+
+    return `
+      <div class="comment-row" data-comment-id="${escapeAttr(commentId)}">
+        <img src="${escapeHtml(avatar)}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover" alt="${escapeHtml(username)}">
+        <div class="flex-1">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-bold text-xs commenter-name" data-username="${escapeAttr(username)}">${escapeHtml(username)} <span class="verified-placeholder" data-user-id="${escapeAttr(comment.userId || '')}"></span></div>
+              <div class="text-[11px] text-gray-400 mt-1">${escapeHtml(time)}</div>
+            </div>
+          </div>
+          <p class="text-sm mt-2 comment-content">${escapeHtml(comment.content)}</p>
+
+          <div class="comment-actions">
+            <div class="comment-like-btn ${localLiked ? 'liked' : ''}" onclick="toggleCommentLikeReel('${escapeAttr(reelId)}','${escapeAttr(commentId)}', this)">
+              <i class="${localLiked ? 'fas' : 'far'} fa-heart"></i>
+              <span class="text-[12px]" id="reel-comment-like-count-${escapeAttr(commentId)}">${displayedLikes}</span>
+            </div>
+            <div class="text-xs text-gray-400 cursor-pointer" onclick="openReplyBoxReel('${escapeAttr(commentId)}','${escapeAttr(username)}')">
+              <i class="fas fa-reply"></i> رد
+            </div>
+          </div>
+
+          <div id="replies-container-${escapeAttr(commentId)}" class="mt-3 space-y-2"></div>
+
+          <div class="reply-box hidden" id="reply-box-${escapeAttr(commentId)}">
+            <input id="reply-input-${escapeAttr(commentId)}" placeholder="اكتب رد..." />
+            <button onclick="postReplyReel('${escapeAttr(reelId)}','${escapeAttr(commentId)}','${escapeAttr(username)}')" class="text-white bg-blue-600 px-3 py-1 rounded">إرسال</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Render comments list. We will render top-level comments in order.
+  // For replies posted via this client, we append them under the parent comment's replies-container.
   function renderComments(reelId, comments) {
     commentsList.innerHTML = '';
     if(!comments || comments.length === 0) {
@@ -465,49 +518,13 @@
       return;
     }
 
-    commentsList.innerHTML = comments.map(c => {
-      // server uses `id` as comment id in reels_comments
-      const commentId = c.id || c.commentId || '';
-      const username = c.username || c.userName || c.user?.username || 'مستخدم';
-      const avatar = c.profile_picture_url || c.profilePicture || c.user?.profile_picture_url || 'https://via.placeholder.com/40';
-      const time = c.timestamp ? new Date(c.timestamp).toLocaleTimeString() : '';
-      const likeCount = typeof c.likes !== 'undefined' ? c.likes : 0;
-
-      // We'll include placeholders and attach handlers that call reel-specific endpoints:
-      return `
-        <div class="comment-row" data-comment-id="${escapeAttr(commentId)}">
-          <img src="${escapeHtml(avatar)}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover" alt="${escapeHtml(username)}">
-          <div class="flex-1">
-            <div class="flex items-center justify-between">
-              <div>
-                <div class="font-bold text-xs">${escapeHtml(username)} <span class="verified-placeholder" data-user-id="${escapeAttr(c.userId || c.userID || c.from || '')}"></span></div>
-                <div class="text-[11px] text-gray-400 mt-1">${escapeHtml(time)}</div>
-              </div>
-            </div>
-            <p class="text-sm mt-2">${escapeHtml(c.content)}</p>
-
-            <div class="comment-actions">
-              <div class="comment-like-btn ${c.is_liked ? 'liked' : ''}" onclick="toggleCommentLikeReel('${escapeAttr(reelId)}','${escapeAttr(commentId)}', this)">
-                <i class="${c.is_liked ? 'fas' : 'far'} fa-heart"></i>
-                <span class="text-[12px]" id="reel-comment-like-count-${escapeAttr(commentId)}">${likeCount}</span>
-              </div>
-              <div class="text-xs text-gray-400 cursor-pointer" onclick="openReplyBoxReel('${escapeAttr(commentId)}','${escapeAttr(username)}')">
-                <i class="fas fa-reply"></i> رد
-              </div>
-            </div>
-
-            <div id="replies-container-${escapeAttr(commentId)}"></div>
-
-            <div class="reply-box hidden" id="reply-box-${escapeAttr(commentId)}">
-              <input id="reply-input-${escapeAttr(commentId)}" placeholder="اكتب رد..." />
-              <button onclick="postReplyReel('${escapeAttr(reelId)}','${escapeAttr(commentId)}','${escapeAttr(username)}')" class="text-white bg-blue-600 px-3 py-1 rounded">إرسال</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    // Render all comments as top-level. Replies posted via this client will be appended under parent.
+    // Use server data for likes if present, but merge with local likes map so likes don't "disappear".
+    const html = comments.map(c => createReelCommentElement(c, reelId)).join('');
+    commentsList.innerHTML = html;
 
     updateVerifiedBadges();
+
     // scroll to bottom to show latest
     setTimeout(()=> { commentsList.scrollTop = commentsList.scrollHeight; }, 80);
   }
@@ -515,12 +532,12 @@
   backdrop.addEventListener('click', closeCommentsSheet);
   document.getElementById('closeComments').addEventListener('click', closeCommentsSheet);
   
-  // Post new comment (top-level)
+  // Post new top-level comment (uses server response to append)
   document.getElementById('sendCommentBtn').addEventListener('click', async () => {
     const input = document.getElementById('commentInput');
     const content = input.value.trim();
     if(!content || !currentReelIdForComments) return;
-    input.value = '';
+    input.disabled = true;
     try {
       const res = await fetch(`/api/reels/${encodeURIComponent(currentReelIdForComments)}/comment`, {
         method: 'POST',
@@ -528,55 +545,86 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content })
       });
-      if (!res.ok) throw new Error('Failed to post comment: ' + res.status);
-      // reload comments
-      const res2 = await fetch(`/api/reels/${encodeURIComponent(currentReelIdForComments)}/comments`, { credentials: 'include' });
-      const data = await res2.json();
-      renderComments(currentReelIdForComments, data.comments || []);
-    } catch(e) { console.error('send comment error', e); alert('فشل الإرسال'); }
+      const json = await res.json().catch(()=>({ ok: false }));
+      if (res.ok && json.ok && json.comment) {
+        // append the returned comment as top-level
+        commentsList.insertAdjacentHTML('beforeend', createReelCommentElement(json.comment, currentReelIdForComments));
+        updateVerifiedBadges();
+        // update comment count badge on reel slide
+        const commentCountSpan = document.getElementById(`commentCount-${currentReelIdForComments}`);
+        if (commentCountSpan) commentCountSpan.textContent = parseInt(commentCountSpan.textContent || '0') + 1;
+        // scroll to bottom
+        setTimeout(()=> { commentsList.scrollTop = commentsList.scrollHeight; }, 80);
+        input.value = '';
+      } else {
+        throw new Error(json.error || 'Failed to post comment');
+      }
+    } catch(e) {
+      console.error('send comment error', e);
+      alert('فشل الإرسال');
+    } finally {
+      input.disabled = false;
+    }
   });
 
-  // Toggle like on a reel comment (tries reel-specific endpoint, falls back to optimistic)
+  // Toggle like on a reel comment. We persist locally (localStorage) so like doesn't disappear on rerender.
+  // We also try to call an API endpoint (`/api/reels/:reelId/comments/:commentId/like`) if backend implements it.
   async function toggleCommentLikeReel(reelId, commentId, btnEl) {
-    btnEl = btnEl || document.querySelector(`[data-comment-id="${commentId}"] .comment-like-btn`);
+    if (!btnEl) btnEl = document.querySelector(`[data-comment-id="${commentId}"] .comment-like-btn`);
     if (!btnEl) return;
     btnEl.style.pointerEvents = 'none';
+
+    const countEl = document.getElementById(`reel-comment-like-count-${commentId}`);
+    let count = parseInt(countEl ? countEl.textContent : '0') || 0;
+
+    const localMap = getLocalLikesMap();
+    const key = `${reelId}:${commentId}`;
+    const currentlyLiked = !!localMap[key];
+
+    // toggle local like immediately (optimistic)
+    if (currentlyLiked) {
+      delete localMap[key];
+      btnEl.classList.remove('liked');
+      const icon = btnEl.querySelector('i');
+      if (icon) { icon.classList.remove('fas'); icon.classList.add('far'); }
+      count = Math.max(0, count - 1);
+    } else {
+      localMap[key] = true;
+      btnEl.classList.add('liked');
+      const icon = btnEl.querySelector('i');
+      if (icon) { icon.classList.remove('far'); icon.classList.add('fas'); }
+      count = count + 1;
+    }
+    if (countEl) countEl.textContent = count;
+    setLocalLikesMap(localMap);
+
+    // fire-and-forget to server endpoint if exists
     try {
-      // Try reel comment like endpoint (may exist if backend implemented)
       const res = await fetch(`/api/reels/${encodeURIComponent(reelId)}/comments/${encodeURIComponent(commentId)}/like`, {
         method: 'POST',
         credentials: 'include'
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(()=>null);
+        // if server responds with authoritative likes/is_liked, use it
         if (data && data.ok) {
-          // update UI from response
-          const countEl = document.getElementById(`reel-comment-like-count-${commentId}`);
-          if (countEl) countEl.textContent = (data.likes != null) ? data.likes : countEl.textContent;
-          if (data.is_liked) btnEl.classList.add('liked'); else btnEl.classList.remove('liked');
-          const icon = btnEl.querySelector('i');
-          if (icon) {
-            if (data.is_liked) { icon.classList.remove('far'); icon.classList.add('fas'); }
-            else { icon.classList.remove('fas'); icon.classList.add('far'); }
+          if (typeof data.likes !== 'undefined' && countEl) countEl.textContent = data.likes;
+          if (typeof data.is_liked !== 'undefined') {
+            // sync localMap according to server
+            if (data.is_liked) localMap[key] = true; else delete localMap[key];
+            setLocalLikesMap(localMap);
+            if (data.is_liked) btnEl.classList.add('liked'); else btnEl.classList.remove('liked');
+            const icon = btnEl.querySelector('i');
+            if (icon) { if (data.is_liked) { icon.classList.remove('far'); icon.classList.add('fas'); } else { icon.classList.remove('fas'); icon.classList.add('far'); } }
           }
-          return;
         }
       }
     } catch (e) {
-      // ignore, fallback to optimistic
-      console.warn('reel comment like endpoint failed, will do optimistic UI', e);
+      // ignore server error; we kept optimistic state
+      console.warn('reel comment like endpoint failed', e);
+    } finally {
+      btnEl.style.pointerEvents = '';
     }
-
-    // Fallback: optimistic toggle on client only
-    try {
-      const countEl = document.getElementById(`reel-comment-like-count-${commentId}`);
-      let count = parseInt(countEl ? countEl.textContent : '0') || 0;
-      const isLiked = btnEl.classList.contains('liked');
-      if (isLiked) { btnEl.classList.remove('liked'); count = Math.max(0, count - 1); btnEl.querySelector('i').classList.remove('fas'); btnEl.querySelector('i').classList.add('far'); }
-      else { btnEl.classList.add('liked'); count = count + 1; btnEl.querySelector('i').classList.remove('far'); btnEl.querySelector('i').classList.add('fas'); }
-      if (countEl) countEl.textContent = count;
-    } catch(e){}
-    finally { btnEl.style.pointerEvents = ''; }
   }
 
   // Open reply input under a specific comment
@@ -593,8 +641,7 @@
   }
 
   // Post a reply to a reel comment.
-  // Since backend doesn't have nested replies for reels in the original server,
-  // we post a normal comment prefixed with @username, then refresh comments.
+  // We'll post a regular reel comment to backend but, on success, append it nested under the parent comment's replies container.
   async function postReplyReel(reelId, commentId, username) {
     const input = document.getElementById(`reply-input-${commentId}`);
     if (!input) return;
@@ -602,6 +649,7 @@
     if (!content) return;
     input.disabled = true;
     try {
+      // Construct reply content - we keep original server behavior (prefix with @username)
       const bodyContent = `@${username} ${content}`;
       const res = await fetch(`/api/reels/${encodeURIComponent(reelId)}/comment`, {
         method: 'POST',
@@ -609,15 +657,43 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: bodyContent })
       });
-      if (!res.ok) throw new Error('Failed to post reply: ' + res.status);
-      // refresh comments
-      const res2 = await fetch(`/api/reels/${encodeURIComponent(reelId)}/comments`, { credentials: 'include' });
-      const data = await res2.json();
-      renderComments(reelId, data.comments || []);
+      const json = await res.json().catch(()=>({ ok: false }));
+      if (res.ok && json.ok && json.comment) {
+        // Append reply visually under parent comment
+        const reply = json.comment;
+        const repliesContainer = document.getElementById(`replies-container-${commentId}`);
+        if (repliesContainer) {
+          repliesContainer.insertAdjacentHTML('beforeend', `
+            <div class="reply-item flex items-start gap-2">
+              <img src="${escapeHtml(reply.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar flex-shrink-0" alt="${escapeHtml(reply.username || '')}">
+              <div class="flex-1">
+                <div class="text-xs text-gray-300 font-bold">${escapeHtml(reply.username || '')}</div>
+                <div class="text-sm text-gray-200">${escapeHtml(reply.content || '')}</div>
+              </div>
+            </div>
+          `);
+        } else {
+          // if parent container missing, append at bottom of list
+          commentsList.insertAdjacentHTML('beforeend', createReelCommentElement(reply, reelId));
+        }
+
+        // update reel comment count visually
+        const commentCountSpan = document.getElementById(`commentCount-${reelId}`);
+        if (commentCountSpan) commentCountSpan.textContent = parseInt(commentCountSpan.textContent || '0') + 1;
+
+        // hide reply box and clear input
+        const box = document.getElementById(`reply-box-${commentId}`);
+        if (box) box.classList.add('hidden');
+        input.value = '';
+
+        // scroll to show new reply
+        setTimeout(()=> { const container = document.getElementById(`replies-container-${commentId}`); if (container) container.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, 80);
+      } else {
+        throw new Error(json.error || 'Failed to post reply');
+      }
     } catch (e) {
       console.error('postReplyReel error', e);
       alert('فشل في إرسال الرد');
-      input.disabled = false;
     } finally {
       input.disabled = false;
     }
