@@ -301,7 +301,7 @@ async function areFriends(userA, userB) {
 // ---------------- Helper: Normalize stored comments ----------------
 function normalizeStoredComment(val) {
   // val: raw object from DB
-  const commentId = val.commentId || val.id || val.key || '';
+  const commentId = val.commentId || val.id || val.key || val.keyId || '';
   const content = val.content || val.commentContent || val.text || '';
   const timestamp = (typeof val.timestamp === 'number') ? val.timestamp : (val.timestamp ? Number(val.timestamp) : Date.now());
 
@@ -320,13 +320,26 @@ function normalizeStoredComment(val) {
   user.username = user.username || 'مستخدم';
   user.profile_picture_url = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
 
+  // include likes/replies counts if present (backwards compatible)
+  const likesCount = typeof val.likes === 'number' ? val.likes : (val.likesCount || 0);
+  const repliesCount = typeof val.repliesCount === 'number' ? val.repliesCount : (val.replies_count || 0);
+
   return {
     commentId,
     postId: val.postId || '',
     content,
     timestamp,
-    user
+    user,
+    likes: likesCount || 0,
+    repliesCount: repliesCount || 0
   };
+}
+
+// helper to count children in a snapshot
+function countSnapshotChildren(snap) {
+  let c = 0;
+  snap.forEach(() => c++);
+  return c;
 }
 
 // ---------------- API: Admin endpoints (جديد) ----------------
@@ -1101,7 +1114,9 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
         userId: userId,
         username: userData.username || 'مستخدم',
         profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-      }
+      },
+      likes: 0,
+      repliesCount: 0
     };
 
     await newCommentRef.set(commentData);
@@ -1152,9 +1167,154 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   }
 });
 
-// Get post comments (UPDATED: normalize)
+
+// ---------------- New Feature: Like a comment ----------------
+// Toggle like/unlike on a comment, maintain likes count and notify owner
+app.post('/api/posts/:postId/comments/:commentId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { postId, commentId } = req.params;
+  if (!postId || !commentId) return res.status(400).json({ ok: false, error: 'postId/commentId required' });
+
+  const likeRef = db.ref(`comment_likes/${postId}/${commentId}/${userId}`);
+  const commentRef = db.ref(`comments/${postId}/${commentId}`);
+
+  try {
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const likeSnap = await likeRef.once('value');
+    let isLiked = likeSnap.exists();
+    let delta = 0;
+
+    if (isLiked) {
+      await likeRef.remove();
+      delta = -1;
+      isLiked = false;
+    } else {
+      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
+      delta = 1;
+      isLiked = true;
+    }
+
+    // Update likes count on comment atomically
+    let newLikesCount = 0;
+    await commentRef.child('likes').transaction((current) => {
+      newLikesCount = (current || 0) + delta;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    // notify comment owner when liked by another user
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
+      if (delta === 1 && commentOwnerId && commentOwnerId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'comment_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: postId,
+          commentId: commentId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create comment_like notification:', nerr);
+    }
+
+    res.json({ ok: true, is_liked: isLiked, likes: newLikesCount });
+
+  } catch (error) {
+    console.error('Error toggling comment like:', error);
+    res.status(500).json({ ok: false, error: 'Failed to toggle comment like' });
+  }
+});
+
+
+// ---------------- New Feature: Reply to comment ----------------
+// Create a reply under comment_replies/{postId}/{commentId}
+// Increment repliesCount on comment and notify original commenter
+app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { postId, commentId } = req.params;
+  const { content } = req.body;
+  if (!postId || !commentId || !content) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`comments/${postId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const userSnap = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnap.val() || {};
+
+    const replyRef = db.ref(`comment_replies/${postId}/${commentId}`).push();
+    const replyId = replyRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const replyData = {
+      id: replyId,
+      postId,
+      commentId,
+      userId,
+      username: userData.username || 'مستخدم',
+      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      content: content.trim(),
+      timestamp: timestamp
+    };
+
+    await replyRef.set(replyData);
+
+    // increment repliesCount on comment
+    let newRepliesCount = 0;
+    await commentRef.child('repliesCount').transaction((current) => {
+      newRepliesCount = (current || 0) + 1;
+      return newRepliesCount;
+    });
+
+    // notify original commenter (if not replying to self)
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
+      if (commentOwnerId && commentOwnerId !== userId) {
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'comment_reply',
+          from_user_id: userId,
+          from_username: userData.username || 'مستخدم',
+          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId,
+          commentId,
+          replyId,
+          replyContent: replyData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create comment_reply notification:', nerr);
+    }
+
+    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+
+  } catch (error) {
+    console.error('Error creating reply:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create reply' });
+  }
+});
+
+// ---------------- Get comments (UPDATED): include likes/replies summary and whether current user liked each ----------------
 app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
-  const postId = req.params.postId;
+  const currentUserId = req.session.userId;
+  const { postId } = req.params;
   try {
     const commentsSnap = await db.ref(`comments/${postId}`)
       .orderByChild('timestamp')
@@ -1163,13 +1323,95 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
     const comments = [];
     commentsSnap.forEach(childSnap => {
       const v = childSnap.val();
-      comments.push(normalizeStoredComment(v));
+      if (v) comments.push(v);
     });
 
-    res.json({ ok: true, comments: comments });
+    // For each comment, fetch likes count, whether current user liked, and latest replies (optionally)
+    const enriched = await Promise.all(comments.map(async (c) => {
+      const normalized = normalizeStoredComment(c);
+      // likes count from comment.likes or count children at comment_likes
+      let likesCount = 0;
+      try {
+        if (typeof c.likes === 'number') {
+          likesCount = c.likes;
+        } else {
+          const likesSnap = await db.ref(`comment_likes/${postId}/${normalized.commentId}`).once('value');
+          likesCount = countSnapshotChildren(likesSnap);
+        }
+      } catch (e) {
+        likesCount = normalized.likes || 0;
+      }
+
+      // did current user like?
+      let isLiked = false;
+      try {
+        const userLikeSnap = await db.ref(`comment_likes/${postId}/${normalized.commentId}/${currentUserId}`).once('value');
+        isLiked = userLikeSnap.exists();
+      } catch (e) {}
+
+      // replies count (from comment or by counting)
+      let repliesCount = 0;
+      try {
+        if (typeof c.repliesCount === 'number') repliesCount = c.repliesCount;
+        else {
+          const repliesSnap = await db.ref(`comment_replies/${postId}/${normalized.commentId}`).once('value');
+          repliesCount = countSnapshotChildren(repliesSnap);
+        }
+      } catch (e) {
+        repliesCount = normalized.repliesCount || 0;
+      }
+
+      // optionally fetch last few replies (e.g., last 5)
+      let recentReplies = [];
+      try {
+        const repliesSnap = await db.ref(`comment_replies/${postId}/${normalized.commentId}`)
+          .orderByChild('timestamp')
+          .limitToLast(5)
+          .once('value');
+        repliesSnap.forEach(r => recentReplies.push(r.val()));
+        recentReplies = recentReplies.map(r => ({
+          id: r.id,
+          userId: r.userId,
+          username: r.username,
+          profile_picture_url: r.profile_picture_url,
+          content: r.content,
+          timestamp: r.timestamp
+        }));
+      } catch (e) {
+        recentReplies = [];
+      }
+
+      return {
+        ...normalized,
+        likes: likesCount,
+        is_liked: isLiked,
+        repliesCount: repliesCount,
+        recentReplies: recentReplies
+      };
+    }));
+
+    res.json({ ok: true, comments: enriched });
   } catch (error) {
     console.error('Error fetching comments:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
+  }
+});
+
+// ---------------- Get replies for a specific comment ----------------
+app.get('/api/posts/:postId/comments/:commentId/replies', requireAuth, async (req, res) => {
+  const { postId, commentId } = req.params;
+  try {
+    const snap = await db.ref(`comment_replies/${postId}/${commentId}`)
+      .orderByChild('timestamp')
+      .once('value');
+    const replies = [];
+    snap.forEach(child => {
+      replies.push(child.val());
+    });
+    res.json({ ok: true, replies: replies });
+  } catch (error) {
+    console.error('Error fetching replies:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
   }
 });
 
@@ -1193,6 +1435,9 @@ app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
     // also remove comments/likes/other related nodes to keep DB clean
     await db.ref(`comments/${postId}`).remove();
     await db.ref(`likes/${postId}`).remove();
+    // also cleanup comment_likes and comment_replies if desired (could be large) - try best-effort
+    await db.ref(`comment_likes/${postId}`).remove().catch(()=>{});
+    await db.ref(`comment_replies/${postId}`).remove().catch(()=>{});
 
     res.json({ ok: true });
   } catch (error) {
