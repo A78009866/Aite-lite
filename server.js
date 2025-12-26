@@ -764,7 +764,7 @@ app.get('/api/friends/requests', requireAuth, async (req, res) => {
 
     res.json({ ok: true, requests: out });
   } catch (error) {
-    console.error('Error getting friend requests', error);
+    console.error('Error getting friend requests:', error);
     res.status(500).json({ ok: false });
   }
 });
@@ -1589,6 +1589,10 @@ app.delete('/api/reels/:reelId', requireAuth, async (req, res) => {
     await db.ref(`reels_likes/${reelId}`).remove();
     await db.ref(`reels_comments/${reelId}`).remove();
 
+    // cleanup comment likes/replies if exist
+    await db.ref(`reels_comment_likes/${reelId}`).remove().catch(()=>{});
+    await db.ref(`reels_comment_replies/${reelId}`).remove().catch(()=>{});
+
     res.json({ ok: true, message: 'تم الحذف بنجاح' });
   } catch (error) {
     console.error(error);
@@ -1670,7 +1674,9 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
       username: user.username,
       profile_picture_url: user.profile_picture_url,
       content,
-      timestamp: admin.database.ServerValue.TIMESTAMP
+      timestamp: admin.database.ServerValue.TIMESTAMP,
+      likes: 0,
+      repliesCount: 0
     };
 
     await commentRef.set(commentData);
@@ -1704,7 +1710,165 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
 
     res.json({ ok: true, comment: commentData });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ ok: false });
+  }
+});
+
+// New endpoints: like a reel comment
+app.post('/api/reels/:reelId/comments/:commentId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId, commentId } = req.params;
+  if (!reelId || !commentId) return res.status(400).json({ ok: false, error: 'reelId/commentId required' });
+
+  const likeRef = db.ref(`reels_comment_likes/${reelId}/${commentId}/${userId}`);
+  const commentRef = db.ref(`reels_comments/${reelId}/${commentId}`);
+
+  try {
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const likeSnap = await likeRef.once('value');
+    let isLiked = likeSnap.exists();
+    let delta = 0;
+
+    if (isLiked) {
+      await likeRef.remove();
+      delta = -1;
+      isLiked = false;
+    } else {
+      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
+      delta = 1;
+      isLiked = true;
+    }
+
+    // Update likes count on comment atomically
+    let newLikesCount = 0;
+    await commentRef.child('likes').transaction((current) => {
+      newLikesCount = (current || 0) + delta;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    // notify comment owner when liked by another user
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = commentVal.userId || '';
+      if (delta === 1 && commentOwnerId && commentOwnerId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'comment_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: null,
+          reelId: reelId,
+          commentId: commentId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create reels comment_like notification:', nerr);
+    }
+
+    res.json({ ok: true, is_liked: isLiked, likes: newLikesCount });
+  } catch (error) {
+    console.error('Error toggling reel comment like:', error);
+    res.status(500).json({ ok: false, error: 'Failed to toggle comment like' });
+  }
+});
+
+// New endpoint: reply to a reel comment
+app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId, commentId } = req.params;
+  const { content } = req.body;
+  if (!reelId || !commentId || !content) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`reels_comments/${reelId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const userSnap = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnap.val() || {};
+
+    const replyRef = db.ref(`reels_comment_replies/${reelId}/${commentId}`).push();
+    const replyId = replyRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const replyData = {
+      id: replyId,
+      reelId,
+      commentId,
+      userId,
+      username: userData.username || 'مستخدم',
+      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      content: content.trim(),
+      timestamp: timestamp
+    };
+
+    await replyRef.set(replyData);
+
+    // increment repliesCount on comment
+    let newRepliesCount = 0;
+    await commentRef.child('repliesCount').transaction((current) => {
+      newRepliesCount = (current || 0) + 1;
+      return newRepliesCount;
+    });
+
+    // notify original commenter (if not replying to self)
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = commentVal.userId || '';
+      if (commentOwnerId && commentOwnerId !== userId) {
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'comment_reply',
+          from_user_id: userId,
+          from_username: userData.username || 'مستخدم',
+          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: null,
+          reelId,
+          commentId,
+          replyId,
+          replyContent: replyData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create reels comment_reply notification:', nerr);
+    }
+
+    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+  } catch (error) {
+    console.error('Error creating reply for reel comment:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create reply' });
+  }
+});
+
+// New endpoint: get replies for a reel comment
+app.get('/api/reels/:reelId/comments/:commentId/replies', requireAuth, async (req, res) => {
+  const { reelId, commentId } = req.params;
+  try {
+    const snap = await db.ref(`reels_comment_replies/${reelId}/${commentId}`)
+      .orderByChild('timestamp')
+      .once('value');
+    const replies = [];
+    snap.forEach(child => {
+      replies.push(child.val());
+    });
+    res.json({ ok: true, replies: replies });
+  } catch (error) {
+    console.error('Error fetching replies for reel comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
   }
 });
 
@@ -1722,7 +1886,50 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
       if (val) comments.push(val);
     });
 
-    res.json({ ok: true, comments: comments });
+    // For each comment, include likes/repliesCount and whether current user liked it
+    const currentUserId = req.session.userId;
+    const enriched = await Promise.all(comments.map(async (c) => {
+      // likes
+      let likes = typeof c.likes === 'number' ? c.likes : 0;
+      try {
+        if (typeof c.likes !== 'number') {
+          const likesSnap = await db.ref(`reels_comment_likes/${reelId}/${c.id}`).once('value');
+          likes = countSnapshotChildren(likesSnap);
+        }
+      } catch (e) {}
+      let is_liked = false;
+      try {
+        const userLikeSnap = await db.ref(`reels_comment_likes/${reelId}/${c.id}/${currentUserId}`).once('value');
+        is_liked = userLikeSnap.exists();
+      } catch (e) {}
+      // repliesCount
+      let repliesCount = typeof c.repliesCount === 'number' ? c.repliesCount : 0;
+      try {
+        if (typeof c.repliesCount !== 'number') {
+          const repliesSnap = await db.ref(`reels_comment_replies/${reelId}/${c.id}`).once('value');
+          repliesCount = countSnapshotChildren(repliesSnap);
+        }
+      } catch (e) {}
+      // recentReplies - last 3
+      let recentReplies = [];
+      try {
+        const rr = await db.ref(`reels_comment_replies/${reelId}/${c.id}`).orderByChild('timestamp').limitToLast(3).once('value');
+        rr.forEach(r => recentReplies.push(r.val()));
+      } catch (e) {}
+
+      return {
+        ...c,
+        likes: likes,
+        is_liked: is_liked,
+        repliesCount: repliesCount,
+        recentReplies: recentReplies
+      };
+    }));
+
+    // sort by timestamp ascending for UI (older first)
+    enriched.sort((a,b) => (a.timestamp||0) - (b.timestamp||0));
+
+    res.json({ ok: true, comments: enriched });
   } catch (error) {
     console.error(error);
     res.status(500).json({ ok: false });
