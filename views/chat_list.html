@@ -236,16 +236,22 @@
   padding: 0;
 }
 #commentModal .modal-header {
-  padding: 18px 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   display:flex;
   align-items:center;
   justify-content:space-between;
 }
 #commentModal .modal-header h3 { margin:0; font-size:18px; color:#fff; }
+#commentModal .comment-post-preview {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  max-height: 36vh;
+  overflow: auto;
+}
 #commentModal .comment-list {
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px 16px;
   gap:12px;
   display:flex;
   flex-direction:column;
@@ -429,7 +435,8 @@
         </div>
     </div>
     
-    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
+    <!-- modal for comments positioned from bottom -->
+    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-end justify-center p-4 glass-modal-bg">
         <div class="glass-comment-modal-content p-0 rounded-xl shadow-2xl max-w-lg w-full modal-animate-in border border-white/20" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3>التعليقات</h3>
@@ -438,7 +445,12 @@
                 </button>
             </div>
 
-            <div id="commentsList" class="comment-list custom-scrollbar">
+            <!-- Post preview shown at top of the modal -->
+            <div id="commentPostPreview" class="comment-post-preview">
+                <!-- will be injected with simplified clone of the post -->
+            </div>
+
+            <div id="commentsList" class="comment-list custom-scrollbar" style="flex:1; overflow-y:auto;">
                 <!-- Comments will be injected here -->
             </div>
 
@@ -519,6 +531,7 @@
         const newCommentInput = document.getElementById('newCommentInput');
         const postCommentBtn = document.getElementById('postCommentBtn');
         const commentError = document.getElementById('commentError');
+        const commentPostPreview = document.getElementById('commentPostPreview');
         let currentPostIdForComments = null; // لتتبع المنشور الحالي للتعليقات
         
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
@@ -1099,10 +1112,14 @@ createModalEl.addEventListener('click', (e) => {
             }
         }
         
+        // updated: when clicking comments, open a modal that shows the post at top and comments below
         async function handleComment(postId) { 
             currentPostIdForComments = postId;
+            populatePostPreviewForComments(postId);
             await fetchAndDisplayComments(postId);
             commentModal.classList.remove('hidden'); 
+            // منع تمرير الخلفية أثناء فتح المودال
+            document.body.style.overflow = 'hidden';
         }
 
         closeCommentModalBtn.addEventListener('click', () => {
@@ -1110,9 +1127,17 @@ createModalEl.addEventListener('click', (e) => {
             currentPostIdForComments = null;
             newCommentInput.value = '';
             commentsList.innerHTML = '';
+            commentPostPreview.innerHTML = '';
+            document.body.style.overflow = 'auto';
         });
 
         // ******************** 7. وظائف التعليقات ********************
+
+        function escapeHtml(text) {
+            return String(text || '').replace(/[&<>"'`=\/]/g, function (s) {
+                return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;", "/":"&#x2F;", "`":"&#x60;", "=":"&#x3D;"}[s]);
+            });
+        }
 
         function createCommentHtml(comment) {
             const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
@@ -1260,6 +1285,59 @@ createModalEl.addEventListener('click', (e) => {
                     document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => ph.remove());
                 }
             }));
+        }
+
+        // Populate a simplified preview of the post inside the comment modal
+        function populatePostPreviewForComments(postId) {
+            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+            if (!postCard) {
+                commentPostPreview.innerHTML = '<div class="text-center text-gray-500 p-4">لا يمكن عرض معاينة المنشور.</div>';
+                return;
+            }
+
+            // clone to avoid manipulating the original
+            const clone = postCard.cloneNode(true);
+
+            // remove interactive elements that may conflict (ids, buttons, audio/video controls)
+            // remove post menu button
+            clone.querySelectorAll('.post-menu-button').forEach(n => n.remove());
+            // remove like/comment buttons area at bottom (optional)
+            clone.querySelectorAll('.post-like-button').forEach(n => n.remove());
+            clone.querySelectorAll('button[onclick^="handleComment"]').forEach(n => n.remove());
+            // remove audio play buttons & waveform to avoid conflicting players
+            clone.querySelectorAll('.audio-play-button, .waveform-post').forEach(n => n.remove());
+
+            // For any <video> elements, replace with their poster image (so it doesn't auto-play)
+            clone.querySelectorAll('video').forEach(v => {
+                const poster = v.getAttribute('poster') || '';
+                const src = v.getAttribute('src') || '';
+                // try to use poster if available, otherwise show a placeholder with a click to open media viewer
+                if (poster) {
+                    const img = document.createElement('img');
+                    img.src = poster;
+                    img.alt = 'video preview';
+                    img.className = 'w-full max-h-64 object-cover rounded-lg cursor-pointer';
+                    img.onclick = (e) => openMediaViewer(src, 'video', e);
+                    v.replaceWith(img);
+                } else {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'w-full max-h-64 bg-black rounded-lg flex items-center justify-center';
+                    wrapper.innerHTML = `<i class="fas fa-video text-4xl text-white"></i>`;
+                    v.replaceWith(wrapper);
+                }
+            });
+
+            // Remove any element ids to avoid duplicates in DOM
+            clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+
+            commentPostPreview.innerHTML = '';
+            const container = document.createElement('div');
+            container.className = 'p-0';
+            container.appendChild(clone);
+            commentPostPreview.appendChild(container);
+
+            // Trigger verified badge update for post owner inside preview
+            updateVerifiedBadges();
         }
 
         // ******************** Initialization ********************
