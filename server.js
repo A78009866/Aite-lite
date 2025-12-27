@@ -2494,7 +2494,100 @@ setInterval(async () => {
     console.error('Error in offline check interval:', error);
   }
 }, 60000); // Check every minute
+// --- GET family key (فقط للمنشئ) ---
+app.get('/api/families/:familyId/key', requireAuth, async (req, res) => {
+  const { familyId } = req.params;
+  const userId = req.session.userId;
+  if (!familyId) return res.status(400).json({ ok: false, error: 'familyId required' });
 
+  try {
+    const snap = await db.ref(`families/${familyId}`).once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
+    const f = snap.val();
+
+    if (!f.creatorId || f.creatorId !== userId) {
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+
+    // Return the plain key only to creator (make sure you stored it on creation as keyPlain)
+    const key = f.keyPlain || null;
+    if (!key) return res.status(404).json({ ok: false, error: 'Key not found' });
+
+    res.json({ ok: true, key });
+  } catch (err) {
+    console.error('Error fetching family key:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// --- POST leave family (any member) ---
+app.post('/api/families/:familyId/leave', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId } = req.params;
+  if (!familyId) return res.status(400).json({ ok: false, error: 'familyId required' });
+
+  try {
+    const familyRef = db.ref(`families/${familyId}`);
+    const snap = await familyRef.once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
+    const f = snap.val();
+
+    if (f.creatorId === userId) {
+      // Owner cannot "leave" — must delete or transfer ownership
+      return res.status(403).json({ ok: false, error: 'Owner cannot leave family. Delete the family or transfer ownership.' });
+    }
+
+    // remove member entry and membership index
+    await familyRef.child(`members/${userId}`).remove();
+    await db.ref(`memberships/${userId}/${familyId}`).remove();
+
+    // decrement membersCount safely
+    await familyRef.child('membersCount').transaction(c => (c || 1) - 1);
+
+    res.json({ ok: true, message: 'Left family' });
+  } catch (err) {
+    console.error('Error leaving family:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// --- DELETE family (only creator) ---
+app.delete('/api/families/:familyId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId } = req.params;
+  if (!familyId) return res.status(400).json({ ok: false, error: 'familyId required' });
+
+  try {
+    const familyRef = db.ref(`families/${familyId}`);
+    const snap = await familyRef.once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
+    const f = snap.val();
+
+    if (f.creatorId !== userId) return res.status(403).json({ ok: false, error: 'Only creator can delete the family' });
+
+    // remove family and related nodes (best-effort cleanup)
+    await familyRef.remove();
+    // remove family posts/comments/likes
+    await db.ref(`family_posts/${familyId}`).remove().catch(()=>{});
+    await db.ref(`family_comments/${familyId}`).remove().catch(()=>{});
+    await db.ref(`family_likes/${familyId}`).remove().catch(()=>{});
+    await db.ref(`reels_comment_replies/${familyId}`).remove().catch(()=>{});
+
+    // remove membership indexes for all members (best-effort)
+    // if you stored memberships under memberships/{userId}/{familyId} earlier:
+    const members = f.members || {};
+    const updates = {};
+    Object.keys(members).forEach(uid => {
+      updates[`memberships/${uid}/${familyId}`] = null;
+    });
+    if (Object.keys(updates).length > 0) await db.ref().update(updates);
+
+    res.json({ ok: true, message: 'Family deleted' });
+  } catch (err) {
+    console.error('Error deleting family:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
