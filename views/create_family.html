@@ -7,189 +7,357 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <style>
-    body { background:#000; color:#e6eefb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    .glass { background: rgba(10,10,12,0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.05); }
-    .field { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); color:#e6eefb; }
-    .btn-primary { background: linear-gradient(90deg,#2563eb,#7c3aed); }
-    .btn-primary:hover { opacity:0.95; }
+    :root{
+      --glass-bg: rgba(10,10,12,0.55);
+      --glass-border: rgba(255,255,255,0.04);
+      --muted: #bfc6cc;
+      --glass-strong: rgba(255,255,255,0.02);
+    }
+    html,body{height:100%;}
+    body{
+      background: #000;
+      color: #e6eefb;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      padding: 32px 16px;
+    }
+
+    .card {
+      max-width:900px;
+      margin: 0 auto;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid var(--glass-border);
+    }
+
+    .cover-preview {
+      width:100%;
+      height: 260px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.55));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      overflow:hidden;
+    }
+    .cover-preview img {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      filter: saturate(.9) contrast(.95);
+      transform: scale(1.02);
+    }
+    .cover-overlay {
+      position:absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.45));
+      pointer-events:none;
+    }
+    .cover-actions {
+      position:absolute;
+      right:16px;
+      bottom:16px;
+      display:flex;
+      gap:10px;
+      z-index:22;
+    }
+
+    .btn-glass {
+      background: rgba(8,8,10,0.6);
+      border: 1px solid rgba(255,255,255,0.04);
+      color: #e6eefb;
+      padding: 10px 14px;
+      border-radius: 10px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      cursor:pointer;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      font-weight:600;
+      font-size:14px;
+    }
+    .btn-glass:active { transform: translateY(1px); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px dashed rgba(255,255,255,0.03);
+      color: var(--muted);
+    }
+
+    .content {
+      padding: 20px;
+      display:grid;
+      grid-template-columns: 1fr 320px;
+      gap: 18px;
+    }
+
+    .left {
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    label.field-label { font-size:13px; color:var(--muted); margin-bottom:6px; display:block; }
+
+    input[type="text"], textarea {
+      width:100%;
+      background: rgba(255,255,255,0.02);
+      border:1px solid var(--glass-border);
+      color: #e6eefb;
+      padding:12px 14px;
+      border-radius:10px;
+      outline:none;
+      font-size:14px;
+    }
+    textarea { min-height:120px; resize:vertical; }
+
+    .right {
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .preview-thumb {
+      width:100%;
+      border-radius:12px;
+      height:120px;
+      overflow:hidden;
+      border:1px solid var(--glass-border);
+      background:#0b0b0c;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .preview-thumb img { width:100%; height:100%; object-fit:cover; }
+
+    .hint { font-size:13px; color:var(--muted); }
+
+    .footer {
+      padding:16px 20px;
+      border-top:1px solid rgba(255,255,255,0.02);
+      display:flex;
+      justify-content:flex-end;
+      gap:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+    }
+
+    /* result modal */
+    .modal-backdrop {
+      position:fixed; inset:0; background:rgba(0,0,0,0.7);
+      display:flex; align-items:center; justify-content:center; z-index:60;
+    }
+    .result-card {
+      width:100%; max-width:720px; border-radius:14px; overflow:hidden; background:var(--glass-bg); border:1px solid var(--glass-border); padding:18px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.7);
+    }
+    .result-top { display:flex; gap:14px; align-items:center; }
+    .result-thumb { width:120px; height:80px; border-radius:8px; overflow:hidden; border:1px solid var(--glass-border); }
+    .result-thumb img { width:100%; height:100%; object-fit:cover; }
+
+    /* small responsive */
+    @media (max-width:900px){
+      .content { grid-template-columns: 1fr; }
+      .cover-preview { height:200px; }
+      .right { order:2; }
+    }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-6">
+<body>
 
-  <div class="max-w-xl w-full glass rounded-2xl p-6 shadow-xl">
-    <div class="flex items-center justify-between mb-4">
-      <h1 class="text-2xl font-bold">إنشاء عائلة جديدة</h1>
-      <a href="/chat_list" class="text-sm text-gray-300 hover:underline">العودة للرئيسية</a>
+  <div class="card">
+    <div class="cover-preview" id="coverPreviewArea" onclick="document.getElementById('familyImage').click()">
+      <img id="coverPreviewImg" src="https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="معاينة الغلاف">
+      <div class="cover-overlay"></div>
+
+      <div class="cover-actions">
+        <button class="btn-glass btn-ghost" onclick="event.stopPropagation(); document.getElementById('familyImage').click();">
+          <i class="fas fa-camera"></i> اختر صورة
+        </button>
+        <button class="btn-glass" onclick="event.stopPropagation(); document.getElementById('createFamilyBtn').scrollIntoView({behavior:'smooth'});">
+          <i class="fas fa-info-circle"></i> معاينة
+        </button>
+      </div>
     </div>
 
-    <p class="text-sm text-gray-300 mb-4">أنشئ مساحة خاصة بعائلتك — سيُنشأ مفتاح تختص به كمنشئ ولا يمكن استرجاعه لاحقاً من الواجهة.</p>
+    <form id="createFamilyForm" class="content" enctype="multipart/form-data" onsubmit="return submitCreateFamily(event)" novalidate>
+      <div class="left">
+        <div>
+          <label class="field-label" for="familyName">اسم العائلة</label>
+          <input id="familyName" name="name" required maxlength="80" placeholder="مثلاً: عائلة الأحمد" />
+        </div>
 
-    <form id="createFamilyForm" class="space-y-4" enctype="multipart/form-data" novalidate>
-      <div>
-        <label class="block text-sm mb-1">اسم العائلة</label>
-        <input id="familyName" name="name" required maxlength="60" class="field w-full p-3 rounded-lg" placeholder="مثلاً: عائلة الأحمد" />
-      </div>
+        <div>
+          <label class="field-label" for="familyBio">نبذة عن العائلة (اختياري)</label>
+          <textarea id="familyBio" name="bio" placeholder="أضف وصفاً قصيراً للعائلة..."></textarea>
+        </div>
 
-      <div>
-        <label class="block text-sm mb-1">صورة العائلة (اختياري)</label>
-        <div class="flex items-center gap-3">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <div id="previewWrap" class="w-28 h-20 rounded-lg overflow-hidden bg-gray-800 border border-gray-700 flex items-center justify-center">
-              <img id="previewImg" src="https://via.placeholder.com/160x100?text=Family" alt="preview" class="w-full h-full object-cover" />
-            </div>
-            <input id="familyImage" type="file" accept="image/*" name="family_image" class="hidden" />
-            <span class="text-sm text-gray-300">اختر صورة</span>
-          </label>
+        <div>
+          <label class="field-label">ملاحظات</label>
+          <div class="hint">سيُولد "مفتاح العائلة" بعد الإنشاء — احتفظ به أو شاركه مع من تريد دعوته للانضمام.</div>
         </div>
       </div>
 
-      <div class="text-sm text-gray-400">
-        بعد الإنشاء ستحصل على رمز العائلة (Family Key). احتفظ به، فهو الوحيد الذي يتيح للأعضاء الانضمام إلا إذا قمت بتغييره لاحقاً من إعدادات (إن وُجدت).
+      <div class="right">
+        <div>
+          <label class="field-label">صورة العائلة</label>
+          <div class="preview-thumb" id="previewThumb" onclick="document.getElementById('familyImage').click()">
+            <img id="thumbImg" src="https://via.placeholder.com/480x300?text=Family" alt="thumb">
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label">اختيارات</label>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn-glass btn-ghost" onclick="document.getElementById('familyImage').click()">
+              <i class="fas fa-upload"></i> رفع صورة
+            </button>
+            <button type="button" class="btn-glass" onclick="resetPreview()">
+              <i class="fas fa-trash-alt"></i> مسح
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label">معاينة المغلف</label>
+          <div class="hint">انقر على الغلاف لتغييره أو سحب صورة عليه.</div>
+        </div>
       </div>
 
-      <div class="flex gap-3 mt-4">
-        <button id="createFamilyBtn" type="submit" class="btn-primary text-white px-4 py-2 rounded-lg shadow-sm flex items-center gap-2">
-          <i class="fas fa-plus"></i>
-          إنشاء العائلة
-        </button>
-        <a href="/chat_list" class="px-4 py-2 rounded-lg border border-gray-700 text-gray-300">إلغاء</a>
-      </div>
+      <input id="familyImage" name="family_image" type="file" accept="image/*" style="display:none" />
 
-      <div id="formError" class="text-sm text-red-400 mt-2 hidden"></div>
+      <div class="footer" style="grid-column:1/-1">
+        <a href="/chat_list" class="btn-glass btn-ghost" style="background:transparent; color:var(--muted)">إلغاء</a>
+        <button id="createFamilyBtn" class="btn-glass" type="submit"><i class="fas fa-plus"></i> إنشاء العائلة</button>
+      </div>
     </form>
   </div>
 
   <!-- result modal -->
-  <div id="resultModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
-    <div class="max-w-md w-full bg-[#0b0b0c] glass rounded-xl p-5 border border-gray-700">
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="text-lg font-bold text-white mb-1">تم إنشاء العائلة</h3>
-          <p class="text-sm text-gray-300 mb-3">هذا هو مفتاح العائلة — احتفظ به أو شاركه مع من تريد دعوتهم.</p>
-        </div>
-        <button onclick="closeResultModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
-      </div>
-
-      <div class="bg-[#071022] border border-gray-700 rounded-lg p-3 mb-3">
-        <div class="mb-2 text-xs text-gray-400">رمز العائلة</div>
-        <div class="flex items-center gap-3">
-          <input id="familyKeyDisplay" readonly class="flex-1 bg-transparent text-white font-mono p-2 rounded" />
-          <button id="copyKeyBtn" class="px-3 py-2 bg-blue-600 rounded text-white"><i class="fas fa-copy"></i></button>
-        </div>
-      </div>
-
-      <div id="createdFamilyInfo" class="flex items-center gap-3 mb-4">
-        <img id="createdFamilyImg" src="" class="w-16 h-12 rounded-md object-cover border border-gray-700" alt="family">
-        <div>
-          <div id="createdFamilyName" class="font-semibold text-white"></div>
-          <div class="text-xs text-gray-400">معرف العائلة: <span id="createdFamilyId" class="font-mono text-sm"></span></div>
+  <div id="resultModal" class="modal-backdrop" style="display:none">
+    <div class="result-card">
+      <div class="result-top">
+        <div class="result-thumb"><img id="createdFamilyImg" src="" alt="created"></div>
+        <div style="flex:1">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div>
+              <div id="createdFamilyName" style="font-weight:700; font-size:18px;">—</div>
+              <div style="font-size:13px; color:var(--muted); margin-top:6px">معرف العائلة: <span id="createdFamilyId" style="font-family:monospace; font-size:13px"></span></div>
+            </div>
+            <div style="display:flex; gap:8px">
+              <button class="btn-glass" id="goToFamilyBtn"><i class="fas fa-arrow-right"></i> اذهب للعائلة</button>
+              <button class="btn-glass btn-ghost" onclick="closeResultModal()"><i class="fas fa-check"></i> تم</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="flex gap-3">
-        <button id="goToFamilyBtn" class="flex-1 px-4 py-2 bg-green-600 rounded text-white">اذهب إلى صفحة العائلة</button>
-        <button onclick="closeResultModal()" class="flex-1 px-4 py-2 bg-gray-700 rounded text-white">تم</button>
+      <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.02); padding-top:12px; display:flex; gap:12px;">
+        <div style="flex:1">
+          <div style="font-size:13px; color:var(--muted)">رمز العائلة (احتفظ به)</div>
+          <input id="familyKeyDisplay" readonly style="width:100%; margin-top:6px; padding:10px; background:transparent; border:1px solid var(--glass-border); border-radius:8px; color:#e6eefb; font-family:monospace;" />
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+          <button id="copyKeyBtn" class="btn-glass" title="نسخ">نسخ</button>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    const form = document.getElementById('createFamilyForm');
-    const familyImage = document.getElementById('familyImage');
-    const previewImg = document.getElementById('previewImg');
-    const formError = document.getElementById('formError');
-    const createBtn = document.getElementById('createFamilyBtn');
+    const familyImageInput = document.getElementById('familyImage');
+    const coverPreviewImg = document.getElementById('coverPreviewImg');
+    const thumbImg = document.getElementById('thumbImg');
+    const previewThumb = document.getElementById('previewThumb');
 
-    const resultModal = document.getElementById('resultModal');
-    const familyKeyDisplay = document.getElementById('familyKeyDisplay');
-    const copyKeyBtn = document.getElementById('copyKeyBtn');
-    const createdFamilyImg = document.getElementById('createdFamilyImg');
-    const createdFamilyName = document.getElementById('createdFamilyName');
-    const createdFamilyId = document.getElementById('createdFamilyId');
-    const goToFamilyBtn = document.getElementById('goToFamilyBtn');
+    function resetPreview() {
+      coverPreviewImg.src = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+      thumbImg.src = 'https://via.placeholder.com/480x300?text=Family';
+      familyImageInput.value = '';
+    }
 
-    let createdFamilyIdVal = null;
-
-    // preview image
-    previewImg.addEventListener('click', () => familyImage.click());
-    familyImage.addEventListener('change', (ev) => {
-      const f = ev.target.files && ev.target.files[0];
+    familyImageInput.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
       if (!f) return;
       const url = URL.createObjectURL(f);
-      previewImg.src = url;
+      coverPreviewImg.src = url;
+      thumbImg.src = url;
     });
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      formError.classList.add('hidden');
+    // drag & drop on coverPreviewArea
+    const coverArea = document.getElementById('coverPreviewArea');
+    coverArea.addEventListener('dragover', (ev)=>{ ev.preventDefault(); coverArea.style.opacity = .9; });
+    coverArea.addEventListener('dragleave', ()=>{ coverArea.style.opacity = 1; });
+    coverArea.addEventListener('drop', (ev)=>{
+      ev.preventDefault();
+      coverArea.style.opacity = 1;
+      const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f && f.type.startsWith('image/')) {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        familyImageInput.files = dt.files;
+        const url = URL.createObjectURL(f);
+        coverPreviewImg.src = url;
+        thumbImg.src = url;
+      }
+    });
 
+    async function submitCreateFamily(e) {
+      e.preventDefault();
       const name = document.getElementById('familyName').value.trim();
       if (!name) {
-        formError.textContent = 'اسم العائلة مطلوب.';
-        formError.classList.remove('hidden');
-        return;
+        alert('اسم العائلة مطلوب');
+        return false;
       }
 
-      createBtn.disabled = true;
-      createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإنشاء';
+      const btn = document.getElementById('createFamilyBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإنشاء';
 
       try {
         const fd = new FormData();
         fd.append('name', name);
-        const file = familyImage.files && familyImage.files[0];
+        const file = familyImageInput.files && familyImageInput.files[0];
         if (file) fd.append('family_image', file);
 
         const res = await fetch('/api/families/create', { method: 'POST', credentials: 'same-origin', body: fd });
         const data = await res.json();
-
         if (!res.ok || !data.ok) {
-          formError.textContent = (data && data.error) ? data.error : 'فشل في إنشاء العائلة';
-          formError.classList.remove('hidden');
+          alert((data && data.error) ? data.error : 'فشل في إنشاء العائلة');
           return;
         }
 
-        // show result modal with key
-        const key = data.key || '';
-        const family = data.family || {};
-        familyKeyDisplay.value = key;
-        createdFamilyImg.src = family.imageUrl || previewImg.src || 'https://via.placeholder.com/160x100?text=Family';
-        createdFamilyName.textContent = family.name || name;
-        createdFamilyId.textContent = data.familyId || '';
-        createdFamilyIdVal = data.familyId || '';
+        // show result modal
+        document.getElementById('familyKeyDisplay').value = data.key || '';
+        document.getElementById('createdFamilyImg').src = data.family.imageUrl || coverPreviewImg.src;
+        document.getElementById('createdFamilyName').textContent = data.family.name || name;
+        document.getElementById('createdFamilyId').textContent = data.familyId || data.family.familyId || '';
+        document.getElementById('resultModal').style.display = 'flex';
 
-        resultModal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-
+        document.getElementById('goToFamilyBtn').onclick = function(){ window.location.href = `/family/${encodeURIComponent(data.familyId)}`; };
       } catch (err) {
         console.error(err);
-        formError.textContent = 'حدث خطأ في الاتصال.';
-        formError.classList.remove('hidden');
+        alert('خطأ في الاتصال');
       } finally {
-        createBtn.disabled = false;
-        createBtn.innerHTML = '<i class="fas fa-plus"></i> إنشاء العائلة';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-plus"></i> إنشاء العائلة';
       }
-    });
+      return false;
+    }
 
-    copyKeyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(familyKeyDisplay.value || '');
-        copyKeyBtn.innerHTML = '<i class="fas fa-check"></i>';
-        setTimeout(() => { copyKeyBtn.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
-      } catch (e) { console.warn('copy failed', e); }
-    });
-
-    goToFamilyBtn.addEventListener('click', () => {
-      if (createdFamilyIdVal) {
-        window.location.href = `/family/${encodeURIComponent(createdFamilyIdVal)}`;
-      }
-    });
-
-    function closeResultModal() {
-      resultModal.classList.add('hidden');
-      document.body.style.overflow = 'auto';
-      // redirect to home to show family tile as well
+    function closeResultModal(){
+      document.getElementById('resultModal').style.display = 'none';
       window.location.href = '/chat_list';
     }
+
+    document.getElementById('copyKeyBtn').addEventListener('click', async () => {
+      const v = document.getElementById('familyKeyDisplay').value || '';
+      try {
+        await navigator.clipboard.writeText(v);
+        document.getElementById('copyKeyBtn').innerHTML = '<i class="fas fa-check"></i> تم';
+        setTimeout(()=> document.getElementById('copyKeyBtn').innerHTML = 'نسخ', 1500);
+      } catch(e){}
+    });
   </script>
 </body>
 </html>
