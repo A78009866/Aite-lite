@@ -380,7 +380,7 @@
     <main class="max-w-6xl mx-auto p-4">
         <div id="familiesWrapper" class="max-w-xl mx-auto mt-4">
             <div class="flex items-center justify-between mb-2">
-                <h2 class="text-white font-bold">عائلتي</h2>
+                <h2 class="text-white font-bold">العائلات</h2>
                 <a href="/create-family" class="text-sm text-gray-400 hover:text-white">إنشاء عائلة جديدة</a>
             </div>
             <div id="familiesRow" class="families-row">
@@ -581,6 +581,7 @@
         const CREATE_FAMILY_BG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
         const postsFeed = document.getElementById('postsFeed');
+        const familiesRow = document.getElementById('familiesRow');
         const deleteModal = document.getElementById('deleteModal');
         const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
         const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
@@ -599,7 +600,6 @@
         const postOptionsMessage = document.getElementById('postOptionsMessage');
 
         // family elements
-        const familiesRow = document.getElementById('familiesRow');
         const familyJoinModal = document.getElementById('familyJoinModal');
         const familyJoinInput = document.getElementById('familyJoinInput');
         const familyJoinError = document.getElementById('familyJoinError');
@@ -1009,7 +1009,7 @@
                 } else if (post.media.type === 'audio') {
                     mediaContent = `
                         <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
-                            <button class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300 flex-shrink-0">
+                            <button class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300">
                                 <i class="fas fa-play"></i>
                             </button>
                             <div id="waveform-${post.postId}" class="waveform-post flex-grow"></div>
@@ -1332,17 +1332,24 @@ function createCommentHtml(comment, postId) {
                 const createHtml = renderCreateFamilyCard();
                 let html = createHtml;
 
-                const res = await fetch('/api/families/my', { credentials: 'same-origin' });
+                const res = await fetch('/api/families', { credentials: 'same-origin' });
                 const data = await res.json();
                 if (res.ok && data.ok) {
                     const families = data.families || [];
                     const famHtml = families.map(f => {
-                        // mark is_member true because /api/families/my returns only member families
-                        return renderFamilyCard({ ...f, is_member: true });
+                        return renderFamilyCard(f);
                     }).join('');
                     html += famHtml;
                 } else {
-                    // if fetch failed, still render create card
+                    // fallback: try my families endpoint
+                    try {
+                      const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
+                      const d2 = await res2.json();
+                      if (res2.ok && d2.ok) {
+                        const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
+                        html += famHtml2;
+                      }
+                    } catch(e){}
                 }
                 familiesRow.innerHTML = html;
             } catch (e) {
@@ -1361,7 +1368,7 @@ function createCommentHtml(comment, postId) {
                 // direct navigation
                 window.location.href = `/family/${encodeURIComponent(familyId)}`;
             } else {
-                // open join modal
+                // open join modal (require key) always for non-members
                 openJoinModal(familyId);
             }
         }
