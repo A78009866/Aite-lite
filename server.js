@@ -1,4 +1,4 @@
-ب// server.js
+// server.js
 
 // تشغيل مكتبة dotenv لقراءة متغيرات البيئة من ملف .env محلياً
 require('dotenv').config();
