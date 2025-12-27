@@ -332,68 +332,6 @@
 .option-btn.danger { background: linear-gradient(90deg,#7f1d1d, #ef4444); color:white; border:none; }
 .option-btn:active { transform: translateY(1px); }
 .option-row { display:flex; gap:10px; margin-bottom:10px; }
-
-/* ----------------- Reels cards in feed (TALL, NO THUMBNAIL) ----------------- */
-.reels-row {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding: 10px 6px;
-  -webkit-overflow-scrolling: touch;
-}
-.reels-row::-webkit-scrollbar { height: 8px; }
-.reels-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 8px; }
-
-/* Taller reel card */
-.reel-card {
-  min-width: 180px;
-  max-width: 220px;
-  height: 220px;             /* taller */
-  border-radius: 12px;
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.03));
-  border: 1px solid rgba(255,255,255,0.04);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-/* DO NOT show thumbnail; show placeholder area */
-.reel-card .placeholder {
-  height: 150px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background: linear-gradient(180deg, rgba(0,0,0,0.6), rgba(20,20,20,0.8));
-  color: #fff;
-  font-size: 28px;
-}
-.reel-card .meta {
-  padding: 10px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.reel-card .meta img.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  object-fit: cover;
-}
-.reel-card .meta .txt {
-  flex: 1;
-  font-size: 14px;
-  line-height: 1.05;
-  color: #e6eefb;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.reel-card .meta .count {
-  font-size: 12px;
-  color: #9ca3af;
-}
     </style>
 </head>
 <body class="min-h-screen">
@@ -1137,35 +1075,6 @@
             `;
         }
 
-        // Renders a horizontal row of small reel cards (NO thumbnail). Every card points to latest reel from feed.
-        function renderReelsCards(reels) {
-            if (!Array.isArray(reels) || reels.length === 0) return '';
-            // assume server returns newest first; pick first as latest
-            const latest = reels[0];
-            const latestReelId = latest ? latest.reelId : null;
-
-            const cards = reels.map(r => {
-                const userAvatar = (r.user && r.user.profile_picture_url) ? r.user.profile_picture_url : DEFAULT_AVATAR;
-                const username = (r.user && r.user.username) ? r.user.username : 'مستخدم';
-                const commentsCount = r.commentsCount || 0;
-                const dest = latestReelId ? `/reels?id=${encodeURIComponent(latestReelId)}` : '/reels';
-                return `
-                    <div class="reel-card" onclick="window.location.href='${escapeAttr(dest)}'">
-                        <div class="placeholder">
-                            <i class="fas fa-play"></i>
-                        </div>
-                        <div class="meta">
-                            <img src="${escapeHtml(userAvatar)}" class="avatar" alt="${escapeHtml(username)}">
-                            <div class="txt">@${escapeHtml(username)}</div>
-                            <div class="count">${commentsCount} تعليق</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            return `<div class="reels-row">${cards}</div>`;
-        }
-
         // Helper to update comment count shown on post card and in modal badge
         function updatePostCommentCount(postId, count) {
             // update count in post card (feed)
@@ -1200,7 +1109,7 @@
 
         // Create comment HTML (uses enriched comment object returned by server)
 function createCommentHtml(comment, postId) {
-    const verifiedHtml = '';
+    const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
     const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
     const likeIcon = comment.is_liked ? 'fas' : 'far';
     const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
@@ -1213,12 +1122,13 @@ function createCommentHtml(comment, postId) {
         </div>
     `).join('') : '';
 
+    // badge container: important -> updateCommentsVerification() سيملؤه بصورة الشارة إذا كان المستخدم موثق
     const badgeContainer = `<span class="badge-container" data-badge-user-id="${escapeAttr(comment.user.userId)}"></span>`;
 
     return `
         <div class="comment-item" id="comment-${comment.commentId}">
             <div class="flex items-start gap-3">
-                <img src="${escapeHtml((comment.user && comment.user.profile_picture_url) ? comment.user.profile_picture_url : DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
+                <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
                 <div class="flex-1">
                     <div class="flex items-center justify-between gap-2">
                         <div>
@@ -1262,818 +1172,823 @@ function createCommentHtml(comment, postId) {
     `;
 }
 
-// Toggle like/unlike on a comment (frontend)
-async function toggleCommentLike(postId, commentId, btnEl) {
-    btnEl.disabled = true;
-    try {
-        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`, {
-            method: 'POST',
-            credentials: 'same-origin'
-        });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            const countEl = document.getElementById(`comment-like-count-${commentId}`);
-            if (countEl) countEl.textContent = data.likes;
-            if (data.is_liked) {
-                btnEl.classList.remove('text-gray-400');
-                btnEl.classList.add('text-red-400');
-                const i = btnEl.querySelector('i');
-                if (i) { i.classList.remove('far'); i.classList.add('fas'); }
-            } else {
-                btnEl.classList.remove('text-red-400');
-                btnEl.classList.add('text-gray-400');
-                const i = btnEl.querySelector('i');
-                if (i) { i.classList.remove('fas'); i.classList.add('far'); }
+        // Toggle like on a comment (frontend)
+        async function toggleCommentLike(postId, commentId, btnEl) {
+            btnEl.disabled = true;
+            try {
+                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST', credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const countEl = document.getElementById(`comment-like-count-${commentId}`);
+                    if (countEl) countEl.textContent = data.likes;
+                    if (data.is_liked) {
+                        btnEl.classList.remove('text-gray-400');
+                        btnEl.classList.add('text-red-400');
+                        const i = btnEl.querySelector('i');
+                        if (i) { i.classList.remove('far'); i.classList.add('fas'); }
+                    } else {
+                        btnEl.classList.remove('text-red-400');
+                        btnEl.classList.add('text-gray-400');
+                        const i = btnEl.querySelector('i');
+                        if (i) { i.classList.remove('fas'); i.classList.add('far'); }
+                    }
+                } else {
+                    console.warn('Like comment failed', data);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btnEl.disabled = false;
             }
-        } else {
-            console.warn('Like comment failed', data);
         }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        btnEl.disabled = false;
-    }
-}
 
-// Open reply input under a comment
-function openReplyBox(commentId) {
-    const box = document.getElementById(`reply-box-${commentId}`);
-    if (!box) return;
-    box.classList.toggle('hidden');
-    const input = document.getElementById(`reply-input-${commentId}`);
-    if (input && !box.classList.contains('hidden')) input.focus();
-}
-
-// Post a reply to a comment
-async function postReply(postId, commentId) {
-    const input = document.getElementById(`reply-input-${commentId}`);
-    if (!input) return;
-    const content = input.value.trim();
-    if (!content) return;
-    input.disabled = true;
-    try {
-        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/reply`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ content })
-        });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            await fetchAndDisplayComments(postId);
-        } else {
-            alert(data.error || 'فشل في إرسال الرد');
-            input.disabled = false;
+        // Open reply input under a comment
+        function openReplyBox(commentId) {
+            const box = document.getElementById(`reply-box-${commentId}`);
+            if (!box) return;
+            box.classList.toggle('hidden');
+            const input = document.getElementById(`reply-input-${commentId}`);
+            if (input && !box.classList.contains('hidden')) input.focus();
         }
-    } catch (e) {
-        console.error(e);
-        alert('فشل في الاتصال');
-        input.disabled = false;
-    }
-}
 
-// Fetch and show all replies for a comment (in-place)
-async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
-    try {
-        triggerBtn.disabled = true;
-        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            const container = document.getElementById(`replies-container-${commentId}`);
-            if (container) {
-                container.innerHTML = data.replies.map(r => `
-                    <div class="reply-item flex items-start gap-2">
-                        <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
-                        <div class="flex-1">
-                            <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                            <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
-                        </div>
+        // Post a reply to a comment
+        async function postReply(postId, commentId) {
+            const input = document.getElementById(`reply-input-${commentId}`);
+            if (!input) return;
+            const content = input.value.trim();
+            if (!content) return;
+            const btn = input.nextElementSibling; // not reliable cross markup; disable via general approach
+            input.disabled = true;
+            try {
+                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ content })
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    // Refresh comments list
+                    await fetchAndDisplayComments(postId);
+                } else {
+                    alert(data.error || 'فشل في إرسال الرد');
+                    input.disabled = false;
+                }
+            } catch (e) {
+                console.error(e);
+                alert('فشل في الاتصال');
+                input.disabled = false;
+            }
+        }
+
+        // Fetch and show all replies for a comment (in-place)
+        async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
+            try {
+                triggerBtn.disabled = true;
+                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/replies`, { credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const container = document.getElementById(`replies-container-${commentId}`);
+                    if (container) {
+                        container.innerHTML = data.replies.map(r => `
+                            <div class="reply-item flex items-start gap-2">
+                                <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                                <div class="flex-1">
+                                    <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
+                                    <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                triggerBtn.disabled = false;
+            }
+        }
+
+        // Normalize a raw comment (legacy fallback) - kept for safety
+        function normalizeComment(raw) {
+            const commentId = raw.commentId || raw.id || raw.key || '';
+            const content = raw.content || raw.commentContent || raw.text || '';
+            const timestamp = raw.timestamp || raw.time || Date.now();
+
+            let user = {};
+            if (raw.user && typeof raw.user === 'object' && Object.keys(raw.user).length > 0) {
+                user.userId = raw.user.userId || raw.user.id || raw.user.uid || '';
+                user.username = raw.user.username || raw.user.displayName || raw.user.name || '';
+                user.profile_picture_url = raw.user.profile_picture_url || raw.user.photoURL || DEFAULT_AVATAR;
+            } else {
+                user.userId = raw.userId || raw.userID || raw.from_user_id || '';
+                user.username = raw.username || raw.from_username || raw.user_name || '';
+                user.profile_picture_url = raw.profile_picture_url || raw.profilePicture || DEFAULT_AVATAR;
+            }
+
+            user.userId = user.userId || '';
+            user.username = user.username || 'مستخدم';
+            user.profile_picture_url = user.profile_picture_url || DEFAULT_AVATAR;
+
+            return {
+                commentId,
+                content,
+                timestamp,
+                user
+            };
+        }
+
+        // ---------------- Families UI logic ----------------
+
+        function renderCreateFamilyCard() {
+            return `
+                <div class="create-family-card" style="background-image: url('${CREATE_FAMILY_BG}');" onclick="onCreateFamilyClick()">
+                    <div class="overlay"></div>
+                    <div class="label">
+                        <div class="text-sm font-semibold">إنشاء عائلة</div>
+                        <div class="text-xs text-gray-200 mt-1">بناء مساحة خاصة للعائلة</div>
                     </div>
-                `).join('');
-            }
-        } else {
-            console.warn('Failed to fetch replies', data);
+                </div>
+            `;
         }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        triggerBtn.disabled = false;
-    }
-}
 
-/* ----------------- Fetch & profile logic ----------------- */
-
-async function fetchCurrentUser() {
-    try {
-        const resp = await fetch('/api/profile', { credentials: 'same-origin' });
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (data && data.id) {
-            currentUserId = data.id;
-            const smallPic = document.getElementById('userProfilePic');
-            if (smallPic) smallPic.src = data.profile_picture_url || DEFAULT_AVATAR;
+        function renderFamilyCard(f) {
+            const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : 'https://via.placeholder.com/160x100?text=Family';
+            const members = f.membersCount || 0;
+            const isMember = !!f.is_member;
+            const badge = isMember ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
+            return `
+                <div class="family-card" data-family-id="${escapeAttr(f.familyId)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId)}', ${isMember})">
+                    <img src="${escapeHtml(img)}" alt="${escapeHtml(f.name)}">
+                    <div class="meta">
+                        <div class="name">${escapeHtml(f.name)} ${isMember ? '' : ''}</div>
+                        <div class="count">${members} عضو • ${badge}</div>
+                    </div>
+                </div>
+            `;
         }
-    } catch (e) {
-        console.error('fetchCurrentUser failed', e);
-    }
-}
 
-async function fetchAndDisplayProfile() {
-    await fetchCurrentUser();
-}
+        async function fetchAndDisplayFamilies() {
+            if (!familiesRow) return;
+            familiesRow.innerHTML = '<div class="text-gray-400">جاري التحميل...</div>';
+            try {
+                // Always show create card first
+                const createHtml = renderCreateFamilyCard();
+                let html = createHtml;
 
-/* ----------------- Presence & SSE helpers used later ----------------- */
-
-function setUserOnlineUI(userId, isOnline, lastSeenTs) {
-    const selectors = document.querySelectorAll(`.avatar-with-dot[data-user-id="${userId}"]`);
-    selectors.forEach(av => {
-        const dot = av.querySelector('.status-indicator');
-        if (!dot) return;
-        if (isOnline) {
-            dot.style.display = 'block';
-        } else {
-            dot.style.display = 'none';
-        }
-    });
-
-    const profileAvatarWrap = document.getElementById('profileAvatarWrap');
-    if (profileAvatarWrap && profileAvatarWrap.dataset.userId === userId) {
-        const bigDot = document.getElementById('profileOnlineDot');
-        const profileStatus = document.getElementById('profileStatus');
-        
-        if (isOnline) {
-            if (bigDot) bigDot.style.display = 'block';
-            if (profileStatus) profileStatus.textContent = 'متصل الآن';
-            if (profileStatus) profileStatus.className = 'text-green-500 font-semibold text-sm block mt-1';
-        } else {
-            if (bigDot) bigDot.style.display = 'none';
-            if (profileStatus) {
-                profileStatus.textContent = formatLastSeen(lastSeenTs) || '';
-                profileStatus.className = 'text-gray-400 text-sm block mt-1';
+                const res = await fetch('/api/families', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const families = data.families || [];
+                    const famHtml = families.map(f => {
+                        return renderFamilyCard(f);
+                    }).join('');
+                    html += famHtml;
+                } else {
+                    // fallback: try my families endpoint
+                    try {
+                      const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
+                      const d2 = await res2.json();
+                      if (res2.ok && d2.ok) {
+                        const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
+                        html += famHtml2;
+                      }
+                    } catch(e){}
+                }
+                familiesRow.innerHTML = html;
+            } catch (e) {
+                console.error('Failed to load families', e);
+                familiesRow.innerHTML = renderCreateFamilyCard();
             }
         }
-    }
-}
 
-function formatLastSeen(lastSeenTs) {
-    if (!lastSeenTs) return '';
-    const now = Date.now();
-    const diff = Math.max(0, now - lastSeenTs);
-    const seconds = Math.floor(diff / 1000);
-    if (seconds < 60) return 'متصل منذ لحظات';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `آخر ظهور منذ ${minutes} دقيقة${minutes > 1 ? 'ً' : ''}`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `آخر ظهور منذ ${hours} ساعة${hours > 1 ? 'ً' : ''}`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `آخر ظهور منذ ${days} يوم${days > 1 ? 'ً' : ''}`;
-    const d = new Date(lastSeenTs);
-    return `آخر ظهور في ${d.toLocaleDateString('ar-EG')}`;
-}
-
-/* ----------------- Posts list and initial load (with reels insertion) ----------------- */
-
-function updatePostCommentCountLocal(postId, count) {
-    const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
-    if (postCard) {
-        const commentSpan = postCard.querySelector('.comment-count-display');
-        if (commentSpan) {
-            commentSpan.innerHTML = `<i class="far fa-comment-dots ml-1"></i> ${count} تعليق`;
+        function onCreateFamilyClick() {
+            // simply navigate to create-family page (server view)
+            window.location.href = '/create-family';
         }
-    }
-}
 
-async function fetchAndDisplayPosts() {
-    postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
-    
-    try {
-        const response = await fetch('/api/posts', { credentials: 'same-origin' });
-        const result = await response.json();
-
-        postsFeed.innerHTML = '';
-
-        if (response.ok && result.ok) {
-            if (result.posts.length === 0) {
-                postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
+        function onFamilyCardClick(familyId, isMember) {
+            if (isMember === true || String(isMember) === 'true') {
+                // direct navigation
+                window.location.href = `/family/${encodeURIComponent(familyId)}`;
             } else {
-                const posts = result.posts;
-                const userIds = [...new Set(posts.map(p => p.userId))];
+                // open join modal (require key) always for non-members
+                openJoinModal(familyId);
+            }
+        }
 
-                const profileMap = {};
-                try {
-                    const profilePromises = userIds.map(uid => fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' })
-                                                        .then(r => r.ok ? r.json() : null)
-                                                        .catch(() => null));
-                    const profileResults = await Promise.all(profilePromises);
-                    profileResults.forEach(pr => {
-                        if (pr && pr.ok) {
-                            profileMap[pr.id] = pr; 
+        function openJoinModal(familyId) {
+            joiningFamilyId = familyId;
+            familyJoinInput.value = '';
+            familyJoinError.classList.add('hidden');
+            familyJoinIntro.textContent = 'أدخل رمز العائلة للانضمام';
+            familyJoinModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            setTimeout(() => { familyJoinInput.focus(); }, 100);
+        }
+
+        function closeJoinModal(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            joiningFamilyId = null;
+            familyJoinModal.classList.add('hidden');
+            familyJoinError.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        async function confirmJoinFamily() {
+            const key = familyJoinInput.value.trim();
+            if (!key || !joiningFamilyId) return;
+            familyJoinConfirmBtn.disabled = true;
+            familyJoinConfirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جارٍ...';
+            familyJoinError.classList.add('hidden');
+            try {
+                const res = await fetch(`/api/families/${encodeURIComponent(joiningFamilyId)}/join`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key })
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    // success: redirect to family page
+                    window.location.href = `/family/${encodeURIComponent(joiningFamilyId)}`;
+                } else {
+                    familyJoinError.textContent = data.error || 'فشل في الانضمام';
+                    familyJoinError.classList.remove('hidden');
+                }
+            } catch (e) {
+                console.error(e);
+                familyJoinError.textContent = 'خطأ في الاتصال';
+                familyJoinError.classList.remove('hidden');
+            } finally {
+                familyJoinConfirmBtn.disabled = false;
+                familyJoinConfirmBtn.innerHTML = 'انضم الآن';
+            }
+        }
+
+        // rest of existing functions (fetch posts, comments, likes, etc.)
+        // Fetch and display posts (feed)
+        async function fetchAndDisplayPosts() {
+            postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
+            
+            try {
+                const response = await fetch('/api/posts');
+                const result = await response.json();
+                
+                postsFeed.innerHTML = '';
+                
+                if (response.ok && result.ok) {
+                    if (result.posts.length === 0) {
+                        postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
+                        return;
+                    }
+                    
+                    const posts = result.posts;
+                    const userIds = [...new Set(posts.map(p => p.userId))];
+
+                    const profileMap = {};
+                    try {
+                        const profilePromises = userIds.map(uid => fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' })
+                                                            .then(r => r.ok ? r.json() : null)
+                                                            .catch(() => null));
+                        const profileResults = await Promise.all(profilePromises);
+                        profileResults.forEach(pr => {
+                            if (pr && pr.ok) {
+                                profileMap[pr.id] = pr; 
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('Failed to fetch profiles for verification status', e);
+                    }
+
+                    const audioPostsToInit = [];
+
+                    posts.forEach(post => {
+                        const prof = profileMap[post.userId];
+                        if (prof) {
+                            post.user = post.user || {};
+                            post.user.is_verified = !!prof.is_verified;
+                        } else {
+                            post.user = post.user || {};
+                            post.user.is_verified = !!post.user.is_verified;
+                        }
+
+                        postsFeed.innerHTML += createPostCard(post);
+                        
+                        if (post.media && post.media.type === 'audio') {
+                            audioPostsToInit.push({ postId: post.postId, url: post.media.url });
                         }
                     });
-                } catch (e) {
-                    console.warn('Failed to fetch profiles for verification status', e);
+                    
+                    setTimeout(() => {
+                        audioPostsToInit.forEach(ap => {
+                            initializePostWaveSurfer(ap.postId, ap.url);
+                        });
+                    }, 100); 
+
                 }
-
-                const audioPostsToInit = [];
-
-                const postsHtml = posts.map(post => {
-                    const prof = profileMap[post.userId];
-                    if (prof) {
-                        post.user = post.user || {};
-                        post.user.is_verified = !!prof.is_verified;
-                    } else {
-                        post.user = post.user || {};
-                        post.user.is_verified = !!post.user.is_verified;
-                    }
-
-                    if (post.media && post.media.type === 'audio') {
-                        audioPostsToInit.push({ postId: post.postId, url: post.media.url });
-                    }
-
-                    return createPostCard(post);
-                });
-
-                // fetch reels and build reels row (cards point to latest reel)
-                let reelsHtml = '';
-                try {
-                    const rRes = await fetch('/api/reels/feed', { credentials: 'same-origin' });
-                    if (rRes.ok) {
-                        const rData = await rRes.json();
-                        if (rData && rData.ok && Array.isArray(rData.reels) && rData.reels.length > 0) {
-                            const sample = rData.reels.slice(0, 6);
-                            reelsHtml = renderReelsCards(sample);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to fetch reels for feed insertion', e);
-                }
-
-                if (postsHtml.length > 0 && reelsHtml) {
-                    const finalHtml = postsHtml.slice(0,1).join('') + reelsHtml + postsHtml.slice(1).join('');
-                    postsFeed.innerHTML = finalHtml;
-                } else {
-                    postsFeed.innerHTML = postsHtml.join('');
-                }
-
-                setTimeout(() => {
-                    audioPostsToInit.forEach(ap => initializePostWaveSurfer(ap.postId, ap.url));
-                }, 100);
-
-            }
-        } else {
-            postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">فشل في جلب المنشورات.</div>';
-        }
-
-    } catch (error) {
-        console.error('Error fetching posts:', error);
-        postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
-    }
-}
-
-/* ----------------- Like post (already present) ----------------- */
-async function handleLike(postId, buttonElement) {
-    const likeIcon = buttonElement.querySelector('.like-icon');
-    buttonElement.disabled = true;
-    try {
-        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/like`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            if (data.action === 'liked') {
-                likeIcon.classList.remove('far', 'text-gray-400');
-                likeIcon.classList.add('fas', 'text-red-500');
-                buttonElement.classList.remove('text-gray-400');
-                buttonElement.classList.add('text-red-500');
-                buttonElement.setAttribute('data-is-liked', 'true');
-            } else {
-                likeIcon.classList.remove('fas', 'text-red-500');
-                likeIcon.classList.add('far', 'text-gray-400');
-                buttonElement.classList.remove('text-red-500');
-                buttonElement.classList.add('text-gray-400');
-                buttonElement.setAttribute('data-is-liked', 'false');
-            }
-            if (data.newLikes !== undefined) {
-                const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
-                if (postCard) {
-                    const likesElem = postCard.querySelector('.flex.justify-between span:first-child');
-                    if (likesElem) likesElem.innerHTML = `<i class="fas fa-heart ml-1"></i> ${data.newLikes} إعجاب`;
-                }
+            } catch (error) {
+                console.error('Error:', error);
+                postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
             }
         }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        buttonElement.disabled = false;
-    }
-}
-
-/* ----------------- Comment modal open/close (profile) ----------------- */
-
-function handleComment(postId) { 
-    currentPostIdForComments = postId;
-    
-    const myPic = document.getElementById('userProfilePic').src || DEFAULT_AVATAR;
-    const inputAvatar = document.getElementById('myCurrentAvatar');
-    if(inputAvatar) inputAvatar.src = myPic;
-
-    const modal = document.getElementById('commentModal');
-    const content = document.getElementById('commentModalContent');
-    
-    modal.classList.remove('hidden');
-    
-    setTimeout(() => {
-        content.classList.add('open');
-    }, 10);
-
-    fetchAndDisplayComments(postId);
-}
-
-function closeCommentModal() {
-    const modal = document.getElementById('commentModal');
-    const content = document.getElementById('commentModalContent');
-    
-    content.classList.remove('open');
-    
-    setTimeout(() => {
-        modal.classList.add('hidden');
-        currentPostIdForComments = null;
-        if(document.getElementById('newCommentInput')) document.getElementById('newCommentInput').value = '';
-        if(document.getElementById('commentsList')) document.getElementById('commentsList').innerHTML = '';
-        if(document.getElementById('commentCountBadge')) document.getElementById('commentCountBadge').innerText = '0';
-    }, 300);
-}
-
-async function postComment() {
-    const input = document.getElementById('newCommentInput');
-    const btn = document.getElementById('postCommentBtn');
-    const errorEl = document.getElementById('commentError');
-    
-    const content = input.value.trim();
-    if (!content || !currentPostIdForComments) return;
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    errorEl.classList.add('hidden');
-
-    try {
-        const response = await fetch(`/api/posts/${encodeURIComponent(currentPostIdForComments)}/comment`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ content: content })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.ok) {
-            await fetchAndDisplayComments(currentPostIdForComments);
-            if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
-                updatePostCommentCountLocal(currentPostIdForComments, Number(result.newComments));
-            }
-            input.value = '';
-            input.focus();
-        } else {
-            errorEl.textContent = result.error || 'فشل الإرسال';
-            errorEl.classList.remove('hidden');
-        }
-    } catch (error) {
-        errorEl.textContent = 'حدث خطأ';
-        errorEl.classList.remove('hidden');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-arrow-up text-sm"></i>';
-    }
-}
-
-/* ----------------- Post options bottom sheet functions (used) ----------------- */
-
-function openPostOptionsModalFromFeed(postId, userId) {
-    currentOptionsPostId = postId;
-    currentOptionsUserId = userId;
-    const postOptionsMessage = document.getElementById('postOptionsMessage');
-    const postOptionsDeleteBtn = document.getElementById('postOptionsDeleteBtn');
-    const postOptionsAddFriendBtn = document.getElementById('postOptionsAddFriendBtn');
-
-    if (postOptionsMessage) postOptionsMessage.classList.add('hidden');
-
-    if (currentUserId && userId === currentUserId) {
-        if (postOptionsDeleteBtn) postOptionsDeleteBtn.style.display = 'flex';
-        if (postOptionsAddFriendBtn) postOptionsAddFriendBtn.style.display = 'none';
-    } else {
-        if (postOptionsDeleteBtn) postOptionsDeleteBtn.style.display = 'none';
-        if (postOptionsAddFriendBtn) postOptionsAddFriendBtn.style.display = 'flex';
-    }
-
-    const modal = document.getElementById('postOptionsModal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-    }
-}
-
-function closePostOptionsModal() {
-    const modal = document.getElementById('postOptionsModal');
-    const postOptionsMessage = document.getElementById('postOptionsMessage');
-    if (modal) modal.classList.add('hidden');
-    if (postOptionsMessage) postOptionsMessage.classList.add('hidden');
-    document.body.style.overflow = 'auto';
-    currentOptionsPostId = null;
-    currentOptionsUserId = null;
-}
-
-// Called when user taps delete inside bottom sheet
-function confirmDeleteFromOptions(e) {
-    e.stopPropagation();
-    if (!currentOptionsPostId) return;
-    openDeleteModal(currentOptionsPostId, e);
-    closePostOptionsModal();
-}
-
-// Add friend from bottom sheet
-async function addFriendFromOptions(e) {
-    e.stopPropagation();
-    if (!currentOptionsUserId) return;
-    const postOptionsAddFriendBtn = document.getElementById('postOptionsAddFriendBtn');
-    const postOptionsMessage = document.getElementById('postOptionsMessage');
-    if (postOptionsAddFriendBtn) postOptionsAddFriendBtn.disabled = true;
-    if (postOptionsMessage) postOptionsMessage.classList.add('hidden');
-
-    try {
-        const res = await fetch('/api/friends/request', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to_id: currentOptionsUserId })
-        });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            if (postOptionsMessage) {
-                postOptionsMessage.textContent = 'تم إرسال طلب الصداقة.';
-                postOptionsMessage.classList.remove('hidden');
-            }
-            fetch('/api/friends/requests_count', { credentials: 'same-origin' })
-              .then(r => r.ok ? r.json() : null)
-              .then(d => {
-                if (d && d.ok) {
-                  const fr = document.getElementById('friendReqBadge');
-                  if (fr && d.count > 0) { fr.style.display = 'inline-flex'; fr.textContent = d.count > 99 ? '99+' : String(d.count); }
-                }
-              }).catch(()=>{});
-            if (postOptionsAddFriendBtn) postOptionsAddFriendBtn.style.display = 'none';
-        } else {
-            const err = data && data.error ? data.error : 'فشل إرسال الطلب';
-            if (postOptionsMessage) {
-                postOptionsMessage.textContent = err;
-                postOptionsMessage.classList.remove('hidden');
-            } else {
-                alert(err);
-            }
-        }
-    } catch (err) {
-        console.error(err);
-        if (postOptionsMessage) {
-            postOptionsMessage.textContent = 'خطأ في الاتصال.';
-            postOptionsMessage.classList.remove('hidden');
-        } else {
-            alert('خطأ في الاتصال.');
-        }
-    } finally {
-        if (postOptionsAddFriendBtn) postOptionsAddFriendBtn.disabled = false;
-    }
-}
-
-/* ================== Comments SSE and related functions ================== */
-let commentsEventSources = {}; // map postId -> EventSource (if used elsewhere)
-
-/* Fetch and display comments for a post (enriched endpoint) */
-async function fetchAndDisplayComments(postId) {
-    const commentsListEl = document.getElementById('commentsList');
-    const badgeEl = document.getElementById('commentCountBadge');
-    
-    commentsListEl.innerHTML = '<div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>';
-    
-    try {
-        const response = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, { credentials: 'same-origin' });
-        const result = await response.json();
-
-        if (response.ok && result.ok) {
-            commentsListEl.innerHTML = '';
-            const comments = result.comments || [];
-            
-            if(badgeEl) badgeEl.innerText = comments.length;
-
-            updatePostCommentCountLocal(postId, comments.length);
-
-            if (comments.length === 0) {
-                commentsListEl.innerHTML = `
-                    <div class="flex flex-col items-center justify-center py-10 text-gray-500 opacity-70">
-                        <i class="far fa-comments text-4xl mb-3"></i>
-                        <p class="text-sm">لا توجد تعليقات بعد.</p>
-                        <p class="text-xs">كن أول من يعلق!</p>
-                    </div>`;
-            } else {
-                const htmlBuffer = comments.map(c => createCommentHtml(c, postId)).join('');
-                commentsListEl.innerHTML = htmlBuffer;
-
-                comments.forEach(c => {
-                    try {
-                        const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
-                        if (btn) {
-                            if ((c.repliesCount || 0) > (c.recentReplies ? c.recentReplies.length : 0)) btn.classList.remove('hidden');
-                            else btn.classList.add('hidden');
-                        }
-                    } catch(e){}
-                });
-
-                setTimeout(() => {
-                    if(commentsListEl.lastElementChild) {
-                        commentsListEl.scrollTop = commentsListEl.scrollHeight;
-                    }
-                }, 100);
-
-                updateCommentsVerification(comments);
-            }
-        } else {
-            commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">فشل تحميل التعليقات.</div>';
-        }
-    } catch (error) {
-        console.error(error);
-        commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">خطأ في الاتصال.</div>';
-    }
-}
-
-/* Verification badge background updater used across feed/comments/reels */
-async function updateCommentsVerification(comments) {
-     const userIds = [...new Set(comments.map(c => (c.user && c.user.userId) ? c.user.userId : ''))].filter(Boolean);
-     if(userIds.length === 0) return;
-
-     try {
-        const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).catch(()=>null));
-        const profiles = await Promise.all(promises);
         
-        profiles.forEach(p => {
-            if(p && p.id && p.is_verified) {
-                const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${p.id}"]`);
-                containers.forEach(cont => {
-                    if(cont.innerHTML.trim() === '') {
-                        cont.innerHTML = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">`;
-                    }
-                });
-            }
-        });
-     } catch(e) { console.warn('Background verification check failed', e); }
-}
+        async function handleLike(postId, buttonElement) {
+            const likeIcon = buttonElement.querySelector('.like-icon');
+            buttonElement.disabled = true;
 
-/* ---------------- Families UI logic ---------------- */
-
-function renderCreateFamilyCard() {
-    return `
-        <div class="create-family-card" style="background-image: url('${CREATE_FAMILY_BG}');" onclick="onCreateFamilyClick()">
-            <div class="overlay"></div>
-            <div class="label">
-                <div class="text-sm font-semibold">إنشاء عائلة</div>
-                <div class="text-xs text-gray-200 mt-1">بناء مساحة خاصة للعائلة</div>
-            </div>
-        </div>
-    `;
-}
-
-function renderFamilyCard(f) {
-    const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : 'https://via.placeholder.com/160x100?text=Family';
-    const members = f.membersCount || 0;
-    const isMember = !!f.is_member;
-    const badge = isMember ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
-    return `
-        <div class="family-card" data-family-id="${escapeAttr(f.familyId)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId)}', ${isMember})">
-            <img src="${escapeHtml(img)}" alt="${escapeHtml(f.name)}">
-            <div class="meta">
-                <div class="name">${escapeHtml(f.name)} ${isMember ? '' : ''}</div>
-                <div class="count">${members} عضو • ${badge}</div>
-            </div>
-        </div>
-    `;
-}
-
-async function fetchAndDisplayFamilies() {
-    if (!familiesRow) return;
-    familiesRow.innerHTML = '<div class="text-gray-400">جاري التحميل...</div>';
-    try {
-        const createHtml = renderCreateFamilyCard();
-        let html = createHtml;
-
-        const res = await fetch('/api/families', { credentials: 'same-origin' });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            const families = data.families || [];
-            const famHtml = families.map(f => {
-                return renderFamilyCard(f);
-            }).join('');
-            html += famHtml;
-        } else {
             try {
-              const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
-              const d2 = await res2.json();
-              if (res2.ok && d2.ok) {
-                const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
-                html += famHtml2;
-              }
-            } catch(e){}
-        }
-        familiesRow.innerHTML = html;
-    } catch (e) {
-        console.error('Failed to load families', e);
-        familiesRow.innerHTML = renderCreateFamilyCard();
-    }
-}
+                const response = await fetch(`/api/posts/${postId}/like`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
 
-function onCreateFamilyClick() {
-    window.location.href = '/create-family';
-}
+                const result = await response.json();
 
-function onFamilyCardClick(familyId, isMember) {
-    if (isMember === true || String(isMember) === 'true') {
-        window.location.href = `/family/${encodeURIComponent(familyId)}`;
-    } else {
-        openJoinModal(familyId);
-    }
-}
+                if (response.ok && result.ok) {
+                    const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+                    if (postCard) {
+                        const likesSpan = postCard.querySelector('.flex.justify-between span:first-child');
+                        if (likesSpan) likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
+                    }
 
-function openJoinModal(familyId) {
-    joiningFamilyId = familyId;
-    familyJoinInput.value = '';
-    familyJoinError.classList.add('hidden');
-    familyJoinIntro.textContent = 'أدخل رمز العائلة للانضمام';
-    familyJoinModal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    setTimeout(() => { familyJoinInput.focus(); }, 100);
-}
+                    if (result.action === 'liked') {
+                        likeIcon.classList.remove('far', 'text-gray-400');
+                        likeIcon.classList.add('fas', 'text-red-500');
+                        buttonElement.classList.remove('text-gray-400');
+                        buttonElement.classList.add('text-red-500');
+                        buttonElement.dataset.isLiked = 'true';
+                    } else {
+                        likeIcon.classList.remove('fas', 'text-red-500');
+                        likeIcon.classList.add('far', 'text-gray-400');
+                        buttonElement.classList.remove('text-red-500');
+                        buttonElement.classList.add('text-gray-400');
+                        buttonElement.dataset.isLiked = 'false';
+                    }
+                    
+                } else {
+                    console.error('Like failed:', result.error);
+                }
 
-function closeJoinModal(e) {
-    if (e && e.stopPropagation) e.stopPropagation();
-    joiningFamilyId = null;
-    familyJoinModal.classList.add('hidden');
-    familyJoinError.classList.add('hidden');
-    document.body.style.overflow = 'auto';
-}
-
-async function confirmJoinFamily() {
-    const key = familyJoinInput.value.trim();
-    if (!key || !joiningFamilyId) return;
-    familyJoinConfirmBtn.disabled = true;
-    familyJoinConfirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جارٍ...';
-    familyJoinError.classList.add('hidden');
-    try {
-        const res = await fetch(`/api/families/${encodeURIComponent(joiningFamilyId)}/join`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key })
-        });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            window.location.href = `/family/${encodeURIComponent(joiningFamilyId)}`;
-        } else {
-            familyJoinError.textContent = data.error || 'فشل في الانضمام';
-            familyJoinError.classList.remove('hidden');
-        }
-    } catch (e) {
-        console.error(e);
-        familyJoinError.textContent = 'خطأ في الاتصال';
-        familyJoinError.classList.remove('hidden');
-    } finally {
-        familyJoinConfirmBtn.disabled = false;
-        familyJoinConfirmBtn.innerHTML = 'انضم الآن';
-    }
-}
-
-/* ================= Initialization & SSE for notifications ================= */
-
-document.addEventListener('DOMContentLoaded', () => {
-    fetch('/api/profile')
-        .then(response => response.ok ? response.json() : null)
-        .then(data => {
-            const profilePicElement = document.getElementById('userProfilePic');
-            const meDot = document.getElementById('meOnlineDot');
-            if (data && data.profile_picture_url) {
-                profilePicElement.src = data.profile_picture_url;
-                profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                currentUserId = data.id;
-                if (data.is_online) meDot.style.display = 'inline-block';
-                else meDot.style.display = 'none';
+            } catch (error) {
+                console.error('Error during like operation:', error);
+            } finally {
+                buttonElement.disabled = false;
             }
-        }).catch(console.error);
+        }
         
-    fetchAndDisplayFamilies().then(() => {
-        fetchAndDisplayPosts();
-    });
+        /* =========================================================
+           منطق التعليقات الجديد (Fix: عرض الكل فوراً + تحديث العداد)
+           ========================================================= */
 
-    // Hook comment posting UI
-    const postCommentBtn = document.getElementById('postCommentBtn');
-    if (postCommentBtn) postCommentBtn.addEventListener('click', postComment);
+        // Setup SSE subscription for a post's comments (Real-time comments)
+        function setupCommentsSSE(postId) {
+            // close existing before opening new
+            closeCommentsSSE();
 
-    const newCommentInput = document.getElementById('newCommentInput');
-    if (newCommentInput) {
-        newCommentInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); postComment(); }
+            try {
+                // Same-origin EventSource will include cookies for session auth
+                commentsEventSource = new EventSource(`/api/posts/${postId}/comments/stream`);
+            } catch (err) {
+                console.warn('Failed to create EventSource', err);
+                commentsEventSource = null;
+                return;
+            }
+
+            commentsEventSource.addEventListener('comments_snapshot', (e) => {
+                try {
+                    const items = JSON.parse(e.data || '[]');
+                    const commentsListEl = document.getElementById('commentsList');
+                    if (!commentsListEl) return;
+
+                    // Render full snapshot (replace)
+                    if (Array.isArray(items)) {
+                        if (items.length === 0) {
+                            commentsListEl.innerHTML = `
+                              <div class="flex flex-col items-center justify-center py-10 text-gray-500 opacity-70">
+                                  <i class="far fa-comments text-4xl mb-3"></i>
+                                  <p class="text-sm">لا توجد تعليقات بعد.</p>
+                                  <p class="text-xs">كن أول من يعلق!</p>
+                              </div>`;
+                        } else {
+                            commentsListEl.innerHTML = items.map(c => createCommentHtml(c, postId)).join('');
+                            // show "عرض كل الردود" buttons appropriately
+                            items.forEach(c => {
+                                try {
+                                    const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
+                                    if (btn) {
+                                        if ((c.repliesCount || 0) > (c.recentReplies ? c.recentReplies.length : 0)) btn.classList.remove('hidden');
+                                        else btn.classList.add('hidden');
+                                    }
+                                } catch(e){}
+                            });
+                            // update verification badges
+                            updateCommentsVerification(items);
+                        }
+
+                        // update counts
+                        const badgeEl = document.getElementById('commentCountBadge');
+                        if (badgeEl) badgeEl.innerText = items.length;
+                        updatePostCommentCount(postId, items.length);
+
+                        // scroll to bottom
+                        setTimeout(() => {
+                            const el = document.getElementById('commentsList');
+                            if (el) el.scrollTop = el.scrollHeight;
+                        }, 80);
+                    }
+                } catch (err) {
+                    console.error('comments_snapshot handler error', err);
+                }
+            });
+
+            commentsEventSource.addEventListener('comment_added', (e) => {
+                try {
+                    const comment = JSON.parse(e.data || '{}');
+                    if (!comment || !comment.commentId) return;
+                    const commentsListEl = document.getElementById('commentsList');
+                    if (!commentsListEl) return;
+
+                    // prevent duplicate: if exists, ignore or replace
+                    const existing = document.getElementById(`comment-${comment.commentId}`);
+                    if (existing) {
+                        // already exists -> update it
+                        existing.outerHTML = createCommentHtml(comment, postId);
+                    } else {
+                        // append new comment
+                        commentsListEl.insertAdjacentHTML('beforeend', createCommentHtml(comment, postId));
+                    }
+
+                    // update counts/badge
+                    const badgeEl = document.getElementById('commentCountBadge');
+                    let current = badgeEl ? Number(badgeEl.innerText || 0) : 0;
+                    current = isNaN(current) ? 1 : current + 1;
+                    if (badgeEl) badgeEl.innerText = current;
+                    updatePostCommentCount(postId, current);
+
+                    // ensure verification is updated for this user
+                    updateCommentsVerification([comment]);
+
+                    // scroll to bottom
+                    setTimeout(() => {
+                        const el = document.getElementById('commentsList');
+                        if (el) el.scrollTop = el.scrollHeight;
+                    }, 60);
+                } catch (err) {
+                    console.error('comment_added handler error', err);
+                }
+            });
+
+            commentsEventSource.addEventListener('comment_changed', (e) => {
+                try {
+                    const comment = JSON.parse(e.data || '{}');
+                    if (!comment || !comment.commentId) return;
+                    const existing = document.getElementById(`comment-${comment.commentId}`);
+                    if (existing) {
+                        existing.outerHTML = createCommentHtml(comment, postId);
+                        updateCommentsVerification([comment]);
+                    }
+                } catch (err) {
+                    console.error('comment_changed handler error', err);
+                }
+            });
+
+            commentsEventSource.addEventListener('comment_removed', (e) => {
+                try {
+                    const payload = JSON.parse(e.data || '{}');
+                    const commentId = payload.commentId || payload.id || payload.key;
+                    if (!commentId) return;
+                    const el = document.getElementById(`comment-${commentId}`);
+                    if (el) el.remove();
+
+                    // update counts/badge
+                    const badgeEl = document.getElementById('commentCountBadge');
+                    let current = badgeEl ? Number(badgeEl.innerText || 0) : NaN;
+                    if (!isNaN(current)) {
+                        current = Math.max(0, current - 1);
+                        badgeEl.innerText = current;
+                        updatePostCommentCount(postId, current);
+                    }
+                } catch (err) {
+                    console.error('comment_removed handler error', err);
+                }
+            });
+
+            commentsEventSource.onerror = (err) => {
+                // EventSource will attempt reconnect; log for debug
+                console.warn('Comments SSE error or disconnected', err);
+            };
+        }
+
+        function closeCommentsSSE() {
+            if (commentsEventSource) {
+                try {
+                    commentsEventSource.close();
+                } catch (e) {}
+                commentsEventSource = null;
+            }
+        }
+
+        // Handle opening comments modal and start SSE
+        function handleComment(postId) { 
+            currentPostIdForComments = postId;
+            
+            const myPic = document.getElementById('userProfilePic').src;
+            const inputAvatar = document.getElementById('myCurrentAvatar');
+            if(inputAvatar) inputAvatar.src = myPic;
+
+            const modal = document.getElementById('commentModal');
+            const content = document.getElementById('commentModalContent');
+            
+            modal.classList.remove('hidden');
+            
+            setTimeout(() => {
+                content.classList.add('open');
+            }, 10);
+
+            // fetch initial snapshot via REST (works even if SSE delayed) and subscribe to SSE for live updates
+            fetchAndDisplayComments(postId);
+            setupCommentsSSE(postId);
+        }
+
+        function closeCommentModal() {
+            const modal = document.getElementById('commentModal');
+            const content = document.getElementById('commentModalContent');
+            
+            content.classList.remove('open');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                currentPostIdForComments = null;
+                if(document.getElementById('newCommentInput')) document.getElementById('newCommentInput').value = '';
+                if(document.getElementById('commentsList')) document.getElementById('commentsList').innerHTML = '';
+                if(document.getElementById('commentCountBadge')) document.getElementById('commentCountBadge').innerText = '0';
+                // close realtime subscription when modal closed
+                closeCommentsSSE();
+            }, 300);
+        }
+
+        // Fetch comments (uses new enriched endpoint)
+        async function fetchAndDisplayComments(postId) {
+            const commentsListEl = document.getElementById('commentsList');
+            const badgeEl = document.getElementById('commentCountBadge');
+            
+            commentsListEl.innerHTML = '<div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>';
+            
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`, { credentials: 'same-origin' });
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    commentsListEl.innerHTML = '';
+                    const comments = result.comments || [];
+                    
+                    if(badgeEl) badgeEl.innerText = comments.length;
+
+                    // synchronize post card's comment count with actual comments length
+                    updatePostCommentCount(postId, comments.length);
+
+                    if (comments.length === 0) {
+                        commentsListEl.innerHTML = `
+                            <div class="flex flex-col items-center justify-center py-10 text-gray-500 opacity-70">
+                                <i class="far fa-comments text-4xl mb-3"></i>
+                                <p class="text-sm">لا توجد تعليقات بعد.</p>
+                                <p class="text-xs">كن أول من يعلق!</p>
+                            </div>`;
+                    } else {
+                        // render comments using createCommentHtml
+                        const htmlBuffer = comments.map(c => createCommentHtml(c, postId)).join('');
+                        commentsListEl.innerHTML = htmlBuffer;
+
+                        // After rendering, ensure "عرض كل الردود" buttons are visible when repliesCount > recentReplies.length
+                        comments.forEach(c => {
+                            try {
+                                const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
+                                if (btn) {
+                                    if ((c.repliesCount || 0) > (c.recentReplies ? c.recentReplies.length : 0)) btn.classList.remove('hidden');
+                                    else btn.classList.add('hidden');
+                                }
+                            } catch(e){}
+                        });
+
+                        setTimeout(() => {
+                            if(commentsListEl.lastElementChild) {
+                                commentsListEl.scrollTop = commentsListEl.scrollHeight;
+                            }
+                        }, 100);
+
+                        updateCommentsVerification(comments);
+                    }
+                } else {
+                    commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">فشل تحميل التعليقات.</div>';
+                }
+            } catch (error) {
+                console.error(error);
+                commentsListEl.innerHTML = '<div class="text-center text-red-400 py-4 text-sm">خطأ في الاتصال.</div>';
+            }
+        }
+        
+        async function updateCommentsVerification(comments) {
+             const userIds = [...new Set(comments.map(c => (c.user && c.user.userId) ? c.user.userId : ''))].filter(Boolean);
+             if(userIds.length === 0) return;
+
+             try {
+                const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.ok ? r.json() : null).catch(()=>null));
+                const profiles = await Promise.all(promises);
+                
+                profiles.forEach(p => {
+                    if(p && p.id && p.is_verified) {
+                        const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${p.id}"]`);
+                        containers.forEach(cont => {
+                            if(cont.innerHTML.trim() === '') {
+                                cont.innerHTML = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">`;
+                            }
+                        });
+                    }
+                });
+             } catch(e) { console.warn('Background verification check failed', e); }
+        }
+
+        async function postComment() {
+            const input = document.getElementById('newCommentInput');
+            const btn = document.getElementById('postCommentBtn');
+            const errorEl = document.getElementById('commentError');
+            
+            const content = input.value.trim();
+            if (!content || !currentPostIdForComments) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            errorEl.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/posts/${currentPostIdForComments}/comment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ content: content })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    // After successful post, re-fetch the entire comments list to avoid shape/count divergence
+                    await fetchAndDisplayComments(currentPostIdForComments);
+
+                    // If server returned a newComments count, ensure post card is updated (fallback kept)
+                    if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
+                        updatePostCommentCount(currentPostIdForComments, Number(result.newComments));
+                    }
+
+                    input.value = '';
+                    input.focus();
+                } else {
+                    errorEl.textContent = result.error || 'فشل الإرسال';
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorEl.textContent = 'حدث خطأ';
+                errorEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-arrow-up text-sm"></i>';
+            }
+        }
+        
+        document.getElementById('postCommentBtn').addEventListener('click', postComment);
+        document.getElementById('newCommentInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                postComment();
+            }
         });
-    }
-});
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/profile')
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const profilePicElement = document.getElementById('userProfilePic');
+                    const meDot = document.getElementById('meOnlineDot');
+                    if (data && data.profile_picture_url) {
+                        profilePicElement.src = data.profile_picture_url;
+                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                        currentUserId = data.id;
+                        if (data.is_online) meDot.style.display = 'inline-block';
+                        else meDot.style.display = 'none';
+                    }
+                }).catch(console.error);
+                
+            // load families first so they appear before posts
+            fetchAndDisplayFamilies().then(() => {
+                fetchAndDisplayPosts();
+            });
+        });
 
-(function setupNotifSSE() {
-  if (!window.EventSource) return;
-  const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+        (function setupNotifSSE() {
+          if (!window.EventSource) return;
+          const es = new EventSource('/api/notifications/stream', { withCredentials: true });
 
-  es.addEventListener('notifications', (e) => {
-    try {
-      const payload = JSON.parse(e.data);
-      const unread = payload.unread_count || 0;
-      const unreadMessages = payload.unread_messages_count || 0;
-      const pendingFR = payload.pending_friend_requests_count || 0;
+          es.addEventListener('notifications', (e) => {
+            try {
+              const payload = JSON.parse(e.data);
+              const unread = payload.unread_count || 0;
+              const unreadMessages = payload.unread_messages_count || 0;
+              const pendingFR = payload.pending_friend_requests_count || 0;
 
-      const notifBadgeEl = document.getElementById('notifBadge');
-      if (unread > 0) {
-        notifBadgeEl.style.display = 'inline-flex';
-        notifBadgeEl.textContent = unread > 99 ? '99+' : String(unread);
-      } else {
-        notifBadgeEl.style.display = 'none';
-      }
+              const notifBadgeEl = document.getElementById('notifBadge');
+              if (unread > 0) {
+                notifBadgeEl.style.display = 'inline-flex';
+                notifBadgeEl.textContent = unread > 99 ? '99+' : String(unread);
+              } else {
+                notifBadgeEl.style.display = 'none';
+              }
 
-      const msgBadgeEl = document.getElementById('msgBadge');
-      if (unreadMessages > 0) {
-        msgBadgeEl.style.display = 'inline-flex';
-        msgBadgeEl.textContent = unreadMessages > 99 ? '99+' : String(unreadMessages);
-      } else {
-        msgBadgeEl.style.display = 'none';
-      }
+              const msgBadgeEl = document.getElementById('msgBadge');
+              if (unreadMessages > 0) {
+                msgBadgeEl.style.display = 'inline-flex';
+                msgBadgeEl.textContent = unreadMessages > 99 ? '99+' : String(unreadMessages);
+              } else {
+                msgBadgeEl.style.display = 'none';
+              }
 
-      const frBadgeEl = document.getElementById('friendReqBadge');
-      if (pendingFR > 0) {
-        frBadgeEl.style.display = 'inline-flex';
-        frBadgeEl.textContent = pendingFR > 99 ? '99+' : String(pendingFR);
-      } else {
-        frBadgeEl.style.display = 'none';
-      }
+              const frBadgeEl = document.getElementById('friendReqBadge');
+              if (pendingFR > 0) {
+                frBadgeEl.style.display = 'inline-flex';
+                frBadgeEl.textContent = pendingFR > 99 ? '99+' : String(pendingFR);
+              } else {
+                frBadgeEl.style.display = 'none';
+              }
 
-    } catch (err) {
-      console.error('Failed to parse notifications SSE data', err);
-    }
-  });
+            } catch (err) {
+              console.error('Failed to parse notifications SSE data', err);
+            }
+          });
 
-  es.addEventListener('error', (err) => {
-    console.warn('Notifications SSE error', err);
-  });
-})();
+          es.addEventListener('error', (err) => {
+            console.warn('Notifications SSE error', err);
+          });
+        })();
 
-/* Initialize unread counts on load */
-(function initUnreadCounts() {
-  fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      if (d && d.ok) {
-        const badge = document.getElementById('notifBadge');
-        if (d.unread_count > 0) {
-          badge.style.display = 'inline-flex';
-          badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count);
+        (function initUnreadCounts() {
+          fetch('/api/notifications/unread_count', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d && d.ok) {
+                const badge = document.getElementById('notifBadge');
+                if (d.unread_count > 0) {
+                  badge.style.display = 'inline-flex';
+                  badge.textContent = d.unread_count > 99 ? '99+' : String(d.unread_count);
+                }
+              }
+            }).catch(()=>{});
+
+          fetch('/api/chats', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d && d.ok && Array.isArray(d.chats)) {
+                const totalUnread = d.chats.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+                const msgBadge = document.getElementById('msgBadge');
+                if (totalUnread > 0) {
+                  msgBadge.style.display = 'inline-flex';
+                  msgBadge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
+                }
+              }
+            }).catch(()=>{});
+
+          fetch('/api/friends/requests_count', { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d && d.ok) {
+                const fr = document.getElementById('friendReqBadge');
+                if (d.count > 0) { fr.style.display = 'inline-flex'; fr.textContent = d.count > 99 ? '99+' : String(d.count); }
+              }
+            }).catch(()=>{});
+        })();
+
+        function sendHeartbeat() {
+            fetch('/api/status/heartbeat', { method: 'POST' })
+                .then(r => r.json())
+                .catch(err => console.error('Heartbeat failed', err));
         }
-      }
-    }).catch(()=>{});
 
-  fetch('/api/chats', { credentials: 'same-origin' })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      if (d && d.ok && Array.isArray(d.chats)) {
-        const totalUnread = d.chats.reduce((acc, c) => acc + (c.unread_count || 0), 0);
-        const msgBadge = document.getElementById('msgBadge');
-        if (totalUnread > 0) {
-          msgBadge.style.display = 'inline-flex';
-          msgBadge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
-        }
-      }
-    }).catch(()=>{});
-
-  fetch('/api/friends/requests_count', { credentials: 'same-origin' })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      if (d && d.ok) {
-        const fr = document.getElementById('friendReqBadge');
-        if (d.count > 0) { fr.style.display = 'inline-flex'; fr.textContent = d.count > 99 ? '99+' : String(d.count); }
-      }
-    }).catch(()=>{});
-})();
-
-function sendHeartbeat() {
-    fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' })
-        .then(r => r.json())
-        .catch(err => console.error('Heartbeat failed', err));
-}
-
-sendHeartbeat();
-setInterval(sendHeartbeat, 60000);
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
         sendHeartbeat();
-    }
-});
+        setInterval(sendHeartbeat, 60000);
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                sendHeartbeat();
+            }
+        });
+
+        // small helpers
+        function escapeHtml(s) {
+            if (!s && s !== 0) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function escapeAttr(s) {
+            if (!s && s !== 0) return '';
+            return String(s).replace(/"/g, '&quot;');
+        }
+
     </script>
 </body>
 </html>
