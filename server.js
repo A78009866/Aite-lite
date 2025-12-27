@@ -818,88 +818,75 @@ app.post('/api/families/:familyId/posts/:postId/like', requireAuth, requireFamil
 });
 
 // Comment on family post
-app.post('/api/families/:familyId/posts/:postId/comment', requireAuth, requireFamilyMember, async (req, res) => {
-  const userId = req.session.userId;
+// --- SSE stream for family post comments (اضف هذا المقطع في server.js بعد endpoints التعليقات الخاصة بالعائلة) ---
+app.get('/api/families/:familyId/posts/:postId/comments/stream', requireAuth, requireFamilyMember, async (req, res) => {
   const { familyId, postId } = req.params;
-  const { content } = req.body;
+  if (!familyId || !postId) return res.status(400).end();
 
-  if (!postId || !content) return res.status(400).json({ ok: false, error: 'Missing postId or content' });
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
+  });
+  res.write('\n');
+
+  const commentsRef = db.ref(`family_comments/${familyId}/${postId}`);
 
   try {
-    const postRef = db.ref(`family_posts/${familyId}/${postId}`);
-    const postSnapshot = await postRef.once('value');
-    if (!postSnapshot.exists()) return res.status(404).json({ ok: false, error: 'Post not found' });
-
-    const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
-    const userData = userSnapshot.val() || {};
-
-    const newCommentRef = db.ref(`family_comments/${familyId}/${postId}`).push();
-    const commentId = newCommentRef.key;
-    const timestamp = admin.database.ServerValue.TIMESTAMP;
-
-    const commentData = {
-      commentId: commentId,
-      postId: postId,
-      userId: userId,
-      content: content.trim(),
-      timestamp: timestamp,
-      user: {
-        userId: userId,
-        username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-      },
-      likes: 0,
-      repliesCount: 0
-    };
-
-    await newCommentRef.set(commentData);
-
-    // increment commentsCount on post
-    let newCommentsCount = 0;
-    await postRef.child('commentsCount').transaction((currentCount) => {
-      newCommentsCount = (currentCount || 0) + 1;
-      return newCommentsCount;
+    // initial snapshot
+    const snap = await commentsRef.orderByChild('timestamp').once('value');
+    const items = [];
+    let lastTs = 0;
+    snap.forEach(child => {
+      const v = child.val();
+      const normalized = normalizeStoredComment(v);
+      items.push(normalized);
+      if (normalized.timestamp && Number(normalized.timestamp) > lastTs) lastTs = Number(normalized.timestamp);
     });
 
-    // create notification for post owner (if commenter !== owner)
-    try {
-      const postData = postSnapshot.val();
-      if (postData && postData.userId && postData.userId !== userId) {
-        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
-        const fromProfile = fromProfileSnap.val() || {};
-        const notifRef = db.ref(`notifications/${postData.userId}`).push();
-        const notifData = {
-          id: notifRef.key,
-          type: 'family_post_comment',
-          from_user_id: userId,
-          from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          familyId,
-          postId,
-          commentId,
-          commentContent: commentData.content,
-          timestamp: admin.database.ServerValue.TIMESTAMP,
-          is_read: false
-        };
-        await notifRef.set(notifData);
-      }
-    } catch (nerr) {
-      console.error('Failed to create family_post_comment notification:', nerr);
-    }
+    sseSend(res, 'comments_snapshot', items);
 
-    // Read back the stored comment and return normalized
-    const savedSnap = await db.ref(`family_comments/${familyId}/${postId}`).child(commentId).once('value');
-    const savedVal = savedSnap.val() || commentData;
-    const normalized = normalizeStoredComment(savedVal);
+    const addedQuery = (lastTs > 0) ? commentsRef.orderByChild('timestamp').startAt(lastTs + 1) : commentsRef.orderByChild('timestamp');
 
-    res.json({ ok: true, comment: normalized, newComments: newCommentsCount });
+    const onChildAdded = (child) => {
+      const v = child.val();
+      const normalized = normalizeStoredComment(v);
+      if (normalized.timestamp && normalized.timestamp <= lastTs) return;
+      sseSend(res, 'comment_added', normalized);
+      if (normalized.timestamp && Number(normalized.timestamp) > lastTs) lastTs = Number(normalized.timestamp);
+    };
 
-  } catch (error) {
-    console.error('Error adding family comment:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إضافة التعليق.' });
+    const onChildChanged = (child) => {
+      const v = child.val();
+      const normalized = normalizeStoredComment(v);
+      sseSend(res, 'comment_changed', normalized);
+    };
+
+    const onChildRemoved = (child) => {
+      const key = child.key || (child.val() && (child.val().commentId || child.val().id));
+      sseSend(res, 'comment_removed', { commentId: key });
+    };
+
+    addedQuery.on('child_added', onChildAdded);
+    commentsRef.on('child_changed', onChildChanged);
+    commentsRef.on('child_removed', onChildRemoved);
+
+    req.on('close', () => {
+      try {
+        addedQuery.off('child_added', onChildAdded);
+        commentsRef.off('child_changed', onChildChanged);
+        commentsRef.off('child_removed', onChildRemoved);
+      } catch (e) { /* ignore */ }
+      res.end();
+    });
+
+  } catch (err) {
+    console.error('SSE family comments stream error:', err);
+    res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
+    res.end();
   }
 });
-
 // Get comments for a family post (enriched)
 app.get('/api/families/:familyId/posts/:postId/comments', requireAuth, requireFamilyMember, async (req, res) => {
   const currentUserId = req.session.userId;
