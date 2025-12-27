@@ -56,35 +56,40 @@
     .controls-row{ display:flex; justify-content:flex-end; margin-bottom:12px; gap:8px; }
     .posts-list{ display:flex; flex-direction:column; gap:14px; }
 
-    /* Reuse the nicer "glass-post-card" look from home */
+    /* Use similar card style as main feed */
     .glass-post-card {
       background-color: rgba(0, 0, 0, 0.3);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
       padding: 14px;
+      border-radius: 12px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-      color: #e6eefb;
     }
-    .avatar-with-dot { position: relative; display: inline-flex; }
-    .online-dot {
-      position: absolute;
-      bottom: 2px;
-      right: 2px;
-      width: 12px;
-      height: 12px;
-      background: #22c55e;
-      border: 2px solid #000;
-      border-radius: 999px;
-      box-shadow: 0 0 6px rgba(34,197,94,0.6);
-      z-index: 10;
-    }
-    .verified-badge-img { display:inline-block; width:14px; height:14px; border-radius:50%; margin-left:6px; vertical-align:middle; }
+    .post-head{ display:flex; gap:12px; align-items:flex-start; }
+    .post-avatar{ width:44px; height:44px; border-radius:999px; overflow:hidden; object-fit:cover; }
+    .post-meta{ flex:1; }
+    .post-username{ font-weight:700; }
+    .post-time{ color:var(--muted); font-size:12px; margin-top:4px; }
+    .post-body{ margin-top:10px; color:#dbe6ef; white-space:pre-wrap; }
+    .post-media img, .post-media video { width:100%; border-radius:10px; display:block; }
+
     .waveform { height:60px; background:#071028; border-radius:8px; overflow:hidden; }
 
-    /* media viewer */
-    .media-container { max-height:80vh; width:auto; }
+    /* comment modal for family (reuse) */
+    .modal-back{ position:fixed; inset:0; background:var(--black-overlay); display:none; align-items:center; justify-content:center; z-index:90; }
+    .create-card{ width:100%; max-width:760px; border-radius:12px; padding:16px; background: linear-gradient(180deg, rgba(8,8,10,0.65), rgba(8,8,10,0.5)); border:1px solid var(--border); box-shadow: 0 20px 80px rgba(0,0,0,0.7); display:flex; flex-direction:column; gap:12px; }
+    .field{ width:100%; padding:12px; border-radius:10px; background:transparent; border:1px solid var(--border); color:var(--accent); min-height:56px; resize:vertical; }
+
+    .verified-badge-img {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-left: 6px;
+      vertical-align: middle;
+      object-fit:cover;
+    }
 
     @media (max-width:720px){ .family-hero{ height:240px; } .family-avatar{ width:84px; height:84px; } .family-name{ font-size:18px; } .top-inner{ padding:10px; } }
   </style>
@@ -126,11 +131,11 @@
     </div>
 
     <div id="postsList" class="posts-list" aria-live="polite">
-      <!-- posts will be injected here with the same look & behavior as home -->
+      <!-- posts will be injected here using the same card style as the main feed -->
     </div>
   </main>
 
-  <!-- Create modal (family post) -->
+  <!-- Create modal -->
   <div id="createModal" class="modal-back" role="dialog" aria-modal="true" style="display:none;">
     <div class="create-card" role="document" aria-labelledby="createTitle">
       <div style="display:flex;align-items:center;justify-content:space-between">
@@ -158,8 +163,8 @@
   </div>
 
   <!-- Settings modal -->
-  <div id="settingsModal" class="settings-modal" role="dialog" aria-modal="true" style="display:none;">
-    <div class="settings-card" role="document" aria-labelledby="settingsTitle">
+  <div id="settingsModal" class="modal-back" role="dialog" aria-modal="true" style="display:none;">
+    <div class="create-card" role="document" aria-labelledby="settingsTitle">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div id="settingsTitle" style="font-weight:800">إعدادات العائلة</div>
         <button id="closeSettingsBtn" class="btn"><i class="fas fa-times"></i></button>
@@ -170,10 +175,10 @@
 
       <div>
         <div style="font-size:13px;color:var(--muted);margin-bottom:6px">رمز الانضمام</div>
-        <div id="settingsKey" class="settings-key">متاح فقط للمنشئ أو المنظم</div>
+        <div id="settingsKey" class="field" style="background:#000;border:1px dashed rgba(255,255,255,0.04);">متاح فقط للمنشئ أو المنظم</div>
       </div>
 
-      <div class="settings-actions">
+      <div style="display:flex;gap:10px;justify-content:flex-end">
         <button id="leaveBtn" class="btn" style="background:transparent;border:1px solid rgba(255,50,50,0.12);color:#ff8b8b">مغادرة العائلة</button>
         <button id="deleteBtn" class="btn" style="background:transparent;border:1px solid rgba(255,50,50,0.12);color:#ff8b8b;display:none">حذف العائلة</button>
         <button id="copyKeyBtn" class="btn" style="display:none">نسخ الرمز</button>
@@ -182,8 +187,8 @@
   </div>
 
   <!-- Confirm modal (black glass) -->
-  <div id="confirmModal" class="confirm-modal" aria-hidden="true">
-    <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div id="confirmModal" class="modal-back" aria-hidden="true">
+    <div class="create-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div id="confirmTitle" style="font-weight:800">تأكيد</div>
         <button id="closeConfirmModal" class="btn"><i class="fas fa-times"></i></button>
@@ -214,21 +219,18 @@
     </div>
   </div>
 
-  <!-- Media viewer -->
-  <div id="mediaViewerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2" style="background:rgba(0,0,0,0.8)" onclick="closeMediaViewer(event)">
-    <button class="absolute top-4 left-4 text-white text-3xl z-50 p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition" onclick="closeMediaViewer(event)">
-        <i class="fas fa-times"></i>
-    </button>
-    <div id="mediaViewerContent" class="media-container flex items-center justify-center" onclick="event.stopPropagation()"></div>
-  </div>
-
   <script>
-    // Defaults
+    // Defaults (keep same default family image used in home)
     const DEFAULT_FAMILY_IMAGE = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
     const DEFAULT_PROFILE_PIC = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
     const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 
     const familyId = (window.location.pathname || '').split('/').pop();
+    const familyCoverImg = document.getElementById('familyCoverImg');
+    const familyAvatar = document.getElementById('familyAvatar');
+    const familyName = document.getElementById('familyName');
+    const familyMeta = document.getElementById('familyMeta');
+
     const postsList = document.getElementById('postsList');
     const createPostBtn = document.getElementById('createPostBtn');
     const createModal = document.getElementById('createModal');
@@ -267,16 +269,14 @@
     let currentFamily = null;
     let currentUserId = null;
     let viewingPostIdForComments = null;
-
-    // Video/audio global managers (to avoid simultaneous playback)
     let activeWaveSurfer = null;
     let activeVideo = null;
 
-    // --- helpers
+    // --- utility helpers
     function escapeHtml(s){ if(!s && s!==0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     function escapeAttr(s){ if(!s && s!==0) return ''; return String(s).replace(/"/g,'&quot;'); }
 
-    // fetch profile
+    // --- fetch current profile (returns profile object or null)
     async function fetchProfileFull() {
       try {
         const res = await fetch('/api/profile', { credentials: 'same-origin' });
@@ -287,128 +287,119 @@
       return null;
     }
 
-    // --- Media viewer helpers
-    function openMediaViewer(url, type, event) {
-        if (event) event.stopPropagation();
-        if (type === 'audio' || type === 'video') {
-          // for large video we allow inline playback in card; skip viewer
-        }
-        let mediaElement = '';
-        if (type === 'image') {
-          mediaElement = `<img src="${escapeAttr(url)}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
-        } else {
-          // fallback show link
-          mediaElement = `<div style="color:#fff;padding:20px">لا يمكن عرض هذا النوع هنا.</div>`;
-        }
-        const viewer = document.getElementById('mediaViewerContent');
-        viewer.innerHTML = mediaElement;
-        document.getElementById('mediaViewerModal').classList.remove('hidden');
-      }
-    function closeMediaViewer(event) {
-      if (event && (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times'))) {
-        const modal = document.getElementById('mediaViewerModal');
-        modal.classList.add('hidden');
-        document.getElementById('mediaViewerContent').innerHTML = '';
-      }
-    }
+    // ---------------- Reused UI: createPostCard (same structure as main feed) ----------------
+    function createPostCard(post) {
+        let mediaContent = '';
+        if (post.media) {
+            if (post.media.type === 'image') {
+                mediaContent = `
+                    <div class="mt-3 cursor-pointer post-media" onclick="openMediaViewer('${post.media.url}', 'image', event)">
+                        <img src="${escapeAttr(post.media.url)}" alt="صورة المنشور" class="w-full max-h-96 object-cover rounded-lg">
+                    </div>
+                `;
+            } else if (post.media.type === 'video') {
+                mediaContent = `
+                    <div class="mt-3 relative w-full aspect-video rounded-lg overflow-hidden bg-black group">
+                        <video id="video-${post.postId}" src="${escapeAttr(post.media.url)}" 
+                               class="w-full h-full object-contain" 
+                               poster="https://via.placeholder.com/600x400?text=Video+Loading" 
+                               preload="metadata"
+                               onclick="toggleVideoPlay('${post.postId}', event)">
+                        </video>
+                        
+                        <div id="play-overlay-${post.postId}" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 transition-opacity duration-300 cursor-pointer" onclick="toggleVideoPlay('${post.postId}', event)">
+                            <i class="fas fa-play text-white text-5xl opacity-80 transition-transform duration-300 transform scale-100 group-hover:scale-110"></i>
+                        </div>
 
-    // --- Video controls (copied/adapted from home)
-    function toggleVideoPlay(postId, event) {
-        if (event) event.stopPropagation();
-        const video = document.getElementById(`video-${postId}`);
-        const playOverlay = document.getElementById(`play-overlay-${postId}`);
-        const controlIcon = document.getElementById(`control-icon-${postId}`);
-        const controlsBar = document.getElementById(`controls-bar-${postId}`);
+                        <div id="controls-bar-${post.postId}" class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent flex items-center space-x-3 space-x-reverse opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                            
+                            <button onclick="toggleVideoPlay('${post.postId}', event)" class="text-white hover:text-blue-400 transition">
+                                <i id="control-icon-${post.postId}" class="fas fa-play text-xl"></i>
+                            </button>
+                            
+                            <div class="flex-grow h-1 bg-gray-500 rounded-full cursor-pointer relative" onclick="seekVideo('${post.postId}', event)">
+                                <div id="progress-bar-${post.postId}" class="absolute top-0 right-0 h-full bg-blue-500 rounded-full w-0"></div>
+                            </div>
+                            
+                            <span id="time-display-${post.postId}" class="text-white text-xs font-mono">0:00 / 0:00</span>
+                            
+                            <button onclick="toggleFullscreen('${post.postId}', event)" class="text-white hover:text-blue-400 transition">
+                                <i class="fas fa-expand text-lg"></i>
+                            </button>
+                        </div>
 
-        if (!video) return;
-
-        if (activeVideo && activeVideo !== video) {
-            const activePostId = activeVideo.id.split('-')[1];
-            const activeControlIcon = document.getElementById(`control-icon-${activePostId}`);
-            const activePlayOverlay = document.getElementById(`play-overlay-${activePostId}`);
-            activeVideo.pause();
-            if (activeControlIcon) {
-                activeControlIcon.classList.remove('fa-pause');
-                activeControlIcon.classList.add('fa-play');
+                    </div>
+                `;
+            } else if (post.media.type === 'audio') {
+                mediaContent = `
+                    <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
+                        <button class="audio-play-button text-white text-xl" id="audio-play-${post.postId}">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div id="waveform-${post.postId}" class="waveform" style="flex:1"></div>
+                    </div>
+                `;
             }
-            if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
-
-            activeVideo.removeEventListener('timeupdate', updateVideoProgress);
-            activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
-            activeVideo.removeEventListener('ended', handleVideoEnd);
-        }
-        if (activeWaveSurfer) {
-            activeWaveSurfer.pause();
-            const otherContainer = activeWaveSurfer.container.closest('.glass-post-card');
-            if (otherContainer) {
-                const apb = otherContainer.querySelector('.audio-play-button i');
-                if (apb) { apb.classList.remove('fa-pause'); apb.classList.add('fa-play'); }
-            }
-            activeWaveSurfer = null;
         }
 
-        if (video.paused) {
-            video.play();
-            if (playOverlay) playOverlay.classList.add('hidden');
-            if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
-            if (controlsBar) controlsBar.classList.remove('opacity-0');
-            activeVideo = video;
-            video.addEventListener('timeupdate', updateVideoProgress);
-            video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
-            video.addEventListener('ended', handleVideoEnd);
-        } else {
-            video.pause();
-            if (playOverlay) playOverlay.classList.remove('hidden');
-            if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
-            activeVideo = null;
-        }
+        const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
+        const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
+        const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot" title="متصل الآن" style="position:relative;display:inline-block;margin-left:6px;width:10px;height:10px;background:#22c55e;border-radius:999px;border:2px solid #000"></span>` : '';
+        const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
+
+        const menuButtonHtml = `
+            <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
+                    onclick="openPostOptions('${post.postId}', '${post.userId}', event)">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+        `;
+
+        return `
+            <div class="glass-post-card" data-post-id="${escapeAttr(post.postId)}" id="family-post-${escapeAttr(post.postId)}">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center">
+                        <a href="/profile?userId=${post.userId}" class="avatar-with-dot" style="display:flex;align-items:center;">
+                            <img src="${escapeAttr(post.user.profile_picture_url || DEFAULT_PROFILE_PIC)}" alt="${escapeAttr(post.user.username || 'مستخدم')}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300">
+                            ${onlineDotHtml}
+                        </a>
+                        <div>
+                             <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(post.user.username || 'مستخدم')} ${verifiedBadgeHtml}</a>
+                            <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
+                        </div>
+                    </div>
+                    ${menuButtonHtml}
+                </div>
+
+                <p class="post-body">${escapeHtml(post.content || '')}</p>
+
+                ${mediaContent}
+
+                <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
+                    <span><i class="fas fa-heart ml-1"></i> ${post.likes || 0} إعجاب</span>
+                    <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="openFamilyComments('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
+                </div>
+
+                <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
+                    <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button gap-2" 
+                            data-is-liked="${post.is_liked ? 'true' : 'false'}" 
+                            onclick="handleFamilyLike('${post.postId}', this)">
+                        <i class="${likeIconClass} ml-2 like-icon text-lg"></i>
+                        <span class="text-sm font-medium">إعجاب</span>
+                    </button>
+                    <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="openFamilyComments('${post.postId}')">
+                        <i class="fas fa-comment-dots text-lg"></i>
+                        <span class="text-sm font-medium">تعليق</span>
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
-    function updateVideoProgress(event) {
-        const video = event.target;
-        const postId = video.id.split('-')[1];
-        const progressBar = document.getElementById(`progress-bar-${postId}`);
-        const timeDisplay = document.getElementById(`time-display-${postId}`);
-        if (!video.duration || !progressBar || !timeDisplay) return;
-        const percent = (video.currentTime / video.duration) * 100;
-        progressBar.style.width = `${percent}%`;
-        timeDisplay.textContent = `${formatVideoTime(video.currentTime)} / ${formatVideoTime(video.duration)}`;
-    }
-
-    function updateVideoTimeDisplay(event) {
-        const video = event.target;
-        const postId = video.id.split('-')[1];
-        const timeDisplay = document.getElementById(`time-display-${postId}`);
-        if (timeDisplay && video.duration) {
-            timeDisplay.textContent = `0:00 / ${formatVideoTime(video.duration)}`;
-        }
-    }
-
-    function handleVideoEnd(event) {
-        const video = event.target;
-        const postId = video.id.split('-')[1];
-        const playOverlay = document.getElementById(`play-overlay-${postId}`);
-        const controlIcon = document.getElementById(`control-icon-${postId}`);
-        video.currentTime = 0;
-        if (playOverlay) playOverlay.classList.remove('hidden');
-        if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
-        activeVideo = null;
-        video.removeEventListener('timeupdate', updateVideoProgress);
-        video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
-        video.removeEventListener('ended', handleVideoEnd);
-    }
-
-    function formatVideoTime(seconds) {
-        if (isNaN(seconds)) return '0:00';
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = Math.floor(seconds % 60);
-        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-
-    // --- WaveSurfer init for audio posts
+    // ---------------- Media controls (video/audio) reused ----------------
     function initializePostWaveSurfer(postId, url) {
         const container = document.getElementById(`waveform-${postId}`);
         if (!container) return;
+
         const ws = WaveSurfer.create({
             container: container,
             waveColor: '#4b5563',
@@ -421,12 +412,12 @@
             responsive: true,
             mediaControls: false,
         });
+
         ws.load(url);
 
-        const playButton = container.closest('.glass-post-card').querySelector('.audio-play-button');
+        const playButton = document.getElementById(`audio-play-${postId}`);
         if (playButton) {
-            playButton.onclick = (e) => {
-                e.stopPropagation();
+            playButton.onclick = () => {
                 if (activeWaveSurfer && activeWaveSurfer !== ws) {
                     activeWaveSurfer.pause();
                     const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
@@ -447,12 +438,11 @@
                     if (playOverlay) playOverlay.classList.remove('hidden');
                     activeVideo = null;
                 }
-
+                
                 if (ws.isPlaying()) {
                     ws.pause();
                     playButton.querySelector('i').classList.remove('fa-pause');
                     playButton.querySelector('i').classList.add('fa-play');
-                    activeWaveSurfer = null;
                 } else {
                     ws.play();
                     playButton.querySelector('i').classList.remove('fa-play');
@@ -469,188 +459,231 @@
         }
     }
 
-    // --- Render a family post card using same structure as home
-    function renderFamilyPostCard(post) {
-      const user = post.user || {};
-      const onlineDotHtml = user.is_online ? `<span class="online-dot" title="متصل الآن"></span>` : '';
-      const verifiedBadgeHtml = user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
-      let mediaContent = '';
+    function toggleVideoPlay(postId, event) {
+        event.stopPropagation();
+        const video = document.getElementById(`video-${postId}`);
+        const playOverlay = document.getElementById(`play-overlay-${postId}`);
+        const controlIcon = document.getElementById(`control-icon-${postId}`);
+        const controlsBar = document.getElementById(`controls-bar-${postId}`);
 
-      if (post.media) {
-        if (post.media.type === 'image') {
-          mediaContent = `
-            <div class="mt-3 cursor-pointer" onclick="openMediaViewer('${escapeAttr(post.media.url)}','image',event)">
-              <img src="${escapeAttr(post.media.url)}" alt="صورة المنشور" class="w-full max-h-96 object-cover rounded-lg">
-            </div>
-          `;
-        } else if (post.media.type === 'video') {
-          mediaContent = `
-            <div class="mt-3 relative w-full aspect-video rounded-lg overflow-hidden bg-black group">
-                <video id="video-${post.postId}" src="${escapeAttr(post.media.url)}" 
-                       class="w-full h-full object-contain" 
-                       poster="" 
-                       preload="metadata"
-                       onclick="toggleVideoPlay('${post.postId}', event)">
-                </video>
+        if (!video) return;
 
-                <div id="play-overlay-${post.postId}" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 transition-opacity duration-300 cursor-pointer" onclick="toggleVideoPlay('${post.postId}', event)">
-                    <i class="fas fa-play text-white text-5xl opacity-80"></i>
-                </div>
-
-                <div id="controls-bar-${post.postId}" class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent flex items-center space-x-3 space-x-reverse opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                    <button onclick="toggleVideoPlay('${post.postId}', event)" class="text-white hover:text-blue-400 transition">
-                        <i id="control-icon-${post.postId}" class="fas fa-play text-xl"></i>
-                    </button>
-
-                    <div class="flex-grow h-1 bg-gray-500 rounded-full cursor-pointer relative" onclick="seekVideo('${post.postId}', event)">
-                        <div id="progress-bar-${post.postId}" class="absolute top-0 right-0 h-full bg-blue-500 rounded-full w-0"></div>
-                    </div>
-
-                    <span id="time-display-${post.postId}" class="text-white text-xs font-mono">0:00 / 0:00</span>
-
-                    <button onclick="toggleFullscreen('${post.postId}', event)" class="text-white hover:text-blue-400 transition">
-                        <i class="fas fa-expand text-lg"></i>
-                    </button>
-                </div>
-            </div>
-          `;
-        } else if (post.media.type === 'audio') {
-          mediaContent = `
-            <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
-                <button class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300">
-                    <i class="fas fa-play"></i>
-                </button>
-                <div id="waveform-${post.postId}" class="waveform flex-grow"></div>
-            </div>
-          `;
-        }
-      }
-
-      const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
-      const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
-
-      return `
-        <article class="glass-post-card" data-post-id="${escapeAttr(post.postId)}" id="family-post-${escapeAttr(post.postId)}">
-          <div class="flex items-start justify-between mb-3">
-            <div class="flex items-center">
-              <a href="/profile?userId=${escapeAttr(post.userId)}" class="avatar-with-dot">
-                <img src="${escapeAttr(user.profile_picture_url || DEFAULT_PROFILE_PIC)}" alt="${escapeAttr(user.username || 'مستخدم')}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
-                ${onlineDotHtml}
-              </a>
-              <div>
-                <a href="/profile?userId=${escapeAttr(post.userId)}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(user.username || 'مستخدم')} ${verifiedBadgeHtml}</a>
-                <p class="text-gray-400 text-xs">${new Date(post.timestamp || Date.now()).toLocaleString('ar-EG')}</p>
-              </div>
-            </div>
-
-            <div>
-              <button class="text-gray-400 hover:text-white transition duration-300" onclick="openPostOptions('${post.postId}', '${post.userId}', event)"><i class="fas fa-ellipsis-v"></i></button>
-            </div>
-          </div>
-
-          <div class="text-gray-200 whitespace-pre-wrap">${escapeHtml(post.content || '')}</div>
-
-          ${mediaContent}
-
-          <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
-              <span><i class="fas fa-heart ml-1"></i> ${post.likes || 0} إعجاب</span>
-              <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="openFamilyComments('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
-          </div>
-
-          <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
-              <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button gap-2" 
-                      data-is-liked="${post.is_liked ? 'true' : 'false'}" 
-                      onclick="handleFamilyLike('${post.postId}', this)">
-                  <i class="${likeIconClass} ml-2 like-icon text-lg"></i>
-                  <span class="text-sm font-medium">إعجاب</span>
-              </button>
-              <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="openFamilyComments('${post.postId}')">
-                  <i class="fas fa-comment-dots text-lg"></i>
-                  <span class="text-sm font-medium">تعليق</span>
-              </button>
-          </div>
-        </article>
-      `;
-    }
-
-    // open post options (we reuse confirm logic)
-    function openPostOptions(postId, userId, event) {
-      event.stopPropagation();
-      const isOwner = (currentUserId && currentUserId === userId);
-      // show simple confirm delete for owner or creator (server enforces)
-      if (isOwner || (currentFamily && currentFamily.creatorId === currentUserId)) {
-        showConfirm('هل تريد حذف هذا المنشور؟', async () => {
-          try {
-            const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}`, { method: 'DELETE', credentials: 'same-origin' });
-            const d = await res.json();
-            if (res.ok && d.ok) {
-              const el = document.getElementById(`family-post-${postId}`);
-              if (el) el.remove();
-            } else {
-              alert(d.error || 'فشل في الحذف');
+        if (activeVideo && activeVideo !== video) {
+            const activePostId = activeVideo.id.split('-')[1];
+            const activeControlIcon = document.getElementById(`control-icon-${activePostId}`);
+            const activePlayOverlay = document.getElementById(`play-overlay-${activePostId}`);
+            activeVideo.pause();
+            if (activeControlIcon) {
+                activeControlIcon.classList.remove('fa-pause');
+                activeControlIcon.classList.add('fa-play');
             }
-          } catch (e) { console.error(e); alert('خطأ في الاتصال'); }
-        });
-      } else {
-        // offer send friend request
-        showConfirm('إرسال طلب صداقة إلى صاحب المنشور؟', async () => {
-          try {
-            const res = await fetch('/api/friends/request', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to_id: userId })});
-            const d = await res.json();
-            if (res.ok && d.ok) alert('تم إرسال الطلب'); else alert(d.error || 'فشل الإرسال');
-          } catch(e){ console.error(e); alert('خطأ'); }
-        });
-      }
+            if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
+            
+            activeVideo.removeEventListener('timeupdate', updateVideoProgress);
+            activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
+            activeVideo.removeEventListener('ended', handleVideoEnd);
+        }
+        if (activeWaveSurfer) {
+            activeWaveSurfer.pause();
+            const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
+            if (otherPostCard) {
+                const apb = otherPostCard.querySelector('.audio-play-button i');
+                if (apb) { apb.classList.remove('fa-pause'); apb.classList.add('fa-play'); }
+            }
+            activeWaveSurfer = null;
+        }
+        
+        if (video.paused) {
+            video.play();
+            if (playOverlay) playOverlay.classList.add('hidden'); 
+            if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
+            if (controlsBar) controlsBar.classList.remove('opacity-0'); 
+            activeVideo = video;
+            
+            video.addEventListener('timeupdate', updateVideoProgress);
+            video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
+            video.addEventListener('ended', handleVideoEnd);
+
+        } else {
+            video.pause();
+            if (playOverlay) playOverlay.classList.remove('hidden'); 
+            if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
+            activeVideo = null;
+        }
     }
 
-    // --- Handle family post like (toggle)
-    async function handleFamilyLike(postId, buttonElement) {
-        buttonElement.disabled = true;
+    function updateVideoProgress(event) {
+        const video = event.target;
+        const postId = video.id.split('-')[1];
+        const progressBar = document.getElementById(`progress-bar-${postId}`);
+        const timeDisplay = document.getElementById(`time-display-${postId}`);
+
+        if (!video.duration || !progressBar || !timeDisplay) return;
+
+        const percent = (video.currentTime / video.duration) * 100;
+        progressBar.style.width = `${percent}%`;
+        timeDisplay.textContent = `${formatVideoTime(video.currentTime)} / ${formatVideoTime(video.duration)}`;
+    }
+
+    function updateVideoTimeDisplay(event) {
+        const video = event.target;
+        const postId = video.id.split('-')[1];
+        const timeDisplay = document.getElementById(`time-display-${postId}`);
+
+        if (timeDisplay && video.duration) {
+            timeDisplay.textContent = `0:00 / ${formatVideoTime(video.duration)}`;
+        }
+    }
+    
+    function handleVideoEnd(event) {
+        const video = event.target;
+        const postId = video.id.split('-')[1];
+        const playOverlay = document.getElementById(`play-overlay-${postId}`);
+        const controlIcon = document.getElementById(`control-icon-${postId}`);
+        
+        video.currentTime = 0;
+        if (playOverlay) playOverlay.classList.remove('hidden'); 
+        if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
+        activeVideo = null;
+        
+        video.removeEventListener('timeupdate', updateVideoProgress);
+        video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
+        video.removeEventListener('ended', handleVideoEnd);
+    }
+
+    function formatVideoTime(seconds) {
+        if (isNaN(seconds)) return '0:00';
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    function seekVideo(postId, event) {
+        const video = document.getElementById(`video-${postId}`);
+        const bar = event.currentTarget;
+        if (!video || !video.duration) return;
+        const rect = bar.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const percent = x / rect.width;
+        video.currentTime = percent * video.duration;
+    }
+
+    function toggleFullscreen(postId, event) {
+        event.stopPropagation();
+        const video = document.getElementById(`video-${postId}`);
+        if (!video) return;
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            if (video.requestFullscreen) video.requestFullscreen();
+        }
+    }
+
+    // Open media viewer for images (simple)
+    function openMediaViewer(url, type, event) {
+        event.stopPropagation();
+        const modal = document.getElementById('createModal'); // reuse modal backdrop visually? We'll create a simple image popup
+        // simple implementation: open new tab for now
+        window.open(url, '_blank');
+    }
+
+    // ---------------- Families: fetch & render posts using same card ----------------
+    async function loadFamilyPosts() {
+      postsList.innerHTML = `<div style="padding:18px;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>`;
+      try {
+        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts`, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          postsList.innerHTML = `<div style="padding:18px;color:#ff8b8b">${(data && data.error) ? data.error : 'فشل جلب المنشورات'}</div>`;
+          return;
+        }
+
+        const posts = data.posts || [];
+        if (posts.length === 0) {
+          postsList.innerHTML = `<div style="padding:18px;color:var(--muted)">لا توجد منشورات داخل هذه العائلة بعد.</div>`;
+          return;
+        }
+
+        // fetch profiles for verification flags (best-effort)
+        const userIds = [...new Set(posts.map(p => p.userId))].filter(Boolean);
+        const profileMap = {};
         try {
-            const response = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/like`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin'
-            });
-            const result = await response.json();
-            if (response.ok && result.ok) {
-                // update UI counts (we expect { ok:true, action:'liked'|'unliked', newLikes: number } or similar)
-                const postEl = document.getElementById(`family-post-${postId}`);
-                if (postEl) {
-                    const likesSpan = postEl.querySelector('.flex.justify-between span:first-child');
-                    if (likesSpan) likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes || result.likes || 0} إعجاب`;
-                }
-                const likeIcon = buttonElement.querySelector('.like-icon');
-                if (result.action === 'liked' || result.is_liked) {
-                    likeIcon.classList.remove('far', 'text-gray-400');
-                    likeIcon.classList.add('fas', 'text-red-500');
-                    buttonElement.classList.remove('text-gray-400');
-                    buttonElement.classList.add('text-red-500');
-                    buttonElement.dataset.isLiked = 'true';
-                } else {
-                    likeIcon.classList.remove('fas', 'text-red-500');
-                    likeIcon.classList.add('far', 'text-gray-400');
-                    buttonElement.classList.remove('text-red-500');
-                    buttonElement.classList.add('text-gray-400');
-                    buttonElement.dataset.isLiked = 'false';
-                }
-            } else {
-                console.warn('Like failed', result);
-            }
-        } catch (error) {
-            console.error('Error during like operation:', error);
-        } finally {
-            buttonElement.disabled = false;
-        }
+          const profilePromises = userIds.map(uid => fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).catch(()=>null));
+          const profileResults = await Promise.all(profilePromises);
+          profileResults.forEach(pr => { if (pr && pr.id) profileMap[pr.id] = pr; });
+        } catch(e){}
+
+        postsList.innerHTML = '';
+        const audioToInit = [];
+        posts.forEach(post => {
+          // enrich with profile verification if available
+          const pr = profileMap[post.userId];
+          post.user = post.user || {};
+          if (pr) post.user.is_verified = !!pr.is_verified;
+          post.user.profile_picture_url = post.user.profile_picture_url || DEFAULT_PROFILE_PIC;
+
+          postsList.insertAdjacentHTML('beforeend', createPostCard(post));
+
+          if (post.media && post.media.type === 'audio') {
+            audioToInit.push({ postId: post.postId, url: post.media.url });
+          }
+        });
+
+        // initialize audio waveforms after DOM inserted
+        setTimeout(() => {
+          audioToInit.forEach(a => initializePostWaveSurfer(a.postId, a.url));
+        }, 150);
+
+      } catch (err) {
+        console.error(err);
+        postsList.innerHTML = `<div style="padding:18px;color:#ff8b8b">خطأ في الاتصال</div>`;
+      }
     }
 
-    // ---------------- Comments for family posts (open modal & fetch)
+    // ---------------- Like family post (calls family like endpoint) ----------------
+    async function handleFamilyLike(postId, btn) {
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/like`, {
+          method: 'POST',
+          credentials: 'same-origin'
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          // update UI counts
+          const postEl = document.getElementById(`family-post-${postId}`);
+          if (postEl) {
+            const likesSpan = postEl.querySelector('.flex.justify-between span:first-child');
+            if (likesSpan) likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${data.newLikes || 0} إعجاب`;
+            const likeIcon = btn.querySelector('i.like-icon');
+            if (data.action === 'liked') {
+              if (likeIcon) { likeIcon.classList.remove('far', 'text-gray-400'); likeIcon.classList.add('fas', 'text-red-500'); }
+              btn.classList.remove('text-gray-400'); btn.classList.add('text-red-500');
+              btn.dataset.isLiked = 'true';
+            } else {
+              if (likeIcon) { likeIcon.classList.remove('fas', 'text-red-500'); likeIcon.classList.add('far', 'text-gray-400'); }
+              btn.classList.remove('text-red-500'); btn.classList.add('text-gray-400');
+              btn.dataset.isLiked = 'false';
+            }
+          }
+        } else {
+          console.warn('like failed', data);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ---------------- Comments for family posts (reuse the modal but endpoints are family-scoped) ----------------
     async function openFamilyComments(postId) {
       viewingPostIdForComments = postId;
       commentsList.innerHTML = `<div style="padding:18px;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>`;
       commentModal.style.display = 'flex';
       document.body.style.overflow = 'hidden';
-      // my avatar
+
+      // set my avatar
       try {
         const profile = await fetchProfileFull();
         if (profile) {
@@ -658,6 +691,7 @@
           currentUserId = profile.id;
         }
       } catch (e){}
+
       await loadFamilyComments(postId);
     }
 
@@ -669,164 +703,183 @@
           commentsList.innerHTML = `<div style="padding:18px;color:#ff8b8b">${(data && data.error) ? data.error : 'فشل جلب التعليقات'}</div>`;
           return;
         }
+
         const comments = data.comments || [];
         if (comments.length === 0) {
           commentsList.innerHTML = `<div style="padding:18px;color:var(--muted)">لا توجد تعليقات بعد.</div>`;
           return;
         }
-        commentsList.innerHTML = comments.map(c => createCommentHtmlForFamily(c, postId)).join('');
+
+        commentsList.innerHTML = comments.map(c => createCommentHtml(c, postId)).join('');
+
+        // show/hide "عرض كل الردود" when needed (if UI had that button)
+        comments.forEach(c => {
+          try {
+            const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
+            if (btn) {
+              if ((c.repliesCount || 0) > (c.recentReplies ? c.recentReplies.length : 0)) btn.classList.remove('hidden');
+              else btn.classList.add('hidden');
+            }
+          } catch(e){}
+        });
+
       } catch (e) {
         console.error(e);
         commentsList.innerHTML = `<div style="padding:18px;color:#ff8b8b">خطأ في الاتصال</div>`;
       }
     }
 
-    // create comment html (align with home markup)
-    function createCommentHtmlForFamily(comment, postId) {
-      const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
-      const likeIcon = comment.is_liked ? 'fas' : 'far';
-      const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
-        <div class="reply-item flex items-start gap-2">
-            <img src="${escapeAttr(r.profile_picture_url || DEFAULT_PROFILE_PIC)}" class="small-avatar flex-shrink-0" alt="${escapeAttr(r.username)}">
-            <div class="flex-1">
-                <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
-            </div>
-        </div>
-      `).join('') : '';
-
-      const badgeContainer = `<span class="badge-container" data-badge-user-id="${escapeAttr(comment.user.userId)}"></span>`;
-
-      return `
-        <div class="comment-item" id="comment-${escapeAttr(comment.commentId)}">
-            <div class="flex items-start gap-3">
-                <img src="${escapeAttr(comment.user.profile_picture_url || DEFAULT_PROFILE_PIC)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeAttr(comment.user.username)}">
-                <div class="flex-1">
-                    <div class="flex items-center justify-between gap-2">
-                        <div>
-                            <div class="text-sm font-bold text-white">
-                                ${escapeHtml(comment.user.username)} ${badgeContainer}
-                            </div>
-                            <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
-                        </div>
-                        <div class="flex items-center gap-2 comment-actions">
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLikeFamily('${postId}', '${comment.commentId}', this)">
-                                <i class="${likeIcon} fa-heart"></i>
-                                <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
-                            </button>
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBoxFamily('${comment.commentId}')">
-                                <i class="fas fa-reply"></i>
-                                <span class="text-xs">رد</span>
-                            </button>
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllRepliesFamily('${postId}', '${comment.commentId}', this)">
-                                <i class="fas fa-angle-down"></i>
-                                <span class="text-xs">عرض الردود</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="mt-2 text-sm text-gray-200">${escapeHtml(comment.content)}</div>
-
-                    <div id="replies-container-${comment.commentId}" class="mt-3 space-y-2">
-                        ${repliesPreviewHtml}
-                    </div>
-
-                    <div id="reply-box-${comment.commentId}" class="mt-2 hidden">
-                        <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
-                            <img src="${document.getElementById('myCurrentAvatar').src}" class="w-7 h-7 rounded-full" alt="me">
-                            <input id="reply-input-${comment.commentId}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
-                            <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReplyFamily('${postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-      `;
-    }
-
-    // toggle comment like (family)
-    async function toggleCommentLikeFamily(postId, commentId, btnEl) {
-      btnEl.disabled = true;
-      try {
-        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`, {
-          method: 'POST',
-          credentials: 'same-origin'
-        });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-          const countEl = document.getElementById(`comment-like-count-${commentId}`);
-          if (countEl) countEl.textContent = data.likes;
-          if (data.is_liked) {
-            btnEl.classList.remove('text-gray-400');
-            btnEl.classList.add('text-red-400');
-            const i = btnEl.querySelector('i');
-            if (i) { i.classList.remove('far'); i.classList.add('fas'); }
-          } else {
-            btnEl.classList.remove('text-red-400');
-            btnEl.classList.add('text-gray-400');
-            const i = btnEl.querySelector('i');
-            if (i) { i.classList.remove('fas'); i.classList.add('far'); }
-          }
-        }
-      } catch (e) { console.error(e); }
-      finally { btnEl.disabled = false; }
-    }
-
-    function openReplyBoxFamily(commentId) {
-      const box = document.getElementById(`reply-box-${commentId}`);
-      if (!box) return;
-      box.classList.toggle('hidden');
-      const input = document.getElementById(`reply-input-${commentId}`);
-      if (input && !box.classList.contains('hidden')) input.focus();
-    }
-
-    async function postReplyFamily(postId, commentId) {
-      const input = document.getElementById(`reply-input-${commentId}`);
-      if (!input) return;
-      const content = input.value.trim();
-      if (!content) return;
-      input.disabled = true;
-      try {
-        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/reply`, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content })
-        });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-          await loadFamilyComments(postId);
-        } else {
-          alert(data.error || 'فشل في إرسال الرد');
-        }
-      } catch (e) { console.error(e); alert('خطأ في الاتصال'); }
-      finally { input.disabled = false; }
-    }
-
-    async function fetchAndShowAllRepliesFamily(postId, commentId, triggerBtn) {
-      try {
-        triggerBtn.disabled = true;
-        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-          const container = document.getElementById(`replies-container-${commentId}`);
-          if (container) {
-            container.innerHTML = data.replies.map(r => `
-              <div class="reply-item flex items-start gap-2">
+    // Create comment HTML (uses enriched comment object returned by server)
+    function createCommentHtml(comment, postId) {
+        const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
+        const likeIcon = comment.is_liked ? 'fas' : 'far';
+        const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
+            <div class="reply-item flex items-start gap-2" style="margin-top:8px">
                 <img src="${escapeAttr(r.profile_picture_url || DEFAULT_PROFILE_PIC)}" class="small-avatar flex-shrink-0" alt="${escapeAttr(r.username)}">
                 <div class="flex-1">
-                  <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                  <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                    <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
+                    <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
                 </div>
-              </div>
-            `).join('');
-          }
-        }
-      } catch (e) { console.error(e); }
-      finally { triggerBtn.disabled = false; }
+            </div>
+        `).join('') : '';
+
+        const badgeContainer = `<span class="badge-container" data-badge-user-id="${escapeAttr(comment.user.userId)}"></span>`;
+
+        return `
+            <div class="comment-item" id="comment-${escapeAttr(comment.commentId)}" style="padding:10px;border-radius:10px;background:#0d1012;margin-bottom:8px">
+                <div style="display:flex;gap:10px;align-items:flex-start">
+                    <img src="${escapeAttr(comment.user.profile_picture_url || DEFAULT_PROFILE_PIC)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeAttr(comment.user.username)}">
+                    <div style="flex:1">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <div>
+                                <div style="font-weight:800;color:#fff">${escapeHtml(comment.user.username)} ${badgeContainer}</div>
+                                <div style="color:var(--muted);font-size:12px">${new Date(comment.timestamp).toLocaleString('ar-EG')}</div>
+                            </div>
+                            <div style="display:flex;gap:8px;align-items:center" class="comment-actions">
+                                <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
+                                    <i class="${likeIcon} fa-heart"></i>
+                                    <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
+                                </button>
+                                <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
+                                    <i class="fas fa-reply"></i>
+                                    <span class="text-xs">رد</span>
+                                </button>
+                                <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                                    <i class="fas fa-angle-down"></i>
+                                    <span class="text-xs">عرض الردود</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="margin-top:8px;color:#dbe6ef">${escapeHtml(comment.content)}</div>
+                        <div id="replies-container-${comment.commentId}" class="mt-3">${repliesPreviewHtml}</div>
+
+                        <div id="reply-box-${comment.commentId}" class="mt-2" style="display:none">
+                            <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
+                                <img src="${document.getElementById('myCurrentAvatar').src}" class="w-7 h-7 rounded-full" alt="me">
+                                <input id="reply-input-${comment.commentId}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
+                                <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReply('${postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
-    // post a new comment for family post
+    // Toggle like on a comment (frontend -> family endpoint)
+    async function toggleCommentLike(postId, commentId, btnEl) {
+        btnEl.disabled = true;
+        try {
+            const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`, { method: 'POST', credentials: 'same-origin' });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                const countEl = document.getElementById(`comment-like-count-${commentId}`);
+                if (countEl) countEl.textContent = data.likes;
+                if (data.is_liked) {
+                    btnEl.classList.remove('text-gray-400');
+                    btnEl.classList.add('text-red-400');
+                    const i = btnEl.querySelector('i');
+                    if (i) { i.classList.remove('far'); i.classList.add('fas'); }
+                } else {
+                    btnEl.classList.remove('text-red-400');
+                    btnEl.classList.add('text-gray-400');
+                    const i = btnEl.querySelector('i');
+                    if (i) { i.classList.remove('fas'); i.classList.add('far'); }
+                }
+            } else {
+                console.warn('Like comment failed', data);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            btnEl.disabled = false;
+        }
+    }
+
+    function openReplyBox(commentId) {
+        const box = document.getElementById(`reply-box-${commentId}`);
+        if (!box) return;
+        box.style.display = box.style.display === 'none' ? 'block' : 'none';
+        const input = document.getElementById(`reply-input-${commentId}`);
+        if (input) input.focus();
+    }
+
+    async function postReply(postId, commentId) {
+        const input = document.getElementById(`reply-input-${commentId}`);
+        if (!input) return;
+        const content = input.value.trim();
+        if (!content) return;
+        input.disabled = true;
+        try {
+            const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/reply`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                await loadFamilyComments(postId);
+            } else {
+                alert(data.error || 'فشل في إرسال الرد');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('خطأ في الاتصال');
+        } finally {
+            input.disabled = false;
+        }
+    }
+
+    // Fetch and show all replies for a comment (in-place)
+    async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
+        try {
+            triggerBtn.disabled = true;
+            const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                const container = document.getElementById(`replies-container-${commentId}`);
+                if (container) {
+                    container.innerHTML = data.replies.map(r => `
+                        <div class="reply-item flex items-start gap-2" style="margin-top:8px">
+                            <img src="${escapeAttr(r.profile_picture_url || DEFAULT_PROFILE_PIC)}" class="small-avatar flex-shrink-0" alt="${escapeAttr(r.username)}">
+                            <div class="flex-1">
+                                <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
+                                <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            triggerBtn.disabled = false;
+        }
+    }
+
+    // ---------------- Post comment (family) ----------------
     postCommentBtn.addEventListener('click', async () => {
       const content = newCommentInput.value.trim();
       if (!content || !viewingPostIdForComments) return;
@@ -842,15 +895,19 @@
         if (res.ok && data.ok) {
           newCommentInput.value = '';
           await loadFamilyComments(viewingPostIdForComments);
-          // update post comment count by reloading posts (simple)
+          // refresh posts
           await loadFamilyPosts();
         } else {
-          alert(data.error || 'فشل في الإرسال');
+          alert(data.error || 'فشل في إرسال التعليق');
         }
-      } catch (e) { console.error(e); alert('خطأ'); }
-      finally { postCommentBtn.disabled = false; }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        postCommentBtn.disabled = false;
+      }
     });
 
+    // Close comment modal
     closeCommentModalBtn.addEventListener('click', () => {
       commentModal.style.display = 'none';
       document.body.style.overflow = 'auto';
@@ -858,211 +915,38 @@
       commentsList.innerHTML = '';
       newCommentInput.value = '';
     });
+    commentModal.addEventListener('click', (e) => { if (e.target === commentModal) closeCommentModalBtn.click(); });
 
-    // --- Load family info & posts
-    async function fetchFamilyInfo() {
-      if (!familyId) return;
-      try {
-        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/info`, { credentials: 'same-origin' });
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-          document.getElementById('familyName').textContent = 'العائلة غير موجودة';
-          document.getElementById('familyMeta').textContent = '';
-          postsList.innerHTML = `<div style="padding:16px;color:var(--muted)">العائلة غير موجودة.</div>`;
-          return;
-        }
-
-        currentFamily = data.family || {};
-        document.getElementById('familyName').textContent = currentFamily.name || '—';
-        const img = currentFamily.imageUrl || DEFAULT_FAMILY_IMAGE;
-        document.getElementById('familyCoverImg').src = img;
-        document.getElementById('familyAvatar').src = img;
-
-        const memberText = `${currentFamily.membersCount || 0} عضو`;
-        document.getElementById('familyMeta').textContent = currentFamily.is_member ? memberText : `${memberText} • خاص`;
-
-        const profile = await fetchProfileFull();
-        currentUserId = profile ? profile.id : null;
-        if (currentFamily.is_member) {
-          createPostBtn.style.display = 'inline-flex';
-          loadFamilyPosts();
-        } else {
-          createPostBtn.style.display = 'none';
-          postsList.innerHTML = `<div style="padding:18px;color:var(--muted)">هذه العائلة خاصة. انضم باستخدام رمز العائلة لعرض المنشورات.</div>`;
-        }
-
-      } catch (err) {
-        console.error(err);
-        postsList.innerHTML = `<div style="padding:18px;color:var(--muted)">خطأ في جلب بيانات العائلة.</div>`;
-      }
-    }
-
-    // Load family posts and render with same UI as home
-    async function loadFamilyPosts() {
-      postsList.innerHTML = `<div style="padding:18px;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>`;
-      try {
-        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts`, { credentials: 'same-origin' });
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-          postsList.innerHTML = `<div style="padding:18px;color:#ff8b8b">${(data && data.error) ? data.error : 'فشل جلب المنشورات'}</div>`;
-          return;
-        }
-        const posts = data.posts || [];
-        if (posts.length === 0) {
-          postsList.innerHTML = `<div style="padding:18px;color:var(--muted)">لا توجد منشورات داخل هذه العائلة بعد.</div>`;
-          return;
-        }
-        postsList.innerHTML = '';
-        const audioInit = [];
-        posts.forEach(p => {
-          postsList.insertAdjacentHTML('beforeend', renderFamilyPostCard(p));
-          if (p.media && p.media.type === 'audio') audioInit.push({ postId: p.postId, url: p.media.url });
-        });
-        // initialize audio players after DOM inserted
-        setTimeout(() => {
-          audioInit.forEach(a => initializePostWaveSurfer(a.postId, a.url));
-        }, 100);
-      } catch (err) {
-        console.error(err);
-        postsList.innerHTML = `<div style="padding:18px;color:#ff8b8b">خطأ في الاتصال</div>`;
-      }
-    }
-
-    // Seek video helper
-    function seekVideo(postId, event) {
-      const bar = event.currentTarget;
-      const rect = bar.getBoundingClientRect();
-      const clickX = (event.clientX || (event.touches && event.touches[0].clientX)) - rect.left;
-      const pct = clickX / rect.width;
-      const video = document.getElementById(`video-${postId}`);
-      if (video && video.duration) {
-        video.currentTime = pct * video.duration;
-      }
-    }
-
-    function toggleFullscreen(postId, event) {
+    // ---------------- Post options / delete ----------------
+    function openPostOptions(postId, userId, event) {
       event.stopPropagation();
-      const video = document.getElementById(`video-${postId}`);
-      if (!video) return;
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
+      // quick options: if owner show delete, else show nothing (server enforces)
+      const isOwner = (currentUserId && userId === currentUserId);
+      if (isOwner || (currentFamily && currentFamily.creatorId === currentUserId)) {
+        showConfirm('هل أنت متأكد أنك تريد حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.', async () => {
+          try {
+            const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/${encodeURIComponent(postId)}`, {
+              method: 'DELETE',
+              credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+              const el = document.getElementById(`family-post-${postId}`);
+              if (el) el.remove();
+            } else {
+              alert(data.error || 'فشل في الحذف');
+            }
+          } catch (e) {
+            console.error(e);
+            alert('خطأ في الاتصال');
+          }
+        });
       } else {
-        const wrapper = video.closest('.glass-post-card') || video;
-        if (wrapper.requestFullscreen) wrapper.requestFullscreen();
+        // for non-owner: optionally open a simple menu or do nothing
       }
     }
 
-    // --- Create post modal logic (same as before)
-    createPostBtn.addEventListener('click', () => openCreateModal());
-    closeCreateModal.addEventListener('click', () => closeCreateModalFn());
-    attachMediaBtn.addEventListener('click', () => familyPostMedia.click());
-    familyPostMedia.addEventListener('change', handleMediaSelection);
-    submitFamilyPostBtn.addEventListener('click', submitFamilyPost);
-
-    function openCreateModal(){ familyPostContent.value=''; familyPostMedia.value=''; postMediaPreview.innerHTML='لا توجد وسائط مرفوعة'; selectedMediaLabel.textContent=''; postError.style.display='none'; createModal.style.display='flex'; document.body.style.overflow='hidden'; }
-    function closeCreateModalFn(){ createModal.style.display='none'; document.body.style.overflow='auto'; }
-
-    function handleMediaSelection(){ const f = familyPostMedia.files && familyPostMedia.files[0]; if(!f){ postMediaPreview.innerHTML='لا توجد وسائط مرفوعة'; selectedMediaLabel.textContent=''; return;} selectedMediaLabel.textContent = f.name; if(f.type.startsWith('image/')){ postMediaPreview.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="preview">`; } else if(f.type.startsWith('video/')){ postMediaPreview.innerHTML = `<video src="${URL.createObjectURL(f)}" controls playsinline></video>`; } else { postMediaPreview.innerHTML = `<div style="color:var(--muted)"><i class="fas fa-file-audio"></i> ${f.name}</div>`; } }
-
-    async function submitFamilyPost(){ postError.style.display='none'; submitFamilyPostBtn.disabled=true; submitFamilyPostBtn.textContent='جارٍ النشر...'; const content = familyPostContent.value.trim(); const file = familyPostMedia.files && familyPostMedia.files[0]; if(!content && !file){ postError.textContent='المحتوى أو الوسائط مطلوب.'; postError.style.display='block'; submitFamilyPostBtn.disabled=false; submitFamilyPostBtn.textContent='نشر'; return;} try{ const fd = new FormData(); fd.append('content', content); if(file) fd.append('media', file); const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/create`, { method:'POST', credentials:'same-origin', body: fd }); const data = await res.json(); if(!res.ok || !data.ok){ postError.textContent = data.error || 'فشل في النشر'; postError.style.display='block'; return; } closeCreateModalFn(); await loadFamilyPosts(); } catch(err){ console.error(err); postError.textContent='خطأ في الاتصال'; postError.style.display='block'; } finally{ submitFamilyPostBtn.disabled=false; submitFamilyPostBtn.textContent='نشر'; } }
-
-    // --- Settings modal logic (same as before) ---
-    openSettingsBtn.addEventListener('click', async () => {
-      settingsImg.src = document.getElementById('familyCoverImg').src || DEFAULT_FAMILY_IMAGE;
-      settingsName.textContent = document.getElementById('familyName').textContent || 'العائلة';
-
-      if (!currentFamily) await fetchFamilyInfo();
-      const profile = await fetchProfileFull();
-      const profileId = profile ? profile.id : null;
-      currentUserId = profileId;
-
-      try {
-        const keyRes = await fetch(`/api/families/${encodeURIComponent(familyId)}/key`, { credentials: 'same-origin' });
-        if (keyRes.ok) {
-          const keyJson = await keyRes.json();
-          if (keyJson && keyJson.ok && keyJson.key) {
-            settingsKey.textContent = keyJson.key;
-            copyKeyBtn.style.display = 'inline-flex';
-          } else {
-            settingsKey.textContent = 'الرمز غير متاح';
-            copyKeyBtn.style.display = 'none';
-          }
-        } else {
-          settingsKey.textContent = 'الرمز متاح فقط للمنشئ أو المنظم';
-          copyKeyBtn.style.display = 'none';
-        }
-
-        const isCreator = currentFamily && currentFamily.creatorId && profileId && (currentFamily.creatorId === profileId);
-        if (isCreator) {
-          deleteBtn.style.display = 'inline-flex';
-          leaveBtn.style.display = 'none';
-        } else {
-          deleteBtn.style.display = 'none';
-          leaveBtn.style.display = 'inline-flex';
-        }
-      } catch (e) {
-        console.error(e);
-        settingsKey.textContent = 'الرمز متاح فقط للالمنشئ أو المنظم';
-        copyKeyBtn.style.display = 'none';
-      }
-
-      settingsModal.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-    });
-
-    closeSettingsBtn.addEventListener('click', closeSettings);
-    settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeSettings(); });
-    function closeSettings(){ settingsModal.style.display = 'none'; document.body.style.overflow = 'auto'; }
-
-    copyKeyBtn.addEventListener('click', async () => {
-      const txt = settingsKey.textContent || '';
-      if (!txt || txt.includes('متاح')) { alert('الرمز غير متاح'); return; }
-      try {
-        await navigator.clipboard.writeText(txt);
-        copyKeyBtn.textContent = 'تم النسخ';
-        setTimeout(()=> copyKeyBtn.textContent = 'نسخ الرمز', 1200);
-      } catch (e) {
-        alert('فشل النسخ');
-      }
-    });
-
-    leaveBtn.addEventListener('click', () => {
-      showConfirm('هل تريد فعلاً مغادرة هذه العائلة؟', async () => {
-        try {
-          const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/leave`, { method: 'POST', credentials: 'same-origin' });
-          const d = await res.json().catch(()=>({}));
-          if (res.ok && d.ok) {
-            alert('تمت المغادرة');
-            window.location.href = '/chat_list';
-          } else {
-            alert(d.error || 'فشل في المغادرة');
-          }
-        } catch (e) {
-          console.error(e);
-          alert('خطأ في الاتصال');
-        }
-      });
-    });
-
-    deleteBtn.addEventListener('click', () => {
-      showConfirm('هل أنت متأكد أنك تريد حذف هذه العائلة نهائياً؟', async () => {
-        try {
-          const res = await fetch(`/api/families/${encodeURIComponent(familyId)}`, { method: 'DELETE', credentials: 'same-origin' });
-          const d = await res.json().catch(()=>({}));
-          if (res.ok && d.ok) {
-            alert('تم حذف العائلة');
-            window.location.href = '/chat_list';
-          } else {
-            alert(d.error || 'فشل في حذف العائلة');
-          }
-        } catch (e) {
-          console.error(e);
-          alert('خطأ في الاتصال');
-        }
-      });
-    });
-
-    // Confirm modal helper
+    // ---------------- Confirm modal helpers ----------------
     function showConfirm(message, onOk) {
       confirmMessage.textContent = message;
       confirmModal.style.display = 'flex';
@@ -1083,11 +967,177 @@
       closeConfirmModal.addEventListener('click', cancelHandler);
     }
 
-    // init
+    // ---------------- Create post modal logic ----------------
+    createPostBtn.addEventListener('click', () => openCreateModal());
+    closeCreateModal.addEventListener('click', () => closeCreateModalFn());
+    attachMediaBtn.addEventListener('click', () => familyPostMedia.click());
+    familyPostMedia.addEventListener('change', handleMediaSelection);
+    submitFamilyPostBtn.addEventListener('click', submitFamilyPost);
+
+    function openCreateModal(){ familyPostContent.value=''; familyPostMedia.value=''; postMediaPreview.innerHTML='لا توجد وسائط مرفوعة'; selectedMediaLabel.textContent=''; postError.style.display='none'; createModal.style.display='flex'; document.body.style.overflow='hidden'; }
+    function closeCreateModalFn(){ createModal.style.display='none'; document.body.style.overflow='auto'; }
+
+    function handleMediaSelection(){ const f = familyPostMedia.files && familyPostMedia.files[0]; if(!f){ postMediaPreview.innerHTML='لا توجد وسائط مرفوعة'; selectedMediaLabel.textContent=''; return;} selectedMediaLabel.textContent = f.name; if(f.type.startsWith('image/')){ postMediaPreview.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="preview">`; } else if(f.type.startsWith('video/')){ postMediaPreview.innerHTML = `<video src="${URL.createObjectURL(f)}" controls playsinline></video>`; } else { postMediaPreview.innerHTML = `<div style="color:var(--muted)"><i class="fas fa-file-audio"></i> ${f.name}</div>`; } }
+
+    async function submitFamilyPost(){ postError.style.display='none'; submitFamilyPostBtn.disabled=true; submitFamilyPostBtn.textContent='جارٍ النشر...'; const content = familyPostContent.value.trim(); const file = familyPostMedia.files && familyPostMedia.files[0]; if(!content && !file){ postError.textContent='المحتوى أو الوسائط مطلوب.'; postError.style.display='block'; submitFamilyPostBtn.disabled=false; submitFamilyPostBtn.textContent='نشر'; return;} try{ const fd = new FormData(); fd.append('content', content); if(file) fd.append('media', file); const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/create`, { method:'POST', credentials:'same-origin', body: fd }); const data = await res.json(); if(!res.ok || !data.ok){ postError.textContent = data.error || 'فشل في النشر'; postError.style.display='block'; return; } closeCreateModalFn(); await loadFamilyPosts(); } catch(err){ console.error(err); postError.textContent='خطأ في الاتصال'; postError.style.display='block'; } finally{ submitFamilyPostBtn.disabled=false; submitFamilyPostBtn.textContent='نشر'; } }
+
+    // --- Settings modal logic (show key to organizers)
+    openSettingsBtn.addEventListener('click', async () => {
+      settingsImg.src = familyCoverImg.src || DEFAULT_FAMILY_IMAGE;
+      settingsName.textContent = familyName.textContent || 'العائلة';
+
+      // if we don't have currentFamily, fetch it
+      if (!currentFamily) await fetchFamilyInfo();
+
+      // determine current user id
+      const profile = await fetchProfileFull();
+      const profileId = profile ? profile.id : null;
+      currentUserId = profileId;
+
+      // Try to get key only if user is organizer (server endpoint checks too)
+      try {
+        const infoRes = await fetch(`/api/families/${encodeURIComponent(familyId)}/info`, { credentials: 'same-origin' });
+        const infoJson = await infoRes.json();
+        const isOrganizer = infoRes.ok && infoJson.ok && infoJson.family && infoJson.family.is_organizer;
+
+        if (isOrganizer) {
+          // request key
+          const keyRes = await fetch(`/api/families/${encodeURIComponent(familyId)}/key`, { credentials: 'same-origin' });
+          if (keyRes.ok) {
+            const keyJson = await keyRes.json();
+            if (keyJson && keyJson.ok && keyJson.key) {
+              settingsKey.textContent = keyJson.key;
+              copyKeyBtn.style.display = 'inline-flex';
+            } else {
+              settingsKey.textContent = 'خطأ في جلب الرمز';
+              copyKeyBtn.style.display = 'none';
+            }
+          } else {
+            settingsKey.textContent = 'الرمز غير متاح';
+            copyKeyBtn.style.display = 'none';
+          }
+        } else {
+          settingsKey.textContent = 'الرمز متاح فقط للمنشئ أو المنظم';
+          copyKeyBtn.style.display = 'none';
+        }
+
+        // show delete button only to creator
+        const isCreator = currentFamily && currentFamily.creatorId && profileId && (currentFamily.creatorId === profileId);
+        if (isCreator) {
+          deleteBtn.style.display = 'inline-flex';
+          leaveBtn.style.display = 'none';
+        } else {
+          deleteBtn.style.display = 'none';
+          leaveBtn.style.display = 'inline-flex';
+        }
+
+      } catch (e) {
+        console.error(e);
+        settingsKey.textContent = 'الرمز متاح فقط للمنشئ أو المنظم';
+        copyKeyBtn.style.display = 'none';
+      }
+
+      settingsModal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    });
+
+    closeSettingsBtn.addEventListener('click', () => { settingsModal.style.display = 'none'; document.body.style.overflow = 'auto'; });
+    settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) { settingsModal.style.display = 'none'; document.body.style.overflow = 'auto'; } });
+
+    // copy key
+    copyKeyBtn.addEventListener('click', async () => {
+      const txt = settingsKey.textContent || '';
+      if (!txt || txt.includes('متاح')) { alert('الرمز غير متاح'); return; }
+      try {
+        await navigator.clipboard.writeText(txt);
+        copyKeyBtn.textContent = 'تم النسخ';
+        setTimeout(()=> copyKeyBtn.textContent = 'نسخ الرمز', 1200);
+      } catch (e) {
+        alert('فشل النسخ');
+      }
+    });
+
+    // leave family (use confirm modal)
+    leaveBtn.addEventListener('click', () => {
+      showConfirm('هل تريد فعلاً مغادرة هذه العائلة؟', async () => {
+        try {
+          const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/leave`, { method: 'POST', credentials: 'same-origin' });
+          const d = await res.json().catch(()=>({}));
+          if (res.ok && d.ok) {
+            alert('تمت المغادرة');
+            window.location.href = '/chat_list';
+          } else {
+            alert(d.error || 'فشل في المغادرة');
+          }
+        } catch (e) {
+          console.error(e);
+          alert('خطأ في الاتصال');
+        }
+      });
+    });
+
+    // delete family (creator only)
+    deleteBtn.addEventListener('click', () => {
+      showConfirm('هل أنت متأكد أنك تريد حذف هذه العائلة نهائياً؟ هذا سيحذف كل المنشورات والبيانات الخاصة بها.', async () => {
+        try {
+          const res = await fetch(`/api/families/${encodeURIComponent(familyId)}`, { method: 'DELETE', credentials: 'same-origin' });
+          const d = await res.json().catch(()=>({}));
+          if (res.ok && d.ok) {
+            alert('تم حذف العائلة');
+            window.location.href = '/chat_list';
+          } else {
+            alert(d.error || 'فشل في حذف العائلة');
+          }
+        } catch (e) {
+          console.error(e);
+          alert('خطأ في الاتصال');
+        }
+      });
+    });
+
+    // --- Family info fetch & initialization
+    async function fetchFamilyInfo() {
+      if (!familyId) return;
+      try {
+        const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/info`, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          familyName.textContent = 'العائلة غير موجودة';
+          familyMeta.textContent = '';
+          postsList.innerHTML = `<div style="padding:16px;color:var(--muted)">العائلة غير موجودة.</div>`;
+          return;
+        }
+
+        currentFamily = data.family || {};
+        familyName.textContent = currentFamily.name || '—';
+        const img = currentFamily.imageUrl || DEFAULT_FAMILY_IMAGE;
+        familyCoverImg.src = img;
+        familyAvatar.src = img;
+
+        const memberText = `${currentFamily.membersCount || 0} عضو`;
+        familyMeta.textContent = currentFamily.is_member ? memberText : `${memberText} • خاص`;
+
+        const profile = await fetchProfileFull();
+        currentUserId = profile ? profile.id : null;
+        if (currentFamily.is_member) {
+          createPostBtn.style.display = 'inline-flex';
+          await loadFamilyPosts();
+        } else {
+          createPostBtn.style.display = 'none';
+          postsList.innerHTML = `<div style="padding:18px;color:var(--muted)">هذه العائلة خاصة. انضم باستخدام رمز العائلة لعرض المنشورات.</div>`;
+        }
+
+      } catch (err) {
+        console.error(err);
+        postsList.innerHTML = `<div style="padding:18px;color:var(--muted)">خطأ في جلب بيانات العائلة.</div>`;
+      }
+    }
+
+    // ---------------- Initialization ----------------
     document.addEventListener('DOMContentLoaded', () => {
       if (!familyId) { document.body.innerHTML = '<div style="padding:24px;color:var(--muted)">معرف العائلة غير موجود.</div>'; return; }
-      document.getElementById('familyCoverImg').src = DEFAULT_FAMILY_IMAGE;
-      document.getElementById('familyAvatar').src = DEFAULT_FAMILY_IMAGE;
+      familyCoverImg.src = DEFAULT_FAMILY_IMAGE;
+      familyAvatar.src = DEFAULT_FAMILY_IMAGE;
       fetchFamilyInfo();
     });
   </script>
