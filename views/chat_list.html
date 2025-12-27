@@ -103,7 +103,52 @@
             font-size: 12px; color: #9ca3af; margin-top: 6px;
         }
 
-        /* rest of existing styles kept */
+        /* --- Reels Tray CSS (NEW) --- */
+        .reels-scroll-container {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding: 10px 0;
+            margin: 10px 0;
+            -webkit-overflow-scrolling: touch;
+        }
+        .reels-scroll-container::-webkit-scrollbar { display: none; } /* Hide scrollbar for cleaner look */
+        
+        .reel-card-item {
+            min-width: 110px;
+            max-width: 110px;
+            height: 190px;
+            border-radius: 12px;
+            background: #111;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.2s;
+        }
+        .reel-card-item:active { transform: scale(0.97); }
+        .reel-card-item video {
+            width: 100%; height: 100%; object-fit: cover;
+            pointer-events: none; /* Prevent controls */
+        }
+        .reel-card-overlay {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            height: 50%;
+        }
+        .reel-user-avatar {
+            position: absolute; top: 8px; left: 8px;
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            border: 1px solid white;
+            z-index: 10;
+        }
+        /* --------------------------- */
+
         /* تنسيقات نافذة التعليقات (Bottom Sheet) */
         .glass-comment-modal-content {
             background-color: #18191a;
@@ -300,38 +345,38 @@
         .reply-item { margin-right: 40px; margin-top: 6px; background: #0f1416; padding: 6px; border-radius: 10px; border: 1px solid #222; }
         .small-avatar { width: 28px; height: 28px; border-radius: 999px; }
         .like-count { font-weight: 700; color: #9ca3af; font-size: 12px; }
-/* شارة التحقق داخل التعليقات في الهوم */
-.badge-container .verified-badge-img,
-.comment-item .verified-badge-img {
-  width: 12px;
-  height: 12px;
-  margin-left: 6px;
-  vertical-align: middle;
-}
+        /* شارة التحقق داخل التعليقات في الهوم */
+        .badge-container .verified-badge-img,
+        .comment-item .verified-badge-img {
+          width: 12px;
+          height: 12px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
 
-/* Post options bottom sheet */
-#postOptionsModal .sheet {
-  background: #0b0b0c;
-  border-radius: 14px 14px 0 0;
-  padding: 12px;
-  border: 1px solid rgba(255,255,255,0.06);
-}
-.option-btn {
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:10px;
-  padding:12px;
-  border-radius:10px;
-  width:100%;
-  background: rgba(255,255,255,0.02);
-  color:#e6eefb;
-  border:1px solid rgba(255,255,255,0.03);
-  cursor:pointer;
-}
-.option-btn.danger { background: linear-gradient(90deg,#7f1d1d, #ef4444); color:white; border:none; }
-.option-btn:active { transform: translateY(1px); }
-.option-row { display:flex; gap:10px; margin-bottom:10px; }
+        /* Post options bottom sheet */
+        #postOptionsModal .sheet {
+          background: #0b0b0c;
+          border-radius: 14px 14px 0 0;
+          padding: 12px;
+          border: 1px solid rgba(255,255,255,0.06);
+        }
+        .option-btn {
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:10px;
+          padding:12px;
+          border-radius:10px;
+          width:100%;
+          background: rgba(255,255,255,0.02);
+          color:#e6eefb;
+          border:1px solid rgba(255,255,255,0.03);
+          cursor:pointer;
+        }
+        .option-btn.danger { background: linear-gradient(90deg,#7f1d1d, #ef4444); color:white; border:none; }
+        .option-btn:active { transform: translateY(1px); }
+        .option-row { display:flex; gap:10px; margin-bottom:10px; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -376,7 +421,6 @@
         </nav>
     </header>
 
-    <!-- Families section (added) -->
     <main class="max-w-6xl mx-auto p-4">
         <div id="familiesWrapper" class="max-w-xl mx-auto mt-4">
             <div class="flex items-center justify-between mb-2">
@@ -384,8 +428,7 @@
                 <a href="/create-family" class="text-sm text-gray-400 hover:text-white">إنشاء عائلة جديدة</a>
             </div>
             <div id="familiesRow" class="families-row">
-                <!-- create family card + family cards will be injected here -->
-            </div>
+                </div>
         </div>
 
         <div id="postsFeed" class="max-w-xl mx-auto mt-6 space-y-4">
@@ -415,7 +458,6 @@
         </nav>
     </div>
 
-    <!-- Join family modal -->
     <div id="familyJoinModal" class="hidden fixed inset-0 z-60 flex items-center justify-center p-4 glass-modal-bg" onclick="closeJoinModal(event)">
       <div class="bg-[#0f1724] max-w-md w-full rounded-xl p-6 border border-gray-700" onclick="event.stopPropagation()">
         <div class="flex justify-between items-center mb-4">
@@ -432,7 +474,6 @@
       </div>
     </div>
 
-    <!-- Centered delete confirmation modal (glass) -->
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
             <i class="fas fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
@@ -446,7 +487,6 @@
         </div>
     </div>
 
-    <!-- Media viewer -->
     <div id="mediaViewerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2 glass-modal-bg" onclick="closeMediaViewer(event)">
         <button class="absolute top-4 left-4 text-white text-3xl z-50 p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition" onclick="closeMediaViewer(event)">
             <i class="fas fa-times"></i>
@@ -455,7 +495,6 @@
         </div>
     </div>
     
-    <!-- Comment modal (bottom sheet) -->
     <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-end md:items-center justify-center glass-modal-bg transition-opacity duration-300">
         <div id="commentModalContent" class="glass-comment-modal-content w-full md:w-auto" onclick="event.stopPropagation()">
             
@@ -491,7 +530,6 @@
         </div>
     </div>
 
-    <!-- Post options bottom sheet (NEW) -->
     <div id="postOptionsModal" class="hidden fixed inset-0 z-[80] flex items-end justify-center glass-modal-bg" onclick="closePostOptionsModal()">
       <div class="sheet w-full md:max-w-md" onclick="event.stopPropagation()">
         <div class="modal-handle" style="margin-bottom:8px;"></div>
@@ -519,7 +557,6 @@
       </div>
     </div>
     
-    <!-- Post menu (context) - kept for backward compatibility but not used for bottom sheet -->
     <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
         <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
             <i class="fas fa-trash ml-3"></i>
@@ -527,7 +564,6 @@
         </button>
     </div>
 
-    <!-- Create modal -->
     <div id="createModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 glass-modal-bg">
         <div class="glass-comment-modal-content p-8 rounded-3xl shadow-2xl max-w-sm w-full modal-animate-in border border-white/20" style="position: relative; height: auto; transform: none; background-color: rgba(30,30,30,0.9);" onclick="event.stopPropagation()">
             
@@ -1425,24 +1461,75 @@ function createCommentHtml(comment, postId) {
             }
         }
 
+        /* ---------------- REELS TRAY LOGIC (NEW) ---------------- */
+        async function fetchReelsData() {
+            try {
+                const res = await fetch('/api/reels/feed', { credentials: 'include' });
+                if(!res.ok) return [];
+                const data = await res.json();
+                if(data.ok && data.reels && data.reels.length > 0) {
+                    return data.reels;
+                }
+            } catch(e) { console.error('fetch reels error', e); }
+            return [];
+        }
+
+        function createReelsTrayHtml(reels) {
+            if(!reels || reels.length === 0) return '';
+            const items = reels.map(r => {
+                const thumb = r.thumbnailUrl || ''; 
+                // Since we might not have a poster image, we use video tag with pointer-events none
+                // If you have a separate thumbnail URL logic, prioritize it.
+                return `
+                <div class="reel-card-item" onclick="window.location.href='/reels?id=${r.reelId}'">
+                  <video src="${r.videoUrl}" muted playsinline preload="metadata"></video>
+                  <div class="reel-user-avatar">
+                    <img src="${escapeHtml(r.user.profile_picture_url)}" class="w-full h-full rounded-full object-cover">
+                  </div>
+                  <div class="reel-card-overlay">
+                    <span class="text-white text-xs font-bold truncate text-shadow-md">@${escapeHtml(r.user.username)}</span>
+                  </div>
+                </div>
+                `;
+            }).join('');
+
+            return `
+            <div class="flex items-center gap-2 mb-2 px-2">
+               <i class="fas fa-clapperboard text-pink-500"></i>
+               <span class="font-bold text-white text-sm">ريلز مقترحة</span>
+            </div>
+            <div class="reels-scroll-container">
+               ${items}
+            </div>
+            `;
+        }
+
         // rest of existing functions (fetch posts, comments, likes, etc.)
         // Fetch and display posts (feed)
         async function fetchAndDisplayPosts() {
             postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
             
             try {
-                const response = await fetch('/api/posts');
-                const result = await response.json();
+                // Parallel fetch: posts + reels
+                const [postsRes, reelsData] = await Promise.all([
+                    fetch('/api/posts').then(r => r.ok ? r.json() : {ok:false}),
+                    fetchReelsData()
+                ]);
+
+                // Prepare reels HTML if any
+                const reelsHtml = createReelsTrayHtml(reelsData);
                 
                 postsFeed.innerHTML = '';
                 
-                if (response.ok && result.ok) {
-                    if (result.posts.length === 0) {
-                        postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
+                if (postsRes.ok) {
+                    const posts = postsRes.posts || [];
+                    if (posts.length === 0) {
+                        // Even if no posts, show reels if available
+                        if(reelsHtml) postsFeed.innerHTML = reelsHtml;
+                        postsFeed.innerHTML += '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
                         return;
                     }
                     
-                    const posts = result.posts;
                     const userIds = [...new Set(posts.map(p => p.userId))];
 
                     const profileMap = {};
@@ -1462,7 +1549,7 @@ function createCommentHtml(comment, postId) {
 
                     const audioPostsToInit = [];
 
-                    posts.forEach(post => {
+                    posts.forEach((post, index) => {
                         const prof = profileMap[post.userId];
                         if (prof) {
                             post.user = post.user || {};
@@ -1472,8 +1559,14 @@ function createCommentHtml(comment, postId) {
                             post.user.is_verified = !!post.user.is_verified;
                         }
 
+                        // Append Post
                         postsFeed.innerHTML += createPostCard(post);
                         
+                        // Insert Reels Tray AFTER the first post (index 0)
+                        if (index === 0 && reelsHtml) {
+                            postsFeed.innerHTML += reelsHtml;
+                        }
+
                         if (post.media && post.media.type === 'audio') {
                             audioPostsToInit.push({ postId: post.postId, url: post.media.url });
                         }
