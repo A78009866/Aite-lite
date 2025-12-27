@@ -245,6 +245,30 @@
   margin-left: 6px;
   vertical-align: middle;
 }
+
+/* Post options bottom sheet */
+#postOptionsModal .sheet {
+  background: #0b0b0c;
+  border-radius: 14px 14px 0 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.option-btn {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:12px;
+  border-radius:10px;
+  width:100%;
+  background: rgba(255,255,255,0.02);
+  color:#e6eefb;
+  border:1px solid rgba(255,255,255,0.03);
+  cursor:pointer;
+}
+.option-btn.danger { background: linear-gradient(90deg,#7f1d1d, #ef4444); color:white; border:none; }
+.option-btn:active { transform: translateY(1px); }
+.option-row { display:flex; gap:10px; margin-bottom:10px; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -376,7 +400,35 @@
         </div>
     </div>
 
-    <!-- Post menu (context) -->
+    <!-- Post options bottom sheet (NEW) -->
+    <div id="postOptionsModal" class="hidden fixed inset-0 z-[80] flex items-end justify-center glass-modal-bg" onclick="closePostOptionsModal()">
+      <div class="sheet w-full md:max-w-md" onclick="event.stopPropagation()">
+        <div class="modal-handle" style="margin-bottom:8px;"></div>
+        <div class="p-3">
+          <div id="postOptionsMessage" class="text-sm text-gray-300 mb-2 hidden"></div>
+          <div class="option-row">
+            <button id="postOptionsDeleteBtn" class="option-btn danger" onclick="confirmDeleteFromOptions(event)">
+              <i class="fas fa-trash"></i>
+              <span>حذف المنشور</span>
+            </button>
+          </div>
+          <div class="option-row">
+            <button id="postOptionsAddFriendBtn" class="option-btn" onclick="addFriendFromOptions(event)">
+              <i class="fas fa-user-plus"></i>
+              <span>إضافة صديق</span>
+            </button>
+          </div>
+          <div class="option-row">
+            <button id="postOptionsCloseBtn" class="option-btn" onclick="closePostOptionsModal()">
+              <i class="fas fa-times"></i>
+              <span>إلغاء</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Post menu (context) - kept for backward compatibility but not used for bottom sheet -->
     <div id="postMenu" class="absolute z-40 bg-[#242526] rounded-lg shadow-xl border border-gray-700 hidden w-40">
         <button id="deleteOptionBtn" class="flex items-center w-full p-3 text-red-400 hover:bg-[#343536] rounded-lg transition duration-300">
             <i class="fas fa-trash ml-3"></i>
@@ -426,6 +478,10 @@
         let activeVideo = null; 
         let currentPostIdForComments = null;
 
+        // For options bottom sheet
+        let currentOptionsPostId = null;
+        let currentOptionsUserId = null;
+
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
 
@@ -440,6 +496,12 @@
         const mediaViewerContent = document.getElementById('mediaViewerContent');
         const profileDropdown = document.getElementById('profileDropdown'); 
         const profileMenuButton = document.getElementById('profileMenuButton'); 
+
+        const postOptionsModal = document.getElementById('postOptionsModal');
+        const postOptionsDeleteBtn = document.getElementById('postOptionsDeleteBtn');
+        const postOptionsAddFriendBtn = document.getElementById('postOptionsAddFriendBtn');
+        const postOptionsCloseBtn = document.getElementById('postOptionsCloseBtn');
+        const postOptionsMessage = document.getElementById('postOptionsMessage');
 
         function toggleProfileDropdown(event) {
             event.stopPropagation();
@@ -545,34 +607,88 @@
             }
         });
 
+        // Replaced togglePostMenu with bottom sheet opener
         function togglePostMenu(postId, userId, event, menuButton) {
             event.stopPropagation();
-            
-            if (!postMenu.classList.contains('hidden') && postMenu.dataset.postId === postId) {
-                postMenu.classList.add('hidden');
-                return;
-            }
-            
-            const rect = menuButton.getBoundingClientRect();
-            // position center on small screens
-            if (window.innerWidth < 640) {
-                postMenu.style.top = `${window.innerHeight/2 - 80}px`;
-                postMenu.style.left = `${window.innerWidth/2 - 80}px`;
-            } else {
-                postMenu.style.top = `${rect.bottom + 5}px`;
-                postMenu.style.left = `${rect.left}px`;
-            }
-            
-            postMenu.dataset.postId = postId;
+            openPostOptionsModal(postId, userId);
+        }
 
-            if (userId === currentUserId) {
-                deleteOptionBtn.style.display = 'flex';
-                deleteOptionBtn.onclick = (e) => openDeleteModal(postId, e);
+        // Open bottom sheet with appropriate options
+        function openPostOptionsModal(postId, userId) {
+            currentOptionsPostId = postId;
+            currentOptionsUserId = userId;
+            postOptionsMessage.classList.add('hidden');
+            // If owner -> show delete, hide add-friend
+            if (currentUserId && userId === currentUserId) {
+                postOptionsDeleteBtn.style.display = 'flex';
+                postOptionsAddFriendBtn.style.display = 'none';
             } else {
-                deleteOptionBtn.style.display = 'none';
+                postOptionsDeleteBtn.style.display = 'none';
+                postOptionsAddFriendBtn.style.display = 'flex';
             }
 
-            postMenu.classList.remove('hidden');
+            postOptionsModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closePostOptionsModal() {
+            postOptionsModal.classList.add('hidden');
+            postOptionsMessage.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            currentOptionsPostId = null;
+            currentOptionsUserId = null;
+        }
+
+        // Called when user taps delete inside bottom sheet
+        function confirmDeleteFromOptions(e) {
+            e.stopPropagation();
+            if (!currentOptionsPostId) return;
+            // reuse existing delete modal logic
+            openDeleteModal(currentOptionsPostId, e);
+            closePostOptionsModal();
+        }
+
+        // Add friend from bottom sheet
+        async function addFriendFromOptions(e) {
+            e.stopPropagation();
+            if (!currentOptionsUserId) return;
+            postOptionsAddFriendBtn.disabled = true;
+            postOptionsMessage.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/friends/request', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to_id: currentOptionsUserId })
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    postOptionsMessage.textContent = 'تم إرسال طلب الصداقة.';
+                    postOptionsMessage.classList.remove('hidden');
+                    // update friend requests badge by re-fetching count
+                    fetch('/api/friends/requests_count', { credentials: 'same-origin' })
+                      .then(r => r.ok ? r.json() : null)
+                      .then(d => {
+                        if (d && d.ok) {
+                          const fr = document.getElementById('friendReqBadge');
+                          if (d.count > 0) { fr.style.display = 'inline-flex'; fr.textContent = d.count > 99 ? '99+' : String(d.count); }
+                        }
+                      }).catch(()=>{});
+                    // Optionally hide add button or give visual feedback
+                    postOptionsAddFriendBtn.style.display = 'none';
+                } else {
+                    const err = data && data.error ? data.error : 'فشل إرسال الطلب';
+                    postOptionsMessage.textContent = err;
+                    postOptionsMessage.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                postOptionsMessage.textContent = 'خطأ في الاتصال.';
+                postOptionsMessage.classList.remove('hidden');
+            } finally {
+                postOptionsAddFriendBtn.disabled = false;
+            }
         }
 
         document.addEventListener('click', (event) => {
@@ -804,13 +920,13 @@
             const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online_dot_small" title="متصل الآن"></span>` : '';
             const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
 
-            // Show post-menu (three dots) only for post owner
-            const menuButtonHtml = (post.userId === currentUserId) ? `
+            // Show post-menu (three dots) only for click target - always render button but it will open bottom sheet
+            const menuButtonHtml = `
                 <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
                         onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)">
                     <i class="fas fa-ellipsis-v"></i>
                 </button>
-            ` : '';
+            `;
 
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
