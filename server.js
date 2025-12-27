@@ -188,6 +188,7 @@ app.get('/admin', requireAuth, requireAdmin, (req, res) => {
 });
 
 // ---------------- Family Pages (جديد) ----------------
+/ ---------------- Family Pages (جديد) ----------------
 // صفحة إنشاء العائلة (frontend file ستوفره لاحقاً)
 app.get('/create-family', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'create_family.html'));
@@ -198,6 +199,52 @@ app.get('/family/:familyId', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'family.html'));
 });
 
+// ---------------- Routes: Auth Logic ----------------
+// ... (login/register/logout unchanged) ...
+
+// (remaining server code omitted here for brevity in this block; assume same as previous version up to family key route)
+// For this response we only show the changed route: GET /api/families/:familyId/key
+
+// --- GET family key (available to any family member) ---
+app.get('/api/families/:familyId/key', requireAuth, async (req, res) => {
+  const { familyId } = req.params;
+  const userId = req.session.userId;
+  if (!familyId) return res.status(400).json({ ok: false, error: 'familyId required' });
+
+  try {
+    const snap = await db.ref(`families/${familyId}`).once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
+    const f = snap.val();
+
+    // Allow access to creator OR any member (including regular members)
+    const member = await isFamilyMember(familyId, userId);
+    const isCreator = f.creatorId && f.creatorId === userId;
+
+    if (!isCreator && !member) {
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+
+    // Return the plain key only if stored on creation as keyPlain
+    const key = f.keyPlain || null;
+    if (!key) return res.status(404).json({ ok: false, error: 'Key not found' });
+
+    res.json({ ok: true, key });
+  } catch (err) {
+    console.error('Error fetching family key:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// ---------------- Utility functions used above ----------------
+async function isFamilyMember(familyId, userId) {
+  if (!familyId || !userId) return false;
+  try {
+    const snap = await db.ref(`families/${familyId}/members/${userId}`).once('value');
+    return snap.exists();
+  } catch (e) {
+    return false;
+  }
+}
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
