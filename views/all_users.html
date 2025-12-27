@@ -36,6 +36,43 @@
       border: 1px solid rgba(255,255,255,0.06);
       vertical-align: middle;
     }
+
+    /* ------------------ Toasts (black glassy) ------------------ */
+    #toastContainer {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1100;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+        pointer-events: none;
+    }
+    .toast {
+        min-width: 220px;
+        max-width: 90vw;
+        color: #ffffff;
+        background: rgba(7,7,8,0.6);
+        border: 1px solid rgba(255,255,255,0.06);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        padding: 10px 14px;
+        border-radius: 12px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        pointer-events: auto;
+        font-size: 14px;
+    }
+    .toast.success { border-left: 4px solid #16a34a; }
+    .toast.error   { border-left: 4px solid #ef4444; }
+    .toast.info    { border-left: 4px solid #3b82f6; }
+    .toast i { width: 18px; text-align: center; }
+    .toast .msg { flex: 1; word-break: break-word; text-align: right; }
+    .toast .close-btn { margin-left: 8px; background: transparent; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 14px; }
   </style>
 </head>
 <body class="mobile-safe">
@@ -71,6 +108,9 @@
     </div>
   </main>
 
+  <!-- Toast container -->
+  <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
 <script>
   const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
   const tabAll = document.getElementById('tabAll');
@@ -81,6 +121,53 @@
 
   tabAll.addEventListener('click', () => { tabAll.classList.add('active'); tabRequests.classList.remove('active'); allUsersContainer.classList.remove('hidden'); requestsContainer.classList.add('hidden'); });
   tabRequests.addEventListener('click', () => { tabRequests.classList.add('active'); tabAll.classList.remove('active'); requestsContainer.classList.remove('hidden'); allUsersContainer.classList.add('hidden'); loadRequests(); });
+
+  /* ---------------- Toast helper (black glassy) ---------------- */
+  function showToast(message, opts = {}) {
+    const { type = 'info', duration = 3500 } = opts;
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = `
+      <i class="${type === 'success' ? 'fas fa-check-circle' : (type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle')}"></i>
+      <div class="msg">${escapeHtml(message)}</div>
+      <button class="close-btn" aria-label="close">&times;</button>
+    `;
+
+    const closeBtn = toast.querySelector('.close-btn');
+    const removeToast = () => {
+      toast.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s';
+      toast.style.transform = 'translateY(-10px)';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 200);
+    };
+    closeBtn.addEventListener('click', removeToast);
+
+    container.appendChild(toast);
+
+    // entrance animation
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-10px)';
+    requestAnimationFrame(() => {
+      toast.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s';
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+    });
+
+    const t = setTimeout(() => {
+      removeToast();
+    }, duration);
+
+    // pause on hover
+    toast.addEventListener('mouseenter', () => clearTimeout(t));
+  }
 
   async function loadAllUsers() {
     allUsersContainer.innerHTML = '<div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري تحميل المستخدمين...</div>';
@@ -132,18 +219,18 @@
             try {
               const r = await fetch('/api/friends/request', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to_id: id })});
               const j = await r.json();
-              if (r.ok && j.ok) { loadAllUsers(); updateFriendReqBadge(); }
-              else { alert(j.error || 'فشل إرسال الطلب'); e.currentTarget.disabled = false; loadAllUsers(); }
-            } catch (err) { alert('خطأ في الشبكة'); e.currentTarget.disabled = false; loadAllUsers(); }
+              if (r.ok && j.ok) { loadAllUsers(); updateFriendReqBadge(); showToast('تم إرسال طلب الصداقة.', { type: 'success' }); }
+              else { showToast(j.error || 'فشل إرسال الطلب', { type: 'error' }); e.currentTarget.disabled = false; loadAllUsers(); }
+            } catch (err) { showToast('خطأ في الشبكة', { type: 'error' }); e.currentTarget.disabled = false; loadAllUsers(); }
           } else if (action === 'cancel') {
             e.currentTarget.disabled = true;
             e.currentTarget.textContent = 'جاري الإلغاء...';
             try {
               const r = await fetch('/api/friends/cancel', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to_id: id })});
               const j = await r.json();
-              if (r.ok && j.ok) { loadAllUsers(); updateFriendReqBadge(); }
-              else { alert('فشل الإلغاء'); loadAllUsers(); }
-            } catch (err) { alert('خطأ'); loadAllUsers(); }
+              if (r.ok && j.ok) { loadAllUsers(); updateFriendReqBadge(); showToast('تم إلغاء الطلب.', { type: 'success' }); }
+              else { showToast('فشل الإلغاء', { type: 'error' }); loadAllUsers(); }
+            } catch (err) { showToast('خطأ', { type: 'error' }); loadAllUsers(); }
           }
         });
       });
@@ -195,17 +282,17 @@
             try {
               const r = await fetch('/api/friends/accept', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
               const j = await r.json();
-              if (r.ok && j.ok) { loadRequests(); updateFriendReqBadge(); }
-              else { alert('فشل في القبول'); loadRequests(); }
-            } catch (err) { alert('خطأ'); loadRequests(); }
+              if (r.ok && j.ok) { loadRequests(); updateFriendReqBadge(); showToast('تمت الموافقة — أصبح هذا المستخدم صديقك.', { type: 'success' }); }
+              else { showToast('فشل في القبول', { type: 'error' }); loadRequests(); }
+            } catch (err) { showToast('خطأ', { type: 'error' }); loadRequests(); }
           } else if (action === 'reject') {
             e.currentTarget.disabled = true;
             try {
               const r = await fetch('/api/friends/reject', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
               const j = await r.json();
-              if (r.ok && j.ok) { loadRequests(); updateFriendReqBadge(); }
-              else { alert('فشل'); loadRequests(); }
-            } catch (err) { alert('خطأ'); loadRequests(); }
+              if (r.ok && j.ok) { loadRequests(); updateFriendReqBadge(); showToast('تم رفض الطلب.', { type: 'success' }); }
+              else { showToast('فشل', { type: 'error' }); loadRequests(); }
+            } catch (err) { showToast('خطأ', { type: 'error' }); loadRequests(); }
           }
         });
       });
