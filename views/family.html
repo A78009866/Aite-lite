@@ -316,32 +316,29 @@
     </div>
 
     <script>
-        // The family.html script is kept mostly as before, but ensures the client calls the new family endpoints:
-        // - Like: POST /api/families/:familyId/posts/:postId/like
-        // - Comment: POST /api/families/:familyId/posts/:postId/comment
-        // - Get comments: GET /api/families/:familyId/posts/:postId/comments
-        // - Like a comment: POST /api/families/:familyId/posts/:postId/comments/:commentId/like
-        // - Reply to comment: POST /api/families/:familyId/posts/:postId/comments/:commentId/reply
-        // - Get replies: GET /api/families/:familyId/posts/:postId/comments/:commentId/replies
+        // The family.html script is updated to open an SSE stream to receive live comment updates
+        // SSE events used:
+        // - comments_snapshot: initial array of comments
+        // - comment_added: single comment object
+        // - comment_changed: updated comment object
+        // - comment_removed: { commentId }
 
-        // --- Constants & Config ---
         const DEFAULT_FAMILY_IMG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop';
         const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 
-        // Get Family ID from URL
         const pathSegments = window.location.pathname.split('/');
         const familyId = pathSegments[pathSegments.length - 1];
 
         let currentUserId = null;
         let isCreator = false;
         let currentPostIdForComments = null;
+        let familyCommentsES = null; // EventSource for family comments stream
         let mediaRecorder = null;
         let audioChunks = [];
         let audioBlob = null;
         let wavesurferRecorder = null;
 
-        // --- Init ---
         document.addEventListener('DOMContentLoaded', async () => {
             if (!familyId) { alert('خطأ في معرف العائلة'); window.location.href='/chat_list'; return; }
             
@@ -371,7 +368,6 @@
                 if (res.ok && data.ok) {
                     const f = data.family;
                     document.getElementById('familyName').textContent = f.name;
-                    // show full image (not cropped by navbar)
                     document.getElementById('familyCoverImg').src = f.imageUrl || DEFAULT_FAMILY_IMG;
                     document.getElementById('membersCount').innerHTML = `<i class="fas fa-users text-xs"></i> <span>${f.membersCount}</span> عضو`;
                     isCreator = (f.creatorId === currentUserId);
@@ -381,7 +377,7 @@
             } catch (error) { console.error(error); }
         }
 
-        // --- Settings Logic ---
+        // Settings and create post functions (unchanged)...
         function openSettingsModal() {
             document.getElementById('settingsModal').classList.remove('hidden');
             if(isCreator) {
@@ -429,7 +425,7 @@
             } catch(e) { alert('فشل المغادرة'); }
         }
 
-        // --- Create Post ---
+        // Create post helpers
         function openCreatePostModal() {
             document.getElementById('createPostModal').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
@@ -520,7 +516,7 @@
             finally { btn.disabled = false; btn.innerHTML = 'نشر'; }
         }
 
-        // --- Feed & Posts ---
+        // Feed & Posts
         async function fetchPosts() {
             const feed = document.getElementById('familyPostsFeed');
             try {
@@ -585,7 +581,7 @@
             `;
         }
 
-        // --- Interaction Logic (Likes/Comments) ---
+        // Interaction Logic (Likes/Comments)
         async function toggleLike(postId, btn) {
             const icon = btn.querySelector('i');
             const countSpan = btn.querySelector('.likes-count');
@@ -622,12 +618,58 @@
             } catch(e) { alert('فشل الحذف'); }
         }
 
-        // --- Comments Logic (family endpoints) ---
+        // ---------------- Comments with SSE ----------------
+
+        // Open comment modal and start SSE connection for this post
         function openCommentModal(postId) {
             currentPostIdForComments = postId;
             document.getElementById('commentModal').classList.remove('hidden');
             setTimeout(() => document.getElementById('commentModalContent').classList.add('open'), 10);
-            fetchComments(postId);
+
+            // close any existing ES
+            closeFamilyCommentsES();
+
+            // create ES
+            const esUrl = `/api/families/${familyId}/posts/${postId}/comments/stream`;
+            familyCommentsES = new EventSource(esUrl, { withCredentials: true });
+
+            const list = document.getElementById('commentsList');
+            list.innerHTML = '<div class="flex justify-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>';
+
+            familyCommentsES.addEventListener('comments_snapshot', (e) => {
+                try {
+                    const arr = JSON.parse(e.data || '[]');
+                    renderCommentsSnapshot(arr);
+                } catch (err) {
+                    console.error('Failed parse comments_snapshot', err);
+                }
+            });
+
+            familyCommentsES.addEventListener('comment_added', (e) => {
+                try {
+                    const c = JSON.parse(e.data);
+                    appendComment(c);
+                } catch (err) { console.error('parse comment_added', err); }
+            });
+
+            familyCommentsES.addEventListener('comment_changed', (e) => {
+                try {
+                    const c = JSON.parse(e.data);
+                    updateCommentElement(c);
+                } catch (err) { console.error('parse comment_changed', err); }
+            });
+
+            familyCommentsES.addEventListener('comment_removed', (e) => {
+                try {
+                    const obj = JSON.parse(e.data);
+                    removeCommentElement(obj.commentId);
+                } catch (err) { console.error('parse comment_removed', err); }
+            });
+
+            familyCommentsES.addEventListener('error', (ev) => {
+                // keep silent or show small indicator
+                // console.warn('ES error', ev);
+            });
         }
 
         function closeCommentModal() {
@@ -635,38 +677,89 @@
             setTimeout(() => {
                 document.getElementById('commentModal').classList.add('hidden');
                 document.getElementById('commentsList').innerHTML = '';
+                currentPostIdForComments = null;
+                closeFamilyCommentsES();
             }, 300);
         }
 
-        async function fetchComments(postId) {
-            const list = document.getElementById('commentsList');
-            list.innerHTML = '<div class="flex justify-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>';
-            
-            try {
-                const res = await fetch(`/api/families/${familyId}/posts/${postId}/comments`);
-                const data = await res.json();
-                if(res.ok && data.ok) {
-                    const comments = data.comments || [];
-                    document.getElementById('commentCountBadge').textContent = comments.length;
-                    
-                    if(comments.length === 0) {
-                        list.innerHTML = '<div class="text-center text-gray-500 py-4">لا توجد تعليقات.</div>';
-                        return;
-                    }
-                    list.innerHTML = comments.map(c => renderComment(c, postId)).join('');
-                } else {
-                    list.innerHTML = '<div class="text-center text-red-500">فشل التحميل</div>';
-                }
-            } catch(e) { list.innerHTML = '<div class="text-center text-gray-500">خطأ في الاتصال</div>'; }
+        function closeFamilyCommentsES() {
+            if (familyCommentsES) {
+                try { familyCommentsES.close(); } catch (e) {}
+                familyCommentsES = null;
+            }
         }
 
-        function renderComment(c, postId) {
-            const verified = (c.user && c.user.is_verified) ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : '';
-            const likeClass = c.is_liked ? 'fas text-red-500' : 'far text-gray-400';
-            
-            const repliesHtml = (c.recentReplies && c.recentReplies.length > 0) ? c.recentReplies.map(r => `
+        function renderCommentsSnapshot(comments) {
+            const list = document.getElementById('commentsList');
+            if (!Array.isArray(comments) || comments.length === 0) {
+                list.innerHTML = '<div class="text-center text-gray-500 py-4">لا توجد تعليقات.</div>';
+                document.getElementById('commentCountBadge').textContent = '0';
+                return;
+            }
+            // comments likely in ascending order by timestamp
+            const html = comments.map(c => renderCommentHtml(c, currentPostIdForComments)).join('');
+            list.innerHTML = html;
+            document.getElementById('commentCountBadge').textContent = String(comments.length);
+        }
+
+        function appendComment(c) {
+            const list = document.getElementById('commentsList');
+            // append at end
+            list.insertAdjacentHTML('beforeend', renderCommentHtml(c, currentPostIdForComments));
+            // update count badge
+            const badge = document.getElementById('commentCountBadge');
+            badge.textContent = String(Number(badge.textContent || 0) + 1);
+            // scroll to bottom
+            setTimeout(() => { list.scrollTop = list.scrollHeight; }, 80);
+        }
+
+        function updateCommentElement(c) {
+            const existing = document.getElementById(`comment-${c.commentId}`);
+            if (!existing) {
+                // if not exists, append
+                appendComment(c);
+                return;
+            }
+            // update content and like count & replies preview
+            const contentEl = existing.querySelector('.text-gray-300') || existing.querySelector('p');
+            if (contentEl) contentEl.textContent = c.content || '';
+            const likeSpan = existing.querySelector('.like-count');
+            if (likeSpan) likeSpan.textContent = c.likes || 0;
+
+            // update recent replies container if present
+            const repliesContainer = existing.querySelector(`#replies-${c.commentId}`);
+            if (repliesContainer) {
+                if (c.recentReplies && c.recentReplies.length > 0) {
+                    repliesContainer.innerHTML = c.recentReplies.map(r => `
+                        <div class="reply-item flex gap-2">
+                            <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar">
+                            <div class="flex-1">
+                                <span class="text-white font-bold text-xs">${escapeHtml(r.username)}</span>
+                                <p class="text-gray-300 text-xs">${escapeHtml(r.content)}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    repliesContainer.innerHTML = '';
+                }
+            }
+        }
+
+        function removeCommentElement(commentId) {
+            const el = document.getElementById(`comment-${commentId}`);
+            if (el) el.remove();
+            const badge = document.getElementById('commentCountBadge');
+            const current = Number(badge.textContent || 0);
+            badge.textContent = String(Math.max(0, current - 1));
+        }
+
+        // Render comment HTML (same structure used elsewhere)
+        function renderCommentHtml(comment, postId) {
+            const verified = ''; // optionally fill
+            const likeClass = comment.is_liked ? 'fas text-red-500' : 'far text-gray-400';
+            const repliesHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
                 <div class="reply-item flex gap-2">
-                    <img src="${r.profile_picture_url || DEFAULT_AVATAR}" class="small-avatar">
+                    <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar">
                     <div class="flex-1">
                         <span class="text-white font-bold text-xs">${escapeHtml(r.username)}</span>
                         <p class="text-gray-300 text-xs">${escapeHtml(r.content)}</p>
@@ -675,27 +768,27 @@
             `).join('') : '';
 
             return `
-                <div class="comment-item" id="comment-${c.commentId}">
+                <div class="comment-item" id="comment-${comment.commentId}">
                     <div class="flex gap-2">
-                        <img src="${c.user.profile_picture_url || DEFAULT_AVATAR}" class="w-8 h-8 rounded-full border border-gray-700">
+                        <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full border border-gray-700">
                         <div class="flex-grow">
                             <div class="flex justify-between items-start">
-                                <span class="text-white font-bold text-sm">${escapeHtml(c.user.username)} ${verified}</span>
-                                <span class="text-xs text-gray-500">${new Date(c.timestamp).toLocaleDateString()}</span>
+                                <span class="text-white font-bold text-sm">${escapeHtml(comment.user.username)} ${verified}</span>
+                                <span class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleDateString()}</span>
                             </div>
-                            <p class="text-gray-300 text-sm mt-1">${escapeHtml(c.content)}</p>
+                            <p class="text-gray-300 text-sm mt-1">${escapeHtml(comment.content)}</p>
                             
                             <div class="flex gap-4 mt-2">
-                                <button class="${likeClass} text-xs flex items-center gap-1" onclick="toggleCommentLike('${postId}', '${c.commentId}', this)">
-                                    <i class="fa-heart"></i> <span class="like-count">${c.likes||0}</span>
+                                <button class="${likeClass} text-xs flex items-center gap-1" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
+                                    <i class="fa-heart"></i> <span class="like-count">${comment.likes||0}</span>
                                 </button>
-                                <button class="text-gray-400 text-xs" onclick="openReplyBox('${c.commentId}')">رد</button>
+                                <button class="text-gray-400 text-xs" onclick="openReplyBox('${comment.commentId}')">رد</button>
                             </div>
 
-                            <div id="replies-${c.commentId}" class="mt-2">${repliesHtml}</div>
-                            <div id="reply-box-${c.commentId}" class="hidden mt-2 flex gap-2">
-                                <input id="reply-input-${c.commentId}" class="glass-input text-xs w-full p-2 rounded-lg" placeholder="اكتب رداً...">
-                                <button onclick="postReply('${postId}', '${c.commentId}')" class="text-blue-400"><i class="fas fa-paper-plane"></i></button>
+                            <div id="replies-${comment.commentId}" class="mt-2">${repliesHtml}</div>
+                            <div id="reply-box-${comment.commentId}" class="hidden mt-2 flex gap-2">
+                                <input id="reply-input-${comment.commentId}" class="glass-input text-xs w-full p-2 rounded-lg" placeholder="اكتب رداً...">
+                                <button onclick="postReply('${postId}', '${comment.commentId}')" class="text-blue-400"><i class="fas fa-paper-plane"></i></button>
                             </div>
                         </div>
                     </div>
@@ -703,6 +796,7 @@
             `;
         }
 
+        // Toggle comment like (family endpoint)
         async function toggleCommentLike(postId, commentId, btn) {
             try {
                 btn.disabled = true;
@@ -739,12 +833,35 @@
                 });
                 const data = await res.json();
                 if(res.ok && data.ok) {
-                    fetchComments(postId);
+                    // rely on SSE to update UI (reply will appear through server-side replies queries if implemented)
+                    // but to be safe, refresh replies for this comment
+                    fetchRepliesForComment(postId, commentId);
                 } else {
                     alert(data.error || 'فشل الإرسال');
                 }
-            } catch(e) { console.error(e); alert('خطأ'); }
+            } catch (e) { console.error(e); alert('خطأ'); }
             finally { input.disabled = false; input.value = ''; }
+        }
+
+        async function fetchRepliesForComment(postId, commentId) {
+            try {
+                const res = await fetch(`/api/families/${familyId}/posts/${postId}/comments/${commentId}/replies`);
+                const d = await res.json();
+                if (res.ok && d.ok) {
+                    const container = document.getElementById(`replies-${commentId}`);
+                    if (container) {
+                        container.innerHTML = d.replies.map(r => `
+                            <div class="reply-item flex gap-2">
+                                <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar">
+                                <div class="flex-1">
+                                    <span class="text-white font-bold text-xs">${escapeHtml(r.username)}</span>
+                                    <p class="text-gray-300 text-xs">${escapeHtml(r.content)}</p>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (e) { console.error(e); }
         }
 
         document.getElementById('postCommentBtn').addEventListener('click', async () => {
@@ -760,14 +877,14 @@
                 });
                 const data = await res.json();
                 if(res.ok && data.ok) {
-                    fetchComments(currentPostIdForComments);
+                    // rely on SSE to add the comment to the list
                 } else {
                     alert(data.error || 'فشل التعليق');
                 }
             } catch(e) { alert('فشل التعليق'); }
         });
 
-        // --- Media Viewer ---
+        // Media viewer
         function openMediaViewer(url, type) {
             const modal = document.getElementById('mediaViewerModal');
             const content = document.getElementById('mediaViewerContent');
@@ -781,7 +898,7 @@
             document.getElementById('mediaViewerContent').innerHTML = '';
         }
 
-        // small helpers
+        // helpers
         function escapeHtml(s) {
             if (!s && s !== 0) return '';
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
