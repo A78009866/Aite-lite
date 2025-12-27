@@ -1,4 +1,4 @@
-// server.js
+ب// server.js
 
 // تشغيل مكتبة dotenv لقراءة متغيرات البيئة من ملف .env محلياً
 require('dotenv').config();
@@ -746,6 +746,391 @@ app.delete('/api/families/:familyId/posts/:postId', requireAuth, requireFamilyMe
   } catch (error) {
     console.error('Error deleting family post', error);
     res.status(500).json({ ok: false });
+  }
+});
+
+// ---------------- New: Family post like/comment endpoints ----------------
+
+// Like/unlike a family post
+app.post('/api/families/:familyId/posts/:postId/like', requireAuth, requireFamilyMember, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId, postId } = req.params;
+
+  if (!familyId || !postId) return res.status(400).json({ ok: false });
+
+  const postRef = db.ref(`family_posts/${familyId}/${postId}`);
+  const userLikeRef = db.ref(`family_likes/${familyId}/${postId}/${userId}`);
+
+  try {
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
+
+    const likeSnapshot = await userLikeRef.once('value');
+    const isLiked = likeSnapshot.val();
+    let likesUpdate = 0;
+    let action = '';
+
+    if (isLiked) {
+      await userLikeRef.remove();
+      likesUpdate = -1;
+      action = 'unliked';
+    } else {
+      await userLikeRef.set(admin.database.ServerValue.TIMESTAMP);
+      likesUpdate = 1;
+      action = 'liked';
+    }
+
+    let newLikesCount = 0;
+    await postRef.child('likes').transaction((currentCount) => {
+      newLikesCount = (currentCount || 0) + likesUpdate;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    // notify post owner for like
+    try {
+      const postData = postSnapshot.val();
+      if (action === 'liked' && postData.userId && postData.userId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${postData.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'family_post_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          familyId,
+          postId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create family_post_like notification:', nerr);
+    }
+
+    res.json({ ok: true, action: action, newLikes: newLikesCount });
+  } catch (error) {
+    console.error('Error toggling family post like:', error);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// Comment on family post
+app.post('/api/families/:familyId/posts/:postId/comment', requireAuth, requireFamilyMember, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId, postId } = req.params;
+  const { content } = req.body;
+
+  if (!postId || !content) return res.status(400).json({ ok: false, error: 'Missing postId or content' });
+
+  try {
+    const postRef = db.ref(`family_posts/${familyId}/${postId}`);
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false, error: 'Post not found' });
+
+    const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnapshot.val() || {};
+
+    const newCommentRef = db.ref(`family_comments/${familyId}/${postId}`).push();
+    const commentId = newCommentRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const commentData = {
+      commentId: commentId,
+      postId: postId,
+      userId: userId,
+      content: content.trim(),
+      timestamp: timestamp,
+      user: {
+        userId: userId,
+        username: userData.username || 'مستخدم',
+        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      },
+      likes: 0,
+      repliesCount: 0
+    };
+
+    await newCommentRef.set(commentData);
+
+    // increment commentsCount on post
+    let newCommentsCount = 0;
+    await postRef.child('commentsCount').transaction((currentCount) => {
+      newCommentsCount = (currentCount || 0) + 1;
+      return newCommentsCount;
+    });
+
+    // create notification for post owner (if commenter !== owner)
+    try {
+      const postData = postSnapshot.val();
+      if (postData && postData.userId && postData.userId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${postData.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'family_post_comment',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          familyId,
+          postId,
+          commentId,
+          commentContent: commentData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create family_post_comment notification:', nerr);
+    }
+
+    // Read back the stored comment and return normalized
+    const savedSnap = await db.ref(`family_comments/${familyId}/${postId}`).child(commentId).once('value');
+    const savedVal = savedSnap.val() || commentData;
+    const normalized = normalizeStoredComment(savedVal);
+
+    res.json({ ok: true, comment: normalized, newComments: newCommentsCount });
+
+  } catch (error) {
+    console.error('Error adding family comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إضافة التعليق.' });
+  }
+});
+
+// Get comments for a family post (enriched)
+app.get('/api/families/:familyId/posts/:postId/comments', requireAuth, requireFamilyMember, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const { familyId, postId } = req.params;
+  try {
+    const commentsSnap = await db.ref(`family_comments/${familyId}/${postId}`)
+      .orderByChild('timestamp')
+      .once('value');
+
+    const comments = [];
+    commentsSnap.forEach(childSnap => {
+      const v = childSnap.val();
+      if (v) comments.push(v);
+    });
+
+    const enriched = await Promise.all(comments.map(async (c) => {
+      const normalized = normalizeStoredComment(c);
+      // likes count
+      let likesCount = 0;
+      try {
+        if (typeof c.likes === 'number') {
+          likesCount = c.likes;
+        } else {
+          const likesSnap = await db.ref(`family_comment_likes/${familyId}/${postId}/${normalized.commentId}`).once('value');
+          likesCount = countSnapshotChildren(likesSnap);
+        }
+      } catch (e) {
+        likesCount = normalized.likes || 0;
+      }
+
+      // did current user like?
+      let isLiked = false;
+      try {
+        const userLikeSnap = await db.ref(`family_comment_likes/${familyId}/${postId}/${normalized.commentId}/${currentUserId}`).once('value');
+        isLiked = userLikeSnap.exists();
+      } catch (e) {}
+
+      // replies count
+      let repliesCount = 0;
+      try {
+        if (typeof c.repliesCount === 'number') repliesCount = c.repliesCount;
+        else {
+          const repliesSnap = await db.ref(`family_comment_replies/${familyId}/${postId}/${normalized.commentId}`).once('value');
+          repliesCount = countSnapshotChildren(repliesSnap);
+        }
+      } catch (e) {
+        repliesCount = normalized.repliesCount || 0;
+      }
+
+      // recent replies
+      let recentReplies = [];
+      try {
+        const repliesSnap = await db.ref(`family_comment_replies/${familyId}/${postId}/${normalized.commentId}`)
+          .orderByChild('timestamp')
+          .limitToLast(5)
+          .once('value');
+        repliesSnap.forEach(r => recentReplies.push(r.val()));
+      } catch (e) { recentReplies = []; }
+
+      return {
+        ...normalized,
+        likes: likesCount,
+        is_liked: isLiked,
+        repliesCount: repliesCount,
+        recentReplies: recentReplies
+      };
+    }));
+
+    res.json({ ok: true, comments: enriched });
+  } catch (error) {
+    console.error('Error fetching family comments:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
+  }
+});
+
+// Like/unlike a family comment
+app.post('/api/families/:familyId/posts/:postId/comments/:commentId/like', requireAuth, requireFamilyMember, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId, postId, commentId } = req.params;
+  if (!familyId || !postId || !commentId) return res.status(400).json({ ok: false, error: 'Missing identifiers' });
+
+  const likeRef = db.ref(`family_comment_likes/${familyId}/${postId}/${commentId}/${userId}`);
+  const commentRef = db.ref(`family_comments/${familyId}/${postId}/${commentId}`);
+
+  try {
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const likeSnap = await likeRef.once('value');
+    let isLiked = likeSnap.exists();
+    let delta = 0;
+
+    if (isLiked) {
+      await likeRef.remove();
+      delta = -1;
+      isLiked = false;
+    } else {
+      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
+      delta = 1;
+      isLiked = true;
+    }
+
+    // Update likes count on comment atomically
+    let newLikesCount = 0;
+    await commentRef.child('likes').transaction((current) => {
+      newLikesCount = (current || 0) + delta;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    // notify comment owner when liked by another user
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
+      if (delta === 1 && commentOwnerId && commentOwnerId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'family_comment_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          familyId,
+          postId,
+          commentId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create family comment_like notification:', nerr);
+    }
+
+    res.json({ ok: true, is_liked: isLiked, likes: newLikesCount });
+
+  } catch (error) {
+    console.error('Error toggling family comment like:', error);
+    res.status(500).json({ ok: false, error: 'Failed to toggle comment like' });
+  }
+});
+
+// Reply to a family comment
+app.post('/api/families/:familyId/posts/:postId/comments/:commentId/reply', requireAuth, requireFamilyMember, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId, postId, commentId } = req.params;
+  const { content } = req.body;
+  if (!familyId || !postId || !commentId || !content) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`family_comments/${familyId}/${postId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const userSnap = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnap.val() || {};
+
+    const replyRef = db.ref(`family_comment_replies/${familyId}/${postId}/${commentId}`).push();
+    const replyId = replyRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const replyData = {
+      id: replyId,
+      postId,
+      commentId,
+      userId,
+      username: userData.username || 'مستخدم',
+      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      content: content.trim(),
+      timestamp: timestamp
+    };
+
+    await replyRef.set(replyData);
+
+    // increment repliesCount on comment
+    let newRepliesCount = 0;
+    await commentRef.child('repliesCount').transaction((current) => {
+      newRepliesCount = (current || 0) + 1;
+      return newRepliesCount;
+    });
+
+    // notify original commenter (if not replying to self)
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
+      if (commentOwnerId && commentOwnerId !== userId) {
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'family_comment_reply',
+          from_user_id: userId,
+          from_username: userData.username || 'مستخدم',
+          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          familyId,
+          postId,
+          commentId,
+          replyId,
+          replyContent: replyData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create family comment_reply notification:', nerr);
+    }
+
+    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+
+  } catch (error) {
+    console.error('Error creating family reply:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create reply' });
+  }
+});
+
+// Get replies for a family comment
+app.get('/api/families/:familyId/posts/:postId/comments/:commentId/replies', requireAuth, requireFamilyMember, async (req, res) => {
+  const { familyId, postId, commentId } = req.params;
+  try {
+    const snap = await db.ref(`family_comment_replies/${familyId}/${postId}/${commentId}`)
+      .orderByChild('timestamp')
+      .once('value');
+    const replies = [];
+    snap.forEach(child => {
+      replies.push(child.val());
+    });
+    res.json({ ok: true, replies: replies });
+  } catch (error) {
+    console.error('Error fetching family replies:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
   }
 });
 
@@ -1772,7 +2157,7 @@ app.get('/api/posts/:postId/comments/:commentId/replies', requireAuth, async (re
   }
 });
 
-// Delete post
+// ---------------- Delete post ----------------
 app.delete('/api/posts/:postId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const postId = req.params.postId;
