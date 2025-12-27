@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>إنشاء عائلة — Aite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body { background:#000; color:#e6eefb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .glass { background: rgba(10,10,12,0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.05); }
+    .field { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); color:#e6eefb; }
+    .btn-primary { background: linear-gradient(90deg,#2563eb,#7c3aed); }
+    .btn-primary:hover { opacity:0.95; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+
+  <div class="max-w-xl w-full glass rounded-2xl p-6 shadow-xl">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">إنشاء عائلة جديدة</h1>
+      <a href="/chat_list" class="text-sm text-gray-300 hover:underline">العودة للرئيسية</a>
+    </div>
+
+    <p class="text-sm text-gray-300 mb-4">أنشئ مساحة خاصة بعائلتك — سيُنشأ مفتاح تختص به كمنشئ ولا يمكن استرجاعه لاحقاً من الواجهة.</p>
+
+    <form id="createFamilyForm" class="space-y-4" enctype="multipart/form-data" novalidate>
+      <div>
+        <label class="block text-sm mb-1">اسم العائلة</label>
+        <input id="familyName" name="name" required maxlength="60" class="field w-full p-3 rounded-lg" placeholder="مثلاً: عائلة الأحمد" />
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1">صورة العائلة (اختياري)</label>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <div id="previewWrap" class="w-28 h-20 rounded-lg overflow-hidden bg-gray-800 border border-gray-700 flex items-center justify-center">
+              <img id="previewImg" src="https://via.placeholder.com/160x100?text=Family" alt="preview" class="w-full h-full object-cover" />
+            </div>
+            <input id="familyImage" type="file" accept="image/*" name="family_image" class="hidden" />
+            <span class="text-sm text-gray-300">اختر صورة</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="text-sm text-gray-400">
+        بعد الإنشاء ستحصل على رمز العائلة (Family Key). احتفظ به، فهو الوحيد الذي يتيح للأعضاء الانضمام إلا إذا قمت بتغييره لاحقاً من إعدادات (إن وُجدت).
+      </div>
+
+      <div class="flex gap-3 mt-4">
+        <button id="createFamilyBtn" type="submit" class="btn-primary text-white px-4 py-2 rounded-lg shadow-sm flex items-center gap-2">
+          <i class="fas fa-plus"></i>
+          إنشاء العائلة
+        </button>
+        <a href="/chat_list" class="px-4 py-2 rounded-lg border border-gray-700 text-gray-300">إلغاء</a>
+      </div>
+
+      <div id="formError" class="text-sm text-red-400 mt-2 hidden"></div>
+    </form>
+  </div>
+
+  <!-- result modal -->
+  <div id="resultModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <div class="max-w-md w-full bg-[#0b0b0c] glass rounded-xl p-5 border border-gray-700">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="text-lg font-bold text-white mb-1">تم إنشاء العائلة</h3>
+          <p class="text-sm text-gray-300 mb-3">هذا هو مفتاح العائلة — احتفظ به أو شاركه مع من تريد دعوتهم.</p>
+        </div>
+        <button onclick="closeResultModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+      </div>
+
+      <div class="bg-[#071022] border border-gray-700 rounded-lg p-3 mb-3">
+        <div class="mb-2 text-xs text-gray-400">رمز العائلة</div>
+        <div class="flex items-center gap-3">
+          <input id="familyKeyDisplay" readonly class="flex-1 bg-transparent text-white font-mono p-2 rounded" />
+          <button id="copyKeyBtn" class="px-3 py-2 bg-blue-600 rounded text-white"><i class="fas fa-copy"></i></button>
+        </div>
+      </div>
+
+      <div id="createdFamilyInfo" class="flex items-center gap-3 mb-4">
+        <img id="createdFamilyImg" src="" class="w-16 h-12 rounded-md object-cover border border-gray-700" alt="family">
+        <div>
+          <div id="createdFamilyName" class="font-semibold text-white"></div>
+          <div class="text-xs text-gray-400">معرف العائلة: <span id="createdFamilyId" class="font-mono text-sm"></span></div>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button id="goToFamilyBtn" class="flex-1 px-4 py-2 bg-green-600 rounded text-white">اذهب إلى صفحة العائلة</button>
+        <button onclick="closeResultModal()" class="flex-1 px-4 py-2 bg-gray-700 rounded text-white">تم</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('createFamilyForm');
+    const familyImage = document.getElementById('familyImage');
+    const previewImg = document.getElementById('previewImg');
+    const formError = document.getElementById('formError');
+    const createBtn = document.getElementById('createFamilyBtn');
+
+    const resultModal = document.getElementById('resultModal');
+    const familyKeyDisplay = document.getElementById('familyKeyDisplay');
+    const copyKeyBtn = document.getElementById('copyKeyBtn');
+    const createdFamilyImg = document.getElementById('createdFamilyImg');
+    const createdFamilyName = document.getElementById('createdFamilyName');
+    const createdFamilyId = document.getElementById('createdFamilyId');
+    const goToFamilyBtn = document.getElementById('goToFamilyBtn');
+
+    let createdFamilyIdVal = null;
+
+    // preview image
+    previewImg.addEventListener('click', () => familyImage.click());
+    familyImage.addEventListener('change', (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      const url = URL.createObjectURL(f);
+      previewImg.src = url;
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formError.classList.add('hidden');
+
+      const name = document.getElementById('familyName').value.trim();
+      if (!name) {
+        formError.textContent = 'اسم العائلة مطلوب.';
+        formError.classList.remove('hidden');
+        return;
+      }
+
+      createBtn.disabled = true;
+      createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإنشاء';
+
+      try {
+        const fd = new FormData();
+        fd.append('name', name);
+        const file = familyImage.files && familyImage.files[0];
+        if (file) fd.append('family_image', file);
+
+        const res = await fetch('/api/families/create', { method: 'POST', credentials: 'same-origin', body: fd });
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          formError.textContent = (data && data.error) ? data.error : 'فشل في إنشاء العائلة';
+          formError.classList.remove('hidden');
+          return;
+        }
+
+        // show result modal with key
+        const key = data.key || '';
+        const family = data.family || {};
+        familyKeyDisplay.value = key;
+        createdFamilyImg.src = family.imageUrl || previewImg.src || 'https://via.placeholder.com/160x100?text=Family';
+        createdFamilyName.textContent = family.name || name;
+        createdFamilyId.textContent = data.familyId || '';
+        createdFamilyIdVal = data.familyId || '';
+
+        resultModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+
+      } catch (err) {
+        console.error(err);
+        formError.textContent = 'حدث خطأ في الاتصال.';
+        formError.classList.remove('hidden');
+      } finally {
+        createBtn.disabled = false;
+        createBtn.innerHTML = '<i class="fas fa-plus"></i> إنشاء العائلة';
+      }
+    });
+
+    copyKeyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(familyKeyDisplay.value || '');
+        copyKeyBtn.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => { copyKeyBtn.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
+      } catch (e) { console.warn('copy failed', e); }
+    });
+
+    goToFamilyBtn.addEventListener('click', () => {
+      if (createdFamilyIdVal) {
+        window.location.href = `/family/${encodeURIComponent(createdFamilyIdVal)}`;
+      }
+    });
+
+    function closeResultModal() {
+      resultModal.classList.add('hidden');
+      document.body.style.overflow = 'auto';
+      // redirect to home to show family tile as well
+      window.location.href = '/chat_list';
+    }
+  </script>
+</body>
+</html>
