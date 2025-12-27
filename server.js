@@ -515,6 +515,30 @@ app.get('/api/families/my', requireAuth, async (req, res) => {
   }
 });
 
+// New: Get all families (with is_member flag for current user)
+app.get('/api/families', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    const familiesSnap = await db.ref('families').once('value');
+    const familiesObj = familiesSnap.val() || {};
+    const all = Object.keys(familiesObj).map(fid => {
+      const f = familiesObj[fid] || {};
+      return {
+        familyId: fid,
+        name: f.name || '',
+        imageUrl: f.imageUrl || '',
+        creatorId: f.creatorId || '',
+        membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+        is_member: !!(f.members && f.members[userId])
+      };
+    });
+    res.json({ ok: true, families: all });
+  } catch (error) {
+    console.error('Error fetching all families:', error);
+    res.status(500).json({ ok: false, error: 'Failed to fetch families' });
+  }
+});
+
 // Join a family (provide key) - if key ok, add member
 app.post('/api/families/:familyId/join', requireAuth, async (req, res) => {
   const userId = req.session.userId;
