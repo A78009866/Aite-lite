@@ -160,15 +160,15 @@
     .small-avatar { width:28px;height:28px;border-radius:999px;object-fit:cover; }
     .reply-item { margin-top:8px; padding:8px; background:#0f1112; border-radius:10px; }
     .comments-sheet .verified-badge-img,
-.comment-item .verified-badge-img,
-.comments-sheet .verified-placeholder img.verified-badge-img {
-  width: 12px;
-  height: 12px;
-  margin-left: 6px;
-  vertical-align: middle;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
-  border: 1px solid rgba(255,255,255,0.06);
-}
+    .comment-item .verified-badge-img,
+    .comments-sheet .verified-placeholder img.verified-badge-img {
+      width: 12px;
+      height: 12px;
+      margin-left: 6px;
+      vertical-align: middle;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
   </style>
 </head>
 <body>
@@ -179,7 +179,6 @@
     </div>
     <div class="flex items-center gap-2">
       <a id="createReelBtn" href="/create-reel" class="text-white text-xl drop-shadow-lg p-2 bg-black/40 rounded-full"><i class="fas fa-plus"></i></a>
-      <!-- Notification icon intentionally removed -->
     </div>
   </div>
 
@@ -220,10 +219,26 @@
       if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
       const data = await res.json();
       currentUserId = data.currentUserId || null;
+      
       if(data.ok && data.reels && data.reels.length > 0) {
         currentReelsData = data.reels;
         renderReels(data.reels);
-        initSwiper();
+        
+        // --- التعديل الجديد: قراءة الـ id من الرابط ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetReelId = urlParams.get('id');
+        let initialIndex = 0;
+
+        if (targetReelId) {
+            // البحث عن ترتيب الريل المطلوب
+            const index = data.reels.findIndex(r => r.reelId === targetReelId);
+            if (index !== -1) {
+                initialIndex = index;
+            }
+        }
+        
+        // تمرير الفهرس (Index) للدالة
+        initSwiper(initialIndex);
       } else {
         document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
       }
@@ -238,7 +253,6 @@
     wrapper.innerHTML = reels.map((reel, index) => {
       const isOwner = reel.userId === currentUserId;
       const poster = reel.thumbnailUrl || BLACK_POSTER;
-      // show verified-placeholder next to username (will be replaced if verified)
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
@@ -277,7 +291,6 @@
     `}).join('');
 
     setupVideoInteractions();
-    // After rendering, update verified badges (for reel owners)
     updateVerifiedBadges();
   }
 
@@ -338,15 +351,20 @@
     });
   }
 
-  function initSwiper() {
+  // --- التعديل الجديد: قبول initialIndex ---
+  function initSwiper(initialIndex = 0) {
     if(swiperInstance) swiperInstance.destroy(true, true);
+    
     swiperInstance = new Swiper(".mySwiper", {
       direction: "vertical",
       mousewheel: true,
       keyboard: { enabled: true },
       speed: 400,
+      initialSlide: initialIndex, // ضبط الشريحة الابتدائية
       on: {
-        init: function() { playCurrentVideo(this); },
+        init: function() { 
+            playCurrentVideo(this); 
+        },
         slideChange: function () {
           pauseAllVideos();
           playCurrentVideo(this);
@@ -475,7 +493,6 @@
       if (!data.ok) throw new Error('Invalid response');
 
       renderComments(data.comments || []);
-      // update comment count indicator
       const countEl = document.getElementById(`commentCount-${reelId}`);
       if (countEl) countEl.textContent = (data.comments || []).length;
     } catch (e) {
@@ -542,11 +559,9 @@
       </div>
     `).join('');
 
-    // after rendering, update verified placeholders for commenters
     updateVerifiedBadges();
   }
 
-  // Toggle like/unlike a reel comment
   async function toggleReelCommentLike(reelId, commentId, btnEl) {
     if (!reelId || !commentId) return;
     btnEl.disabled = true;
@@ -574,7 +589,6 @@
     }
   }
 
-  // toggle reply input box for a comment
   function toggleReplyBox(commentId) {
     const box = document.getElementById(`reply-box-${commentId}`);
     if (!box) return;
@@ -583,7 +597,6 @@
     if (input && !box.classList.contains('hidden')) input.focus();
   }
 
-  // post a reply to a reel comment
   async function postReelReply(reelId, commentId) {
     const input = document.getElementById(`reply-input-${commentId}`);
     if (!input) return;
@@ -599,9 +612,7 @@
       });
       const data = await res.json();
       if (res.ok && data.ok) {
-        // refresh all comments for reel
         await fetchAndRenderReelComments(reelId);
-        // optionally keep comment sheet open
       } else {
         alert(data.error || 'فشل في إرسال الرد');
       }
@@ -613,7 +624,6 @@
     }
   }
 
-  // fetch all replies for a particular reel comment and show them
   async function fetchAndShowAllRepliesReel(reelId, commentId, triggerBtn) {
     if (!reelId || !commentId) return;
     triggerBtn.disabled = true;
@@ -659,7 +669,6 @@
         body: JSON.stringify({ content })
       });
       if (!res.ok) throw new Error('Failed to post comment: ' + res.status);
-      // refresh comments
       await fetchAndRenderReelComments(currentReelIdForComments);
     } catch(e) { console.error('send comment error', e); alert('فشل الإرسال'); }
   });
@@ -674,11 +683,9 @@
     }
   };
 
-  // VERIFIED BADGES: find placeholders and replace with badge image when profile.is_verified === true
   async function updateVerifiedBadges() {
     const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
     if (placeholders.length === 0) return;
-    // dedupe ids
     const byId = {};
     placeholders.forEach(ph => {
       const uid = ph.dataset.userId;
@@ -691,7 +698,6 @@
         if (!r.ok) return; 
         const data = await r.json();
         if (data && data.is_verified) {
-          // replace all placeholders for this uid
           document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => {
             const img = document.createElement('img');
             img.src = VERIFIED_IMG_URL;
@@ -701,17 +707,14 @@
             ph.replaceWith(img);
           });
         } else {
-          // remove placeholders for this uid
           document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => ph.remove());
         }
       } catch (e) {
-        // on error, just remove placeholders to avoid stale UI
         document.querySelectorAll(`.verified-placeholder[data-user-id="${uid}"]`).forEach(ph => ph.remove());
       }
     }));
   }
 
-  // small helpers
   function escapeHtml(s) {
     if (!s && s !== 0) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -721,7 +724,6 @@
     return String(s).replace(/"/g, '&quot;');
   }
 
-  // initial: after loadReels renders, update badges again (some placeholders may exist)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') updateVerifiedBadges();
   });
