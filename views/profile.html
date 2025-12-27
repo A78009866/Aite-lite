@@ -236,6 +236,43 @@
           height: 18px;
           margin-left: 6px;
         }
+
+        /* ------------------ Toasts (black glassy) ------------------ */
+        #toastContainer {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1100;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+            pointer-events: none;
+        }
+        .toast {
+            min-width: 220px;
+            max-width: 90vw;
+            color: #ffffff;
+            background: rgba(7,7,8,0.6);
+            border: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 10px 14px;
+            border-radius: 12px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            pointer-events: auto;
+            font-size: 14px;
+        }
+        .toast.success { border-left: 4px solid #16a34a; }
+        .toast.error   { border-left: 4px solid #ef4444; }
+        .toast.info    { border-left: 4px solid #3b82f6; }
+        .toast i { width: 18px; text-align: center; }
+        .toast .msg { flex: 1; word-break: break-word; text-align: right; }
+        .toast .close-btn { margin-left: 8px; background: transparent; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 14px; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -392,6 +429,9 @@
         </div>
     </div>
 
+    <!-- Toast container (added for black glassy toasts) -->
+    <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
 <script>
 const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
@@ -405,6 +445,53 @@ let currentPostIdForComments = null;
 let statusPollInterval = null;
 let PROFILE_VERIFIED = false; 
 let currentPostIdToDelete = null;
+
+/* ---------------- Toast helper (black glassy) ---------------- */
+function showToast(message, opts = {}) {
+    const { type = 'info', duration = 3500 } = opts;
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = `
+        <i class="${type === 'success' ? 'fas fa-check-circle' : (type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle')}"></i>
+        <div class="msg">${escapeHtml(message)}</div>
+        <button class="close-btn" aria-label="close">&times;</button>
+    `;
+
+    const closeBtn = toast.querySelector('.close-btn');
+    const removeToast = () => {
+        toast.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s';
+        toast.style.transform = 'translateY(-10px)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 200);
+    };
+    closeBtn.addEventListener('click', removeToast);
+
+    container.appendChild(toast);
+
+    // entrance animation
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-10px)';
+    requestAnimationFrame(() => {
+        toast.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s';
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    });
+
+    const t = setTimeout(() => {
+        removeToast();
+    }, duration);
+
+    // pause on hover
+    toast.addEventListener('mouseenter', () => clearTimeout(t));
+}
 
 /* ---------------- UI helpers ---------------- */
 function toggleProfileDropdown(event) {
@@ -471,13 +558,16 @@ confirmDeleteBtn.addEventListener('click', async () => {
             const el = document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`);
             if (el) el.remove();
             deleteModal.classList.add('hidden');
+            showToast('تم حذف المنشور.', { type: 'success' });
         } else {
             deleteMessage.textContent = result.error || 'فشل الحذف.';
             deleteMessage.classList.remove('hidden');
+            showToast(deleteMessage.textContent, { type: 'error' });
         }
     } catch (error) {
         deleteMessage.textContent = 'حدث خطأ في الاتصال بالخادم.';
         deleteMessage.classList.remove('hidden');
+        showToast(deleteMessage.textContent, { type: 'error' });
     } finally {
         confirmDeleteBtn.disabled = false;
         confirmDeleteBtn.innerHTML = 'تأكيد الحذف';
@@ -769,12 +859,12 @@ async function postReply(postId, commentId) {
             // refresh comments list to show the new reply
             await fetchAndDisplayComments(postId);
         } else {
-            alert(data.error || 'فشل في إرسال الرد');
+            showToast(data.error || 'فشل في إرسال الرد', { type: 'error' });
             input.disabled = false;
         }
     } catch (e) {
         console.error(e);
-        alert('فشل في الاتصال');
+        showToast('فشل في الاتصال', { type: 'error' });
         input.disabled = false;
     }
 }
@@ -1056,10 +1146,12 @@ async function postComment() {
         } else {
             errorEl.textContent = result.error || 'فشل الإرسال';
             errorEl.classList.remove('hidden');
+            showToast(errorEl.textContent, { type: 'error' });
         }
     } catch (error) {
         errorEl.textContent = 'حدث خطأ';
         errorEl.classList.remove('hidden');
+        showToast(errorEl.textContent, { type: 'error' });
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-arrow-up text-sm"></i>';
@@ -1161,10 +1253,10 @@ async function fetchAndDisplayProfile() {
             } else {
                 editProfileButton.classList.add('hidden');
 
-                // Update chatButton appearance to match profile1: don't overwrite its initial classes,
-                // simply set href and unhide when friend, hide otherwise.
+                // Update chatButton appearance to match all_users style when visible
                 if (data.is_friend) {
                     chatButton.href = `/chat?contactId=${currentProfileId}`;
+                    chatButton.className = 'action-btn message';
                     chatButton.classList.remove('hidden');
                 } else {
                     chatButton.classList.add('hidden');
@@ -1179,17 +1271,17 @@ async function fetchAndDisplayProfile() {
                         try {
                             const r = await fetch('/api/friends/accept', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تمت الموافقة — أصبح هذا المستخدم صديقك.'); fetchAndDisplayProfile(); }
-                            else alert('فشل في قبول الطلب.');
-                        } catch (e) { alert('خطأ في الشبكة'); }
+                            if (r.ok && j.ok) { showToast('تمت الموافقة — أصبح هذا المستخدم صديقك.', { type: 'success' }); fetchAndDisplayProfile(); }
+                            else { showToast('فشل في قبول الطلب.', { type: 'error' }); }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); }
                     });
                     document.getElementById('rejectFriendBtn').addEventListener('click', async () => {
                         try {
                             const r = await fetch('/api/friends/reject', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تم رفض الطلب.'); fetchAndDisplayProfile(); }
-                            else alert('فشل في رفض الطلب.');
-                        } catch (e) { alert('خطأ في الشبكة'); }
+                            if (r.ok && j.ok) { showToast('تم رفض الطلب.', { type: 'success' }); fetchAndDisplayProfile(); }
+                            else { showToast('فشل في رفض الطلب.', { type: 'error' }); }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); }
                     });
                 } else if (data.request_sent) {
                     // show a subtle "request sent" action button style
@@ -1201,8 +1293,8 @@ async function fetchAndDisplayProfile() {
                             btn.textContent = 'جاري الإلغاء...';
                             const r = await fetch('/api/friends/cancel', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تم إلغاء الطلب.'); fetchAndDisplayProfile(); } else { alert('فشل في إلغاء الطلب.'); fetchAndDisplayProfile(); }
-                        } catch (e) { alert('خطأ في الشبكة'); fetchAndDisplayProfile(); }
+                            if (r.ok && j.ok) { showToast('تم إلغاء الطلب.', { type: 'success' }); fetchAndDisplayProfile(); } else { showToast('فشل في إلغاء الطلب.', { type: 'error' }); fetchAndDisplayProfile(); }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); fetchAndDisplayProfile(); }
                     });
                 } else if (!data.is_friend) {
                     friendActionContainer.innerHTML = `<button id="addFriendBtn" class="action-btn"><i class="fas fa-user-plus ml-2"></i>إضافة صديق</button>`;
@@ -1213,8 +1305,8 @@ async function fetchAndDisplayProfile() {
                             btn.textContent = 'جاري الإرسال...';
                             const r = await fetch('/api/friends/request', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to_id: currentProfileId })});
                             const j = await r.json();
-                            if (r.ok && j.ok) { alert('تم إرسال طلب الصداقة.'); fetchAndDisplayProfile(); } else { alert(j.error || 'فشل في إرسال الطلب.'); fetchAndDisplayProfile(); }
-                        } catch (e) { alert('خطأ في الشبكة'); fetchAndDisplayProfile(); }
+                            if (r.ok && j.ok) { showToast('تم إرسال طلب الصداقة.', { type: 'success' }); fetchAndDisplayProfile(); } else { showToast(j.error || 'فشل في إرسال الطلب.', { type: 'error' }); fetchAndDisplayProfile(); }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); fetchAndDisplayProfile(); }
                     });
                 }
             }
