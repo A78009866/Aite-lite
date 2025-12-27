@@ -334,7 +334,7 @@
 
             <div class="flex items-center space-x-4 space-x-reverse relative">
                 <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
-                    <img id="userProfilePic" src="/assets/default_profile_pic.png" alt="صورة P" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                    <img id="userProfilePic" src="https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png" alt="صورة P" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
                 </button>
             </div>
 
@@ -364,7 +364,7 @@
                 <div class="p-4 pt-0 -mt-20 relative">
 
                     <div id="profileAvatarWrap" class="avatar-wrapper" data-user-id="">
-                        <img id="profileImage" src="/assets/default_profile_pic.png" alt="صورة الملف الشخصي"
+                        <img id="profileImage" src="https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png" alt="صورة الملف الشخصي"
                              class="w-32 h-32 rounded-full object-cover border-4 border-black shadow-lg mb-3 hover:ring-4 hover:ring-blue-400 transition duration-300">
                         
                         <span id="profileOnlineDot" class="status-indicator large" title="متصل الآن"></span>
@@ -387,7 +387,7 @@
                             <!-- chatButton: will have green #1fd14f from CSS when shown -->
                             <a id="chatButton"
    href="#"
-   class="hidden action-btn message">
+   class="action-btn message" style="display:none">
     <i class="fas fa-comment-dots ml-2"></i>
     مراسلة
 </a>
@@ -504,7 +504,8 @@
 
 <script>
 const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
+// use provided default profile pic from server for users without profile picture
+const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
 
 let currentProfileId = null;
 let currentUserId = null;
@@ -762,13 +763,14 @@ function createPostCard(post) {
     const isOnline = post.user && post.user.is_online;
     const dotDisplay = isOnline ? 'block' : 'none';
     const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
+    const profilePic = post.user && post.user.profile_picture_url ? post.user.profile_picture_url : DEFAULT_PROFILE_PIC_URL;
 
     return `
         <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
             <div class="flex items-start justify-between mb-3">
                 <div class="flex items-center">
                     <a href="/profile?userId=${post.userId}" class="avatar-wrapper ml-3" data-user-id="${post.userId}">
-                        <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
+                        <img src="${escapeHtml(profilePic)}" alt="${escapeHtml(post.user.username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
                         <span class="status-indicator small" style="display: ${dotDisplay};" title="متصل الآن"></span>
                     </a>
                     <div>
@@ -776,12 +778,8 @@ function createPostCard(post) {
                         <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
                     </div>
                 </div>
-                ${post.userId === currentUserId ? `
-                  <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button>
-                ` : `
-                  <!-- Non-owner still can open options (e.g. add friend) by using bottom sheet on mobile -->
-                  <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button>
-                `}
+                ${/* always render menu button but bottom sheet will decide options */ ''}
+                <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button>
             </div>
             <p class="text-gray-200 whitespace-pre-wrap">${post.content}</p>
             ${mediaContent}
@@ -803,26 +801,18 @@ function createPostCard(post) {
 
 /* ----------------- Comment UI (like & reply) ----------------- */
 
-/*
-  The comment UI & actions below were aligned with the working implementation
-  from the main feed. This ensures "like comment" and "reply" behave the same
-  in the profile page.
-*/
-
 function createCommentHtml(comment, postIdForSafety = '') {
-    // comment is expected to be the enriched normalized comment from the server:
-    // { commentId, postId, content, timestamp, user: { userId, username, profile_picture_url }, likes, is_liked, repliesCount, recentReplies }
     const postId = comment.postId || postIdForSafety || '';
     const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', {
         month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric'
     });
-    const verifiedHtml = ''; // optionally filled by updateCommentsVerification()
+    const verifiedHtml = '';
     const likeBtnClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
     const likeIconClass = comment.is_liked ? 'fas' : 'far';
 
     const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
         <div class="reply-item flex items-start gap-2">
-            <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+            <img src="${escapeHtml(r.profile_picture_url || DEFAULT_PROFILE_PIC_URL)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
             <div class="flex-1">
                 <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
                 <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
@@ -833,7 +823,7 @@ function createCommentHtml(comment, postIdForSafety = '') {
     return `
         <div class="comment-item" id="comment-${comment.commentId}">
             <div class="flex items-start gap-3">
-                <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
+                <img src="${escapeHtml((comment.user && comment.user.profile_picture_url) ? comment.user.profile_picture_url : DEFAULT_PROFILE_PIC_URL)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
                 <div class="flex-1">
                     <div class="flex items-center justify-between gap-2">
                         <div>
@@ -957,7 +947,7 @@ async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
             if (container) {
                 container.innerHTML = data.replies.map(r => `
                     <div class="reply-item flex items-start gap-2">
-                        <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                        <img src="${escapeHtml(r.profile_picture_url || DEFAULT_PROFILE_PIC_URL)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
                         <div class="flex-1">
                             <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
                             <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
@@ -1156,7 +1146,7 @@ async function handleLike(postId, buttonElement) {
 function handleComment(postId) { 
     currentPostIdForComments = postId;
     
-    const myPic = document.getElementById('userProfilePic').src;
+    const myPic = (document.getElementById('userProfilePic').src || DEFAULT_PROFILE_PIC_URL);
     const inputAvatar = document.getElementById('myCurrentAvatar');
     if(inputAvatar) inputAvatar.src = myPic;
 
@@ -1378,7 +1368,7 @@ document.addEventListener('click', (event) => {
     }
 });
 
-/* ----------------- Fetch & profile logic (unchanged) ----------------- */
+/* ----------------- Fetch & profile logic (unchanged with fixes) ----------------- */
 
 async function fetchCurrentUser() {
     try {
@@ -1388,7 +1378,7 @@ async function fetchCurrentUser() {
         if (data && data.id) {
             currentUserId = data.id;
             const smallPic = document.getElementById('userProfilePic');
-            if (smallPic && data.profile_picture_url) smallPic.src = data.profile_picture_url;
+            if (smallPic) smallPic.src = data.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
         }
     } catch (e) {
         console.error('fetchCurrentUser failed', e);
@@ -1415,7 +1405,9 @@ async function fetchAndDisplayProfile() {
 
             const profileAvatarWrap = document.getElementById('profileAvatarWrap');
             profileAvatarWrap.dataset.userId = data.id;
-            document.getElementById('profileImage').src = data.profile_picture_url || '/assets/default_profile_pic.png';
+
+            // ensure we use server default when no profile picture
+            document.getElementById('profileImage').src = data.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
             if (data.cover_photo_url) document.getElementById('coverPhotoContainer').style.backgroundImage = `url('${data.cover_photo_url}')`;
 
             const profileUsernameEl = document.getElementById('profileUsername');
@@ -1432,19 +1424,31 @@ async function fetchAndDisplayProfile() {
             const editProfileButton = document.getElementById('editProfileButton');
             const chatButton = document.getElementById('chatButton');
 
+            // Explicitly hide chat button for owner's own profile
+            if (chatButton) {
+                chatButton.style.display = 'none';
+                chatButton.href = '#';
+            }
+
             if (currentUserId && data.id === currentUserId) {
                 editProfileButton.classList.remove('hidden');
-                chatButton.classList.add('hidden');
+                // keep chat button hidden when viewing own profile
+                if (chatButton) chatButton.style.display = 'none';
             } else {
                 editProfileButton.classList.add('hidden');
 
                 // Update chatButton appearance to match all_users style when visible
                 if (data.is_friend) {
-                    chatButton.href = `/chat?contactId=${currentProfileId}`;
-                    chatButton.className = 'action-btn message';
-                    chatButton.classList.remove('hidden');
+                    if (chatButton) {
+                        chatButton.href = `/chat?contactId=${currentProfileId}`;
+                        chatButton.classList.remove('hidden');
+                        chatButton.style.display = 'inline-flex';
+                    }
                 } else {
-                    chatButton.classList.add('hidden');
+                    if (chatButton) {
+                        chatButton.classList.add('hidden');
+                        chatButton.style.display = 'none';
+                    }
                 }
 
                 if (data.request_received) {
@@ -1469,7 +1473,6 @@ async function fetchAndDisplayProfile() {
                         } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); }
                     });
                 } else if (data.request_sent) {
-                    // show a subtle "request sent" action button style
                     friendActionContainer.innerHTML = `<button id="cancelFriendBtn" class="action-btn"><i class="fas fa-clock ml-2"></i>طلب مرسل</button>`;
                     document.getElementById('cancelFriendBtn').addEventListener('click', async (ev) => {
                         const btn = ev.currentTarget;
