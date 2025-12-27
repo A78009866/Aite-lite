@@ -7,7 +7,29 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <script src="https://unpkg.com/wavesurfer.js"></script>
+
+  <!-- Load WaveSurfer.js with a small fallback mechanism to reduce ERR_NAME_NOT_RESOLVED issues -->
+  <script>
+    (function loadWaveSurfer() {
+      const urls = [
+        'https://unpkg.com/wavesurfer.js',
+        'https://cdn.jsdelivr.net/npm/wavesurfer.js'
+      ];
+      let i = 0;
+      function tryLoad() {
+        if (i >= urls.length) {
+          console.warn('WaveSurfer failed to load from provided CDNs.');
+          return;
+        }
+        const s = document.createElement('script');
+        s.src = urls[i++];
+        s.onload = () => { console.log('WaveSurfer loaded from', s.src); };
+        s.onerror = () => { console.warn('WaveSurfer failed to load from', s.src); tryLoad(); };
+        document.head.appendChild(s);
+      }
+      tryLoad();
+    })();
+  </script>
 
   <style>
     :root{
@@ -56,7 +78,7 @@
     .controls-row{ display:flex; justify-content:flex-end; margin-bottom:12px; gap:8px; }
     .posts-list{ display:flex; flex-direction:column; gap:14px; }
 
-    /* Use similar card style as main feed */
+    /* Use same card style as main feed */
     .glass-post-card {
       background-color: rgba(0, 0, 0, 0.3);
       backdrop-filter: blur(10px);
@@ -76,11 +98,6 @@
 
     .waveform { height:60px; background:#071028; border-radius:8px; overflow:hidden; }
 
-    /* comment modal for family (reuse) */
-    .modal-back{ position:fixed; inset:0; background:var(--black-overlay); display:none; align-items:center; justify-content:center; z-index:90; }
-    .create-card{ width:100%; max-width:760px; border-radius:12px; padding:16px; background: linear-gradient(180deg, rgba(8,8,10,0.65), rgba(8,8,10,0.5)); border:1px solid var(--border); box-shadow: 0 20px 80px rgba(0,0,0,0.7); display:flex; flex-direction:column; gap:12px; }
-    .field{ width:100%; padding:12px; border-radius:10px; background:transparent; border:1px solid var(--border); color:var(--accent); min-height:56px; resize:vertical; }
-
     .verified-badge-img {
       display: inline-block;
       width: 14px;
@@ -90,6 +107,10 @@
       vertical-align: middle;
       object-fit:cover;
     }
+
+    .small-avatar { width:28px; height:28px; border-radius:999px; }
+
+    .comment-item { padding: 8px; border-radius: 12px; background: #131313; border: 1px solid #222; }
 
     @media (max-width:720px){ .family-hero{ height:240px; } .family-avatar{ width:84px; height:84px; } .family-name{ font-size:18px; } .top-inner{ padding:10px; } }
   </style>
@@ -170,7 +191,7 @@
         <button id="closeSettingsBtn" class="btn"><i class="fas fa-times"></i></button>
       </div>
 
-      <div class="settings-thumb"><img id="settingsImg" src="https://via.placeholder.com/800x400?text=Family" alt="صورة العائلة"></div>
+      <div class="settings-thumb"><img id="settingsImg" src="https://via.placeholder.com/800x400?text=Family" alt="صورة العائلة" style="width:100%;height:auto;border-radius:8px"></div>
       <div class="settings-name" id="settingsName">اسم العائلة</div>
 
       <div>
@@ -187,7 +208,7 @@
   </div>
 
   <!-- Confirm modal (black glass) -->
-  <div id="confirmModal" class="modal-back" aria-hidden="true">
+  <div id="confirmModal" class="modal-back" aria-hidden="true" style="display:none;">
     <div class="create-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div id="confirmTitle" style="font-weight:800">تأكيد</div>
@@ -220,11 +241,12 @@
   </div>
 
   <script>
-    // Defaults (keep same default family image used in home)
-    const DEFAULT_FAMILY_IMAGE = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+    // Defaults & constants
+    const DEFAULT_FAMILY_IMAGE = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop';
     const DEFAULT_PROFILE_PIC = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
     const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
 
+    // Page elements
     const familyId = (window.location.pathname || '').split('/').pop();
     const familyCoverImg = document.getElementById('familyCoverImg');
     const familyAvatar = document.getElementById('familyAvatar');
@@ -272,11 +294,31 @@
     let activeWaveSurfer = null;
     let activeVideo = null;
 
-    // --- utility helpers
+    // small helpers
     function escapeHtml(s){ if(!s && s!==0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     function escapeAttr(s){ if(!s && s!==0) return ''; return String(s).replace(/"/g,'&quot;'); }
 
-    // --- fetch current profile (returns profile object or null)
+    // formatTimestamp (fixes ReferenceError)
+    function formatTimestamp(timestamp) {
+        if (!timestamp) return '';
+        try {
+            const date = new Date(Number(timestamp));
+            const now = new Date();
+            const diffInHours = (now - date) / (1000 * 60 * 60);
+
+            if (diffInHours < 24) {
+                return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            } else if (diffInHours < 7 * 24) {
+                return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+            } else {
+                return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+            }
+        } catch (e) {
+            return '';
+        }
+    }
+
+    // fetch current profile
     async function fetchProfileFull() {
       try {
         const res = await fetch('/api/profile', { credentials: 'same-origin' });
@@ -287,7 +329,87 @@
       return null;
     }
 
-    // ---------------- Reused UI: createPostCard (same structure as main feed) ----------------
+    // Safe WaveSurfer creation wrapper
+    function safeCreateWaveSurfer(opts) {
+      if (window.WaveSurfer) {
+        return WaveSurfer.create(opts);
+      } else {
+        console.warn('WaveSurfer not available, skipping waveform.');
+        return null;
+      }
+    }
+
+    // Initialize waveform with fallback
+    function initializePostWaveSurfer(postId, url) {
+        const container = document.getElementById(`waveform-${postId}`);
+        if (!container) return;
+
+        if (!window.WaveSurfer) {
+          // try again shortly (in case script loads late)
+          setTimeout(() => initializePostWaveSurfer(postId, url), 500);
+          return;
+        }
+
+        const ws = WaveSurfer.create({
+            container: container,
+            waveColor: '#4b5563',
+            progressColor: '#3b82f6',
+            cursorColor: '#10b981',
+            barWidth: 3,
+            barRadius: 3,
+            barGap: 1,
+            height: 60,
+            responsive: true,
+            mediaControls: false,
+        });
+
+        ws.load(url);
+
+        const playButton = document.getElementById(`audio-play-${postId}`) || document.getElementById(`audio-play-${postId}`); // ensure id match
+        if (playButton) {
+            playButton.onclick = () => {
+                if (activeWaveSurfer && activeWaveSurfer !== ws) {
+                    activeWaveSurfer.pause();
+                    const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
+                    if (otherPostCard) {
+                        const pb = otherPostCard.querySelector('.audio-play-button i');
+                        if (pb) { pb.classList.remove('fa-pause'); pb.classList.add('fa-play'); }
+                    }
+                }
+                if (activeVideo) {
+                    const activePostId = activeVideo.id.split('-')[1];
+                    const controlIcon = document.getElementById(`control-icon-${activePostId}`);
+                    const playOverlay = document.getElementById(`play-overlay-${activePostId}`);
+                    activeVideo.pause();
+                    if (controlIcon) {
+                        controlIcon.classList.remove('fa-pause');
+                        controlIcon.classList.add('fa-play');
+                    }
+                    if (playOverlay) playOverlay.classList.remove('hidden');
+                    activeVideo = null;
+                }
+
+                if (ws.isPlaying()) {
+                    ws.pause();
+                    playButton.querySelector('i').classList.remove('fa-pause');
+                    playButton.querySelector('i').classList.add('fa-play');
+                } else {
+                    ws.play();
+                    playButton.querySelector('i').classList.remove('fa-play');
+                    playButton.querySelector('i').classList.add('fa-pause');
+                    activeWaveSurfer = ws;
+                }
+            };
+
+            ws.on('finish', () => {
+                playButton.querySelector('i').classList.remove('fa-pause');
+                playButton.querySelector('i').classList.add('fa-play');
+                activeWaveSurfer = null;
+            });
+        }
+    }
+
+    // Create post card (same layout as main feed)
     function createPostCard(post) {
         let mediaContent = '';
         if (post.media) {
@@ -333,7 +455,7 @@
             } else if (post.media.type === 'audio') {
                 mediaContent = `
                     <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
-                        <button class="audio-play-button text-white text-xl" id="audio-play-${post.postId}">
+                        <button id="audio-play-${post.postId}" class="audio-play-button text-white text-xl">
                             <i class="fas fa-play"></i>
                         </button>
                         <div id="waveform-${post.postId}" class="waveform" style="flex:1"></div>
@@ -395,70 +517,14 @@
         `;
     }
 
-    // ---------------- Media controls (video/audio) reused ----------------
-    function initializePostWaveSurfer(postId, url) {
-        const container = document.getElementById(`waveform-${postId}`);
-        if (!container) return;
-
-        const ws = WaveSurfer.create({
-            container: container,
-            waveColor: '#4b5563',
-            progressColor: '#3b82f6',
-            cursorColor: '#10b981',
-            barWidth: 3,
-            barRadius: 3,
-            barGap: 1,
-            height: 60,
-            responsive: true,
-            mediaControls: false,
-        });
-
-        ws.load(url);
-
-        const playButton = document.getElementById(`audio-play-${postId}`);
-        if (playButton) {
-            playButton.onclick = () => {
-                if (activeWaveSurfer && activeWaveSurfer !== ws) {
-                    activeWaveSurfer.pause();
-                    const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
-                    if (otherPostCard) {
-                        const pb = otherPostCard.querySelector('.audio-play-button i');
-                        if (pb) { pb.classList.remove('fa-pause'); pb.classList.add('fa-play'); }
-                    }
-                }
-                if (activeVideo) {
-                    const activePostId = activeVideo.id.split('-')[1];
-                    const controlIcon = document.getElementById(`control-icon-${activePostId}`);
-                    const playOverlay = document.getElementById(`play-overlay-${activePostId}`);
-                    activeVideo.pause();
-                    if (controlIcon) {
-                        controlIcon.classList.remove('fa-pause');
-                        controlIcon.classList.add('fa-play');
-                    }
-                    if (playOverlay) playOverlay.classList.remove('hidden');
-                    activeVideo = null;
-                }
-                
-                if (ws.isPlaying()) {
-                    ws.pause();
-                    playButton.querySelector('i').classList.remove('fa-pause');
-                    playButton.querySelector('i').classList.add('fa-play');
-                } else {
-                    ws.play();
-                    playButton.querySelector('i').classList.remove('fa-play');
-                    playButton.querySelector('i').classList.add('fa-pause');
-                    activeWaveSurfer = ws;
-                }
-            };
-
-            ws.on('finish', () => {
-                playButton.querySelector('i').classList.remove('fa-pause');
-                playButton.querySelector('i').classList.add('fa-play');
-                activeWaveSurfer = null;
-            });
-        }
+    // openMediaViewer: for now we open image/video in new tab (keeps implementation simple and reliable)
+    function openMediaViewer(url, type, event) {
+      event.stopPropagation();
+      if (!url) return;
+      window.open(url, '_blank');
     }
 
+    // video helpers (same as previous implementation)
     function toggleVideoPlay(postId, event) {
         event.stopPropagation();
         const video = document.getElementById(`video-${postId}`);
@@ -478,35 +544,29 @@
                 activeControlIcon.classList.add('fa-play');
             }
             if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
-            
+
             activeVideo.removeEventListener('timeupdate', updateVideoProgress);
             activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
             activeVideo.removeEventListener('ended', handleVideoEnd);
         }
         if (activeWaveSurfer) {
             activeWaveSurfer.pause();
-            const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
-            if (otherPostCard) {
-                const apb = otherPostCard.querySelector('.audio-play-button i');
-                if (apb) { apb.classList.remove('fa-pause'); apb.classList.add('fa-play'); }
-            }
             activeWaveSurfer = null;
         }
-        
+
         if (video.paused) {
             video.play();
-            if (playOverlay) playOverlay.classList.add('hidden'); 
+            if (playOverlay) playOverlay.classList.add('hidden');
             if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
-            if (controlsBar) controlsBar.classList.remove('opacity-0'); 
+            if (controlsBar) controlsBar.classList.remove('opacity-0');
             activeVideo = video;
-            
+
             video.addEventListener('timeupdate', updateVideoProgress);
             video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
             video.addEventListener('ended', handleVideoEnd);
-
         } else {
             video.pause();
-            if (playOverlay) playOverlay.classList.remove('hidden'); 
+            if (playOverlay) playOverlay.classList.remove('hidden');
             if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
             activeVideo = null;
         }
@@ -534,18 +594,18 @@
             timeDisplay.textContent = `0:00 / ${formatVideoTime(video.duration)}`;
         }
     }
-    
+
     function handleVideoEnd(event) {
         const video = event.target;
         const postId = video.id.split('-')[1];
         const playOverlay = document.getElementById(`play-overlay-${postId}`);
         const controlIcon = document.getElementById(`control-icon-${postId}`);
-        
+
         video.currentTime = 0;
-        if (playOverlay) playOverlay.classList.remove('hidden'); 
+        if (playOverlay) playOverlay.classList.remove('hidden');
         if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
         activeVideo = null;
-        
+
         video.removeEventListener('timeupdate', updateVideoProgress);
         video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
         video.removeEventListener('ended', handleVideoEnd);
@@ -577,14 +637,6 @@
         } else {
             if (video.requestFullscreen) video.requestFullscreen();
         }
-    }
-
-    // Open media viewer for images (simple)
-    function openMediaViewer(url, type, event) {
-        event.stopPropagation();
-        const modal = document.getElementById('createModal'); // reuse modal backdrop visually? We'll create a simple image popup
-        // simple implementation: open new tab for now
-        window.open(url, '_blank');
     }
 
     // ---------------- Families: fetch & render posts using same card ----------------
@@ -640,7 +692,7 @@
       }
     }
 
-    // ---------------- Like family post (calls family like endpoint) ----------------
+    // ---------------- Like family post (family endpoint) ----------------
     async function handleFamilyLike(postId, btn) {
       btn.disabled = true;
       try {
@@ -650,7 +702,6 @@
         });
         const data = await res.json();
         if (res.ok && data.ok) {
-          // update UI counts
           const postEl = document.getElementById(`family-post-${postId}`);
           if (postEl) {
             const likesSpan = postEl.querySelector('.flex.justify-between span:first-child');
@@ -676,7 +727,7 @@
       }
     }
 
-    // ---------------- Comments for family posts (reuse the modal but endpoints are family-scoped) ----------------
+    // ---------------- Comments for family posts (modal) ----------------
     async function openFamilyComments(postId) {
       viewingPostIdForComments = postId;
       commentsList.innerHTML = `<div style="padding:18px;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>`;
@@ -711,25 +762,13 @@
         }
 
         commentsList.innerHTML = comments.map(c => createCommentHtml(c, postId)).join('');
-
-        // show/hide "عرض كل الردود" when needed (if UI had that button)
-        comments.forEach(c => {
-          try {
-            const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
-            if (btn) {
-              if ((c.repliesCount || 0) > (c.recentReplies ? c.recentReplies.length : 0)) btn.classList.remove('hidden');
-              else btn.classList.add('hidden');
-            }
-          } catch(e){}
-        });
-
       } catch (e) {
         console.error(e);
         commentsList.innerHTML = `<div style="padding:18px;color:#ff8b8b">خطأ في الاتصال</div>`;
       }
     }
 
-    // Create comment HTML (uses enriched comment object returned by server)
+    // create comment HTML
     function createCommentHtml(comment, postId) {
         const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
         const likeIcon = comment.is_liked ? 'fas' : 'far';
@@ -787,7 +826,7 @@
         `;
     }
 
-    // Toggle like on a comment (frontend -> family endpoint)
+    // Toggle comment like (family)
     async function toggleCommentLike(postId, commentId, btnEl) {
         btnEl.disabled = true;
         try {
@@ -817,6 +856,7 @@
         }
     }
 
+    // Reply UI helpers
     function openReplyBox(commentId) {
         const box = document.getElementById(`reply-box-${commentId}`);
         if (!box) return;
@@ -852,7 +892,6 @@
         }
     }
 
-    // Fetch and show all replies for a comment (in-place)
     async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
         try {
             triggerBtn.disabled = true;
@@ -879,7 +918,7 @@
         }
     }
 
-    // ---------------- Post comment (family) ----------------
+    // Post a new comment (family)
     postCommentBtn.addEventListener('click', async () => {
       const content = newCommentInput.value.trim();
       if (!content || !viewingPostIdForComments) return;
@@ -895,8 +934,7 @@
         if (res.ok && data.ok) {
           newCommentInput.value = '';
           await loadFamilyComments(viewingPostIdForComments);
-          // refresh posts
-          await loadFamilyPosts();
+          await loadFamilyPosts(); // update counts
         } else {
           alert(data.error || 'فشل في إرسال التعليق');
         }
@@ -917,10 +955,9 @@
     });
     commentModal.addEventListener('click', (e) => { if (e.target === commentModal) closeCommentModalBtn.click(); });
 
-    // ---------------- Post options / delete ----------------
+    // Post options / delete
     function openPostOptions(postId, userId, event) {
       event.stopPropagation();
-      // quick options: if owner show delete, else show nothing (server enforces)
       const isOwner = (currentUserId && userId === currentUserId);
       if (isOwner || (currentFamily && currentFamily.creatorId === currentUserId)) {
         showConfirm('هل أنت متأكد أنك تريد حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.', async () => {
@@ -942,11 +979,11 @@
           }
         });
       } else {
-        // for non-owner: optionally open a simple menu or do nothing
+        // non-owner: do nothing (server enforces permissions)
       }
     }
 
-    // ---------------- Confirm modal helpers ----------------
+    // Confirm helpers
     function showConfirm(message, onOk) {
       confirmMessage.textContent = message;
       confirmModal.style.display = 'flex';
@@ -967,7 +1004,7 @@
       closeConfirmModal.addEventListener('click', cancelHandler);
     }
 
-    // ---------------- Create post modal logic ----------------
+    // Create modal wiring
     createPostBtn.addEventListener('click', () => openCreateModal());
     closeCreateModal.addEventListener('click', () => closeCreateModalFn());
     attachMediaBtn.addEventListener('click', () => familyPostMedia.click());
@@ -977,31 +1014,27 @@
     function openCreateModal(){ familyPostContent.value=''; familyPostMedia.value=''; postMediaPreview.innerHTML='لا توجد وسائط مرفوعة'; selectedMediaLabel.textContent=''; postError.style.display='none'; createModal.style.display='flex'; document.body.style.overflow='hidden'; }
     function closeCreateModalFn(){ createModal.style.display='none'; document.body.style.overflow='auto'; }
 
-    function handleMediaSelection(){ const f = familyPostMedia.files && familyPostMedia.files[0]; if(!f){ postMediaPreview.innerHTML='لا توجد وسائط مرفوعة'; selectedMediaLabel.textContent=''; return;} selectedMediaLabel.textContent = f.name; if(f.type.startsWith('image/')){ postMediaPreview.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="preview">`; } else if(f.type.startsWith('video/')){ postMediaPreview.innerHTML = `<video src="${URL.createObjectURL(f)}" controls playsinline></video>`; } else { postMediaPreview.innerHTML = `<div style="color:var(--muted)"><i class="fas fa-file-audio"></i> ${f.name}</div>`; } }
+    function handleMediaSelection(){ const f = familyPostMedia.files && familyPostMedia.files[0]; if(!f){ postMediaPreview.innerHTML='لا توجد وسائط مرفوعة'; selectedMediaLabel.textContent=''; return;} selectedMediaLabel.textContent = f.name; if(f.type.startsWith('image/')){ postMediaPreview.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="preview" style="max-width:100%;border-radius:8px">`; } else if(f.type.startsWith('video/')){ postMediaPreview.innerHTML = `<video src="${URL.createObjectURL(f)}" controls playsinline style="width:100%;border-radius:8px"></video>`; } else { postMediaPreview.innerHTML = `<div style="color:var(--muted)"><i class="fas fa-file-audio"></i> ${f.name}</div>`; } }
 
     async function submitFamilyPost(){ postError.style.display='none'; submitFamilyPostBtn.disabled=true; submitFamilyPostBtn.textContent='جارٍ النشر...'; const content = familyPostContent.value.trim(); const file = familyPostMedia.files && familyPostMedia.files[0]; if(!content && !file){ postError.textContent='المحتوى أو الوسائط مطلوب.'; postError.style.display='block'; submitFamilyPostBtn.disabled=false; submitFamilyPostBtn.textContent='نشر'; return;} try{ const fd = new FormData(); fd.append('content', content); if(file) fd.append('media', file); const res = await fetch(`/api/families/${encodeURIComponent(familyId)}/posts/create`, { method:'POST', credentials:'same-origin', body: fd }); const data = await res.json(); if(!res.ok || !data.ok){ postError.textContent = data.error || 'فشل في النشر'; postError.style.display='block'; return; } closeCreateModalFn(); await loadFamilyPosts(); } catch(err){ console.error(err); postError.textContent='خطأ في الاتصال'; postError.style.display='block'; } finally{ submitFamilyPostBtn.disabled=false; submitFamilyPostBtn.textContent='نشر'; } }
 
-    // --- Settings modal logic (show key to organizers)
+    // Settings wiring (key / leave / delete)
     openSettingsBtn.addEventListener('click', async () => {
       settingsImg.src = familyCoverImg.src || DEFAULT_FAMILY_IMAGE;
       settingsName.textContent = familyName.textContent || 'العائلة';
 
-      // if we don't have currentFamily, fetch it
       if (!currentFamily) await fetchFamilyInfo();
 
-      // determine current user id
       const profile = await fetchProfileFull();
       const profileId = profile ? profile.id : null;
       currentUserId = profileId;
 
-      // Try to get key only if user is organizer (server endpoint checks too)
       try {
         const infoRes = await fetch(`/api/families/${encodeURIComponent(familyId)}/info`, { credentials: 'same-origin' });
         const infoJson = await infoRes.json();
         const isOrganizer = infoRes.ok && infoJson.ok && infoJson.family && infoJson.family.is_organizer;
 
         if (isOrganizer) {
-          // request key
           const keyRes = await fetch(`/api/families/${encodeURIComponent(familyId)}/key`, { credentials: 'same-origin' });
           if (keyRes.ok) {
             const keyJson = await keyRes.json();
@@ -1021,7 +1054,6 @@
           copyKeyBtn.style.display = 'none';
         }
 
-        // show delete button only to creator
         const isCreator = currentFamily && currentFamily.creatorId && profileId && (currentFamily.creatorId === profileId);
         if (isCreator) {
           deleteBtn.style.display = 'inline-flex';
@@ -1044,7 +1076,6 @@
     closeSettingsBtn.addEventListener('click', () => { settingsModal.style.display = 'none'; document.body.style.overflow = 'auto'; });
     settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) { settingsModal.style.display = 'none'; document.body.style.overflow = 'auto'; } });
 
-    // copy key
     copyKeyBtn.addEventListener('click', async () => {
       const txt = settingsKey.textContent || '';
       if (!txt || txt.includes('متاح')) { alert('الرمز غير متاح'); return; }
@@ -1057,7 +1088,6 @@
       }
     });
 
-    // leave family (use confirm modal)
     leaveBtn.addEventListener('click', () => {
       showConfirm('هل تريد فعلاً مغادرة هذه العائلة؟', async () => {
         try {
@@ -1076,7 +1106,6 @@
       });
     });
 
-    // delete family (creator only)
     deleteBtn.addEventListener('click', () => {
       showConfirm('هل أنت متأكد أنك تريد حذف هذه العائلة نهائياً؟ هذا سيحذف كل المنشورات والبيانات الخاصة بها.', async () => {
         try {
@@ -1095,7 +1124,7 @@
       });
     });
 
-    // --- Family info fetch & initialization
+    // Fetch family info
     async function fetchFamilyInfo() {
       if (!familyId) return;
       try {
@@ -1133,7 +1162,7 @@
       }
     }
 
-    // ---------------- Initialization ----------------
+    // Initialization
     document.addEventListener('DOMContentLoaded', () => {
       if (!familyId) { document.body.innerHTML = '<div style="padding:24px;color:var(--muted)">معرف العائلة غير موجود.</div>'; return; }
       familyCoverImg.src = DEFAULT_FAMILY_IMAGE;
