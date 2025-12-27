@@ -41,6 +41,69 @@
             z-index: 1000;
         }
 
+        /* Family section */
+        .families-row {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding: 12px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .families-row::-webkit-scrollbar { height: 8px; }
+        .families-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 8px; }
+
+        .create-family-card {
+            min-width: 220px;
+            max-width: 220px;
+            height: 110px;
+            border-radius: 14px;
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            cursor: pointer;
+        }
+        .create-family-card .overlay {
+            position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.06), rgba(0,0,0,0.5));
+        }
+        .create-family-card .label {
+            position: relative; z-index: 2; text-align: center;
+        }
+
+        .family-card {
+            min-width: 160px;
+            max-width: 160px;
+            height: 110px;
+            border-radius: 12px;
+            background: rgba(20,20,20,0.6);
+            border: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .family-card img {
+            width: 72px; height: 72px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+        }
+        .family-card .meta {
+            flex: 1; overflow: hidden;
+        }
+        .family-card .meta .name {
+            font-weight: 700; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+        }
+        .family-card .meta .count {
+            font-size: 12px; color: #9ca3af; margin-top: 6px;
+        }
+
+        /* rest of existing styles kept */
         /* تنسيقات نافذة التعليقات (Bottom Sheet) */
         .glass-comment-modal-content {
             background-color: #18191a;
@@ -313,9 +376,20 @@
         </nav>
     </header>
 
+    <!-- Families section (added) -->
     <main class="max-w-6xl mx-auto p-4">
-        <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
+        <div id="familiesWrapper" class="max-w-xl mx-auto mt-4">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-white font-bold">عائلتي</h2>
+                <a href="/create-family" class="text-sm text-gray-400 hover:text-white">إنشاء عائلة جديدة</a>
             </div>
+            <div id="familiesRow" class="families-row">
+                <!-- create family card + family cards will be injected here -->
+            </div>
+        </div>
+
+        <div id="postsFeed" class="max-w-xl mx-auto mt-6 space-y-4">
+        </div>
     </main>
     
     <div class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-navbar">
@@ -339,6 +413,23 @@
                 <span id="friendReqBadge" style="display:none">0</span>
             </a>
         </nav>
+    </div>
+
+    <!-- Join family modal -->
+    <div id="familyJoinModal" class="hidden fixed inset-0 z-60 flex items-center justify-center p-4 glass-modal-bg" onclick="closeJoinModal(event)">
+      <div class="bg-[#0f1724] max-w-md w-full rounded-xl p-6 border border-gray-700" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-bold text-white">الانضمام إلى العائلة</h3>
+          <button class="text-gray-400 hover:text-white" onclick="closeJoinModal(event)"><i class="fas fa-times"></i></button>
+        </div>
+        <p id="familyJoinIntro" class="text-sm text-gray-300 mb-3">أدخل رمز العائلة للانضمام.</p>
+        <input id="familyJoinInput" class="w-full p-3 rounded-lg bg-[#081019] border border-gray-700 text-white mb-3" placeholder="رمز العائلة" />
+        <div id="familyJoinError" class="text-red-400 text-sm mb-2 hidden"></div>
+        <div class="flex gap-3">
+          <button id="familyJoinConfirmBtn" class="flex-1 p-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-white" onclick="confirmJoinFamily()">انضم الآن</button>
+          <button class="flex-1 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white" onclick="closeJoinModal(event)">إلغاء</button>
+        </div>
+      </div>
     </div>
 
     <!-- Centered delete confirmation modal (glass) -->
@@ -482,8 +573,12 @@
         let currentOptionsPostId = null;
         let currentOptionsUserId = null;
 
+        // For family join
+        let joiningFamilyId = null;
+
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
+        const CREATE_FAMILY_BG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
         const postsFeed = document.getElementById('postsFeed');
         const deleteModal = document.getElementById('deleteModal');
@@ -502,6 +597,14 @@
         const postOptionsAddFriendBtn = document.getElementById('postOptionsAddFriendBtn');
         const postOptionsCloseBtn = document.getElementById('postOptionsCloseBtn');
         const postOptionsMessage = document.getElementById('postOptionsMessage');
+
+        // family elements
+        const familiesRow = document.getElementById('familiesRow');
+        const familyJoinModal = document.getElementById('familyJoinModal');
+        const familyJoinInput = document.getElementById('familyJoinInput');
+        const familyJoinError = document.getElementById('familyJoinError');
+        const familyJoinConfirmBtn = document.getElementById('familyJoinConfirmBtn');
+        const familyJoinIntro = document.getElementById('familyJoinIntro');
 
         function toggleProfileDropdown(event) {
             event.stopPropagation();
@@ -1002,7 +1105,6 @@
         }
 
         // Create comment HTML (uses enriched comment object returned by server)
-        // استبدل دالة createCommentHtml في chat_list.html بهذه النسخة:
 function createCommentHtml(comment, postId) {
     const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
     const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
@@ -1192,6 +1294,128 @@ function createCommentHtml(comment, postId) {
             };
         }
 
+        // ---------------- Families UI logic ----------------
+
+        function renderCreateFamilyCard() {
+            return `
+                <div class="create-family-card" style="background-image: url('${CREATE_FAMILY_BG}');" onclick="onCreateFamilyClick()">
+                    <div class="overlay"></div>
+                    <div class="label">
+                        <div class="text-sm font-semibold">إنشاء عائلة</div>
+                        <div class="text-xs text-gray-200 mt-1">بناء مساحة خاصة للعائلة</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderFamilyCard(f) {
+            const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : 'https://via.placeholder.com/160x100?text=Family';
+            const members = f.membersCount || 0;
+            const isMember = !!f.is_member;
+            const badge = isMember ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
+            return `
+                <div class="family-card" data-family-id="${escapeAttr(f.familyId)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId)}', ${isMember})">
+                    <img src="${escapeHtml(img)}" alt="${escapeHtml(f.name)}">
+                    <div class="meta">
+                        <div class="name">${escapeHtml(f.name)} ${isMember ? '' : ''}</div>
+                        <div class="count">${members} عضو • ${badge}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function fetchAndDisplayFamilies() {
+            if (!familiesRow) return;
+            familiesRow.innerHTML = '<div class="text-gray-400">جاري التحميل...</div>';
+            try {
+                // Always show create card first
+                const createHtml = renderCreateFamilyCard();
+                let html = createHtml;
+
+                const res = await fetch('/api/families/my', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const families = data.families || [];
+                    const famHtml = families.map(f => {
+                        // mark is_member true because /api/families/my returns only member families
+                        return renderFamilyCard({ ...f, is_member: true });
+                    }).join('');
+                    html += famHtml;
+                } else {
+                    // if fetch failed, still render create card
+                }
+                familiesRow.innerHTML = html;
+            } catch (e) {
+                console.error('Failed to load families', e);
+                familiesRow.innerHTML = renderCreateFamilyCard();
+            }
+        }
+
+        function onCreateFamilyClick() {
+            // simply navigate to create-family page (server view)
+            window.location.href = '/create-family';
+        }
+
+        function onFamilyCardClick(familyId, isMember) {
+            if (isMember === true || String(isMember) === 'true') {
+                // direct navigation
+                window.location.href = `/family/${encodeURIComponent(familyId)}`;
+            } else {
+                // open join modal
+                openJoinModal(familyId);
+            }
+        }
+
+        function openJoinModal(familyId) {
+            joiningFamilyId = familyId;
+            familyJoinInput.value = '';
+            familyJoinError.classList.add('hidden');
+            familyJoinIntro.textContent = 'أدخل رمز العائلة للانضمام';
+            familyJoinModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            setTimeout(() => { familyJoinInput.focus(); }, 100);
+        }
+
+        function closeJoinModal(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            joiningFamilyId = null;
+            familyJoinModal.classList.add('hidden');
+            familyJoinError.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        async function confirmJoinFamily() {
+            const key = familyJoinInput.value.trim();
+            if (!key || !joiningFamilyId) return;
+            familyJoinConfirmBtn.disabled = true;
+            familyJoinConfirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جارٍ...';
+            familyJoinError.classList.add('hidden');
+            try {
+                const res = await fetch(`/api/families/${encodeURIComponent(joiningFamilyId)}/join`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key })
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    // success: redirect to family page
+                    window.location.href = `/family/${encodeURIComponent(joiningFamilyId)}`;
+                } else {
+                    familyJoinError.textContent = data.error || 'فشل في الانضمام';
+                    familyJoinError.classList.remove('hidden');
+                }
+            } catch (e) {
+                console.error(e);
+                familyJoinError.textContent = 'خطأ في الاتصال';
+                familyJoinError.classList.remove('hidden');
+            } finally {
+                familyJoinConfirmBtn.disabled = false;
+                familyJoinConfirmBtn.innerHTML = 'انضم الآن';
+            }
+        }
+
+        // rest of existing functions (fetch posts, comments, likes, etc.)
         // Fetch and display posts (feed)
         async function fetchAndDisplayPosts() {
             postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
@@ -1490,7 +1714,10 @@ function createCommentHtml(comment, postId) {
                     }
                 }).catch(console.error);
                 
-            fetchAndDisplayPosts();
+            // load families first so they appear before posts
+            fetchAndDisplayFamilies().then(() => {
+                fetchAndDisplayPosts();
+            });
         });
 
         (function setupNotifSSE() {
