@@ -9,7 +9,8 @@
     <script src="https://unpkg.com/wavesurfer.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Vibes&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <!-- استخدمت خط Tajawal كخيار واضح وبسيط للنافبار -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
         body {
@@ -23,19 +24,22 @@
 
         /* Navbar Font */
         .app-logo {
-            font-family: 'Vibes', cursive;
-            font-size: 2rem;
-            letter-spacing: 1px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1.25rem;
+            letter-spacing: 0.5px;
             color: #fff;
+            font-weight: 700;
         }
 
         /* Glassmorphism */
         .glass-navbar {
-            background-color: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
+            /* لم تعد ثابتة حتى لا تغطي صورة الغلاف */
+            position: relative;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            z-index: 50;
+            z-index: 20;
         }
 
         .glass-card {
@@ -53,13 +57,13 @@
             height: 250px; /* ارتفاع ثابت للصورة */
             border-radius: 0 0 24px 24px;
             overflow: hidden;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
             margin-bottom: 20px;
         }
         .family-cover {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            display: block;
         }
         .header-content {
             position: absolute;
@@ -67,7 +71,7 @@
             left: 0;
             right: 0;
             padding: 20px;
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
             z-index: 10;
         }
 
@@ -147,11 +151,14 @@
         /* Scrollbar */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+        /* ensure main content isn't hidden under header (header is relative now) */
+        main { padding-top: 1rem; }
     </style>
 </head>
 <body>
 
-    <header class="fixed top-0 left-0 right-0 glass-navbar px-4 py-2 flex justify-between items-center transition-all duration-300 h-16">
+    <header class="glass-navbar px-4 py-3 flex justify-between items-center transition-all duration-300">
         <a href="/chat_list" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition">
             <i class="fas fa-arrow-right text-xl"></i>
         </a>
@@ -165,10 +172,10 @@
         </button>
     </header>
 
-    <main class="w-full pt-20 pb-20">
+    <main class="w-full pb-20">
         
         <div class="max-w-xl mx-auto px-2">
-            <div class="family-header">
+            <div class="family-header" aria-hidden="false">
                 <img id="familyCoverImg" src="" alt="غلاف العائلة" class="family-cover">
                 <div class="header-content">
                     <h2 id="familyName" class="text-3xl font-bold text-white mb-1 drop-shadow-lg"></h2>
@@ -309,6 +316,14 @@
     </div>
 
     <script>
+        // The family.html script is kept mostly as before, but ensures the client calls the new family endpoints:
+        // - Like: POST /api/families/:familyId/posts/:postId/like
+        // - Comment: POST /api/families/:familyId/posts/:postId/comment
+        // - Get comments: GET /api/families/:familyId/posts/:postId/comments
+        // - Like a comment: POST /api/families/:familyId/posts/:postId/comments/:commentId/like
+        // - Reply to comment: POST /api/families/:familyId/posts/:postId/comments/:commentId/reply
+        // - Get replies: GET /api/families/:familyId/posts/:postId/comments/:commentId/replies
+
         // --- Constants & Config ---
         const DEFAULT_FAMILY_IMG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop';
         const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
@@ -356,6 +371,7 @@
                 if (res.ok && data.ok) {
                     const f = data.family;
                     document.getElementById('familyName').textContent = f.name;
+                    // show full image (not cropped by navbar)
                     document.getElementById('familyCoverImg').src = f.imageUrl || DEFAULT_FAMILY_IMG;
                     document.getElementById('membersCount').innerHTML = `<i class="fas fa-users text-xs"></i> <span>${f.membersCount}</span> عضو`;
                     isCreator = (f.creatorId === currentUserId);
@@ -517,6 +533,8 @@
                         return;
                     }
                     feed.innerHTML = posts.map(p => createPostCard(p)).join('');
+                } else {
+                    feed.innerHTML = `<div class="text-center text-red-500 py-10"><p>تعذر تحميل المنشورات.</p></div>`;
                 }
             } catch(e) { feed.innerHTML = '<div class="text-center text-red-500">فشل تحميل المنشورات</div>'; }
         }
@@ -547,10 +565,10 @@
                                 <div class="text-xs text-gray-500">${new Date(post.timestamp).toLocaleDateString('ar-EG')}</div>
                             </div>
                         </div>
-                        ${(isCreator || post.userId === currentUserId) ? `<button onclick="deletePost('${post.postId}')" class="text-gray-500 hover:text-red-400"><i class="fas fa-trash"></i></button>` : ''}
+                        ${(post.userId === currentUserId || isCreator) ? `<button onclick="deletePost('${post.postId}')" class="text-gray-500 hover:text-red-400"><i class="fas fa-trash"></i></button>` : ''}
                     </div>
 
-                    <p class="text-gray-200 text-base whitespace-pre-wrap leading-relaxed">${post.content}</p>
+                    <p class="text-gray-200 text-base whitespace-pre-wrap leading-relaxed">${escapeHtml(post.content)}</p>
                     ${mediaHtml}
 
                     <div class="flex justify-between items-center mt-4 pt-3 border-t border-white/5">
@@ -568,39 +586,43 @@
         }
 
         // --- Interaction Logic (Likes/Comments) ---
-        // Note: Assumes server endpoints exist as per REST pattern.
-        
         async function toggleLike(postId, btn) {
             const icon = btn.querySelector('i');
             const countSpan = btn.querySelector('.likes-count');
-            
-            const isLiked = icon.classList.contains('fas');
-            if(isLiked) {
-                icon.classList.replace('fas', 'far');
-                icon.classList.replace('text-red-500', 'text-gray-400');
-                btn.classList.replace('text-red-500', 'text-gray-400');
-                countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
-            } else {
-                icon.classList.replace('far', 'fas');
-                icon.classList.replace('text-gray-400', 'text-red-500');
-                btn.classList.replace('text-gray-400', 'text-red-500');
-                countSpan.textContent = parseInt(countSpan.textContent) + 1;
-            }
-
+            btn.disabled = true;
             try {
-                await fetch(`/api/families/${familyId}/posts/${postId}/like`, { method: 'POST' });
-            } catch(e) { console.error('Like error', e); }
+                const res = await fetch(`/api/families/${familyId}/posts/${postId}/like`, { method: 'POST' });
+                const data = await res.json();
+                if(res.ok && data.ok) {
+                    countSpan.textContent = data.newLikes;
+                    if(data.action === 'liked') {
+                        icon.classList.remove('far', 'text-gray-400');
+                        icon.classList.add('fas', 'text-red-500');
+                        btn.classList.remove('text-gray-400');
+                        btn.classList.add('text-red-500');
+                    } else {
+                        icon.classList.remove('fas', 'text-red-500');
+                        icon.classList.add('far', 'text-gray-400');
+                        btn.classList.remove('text-red-500');
+                        btn.classList.add('text-gray-400');
+                    }
+                } else {
+                    console.warn('Like failed', data);
+                }
+            } catch(e) { console.error(e); }
+            finally { btn.disabled = false; }
         }
 
         async function deletePost(postId) {
             if(!confirm('حذف المنشور؟')) return;
             try {
                 const res = await fetch(`/api/families/${familyId}/posts/${postId}`, { method: 'DELETE' });
-                if(res.ok) document.getElementById(`post-${postId}`).remove();
+                const data = await res.json();
+                if(res.ok && data.ok) document.getElementById(`post-${postId}`).remove();
             } catch(e) { alert('فشل الحذف'); }
         }
 
-        // --- Comments Logic ---
+        // --- Comments Logic (family endpoints) ---
         function openCommentModal(postId) {
             currentPostIdForComments = postId;
             document.getElementById('commentModal').classList.remove('hidden');
@@ -642,13 +664,12 @@
             const verified = (c.user && c.user.is_verified) ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : '';
             const likeClass = c.is_liked ? 'fas text-red-500' : 'far text-gray-400';
             
-            // Nested Replies
             const repliesHtml = (c.recentReplies && c.recentReplies.length > 0) ? c.recentReplies.map(r => `
                 <div class="reply-item flex gap-2">
                     <img src="${r.profile_picture_url || DEFAULT_AVATAR}" class="small-avatar">
                     <div class="flex-1">
-                        <span class="text-white font-bold text-xs">${r.username}</span>
-                        <p class="text-gray-300 text-xs">${r.content}</p>
+                        <span class="text-white font-bold text-xs">${escapeHtml(r.username)}</span>
+                        <p class="text-gray-300 text-xs">${escapeHtml(r.content)}</p>
                     </div>
                 </div>
             `).join('') : '';
@@ -659,10 +680,10 @@
                         <img src="${c.user.profile_picture_url || DEFAULT_AVATAR}" class="w-8 h-8 rounded-full border border-gray-700">
                         <div class="flex-grow">
                             <div class="flex justify-between items-start">
-                                <span class="text-white font-bold text-sm">${c.user.username} ${verified}</span>
+                                <span class="text-white font-bold text-sm">${escapeHtml(c.user.username)} ${verified}</span>
                                 <span class="text-xs text-gray-500">${new Date(c.timestamp).toLocaleDateString()}</span>
                             </div>
-                            <p class="text-gray-300 text-sm mt-1">${c.content}</p>
+                            <p class="text-gray-300 text-sm mt-1">${escapeHtml(c.content)}</p>
                             
                             <div class="flex gap-4 mt-2">
                                 <button class="${likeClass} text-xs flex items-center gap-1" onclick="toggleCommentLike('${postId}', '${c.commentId}', this)">
@@ -684,19 +705,25 @@
 
         async function toggleCommentLike(postId, commentId, btn) {
             try {
+                btn.disabled = true;
                 const res = await fetch(`/api/families/${familyId}/posts/${postId}/comments/${commentId}/like`, { method: 'POST' });
                 const data = await res.json();
-                if(data.ok) {
+                if(res.ok && data.ok) {
                     const span = btn.querySelector('.like-count');
                     span.textContent = data.likes;
                     if(data.is_liked) { btn.classList.remove('far', 'text-gray-400'); btn.classList.add('fas', 'text-red-500'); }
                     else { btn.classList.remove('fas', 'text-red-500'); btn.classList.add('far', 'text-gray-400'); }
                 }
-            } catch(e) {}
+            } catch(e) { console.error(e); }
+            finally { btn.disabled = false; }
         }
 
         function openReplyBox(cid) {
-            document.getElementById(`reply-box-${cid}`).classList.toggle('hidden');
+            const el = document.getElementById(`reply-box-${cid}`);
+            if (!el) return;
+            el.classList.toggle('hidden');
+            const input = el.querySelector('input');
+            if (input && !el.classList.contains('hidden')) input.focus();
         }
 
         async function postReply(postId, commentId) {
@@ -704,13 +731,20 @@
             const content = input.value.trim();
             if(!content) return;
             try {
-                await fetch(`/api/families/${familyId}/posts/${postId}/comments/${commentId}/reply`, {
+                input.disabled = true;
+                const res = await fetch(`/api/families/${familyId}/posts/${postId}/comments/${commentId}/reply`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({ content })
                 });
-                fetchComments(postId); // Refresh
-            } catch(e) {}
+                const data = await res.json();
+                if(res.ok && data.ok) {
+                    fetchComments(postId);
+                } else {
+                    alert(data.error || 'فشل الإرسال');
+                }
+            } catch(e) { console.error(e); alert('خطأ'); }
+            finally { input.disabled = false; input.value = ''; }
         }
 
         document.getElementById('postCommentBtn').addEventListener('click', async () => {
@@ -719,12 +753,17 @@
             if(!content || !currentPostIdForComments) return;
             input.value = '';
             try {
-                await fetch(`/api/families/${familyId}/posts/${currentPostIdForComments}/comment`, {
+                const res = await fetch(`/api/families/${familyId}/posts/${currentPostIdForComments}/comment`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({ content })
                 });
-                fetchComments(currentPostIdForComments);
+                const data = await res.json();
+                if(res.ok && data.ok) {
+                    fetchComments(currentPostIdForComments);
+                } else {
+                    alert(data.error || 'فشل التعليق');
+                }
             } catch(e) { alert('فشل التعليق'); }
         });
 
@@ -740,6 +779,12 @@
         function closeMediaViewer() {
             document.getElementById('mediaViewerModal').classList.add('hidden');
             document.getElementById('mediaViewerContent').innerHTML = '';
+        }
+
+        // small helpers
+        function escapeHtml(s) {
+            if (!s && s !== 0) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
     </script>
