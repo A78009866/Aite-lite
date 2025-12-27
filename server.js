@@ -18,8 +18,6 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
-// Default family image - same visual used in home create card when no image was provided
-const DEFAULT_FAMILY_IMAGE_URL = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
 // إعدادات Cloudinary
 cloudinary.config({
@@ -188,7 +186,6 @@ app.get('/admin', requireAuth, requireAdmin, (req, res) => {
 });
 
 // ---------------- Family Pages (جديد) ----------------
-/ ---------------- Family Pages (جديد) ----------------
 // صفحة إنشاء العائلة (frontend file ستوفره لاحقاً)
 app.get('/create-family', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'create_family.html'));
@@ -199,52 +196,6 @@ app.get('/family/:familyId', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'family.html'));
 });
 
-// ---------------- Routes: Auth Logic ----------------
-// ... (login/register/logout unchanged) ...
-
-// (remaining server code omitted here for brevity in this block; assume same as previous version up to family key route)
-// For this response we only show the changed route: GET /api/families/:familyId/key
-
-// --- GET family key (available to any family member) ---
-app.get('/api/families/:familyId/key', requireAuth, async (req, res) => {
-  const { familyId } = req.params;
-  const userId = req.session.userId;
-  if (!familyId) return res.status(400).json({ ok: false, error: 'familyId required' });
-
-  try {
-    const snap = await db.ref(`families/${familyId}`).once('value');
-    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
-    const f = snap.val();
-
-    // Allow access to creator OR any member (including regular members)
-    const member = await isFamilyMember(familyId, userId);
-    const isCreator = f.creatorId && f.creatorId === userId;
-
-    if (!isCreator && !member) {
-      return res.status(403).json({ ok: false, error: 'Forbidden' });
-    }
-
-    // Return the plain key only if stored on creation as keyPlain
-    const key = f.keyPlain || null;
-    if (!key) return res.status(404).json({ ok: false, error: 'Key not found' });
-
-    res.json({ ok: true, key });
-  } catch (err) {
-    console.error('Error fetching family key:', err);
-    res.status(500).json({ ok: false, error: 'Server error' });
-  }
-});
-
-// ---------------- Utility functions used above ----------------
-async function isFamilyMember(familyId, userId) {
-  if (!familyId || !userId) return false;
-  try {
-    const snap = await db.ref(`families/${familyId}/members/${userId}`).once('value');
-    return snap.exists();
-  } catch (e) {
-    return false;
-  }
-}
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
@@ -397,21 +348,6 @@ async function requireFamilyMember(req, res, next) {
   }
 }
 
-// Helper: check if user is organizer (creator or member with elevated role)
-// roles considered organizing: owner, admin, organizer, manager
-async function isFamilyOrganizer(familyId, userId) {
-  if (!familyId || !userId) return false;
-  try {
-    const snap = await db.ref(`families/${familyId}/members/${userId}`).once('value');
-    if (!snap.exists()) return false;
-    const member = snap.val();
-    const role = (member.role || '').toLowerCase();
-    return role === 'owner' || role === 'admin' || role === 'organizer' || role === 'manager';
-  } catch (e) {
-    return false;
-  }
-}
-
 // ---------------- Helper: Normalize stored comments ----------------
 function normalizeStoredComment(val) {
   // val: raw object from DB
@@ -523,7 +459,7 @@ app.post('/api/families/create', requireAuth, upload.single('family_image'), asy
     const plainKey = generateFamilyKey();
     const keyHash = hashFamilyKey(plainKey);
 
-    const imageUrl = (req.file && req.file.path) ? req.file.path : DEFAULT_FAMILY_IMAGE_URL;
+    const imageUrl = (req.file && req.file.path) ? req.file.path : '';
 
     const familyData = {
       familyId,
@@ -531,7 +467,6 @@ app.post('/api/families/create', requireAuth, upload.single('family_image'), asy
       imageUrl,
       creatorId: userId,
       keyHash,
-      keyPlain: plainKey, // store plain key so creator/organizers can retrieve (be mindful of security)
       createdAt,
       membersCount: 1
     };
@@ -566,7 +501,7 @@ app.get('/api/families/my', requireAuth, async (req, res) => {
         myFamilies.push({
           familyId: fid,
           name: f.name,
-          imageUrl: f.imageUrl || DEFAULT_FAMILY_IMAGE_URL,
+          imageUrl: f.imageUrl || '',
           membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
           creatorId: f.creatorId
         });
@@ -591,7 +526,7 @@ app.get('/api/families', requireAuth, async (req, res) => {
       return {
         familyId: fid,
         name: f.name || '',
-        imageUrl: f.imageUrl || DEFAULT_FAMILY_IMAGE_URL,
+        imageUrl: f.imageUrl || '',
         creatorId: f.creatorId || '',
         membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
         is_member: !!(f.members && f.members[userId])
@@ -653,16 +588,14 @@ app.get('/api/families/:familyId/info', requireAuth, async (req, res) => {
     const f = snap.val();
     const isMember = !!(f.members && f.members[userId]);
 
-    // Note: never return keyHash or plain key to unauthorized users
+    // Note: never return keyHash or plain key
     const result = {
       familyId,
       name: f.name,
-      imageUrl: f.imageUrl || DEFAULT_FAMILY_IMAGE_URL,
+      imageUrl: f.imageUrl || '',
       creatorId: f.creatorId || '',
       membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
-      is_member: isMember,
-      // include a flag indicating whether current user is an organizer so UI can show key if allowed
-      is_organizer: await isFamilyOrganizer(familyId, userId)
+      is_member: isMember
     };
 
     res.json({ ok: true, family: result });
@@ -776,373 +709,6 @@ app.get('/api/families/:familyId/posts', requireAuth, requireFamilyMember, async
   } catch (error) {
     console.error('Error fetching family posts:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب منشورات العائلة.' });
-  }
-});
-
-// Like/unlike a family post (only members)
-app.post('/api/families/:familyId/posts/:postId/like', requireAuth, requireFamilyMember, async (req, res) => {
-  const userId = req.session.userId;
-  const { familyId, postId } = req.params;
-
-  if (!postId) return res.status(400).json({ ok: false });
-
-  const postRef = db.ref(`family_posts/${familyId}/${postId}`);
-  const userLikeRef = db.ref(`family_likes/${familyId}/${postId}/${userId}`);
-
-  try {
-    const postSnapshot = await postRef.once('value');
-    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
-
-    const likeSnapshot = await userLikeRef.once('value');
-    const isLiked = likeSnapshot.val();
-    let likesUpdate = 0;
-    let action = '';
-
-    if (isLiked) {
-      await userLikeRef.remove();
-      likesUpdate = -1;
-      action = 'unliked';
-    } else {
-      await userLikeRef.set(admin.database.ServerValue.TIMESTAMP);
-      likesUpdate = 1;
-      action = 'liked';
-    }
-
-    let newLikesCount = 0;
-    await postRef.child('likes').transaction((currentCount) => {
-      newLikesCount = (currentCount || 0) + likesUpdate;
-      return newLikesCount < 0 ? 0 : newLikesCount;
-    });
-
-    // notification to post owner
-    try {
-      const postData = postSnapshot.val();
-      if (action === 'liked' && postData.userId && postData.userId !== userId) {
-        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
-        const fromProfile = fromProfileSnap.val() || {};
-        const notifRef = db.ref(`notifications/${postData.userId}`).push();
-        const notifData = {
-          id: notifRef.key,
-          type: 'family_post_like',
-          from_user_id: userId,
-          from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          familyId,
-          postId,
-          timestamp: admin.database.ServerValue.TIMESTAMP,
-          is_read: false
-        };
-        await notifRef.set(notifData);
-      }
-    } catch (nerr) {
-      console.error('Failed to create family_post_like notification:', nerr);
-    }
-
-    res.json({ ok: true, action: action, newLikes: newLikesCount });
-
-  } catch (error) {
-    console.error('Error liking family post', error);
-    res.status(500).json({ ok: false });
-  }
-});
-
-// Comment on family post
-app.post('/api/families/:familyId/posts/:postId/comment', requireAuth, requireFamilyMember, async (req, res) => {
-  const userId = req.session.userId;
-  const { familyId, postId } = req.params;
-  const { content } = req.body;
-
-  if (!postId || !content) return res.status(400).json({ ok: false, error: 'Missing postId or content' });
-
-  try {
-    const postRef = db.ref(`family_posts/${familyId}/${postId}`);
-    const postSnapshot = await postRef.once('value');
-    if (!postSnapshot.exists()) return res.status(404).json({ ok: false, error: 'Post not found' });
-
-    const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
-    const userData = userSnapshot.val() || {};
-
-    const newCommentRef = db.ref(`family_comments/${familyId}/${postId}`).push();
-    const commentId = newCommentRef.key;
-    const timestamp = admin.database.ServerValue.TIMESTAMP;
-
-    // Store a consistent normalized comment shape in DB
-    const commentData = {
-      commentId: commentId,
-      postId: postId,
-      userId: userId,
-      content: content.trim(),
-      timestamp: timestamp,
-      user: {
-        userId: userId,
-        username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-      },
-      likes: 0,
-      repliesCount: 0
-    };
-
-    await newCommentRef.set(commentData);
-
-    // increment commentsCount on post (transaction to be safe)
-    let newCommentsCount = 0;
-    await postRef.child('commentsCount').transaction((currentCount) => {
-      newCommentsCount = (currentCount || 0) + 1;
-      return newCommentsCount;
-    });
-
-    // create notification for post owner (if commenter !== owner)
-    try {
-      const postData = postSnapshot.val();
-      if (postData && postData.userId && postData.userId !== userId) {
-        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
-        const fromProfile = fromProfileSnap.val() || {};
-        const notifRef = db.ref(`notifications/${postData.userId}`).push();
-        const notifData = {
-          id: notifRef.key,
-          type: 'family_post_comment',
-          from_user_id: userId,
-          from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          familyId,
-          postId: postId,
-          commentId: commentId,
-          commentContent: commentData.content,
-          timestamp: admin.database.ServerValue.TIMESTAMP,
-          is_read: false
-        };
-        await notifRef.set(notifData);
-      }
-    } catch (nerr) {
-      console.error('Failed to create family_post_comment notification:', nerr);
-    }
-
-    // Read back the stored comment (so timestamp is resolved) and return normalized
-    const savedSnap = await db.ref(`family_comments/${familyId}/${postId}`).child(commentId).once('value');
-    const savedVal = savedSnap.val() || commentData;
-    const normalized = normalizeStoredComment(savedVal);
-
-    res.json({ ok: true, comment: normalized, newComments: newCommentsCount });
-
-  } catch (error) {
-    console.error('Error adding family comment:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إضافة التعليق.' });
-  }
-});
-
-// Get comments for family post
-app.get('/api/families/:familyId/posts/:postId/comments', requireAuth, requireFamilyMember, async (req, res) => {
-  const currentUserId = req.session.userId;
-  const { familyId, postId } = req.params;
-  try {
-    const commentsSnap = await db.ref(`family_comments/${familyId}/${postId}`)
-      .orderByChild('timestamp')
-      .once('value');
-
-    const comments = [];
-    commentsSnap.forEach(childSnap => {
-      const v = childSnap.val();
-      if (v) comments.push(v);
-    });
-
-    // Enrich each comment: likes count, whether current user liked, replies
-    const enriched = await Promise.all(comments.map(async (c) => {
-      const normalized = normalizeStoredComment(c);
-      // likes
-      let likesCount = 0;
-      try {
-        if (typeof c.likes === 'number') likesCount = c.likes;
-        else {
-          const likesSnap = await db.ref(`family_comment_likes/${familyId}/${postId}/${normalized.commentId}`).once('value');
-          likesCount = countSnapshotChildren(likesSnap);
-        }
-      } catch (e) {
-        likesCount = normalized.likes || 0;
-      }
-      // is liked by current user
-      let isLiked = false;
-      try {
-        const userLikeSnap = await db.ref(`family_comment_likes/${familyId}/${postId}/${normalized.commentId}/${currentUserId}`).once('value');
-        isLiked = userLikeSnap.exists();
-      } catch (e) {}
-
-      // repliesCount
-      let repliesCount = 0;
-      try {
-        if (typeof c.repliesCount === 'number') repliesCount = c.repliesCount;
-        else {
-          const repliesSnap = await db.ref(`family_comment_replies/${familyId}/${postId}/${normalized.commentId}`).once('value');
-          repliesCount = countSnapshotChildren(repliesSnap);
-        }
-      } catch (e) {
-        repliesCount = normalized.repliesCount || 0;
-      }
-
-      // recentReplies
-      let recentReplies = [];
-      try {
-        const repliesSnap = await db.ref(`family_comment_replies/${familyId}/${postId}/${normalized.commentId}`)
-          .orderByChild('timestamp')
-          .limitToLast(5)
-          .once('value');
-        repliesSnap.forEach(r => recentReplies.push(r.val()));
-      } catch (e) { recentReplies = []; }
-
-      return {
-        ...normalized,
-        likes: likesCount,
-        is_liked: isLiked,
-        repliesCount: repliesCount,
-        recentReplies: recentReplies
-      };
-    }));
-
-    res.json({ ok: true, comments: enriched });
-  } catch (error) {
-    console.error('Error fetching family comments:', error);
-    res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
-  }
-});
-
-// Toggle like on a family comment
-app.post('/api/families/:familyId/posts/:postId/comments/:commentId/like', requireAuth, requireFamilyMember, async (req, res) => {
-  const userId = req.session.userId;
-  const { familyId, postId, commentId } = req.params;
-  if (!familyId || !postId || !commentId) return res.status(400).json({ ok: false, error: 'Missing parameters' });
-
-  const likeRef = db.ref(`family_comment_likes/${familyId}/${postId}/${commentId}/${userId}`);
-  const commentRef = db.ref(`family_comments/${familyId}/${postId}/${commentId}`);
-
-  try {
-    const commentSnap = await commentRef.once('value');
-    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
-
-    const likeSnap = await likeRef.once('value');
-    let isLiked = likeSnap.exists();
-    let delta = 0;
-
-    if (isLiked) {
-      await likeRef.remove();
-      delta = -1;
-      isLiked = false;
-    } else {
-      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
-      delta = 1;
-      isLiked = true;
-    }
-
-    // Update likes count on comment atomically
-    let newLikesCount = 0;
-    await commentRef.child('likes').transaction((current) => {
-      newLikesCount = (current || 0) + delta;
-      return newLikesCount < 0 ? 0 : newLikesCount;
-    });
-
-    // notify comment owner when liked by another user
-    try {
-      const commentVal = commentSnap.val();
-      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
-      if (delta === 1 && commentOwnerId && commentOwnerId !== userId) {
-        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
-        const fromProfile = fromProfileSnap.val() || {};
-        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
-        const notifData = {
-          id: notifRef.key,
-          type: 'comment_like',
-          from_user_id: userId,
-          from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          familyId,
-          postId,
-          commentId,
-          timestamp: admin.database.ServerValue.TIMESTAMP,
-          is_read: false
-        };
-        await notifRef.set(notifData);
-      }
-    } catch (nerr) {
-      console.error('Failed to create family comment_like notification:', nerr);
-    }
-
-    res.json({ ok: true, is_liked: isLiked, likes: newLikesCount });
-
-  } catch (error) {
-    console.error('Error toggling family comment like:', error);
-    res.status(500).json({ ok: false, error: 'Failed to toggle comment like' });
-  }
-});
-
-// Reply to a family comment
-app.post('/api/families/:familyId/posts/:postId/comments/:commentId/reply', requireAuth, requireFamilyMember, async (req, res) => {
-  const userId = req.session.userId;
-  const { familyId, postId, commentId } = req.params;
-  const { content } = req.body;
-  if (!familyId || !postId || !commentId || !content) return res.status(400).json({ ok: false, error: 'Missing parameters' });
-
-  try {
-    const commentRef = db.ref(`family_comments/${familyId}/${postId}/${commentId}`);
-    const commentSnap = await commentRef.once('value');
-    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
-
-    const userSnap = await db.ref(`profiles/${userId}`).once('value');
-    const userData = userSnap.val() || {};
-
-    const replyRef = db.ref(`family_comment_replies/${familyId}/${postId}/${commentId}`).push();
-    const replyId = replyRef.key;
-    const timestamp = admin.database.ServerValue.TIMESTAMP;
-
-    const replyData = {
-      id: replyId,
-      familyId,
-      postId,
-      commentId,
-      userId,
-      username: userData.username || 'مستخدم',
-      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-      content: content.trim(),
-      timestamp: timestamp
-    };
-
-    await replyRef.set(replyData);
-
-    // increment repliesCount on comment
-    let newRepliesCount = 0;
-    await commentRef.child('repliesCount').transaction((current) => {
-      newRepliesCount = (current || 0) + 1;
-      return newRepliesCount;
-    });
-
-    // notify original commenter (if not replying to self)
-    try {
-      const commentVal = commentSnap.val();
-      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
-      if (commentOwnerId && commentOwnerId !== userId) {
-        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
-        const notifData = {
-          id: notifRef.key,
-          type: 'comment_reply',
-          from_user_id: userId,
-          from_username: userData.username || 'مستخدم',
-          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          familyId,
-          postId,
-          commentId,
-          replyId,
-          replyContent: replyData.content,
-          timestamp: admin.database.ServerValue.TIMESTAMP,
-          is_read: false
-        };
-        await notifRef.set(notifData);
-      }
-    } catch (nerr) {
-      console.error('Failed to create family comment_reply notification:', nerr);
-    }
-
-    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
-
-  } catch (error) {
-    console.error('Error creating reply:', error);
-    res.status(500).json({ ok: false, error: 'Failed to create reply' });
   }
 });
 
@@ -2573,6 +2139,7 @@ app.post('/api/reels/:reelId/comments/:commentId/like', requireAuth, async (req,
   }
 });
 
+// New endpoint: reply to a reel comment
 app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { reelId, commentId } = req.params;
@@ -2641,6 +2208,24 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
   } catch (error) {
     console.error('Error creating reply for reel comment:', error);
     res.status(500).json({ ok: false, error: 'Failed to create reply' });
+  }
+});
+
+// New endpoint: get replies for a reel comment
+app.get('/api/reels/:reelId/comments/:commentId/replies', requireAuth, async (req, res) => {
+  const { reelId, commentId } = req.params;
+  try {
+    const snap = await db.ref(`reels_comment_replies/${reelId}/${commentId}`)
+      .orderByChild('timestamp')
+      .once('value');
+    const replies = [];
+    snap.forEach(child => {
+      replies.push(child.val());
+    });
+    res.json({ ok: true, replies: replies });
+  } catch (error) {
+    console.error('Error fetching replies for reel comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
   }
 });
 
@@ -2909,7 +2494,7 @@ setInterval(async () => {
     console.error('Error in offline check interval:', error);
   }
 }, 60000); // Check every minute
-// --- GET family key (فقط للمنشئ أو المنظم) ---
+// --- GET family key (فقط للمنشئ) ---
 app.get('/api/families/:familyId/key', requireAuth, async (req, res) => {
   const { familyId } = req.params;
   const userId = req.session.userId;
@@ -2920,14 +2505,11 @@ app.get('/api/families/:familyId/key', requireAuth, async (req, res) => {
     if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
     const f = snap.val();
 
-    // Allow access to creator OR any organizer (roles owner/admin/organizer/manager)
-    const allowed = (f.creatorId && f.creatorId === userId) || await isFamilyOrganizer(familyId, userId);
-
-    if (!allowed) {
+    if (!f.creatorId || f.creatorId !== userId) {
       return res.status(403).json({ ok: false, error: 'Forbidden' });
     }
 
-    // Return the plain key only to creator/organizer (make sure you stored it on creation as keyPlain)
+    // Return the plain key only to creator (make sure you stored it on creation as keyPlain)
     const key = f.keyPlain || null;
     if (!key) return res.status(404).json({ ok: false, error: 'Key not found' });
 
