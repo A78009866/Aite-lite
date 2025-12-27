@@ -11,6 +11,7 @@ const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
@@ -38,6 +39,8 @@ const storage = new CloudinaryStorage({
       folderName = 'profile_pics';
     } else if (file.fieldname === 'cover_photo') {
       folderName = 'cover_photos';
+    } else if (file.fieldname === 'family_image') {
+      folderName = 'families';
     } else if (url.includes('/messages/send')) {
       folderName = 'chat_media';
     } else if (url.includes('/api/posts/create')) {
@@ -182,6 +185,17 @@ app.get('/admin', requireAuth, requireAdmin, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'admin.html'));
 });
 
+// ---------------- Family Pages (جديد) ----------------
+// صفحة إنشاء العائلة (frontend file ستوفره لاحقاً)
+app.get('/create-family', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'create_family.html'));
+});
+
+// صفحة عرض العائلة (frontend file ستوفره لاحقاً)
+app.get('/family/:familyId', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'family.html'));
+});
+
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
@@ -298,6 +312,42 @@ async function areFriends(userA, userB) {
   return snap.exists();
 }
 
+// ---------------- Helper: Family Utilities (جديد) ----------------
+function generateFamilyKey() {
+  // shorter key for ease of typing in UI, but you may increase length
+  return crypto.randomBytes(4).toString('hex'); // 8 hex chars
+}
+
+function hashFamilyKey(plainKey) {
+  const salt = process.env.FAMILY_KEY_SALT || process.env.SESSION_SECRET || 'fam-salt-default';
+  return crypto.createHmac('sha256', salt).update(String(plainKey)).digest('hex');
+}
+
+async function isFamilyMember(familyId, userId) {
+  if (!familyId || !userId) return false;
+  try {
+    const snap = await db.ref(`families/${familyId}/members/${userId}`).once('value');
+    return snap.exists();
+  } catch (e) {
+    return false;
+  }
+}
+
+// middleware: ensure user is member of the family
+async function requireFamilyMember(req, res, next) {
+  const userId = req.session.userId;
+  const familyId = req.params.familyId || req.body.familyId;
+  if (!familyId) return res.status(400).json({ ok: false, error: 'familyId required' });
+  try {
+    const member = await isFamilyMember(familyId, userId);
+    if (!member) return res.status(403).json({ ok: false, error: 'You are not a member of this family' });
+    next();
+  } catch (e) {
+    console.error('requireFamilyMember error', e);
+    res.status(500).json({ ok: false });
+  }
+}
+
 // ---------------- Helper: Normalize stored comments ----------------
 function normalizeStoredComment(val) {
   // val: raw object from DB
@@ -389,6 +439,289 @@ app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (re
   } catch (error) {
     console.error('Error updating verification:', error);
     res.status(500).json({ ok: false, error: 'فشل في تحديث حالة التحقق.' });
+  }
+});
+
+// ---------------- API: Family Endpoints (جديد) ----------------
+
+// Create a family (multipart: family_image)
+app.post('/api/families/create', requireAuth, upload.single('family_image'), async (req, res) => {
+  const userId = req.session.userId;
+  const { name } = req.body;
+  if (!name || name.trim().length === 0) return res.status(400).json({ ok: false, error: 'Family name required' });
+
+  try {
+    const newRef = db.ref('families').push();
+    const familyId = newRef.key;
+    const createdAt = admin.database.ServerValue.TIMESTAMP;
+
+    // generate key and store hashed version
+    const plainKey = generateFamilyKey();
+    const keyHash = hashFamilyKey(plainKey);
+
+    const imageUrl = (req.file && req.file.path) ? req.file.path : '';
+
+    const familyData = {
+      familyId,
+      name: name.trim(),
+      imageUrl,
+      creatorId: userId,
+      keyHash,
+      createdAt,
+      membersCount: 1
+    };
+
+    // members map
+    const members = {};
+    members[userId] = { role: 'owner', joinedAt: createdAt };
+
+    await newRef.set({ ...familyData, members });
+
+    // add membership index for quick lookup
+    await db.ref(`memberships/${userId}/${familyId}`).set(true);
+
+    res.json({ ok: true, familyId, key: plainKey, family: { familyId, name: familyData.name, imageUrl: familyData.imageUrl } });
+  } catch (error) {
+    console.error('Error creating family:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create family' });
+  }
+});
+
+// Get families where current user is a member (to show next to "create family" card)
+app.get('/api/families/my', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    const familiesSnap = await db.ref('families').once('value');
+    const familiesObj = familiesSnap.val() || {};
+    const myFamilies = [];
+
+    Object.keys(familiesObj).forEach(fid => {
+      const f = familiesObj[fid];
+      if (f && f.members && f.members[userId]) {
+        myFamilies.push({
+          familyId: fid,
+          name: f.name,
+          imageUrl: f.imageUrl || '',
+          membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+          creatorId: f.creatorId
+        });
+      }
+    });
+
+    res.json({ ok: true, families: myFamilies });
+  } catch (error) {
+    console.error('Error fetching my families:', error);
+    res.status(500).json({ ok: false, error: 'Failed to fetch families' });
+  }
+});
+
+// Join a family (provide key) - if key ok, add member
+app.post('/api/families/:familyId/join', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId } = req.params;
+  const { key } = req.body;
+
+  if (!familyId || !key) return res.status(400).json({ ok: false, error: 'familyId and key required' });
+
+  try {
+    const familyRef = db.ref(`families/${familyId}`);
+    const snap = await familyRef.once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
+
+    const family = snap.val();
+    const storedHash = family.keyHash || '';
+
+    if (hashFamilyKey(key) !== storedHash) {
+      return res.status(403).json({ ok: false, error: 'Invalid family key' });
+    }
+
+    // add member
+    const ts = admin.database.ServerValue.TIMESTAMP;
+    await familyRef.child(`members/${userId}`).set({ role: 'member', joinedAt: ts });
+    // increment membersCount
+    await familyRef.child('membersCount').transaction(c => (c || 0) + 1);
+
+    // add membership index
+    await db.ref(`memberships/${userId}/${familyId}`).set(true);
+
+    res.json({ ok: true, message: 'Joined family' });
+  } catch (error) {
+    console.error('Error joining family:', error);
+    res.status(500).json({ ok: false, error: 'Failed to join family' });
+  }
+});
+
+// Get family info (public view). If user is member, include member info.
+app.get('/api/families/:familyId/info', requireAuth, async (req, res) => {
+  const { familyId } = req.params;
+  const userId = req.session.userId;
+  if (!familyId) return res.status(400).json({ ok: false });
+
+  try {
+    const snap = await db.ref(`families/${familyId}`).once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
+
+    const f = snap.val();
+    const isMember = !!(f.members && f.members[userId]);
+
+    // Note: never return keyHash or plain key
+    const result = {
+      familyId,
+      name: f.name,
+      imageUrl: f.imageUrl || '',
+      creatorId: f.creatorId || '',
+      membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+      is_member: isMember
+    };
+
+    res.json({ ok: true, family: result });
+  } catch (error) {
+    console.error('Error getting family info:', error);
+    res.status(500).json({ ok: false, error: 'Failed to fetch family info' });
+  }
+});
+
+// ---------------- API: Family Posts ----------------
+
+// Create a post inside a family (only members)
+app.post('/api/families/:familyId/posts/create', requireAuth, requireFamilyMember, upload.single('media'), async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId } = req.params;
+  const content = req.body.content ? req.body.content.trim() : '';
+  let mediaUrl = null;
+  let mediaType = null;
+
+  if (content.length === 0 && !req.file) {
+    return res.status(400).json({ ok: false, error: 'المحتوى مطلوب.' });
+  }
+
+  if (req.file) {
+    mediaUrl = req.file.path;
+    const mimeType = req.file.mimetype || '';
+    if (mimeType.startsWith('image/')) mediaType = 'image';
+    else if (mimeType.startsWith('video/')) mediaType = 'video';
+    else if (mimeType.startsWith('audio/')) mediaType = 'audio';
+    else mediaType = 'raw';
+  }
+
+  try {
+    const newPostRef = db.ref(`family_posts/${familyId}`).push();
+    const postId = newPostRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const postData = {
+      postId: postId,
+      familyId: familyId,
+      userId: userId,
+      content: content,
+      timestamp: timestamp,
+      likes: 0,
+      commentsCount: 0,
+      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null
+    };
+
+    await newPostRef.set(postData);
+
+    // increment family posts count (optional)
+    await db.ref(`families/${familyId}/postsCount`).transaction(c => (c || 0) + 1);
+
+    res.json({ ok: true, message: 'تم النشر داخل العائلة', postId: postId });
+  } catch (error) {
+    console.error('Error creating family post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء المنشور.' });
+  }
+});
+
+// Get family posts (only members)
+app.get('/api/families/:familyId/posts', requireAuth, requireFamilyMember, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const { familyId } = req.params;
+  try {
+    const postsSnap = await db.ref(`family_posts/${familyId}`)
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
+
+    let posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
+    posts.reverse();
+
+    // fetch users' profiles for the posts
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL;
+
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+      profiles[userIds[index]] = snap.val();
+    });
+
+    const likedStatuses = {};
+    const likePromises = posts.map(post => db.ref(`family_likes/${familyId}/${post.postId}/${currentUserId}`).once('value'));
+    const likeSnapshots = await Promise.all(likePromises);
+
+    likeSnapshots.forEach((snap, index) => {
+      likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      commentsCount: post.commentsCount || 0,
+      is_liked: likedStatuses[post.postId] || false,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl,
+        is_online: !!profiles[post.userId]?.is_online,
+        is_verified: !!profiles[post.userId]?.is_verified
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching family posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب منشورات العائلة.' });
+  }
+});
+
+// Delete family post (only author or family owner)
+app.delete('/api/families/:familyId/posts/:postId', requireAuth, requireFamilyMember, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId, postId } = req.params;
+
+  const postRef = db.ref(`family_posts/${familyId}/${postId}`);
+  const familyRef = db.ref(`families/${familyId}`);
+
+  try {
+    const postSnapshot = await postRef.once('value');
+    const postData = postSnapshot.val();
+
+    if (!postData) return res.status(404).json({ ok: false });
+
+    // check if user is author or family owner
+    const familySnap = await familyRef.once('value');
+    const familyData = familySnap.val() || {};
+
+    const isOwner = familyData.creatorId === userId;
+    const isAuthor = postData.userId === userId;
+
+    if (!isOwner && !isAuthor) return res.status(403).json({ ok: false });
+
+    await postRef.remove();
+    await db.ref(`families/${familyId}/postsCount`).transaction((c) => (c || 0) > 0 ? c - 1 : 0);
+
+    // also remove comments/likes related to family post
+    await db.ref(`family_comments/${familyId}/${postId}`).remove().catch(()=>{});
+    await db.ref(`family_likes/${familyId}/${postId}`).remove().catch(()=>{});
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error deleting family post', error);
+    res.status(500).json({ ok: false });
   }
 });
 
