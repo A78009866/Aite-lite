@@ -1832,6 +1832,64 @@ app.get('/api/posts', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- NEW: Get posts by user (required by profile page) ----------------
+app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
+  const requestedUserId = req.params.userId;
+  const currentUserId = req.session.userId;
+
+  if (!requestedUserId) return res.status(400).json({ ok: false, error: 'userId required' });
+
+  try {
+    const postsSnap = await db.ref('posts')
+      .orderByChild('userId')
+      .equalTo(requestedUserId)
+      .limitToLast(50)
+      .once('value');
+
+    const posts = [];
+    postsSnap.forEach(child => {
+      posts.push(child.val());
+    });
+    posts.reverse();
+
+    // fetch profile(s) for these posts' authors (mainly one)
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    if (userIds.length > 0) {
+      const profilePromises = userIds.map(id => db.ref(`profiles/${id}`).once('value'));
+      const profileSnapshots = await Promise.all(profilePromises);
+      profileSnapshots.forEach((snap, idx) => {
+        profiles[userIds[idx]] = snap.val() || {};
+      });
+    }
+
+    // determine liked status by current user for each post
+    const likedStatuses = {};
+    const likePromises = posts.map(post => db.ref(`likes/${post.postId}/${currentUserId}`).once('value'));
+    const likeSnapshots = await Promise.all(likePromises);
+    likeSnapshots.forEach((snap, idx) => {
+      likedStatuses[posts[idx].postId] = snap.val() !== null;
+    });
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      commentsCount: post.commentsCount || 0,
+      is_liked: likedStatuses[post.postId] || false,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_online: !!profiles[post.userId]?.is_online,
+        is_verified: !!profiles[post.userId]?.is_verified
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+  } catch (error) {
+    console.error('Error fetching user posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب منشورات المستخدم.' });
+  }
+});
+
 // Like/unlike post
 app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   const userId = req.session.userId;
@@ -2182,14 +2240,6 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
           .limitToLast(5)
           .once('value');
         repliesSnap.forEach(r => recentReplies.push(r.val()));
-        recentReplies = recentReplies.map(r => ({
-          id: r.id,
-          userId: r.userId,
-          username: r.username,
-          profile_picture_url: r.profile_picture_url,
-          content: r.content,
-          timestamp: r.timestamp
-        }));
       } catch (e) {
         recentReplies = [];
       }
