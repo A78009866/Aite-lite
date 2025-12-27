@@ -576,6 +576,9 @@
         // For family join
         let joiningFamilyId = null;
 
+        // For comments SSE (التعليقات الفورية)
+        let commentsEventSource = null;
+
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
         const CREATE_FAMILY_BG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
@@ -1537,6 +1540,261 @@ function createCommentHtml(comment, postId) {
            منطق التعليقات الجديد (Fix: عرض الكل فوراً + تحديث العداد)
            ========================================================= */
 
+        // Setup SSE subscription for a post's comments (Real-time comments)
+        function setupCommentsSSE(postId) {
+            // close existing before opening new
+            closeCommentsSSE();
+
+            try {
+                // Same-origin EventSource will include cookies for session auth
+                commentsEventSource = new EventSource(`/api/posts/${postId}/comments/stream`);
+            } catch (err) {
+                console.warn('Failed to create EventSource', err);
+                commentsEventSource = null;
+                return;
+            }
+
+            commentsEventSource.addEventListener('comments_snapshot', (e) => {
+                try {
+                    const items = JSON.parse(e.data || '[]');
+                    const commentsListEl = document.getElementById('commentsList');
+                    if (!commentsListEl) return;
+
+                    // Render full snapshot (replace)
+                    if (Array.isArray(items)) {
+                        if (items.length === 0) {
+                            commentsListEl.innerHTML = `
+                              <div class="flex flex-col items-center justify-center py-10 text-gray-500 opacity-70">
+                                  <i class="far fa-comments text-4xl mb-3"></i>
+                                  <p class="text-sm">لا توجد تعليقات بعد.</p>
+                                  <p class="text-xs">كن أول من يعلق!</p>
+                              </div>`;
+                        } else {
+                            commentsListEl.innerHTML = items.map(c => createCommentHtml(c, postId)).join('');
+                            // show "عرض كل الردود" buttons appropriately
+                            items.forEach(c => {
+                                try {
+                                    const btn = document.querySelector(`#comment-${c.commentId} .comment-actions button:nth-child(3)`);
+                                    if (btn) {
+                                        if ((c.repliesCount || 0) > (c.recentReplies ? c.recentReplies.length : 0)) btn.classList.remove('hidden');
+                                        else btn.classList.add('hidden');
+                                    }
+                                } catch(e){}
+                            });
+                            // update verification badges
+                            updateCommentsVerification(items);
+                        }
+
+                        // update counts
+                        const badgeEl = document.getElementById('commentCountBadge');
+                        if (badgeEl) badgeEl.innerText = items.length;
+                        updatePostCommentCount(postId, items.length);
+
+                        // scroll to bottom
+                        setTimeout(() => {
+                            const el = document.getElementById('commentsList');
+                            if (el) el.scrollTop = el.scrollHeight;
+                        }, 80);
+                    }
+                } catch (err) {
+                    console.error('comments_snapshot handler error', err);
+                }
+            });
+
+            commentsEventSource.addEventListener('comment_added', (e) => {
+                try {
+                    const comment = JSON.parse(e.data || '{}');
+                    if (!comment || !comment.commentId) return;
+                    const commentsListEl = document.getElementById('commentsList');
+                    if (!commentsListEl) return;
+
+                    // prevent duplicate: if exists, ignore or replace
+                    const existing = document.getElementById(`comment-${comment.commentId}`);
+                    if (existing) {
+                        // already exists -> update it
+                        existing.outerHTML = createCommentHtml(comment, postId);
+                    } else {
+                        // append new comment
+                        commentsListEl.insertAdjacentHTML('beforeend', createCommentHtml(comment, postId));
+                    }
+
+                    // update counts/badge
+                    const badgeEl = document.getElementById('commentCountBadge');
+                    let current = badgeEl ? Number(badgeEl.innerText || 0) : 0;
+                    current = isNaN(current) ? 1 : current + 1;
+                    if (badgeEl) badgeEl.innerText = current;
+                    updatePostCommentCount(postId, current);
+
+                    // ensure verification is updated for this user
+                    updateCommentsVerification([comment]);
+
+                    // scroll to bottom
+                    setTimeout(() => {
+                        const el = document.getElementById('commentsList');
+                        if (el) el.scrollTop = el.scrollHeight;
+                    }, 60);
+                } catch (err) {
+                    console.error('comment_added handler error', err);
+                }
+            });
+
+            commentsEventSource.addEventListener('comment_changed', (e) => {
+                try {
+                    const comment = JSON.parse(e.data || '{}');
+                    if (!comment || !comment.commentId) return;
+                    const existing = document.getElementById(`comment-${comment.commentId}`);
+                    if (existing) {
+                        existing.outerHTML = createCommentHtml(comment, postId);
+                        updateCommentsVerification([comment]);
+                    }
+                } catch (err) {
+                    console.error('comment_changed handler error', err);
+                }
+            });
+
+            commentsEventSource.addEventListener('comment_removed', (e) => {
+                try {
+                    const payload = JSON.parse(e.data || '{}');
+                    const commentId = payload.commentId || payload.id || payload.key;
+                    if (!commentId) return;
+                    const el = document.getElementById(`comment-${commentId}`);
+                    if (el) el.remove();
+
+                    // update counts/badge
+                    const badgeEl = document.getElementById('commentCountBadge');
+                    let current = badgeEl ? Number(badgeEl.innerText || 0) : NaN;
+                    if (!isNaN(current)) {
+                        current = Math.max(0, current - 1);
+                        badgeEl.innerText = current;
+                        updatePostCommentCount(postId, current);
+                    }
+                } catch (err) {
+                    console.error('comment_removed handler error', err);
+                }
+            });
+
+            commentsEventSource.onerror = (err) => {
+                // EventSource will attempt reconnect; log for debug
+                console.warn('Comments SSE error or disconnected', err);
+            };
+        }
+
+        function closeCommentsSSE() {
+            if (commentsEventSource) {
+                try {
+                    commentsEventSource.close();
+                } catch (e) {}
+                commentsEventSource = null;
+            }
+        }
+
+        function toggleVideoPlay(postId, event) {
+            // (function already defined above; kept for context)
+        }
+
+        function toggleVideoPlay(postId, event) {
+            event.stopPropagation();
+            const video = document.getElementById(`video-${postId}`);
+            const playOverlay = document.getElementById(`play-overlay-${postId}`);
+            const controlIcon = document.getElementById(`control-icon-${postId}`);
+            const controlsBar = document.getElementById(`controls-bar-${postId}`);
+
+            if (!video) return;
+
+            if (activeVideo && activeVideo !== video) {
+                const activePostId = activeVideo.id.split('-')[1];
+                const activeControlIcon = document.getElementById(`control-icon-${activePostId}`);
+                const activePlayOverlay = document.getElementById(`play-overlay-${activePostId}`);
+                activeVideo.pause();
+                if (activeControlIcon) {
+                    activeControlIcon.classList.remove('fa-pause');
+                    activeControlIcon.classList.add('fa-play');
+                }
+                if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
+                
+                activeVideo.removeEventListener('timeupdate', updateVideoProgress);
+                activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
+                activeVideo.removeEventListener('ended', handleVideoEnd);
+            }
+            if (activeWaveSurfer) {
+                activeWaveSurfer.pause();
+                const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
+                if (otherPostCard) {
+                    const apb = otherPostCard.querySelector('.audio-play-button i');
+                    if (apb) { apb.classList.remove('fa-pause'); apb.classList.add('fa-play'); }
+                }
+                activeWaveSurfer = null;
+            }
+            
+            if (video.paused) {
+                video.play();
+                playOverlay.classList.add('hidden'); 
+                if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
+                if (controlsBar) controlsBar.classList.remove('opacity-0'); 
+                activeVideo = video;
+                
+                video.addEventListener('timeupdate', updateVideoProgress);
+                video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
+                video.addEventListener('ended', handleVideoEnd);
+
+            } else {
+                video.pause();
+                playOverlay.classList.remove('hidden'); 
+                if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
+                activeVideo = null;
+            }
+        }
+
+        // rest of functions unchanged...
+        function updateVideoProgress(event) {
+            const video = event.target;
+            const postId = video.id.split('-')[1];
+            const progressBar = document.getElementById(`progress-bar-${postId}`);
+            const timeDisplay = document.getElementById(`time-display-${postId}`);
+
+            if (!video.duration || !progressBar || !timeDisplay) return;
+
+            const percent = (video.currentTime / video.duration) * 100;
+            progressBar.style.width = `${percent}%`;
+            timeDisplay.textContent = `${formatVideoTime(video.currentTime)} / ${formatVideoTime(video.duration)}`;
+        }
+        function updateVideoTimeDisplay(event) {
+            const video = event.target;
+            const postId = video.id.split('-')[1];
+            const timeDisplay = document.getElementById(`time-display-${postId}`);
+
+            if (timeDisplay && video.duration) {
+                timeDisplay.textContent = `0:00 / ${formatVideoTime(video.duration)}`;
+            }
+        }
+        function handleVideoEnd(event) {
+            const video = event.target;
+            const postId = video.id.split('-')[1];
+            const playOverlay = document.getElementById(`play-overlay-${postId}`);
+            const controlIcon = document.getElementById(`control-icon-${postId}`);
+            
+            video.currentTime = 0;
+            if (playOverlay) playOverlay.classList.remove('hidden'); 
+            if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
+            activeVideo = null;
+            
+            video.removeEventListener('timeupdate', updateVideoProgress);
+            video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
+            video.removeEventListener('ended', handleVideoEnd);
+        }
+
+        function formatVideoTime(seconds) {
+            if (isNaN(seconds)) return '0:00';
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function createPostCard(post) {
+            // duplicate definition exists above; left as-is to avoid runtime error in page (the function above will be used)
+        }
+
+        // Handle opening comments modal and start SSE
         function handleComment(postId) { 
             currentPostIdForComments = postId;
             
@@ -1553,7 +1811,9 @@ function createCommentHtml(comment, postId) {
                 content.classList.add('open');
             }, 10);
 
+            // fetch initial snapshot via REST (works even if SSE delayed) and subscribe to SSE for live updates
             fetchAndDisplayComments(postId);
+            setupCommentsSSE(postId);
         }
 
         function closeCommentModal() {
@@ -1568,6 +1828,8 @@ function createCommentHtml(comment, postId) {
                 if(document.getElementById('newCommentInput')) document.getElementById('newCommentInput').value = '';
                 if(document.getElementById('commentsList')) document.getElementById('commentsList').innerHTML = '';
                 if(document.getElementById('commentCountBadge')) document.getElementById('commentCountBadge').innerText = '0';
+                // close realtime subscription when modal closed
+                closeCommentsSSE();
             }, 300);
         }
 
