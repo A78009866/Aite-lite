@@ -1347,59 +1347,77 @@ function createCommentHtml(comment, postId) {
             `;
         }
 
-        // الرابط الموحد للصورة الافتراضية
+       // الرابط الموحد للصورة الافتراضية
 const DEFAULT_FAM_IMG = "https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop";
 
+function renderFamilyCard(f) {
+    // التحقق: إذا كانت الصورة مفقودة أو تحتوي على رابط Placeholder قديم، استخدم الصورة الموحدة
+    const imgUrl = (f.imageUrl && f.imageUrl.length > 0 && !f.imageUrl.includes('placeholder')) 
+                   ? f.imageUrl 
+                   : DEFAULT_FAM_IMG;
+    
+    const members = f.membersCount || 0;
+    const isMember = !!f.is_member;
+    
+    // شارات الحالة (عضو أو مقفل)
+    const badge = isMember 
+        ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` 
+        : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
 
-        function renderFamilyCard(f) {
-            const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : 'https://via.placeholder.com/160x100?text=Family';
-            const members = f.membersCount || 0;
-            const isMember = !!f.is_member;
-            const badge = isMember ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
-            return `
-                <div class="family-card" data-family-id="${escapeAttr(f.familyId)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId)}', ${isMember})">
-                    <img src="${escapeHtml(img)}" alt="${escapeHtml(f.name)}">
-                    <div class="meta">
-                        <div class="name">${escapeHtml(f.name)} ${isMember ? '' : ''}</div>
-                        <div class="count">${members} عضو • ${badge}</div>
-                    </div>
-                </div>
-            `;
-        }
+    return `
+        <div class="family-card" data-family-id="${escapeAttr(f.familyId || f.id)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId || f.id)}', ${isMember})">
+            <img src="${escapeHtml(imgUrl)}" 
+                 alt="${escapeHtml(f.name)}" 
+                 onerror="this.onerror=null;this.src='${DEFAULT_FAM_IMG}';">
+            <div class="meta">
+                <div class="name">${escapeHtml(f.name)}</div>
+                <div class="count">${members} عضو • ${badge}</div>
+            </div>
+        </div>
+    `;
+}
 
-        async function fetchAndDisplayFamilies() {
-            if (!familiesRow) return;
-            familiesRow.innerHTML = '<div class="text-gray-400">جاري التحميل...</div>';
+async function fetchAndDisplayFamilies() {
+    if (!familiesRow) return;
+    
+    // حالة التحميل
+    familiesRow.innerHTML = '<div class="text-gray-400 p-4">جاري تحميل العائلات...</div>';
+    
+    try {
+        // دائماً اظهر بطاقة "إنشاء عائلة" في البداية
+        const createHtml = renderCreateFamilyCard();
+        let html = createHtml;
+
+        // محاولة جلب كل العائلات
+        const res = await fetch('/api/families', { credentials: 'same-origin' });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+            const families = data.families || [];
+            const famHtml = families.map(f => renderFamilyCard(f)).join('');
+            html += famHtml;
+        } else {
+            // حالة احتياطية (Fallback): جلب عائلاتي فقط في حال فشل المسار العام
             try {
-                // Always show create card first
-                const createHtml = renderCreateFamilyCard();
-                let html = createHtml;
-
-                const res = await fetch('/api/families', { credentials: 'same-origin' });
-                const data = await res.json();
-                if (res.ok && data.ok) {
-                    const families = data.families || [];
-                    const famHtml = families.map(f => {
-                        return renderFamilyCard(f);
-                    }).join('');
-                    html += famHtml;
-                } else {
-                    // fallback: try my families endpoint
-                    try {
-                      const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
-                      const d2 = await res2.json();
-                      if (res2.ok && d2.ok) {
-                        const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
-                        html += famHtml2;
-                      }
-                    } catch(e){}
+                const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
+                const d2 = await res2.json();
+                if (res2.ok && d2.ok) {
+                    const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
+                    html += famHtml2;
                 }
-                familiesRow.innerHTML = html;
             } catch (e) {
-                console.error('Failed to load families', e);
-                familiesRow.innerHTML = renderCreateFamilyCard();
+                console.error('Fallback fetch failed', e);
             }
         }
+        
+        familiesRow.innerHTML = html;
+
+    } catch (e) {
+        console.error('Failed to load families', e);
+        // في حال الخطأ الكلي، اظهر بطاقة الإنشاء فقط
+        familiesRow.innerHTML = renderCreateFamilyCard();
+    }
+}
 
         function onCreateFamilyClick() {
             // simply navigate to create-family page (server view)
