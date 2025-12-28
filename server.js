@@ -201,7 +201,16 @@ app.get('/family/:familyId', requireAuth, (req, res) => {
 app.get('/search', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'search.html'));
 });
+// إضافة ضمن قسم "Routes: Pages" (ضعه بجانب باقي app.get للـ views)
+app.get('/post.html', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'post.html'));
+});
 
+// دعم المسار القصير /post مع تمرير الاستعلامات (مثلاً /post?id=XYZ)
+app.get('/post', requireAuth, (req, res) => {
+  const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(`/post.html${qs}`);
+});
 // API: بحث بسيط يجمع من posts, reels, profiles (فلترة بسيطة على الخادم)
 app.get('/api/search', requireAuth, async (req, res) => {
   try {
