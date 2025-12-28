@@ -1567,6 +1567,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'فشل في جلب قائمة الأصدقاء.' });
   }
 });
+// // ابحث عن هذا الجزء في server.js واستبدله بالكامل
 // ---------------------------------------------------
 // API: لجلب معلومات المستخدم (الصورة والاسم) عند تسجيل الدخول
 // ---------------------------------------------------
@@ -1575,17 +1576,19 @@ app.get('/api/get-public-info', async (req, res) => {
         const username = req.query.username;
         if (!username) return res.json({ found: false });
 
-        const usersRef = db.ref('users');
-        // البحث عن المستخدم بواسطة اسم المستخدم
-        const snapshot = await usersRef.orderByChild('username').equalTo(username).once('value');
+        // تصحيح: البحث في profiles وليس users
+        const profilesRef = db.ref('profiles');
+        
+        const snapshot = await profilesRef.orderByChild('username').equalTo(username).once('value');
 
         if (snapshot.exists()) {
-            // نأخذ أول نتيجة (لأن اسم المستخدم فريد)
-            const userData = Object.values(snapshot.val())[0];
+            // نأخذ أول نتيجة
+            const profileData = Object.values(snapshot.val())[0];
             return res.json({
                 found: true,
-                full_name: userData.full_name || username,
-                profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+                full_name: profileData.full_name || username,
+                // تأكد من وجود رابط للصورة أو استخدام الافتراضية
+                profile_picture_url: profileData.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png'
             });
         }
         res.json({ found: false });
@@ -1594,6 +1597,7 @@ app.get('/api/get-public-info', async (req, res) => {
         res.json({ found: false });
     }
 });
+
 
 // /api/users/all -> all users with is_friend/request flags
 app.get('/api/users/all', requireAuth, async (req, res) => {
