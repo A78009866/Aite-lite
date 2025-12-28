@@ -1567,6 +1567,33 @@ app.get('/api/users', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'فشل في جلب قائمة الأصدقاء.' });
   }
 });
+// ---------------------------------------------------
+// API: لجلب معلومات المستخدم (الصورة والاسم) عند تسجيل الدخول
+// ---------------------------------------------------
+app.get('/api/get-public-info', async (req, res) => {
+    try {
+        const username = req.query.username;
+        if (!username) return res.json({ found: false });
+
+        const usersRef = db.ref('users');
+        // البحث عن المستخدم بواسطة اسم المستخدم
+        const snapshot = await usersRef.orderByChild('username').equalTo(username).once('value');
+
+        if (snapshot.exists()) {
+            // نأخذ أول نتيجة (لأن اسم المستخدم فريد)
+            const userData = Object.values(snapshot.val())[0];
+            return res.json({
+                found: true,
+                full_name: userData.full_name || username,
+                profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+            });
+        }
+        res.json({ found: false });
+    } catch (error) {
+        console.error('Error fetching user info:', error);
+        res.json({ found: false });
+    }
+});
 
 // /api/users/all -> all users with is_friend/request flags
 app.get('/api/users/all', requireAuth, async (req, res) => {
