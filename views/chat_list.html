@@ -239,20 +239,25 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* Changed waveform-post to black/glassy */
+        /* Make waveform black and progress bright white (match create_post preview) */
         .waveform-post {
             height: 60px; 
-            background: rgba(255,255,255,0.02); /* subtle glass */
+            background: #000; /* fully black background */
             border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.06);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.03);
+            overflow: hidden;
         }
 
-        /* Ensure audio play button doesn't turn blue on hover */
-        .audio-play-button:hover {
-            color: #e5e7eb !important; /* muted light color */
+        /* Ensure audio play button doesn't turn blue on hover, keep it white-ish */
+        .audio-play-button, .audio-play-button i {
+            color: #e5e7eb !important;
+        }
+        .audio-play-button:hover, .audio-play-button:focus {
+            color: #ffffff !important;
+        }
+
+        .waveform-post .wavesurfer {
+            background: transparent;
         }
 
         .custom-scrollbar::-webkit-scrollbar {
@@ -850,22 +855,31 @@
             }
         });
 
+        // Initialize WaveSurfer for post audio with black background & white progress
         function initializePostWaveSurfer(postId, url) {
             const container = document.getElementById(`waveform-${postId}`);
             if (!container) return;
 
+            // Destroy previous WaveSurfer instance attached to this container (safety)
+            if (container._wsInstance && typeof container._wsInstance.destroy === 'function') {
+                try { container._wsInstance.destroy(); } catch(e){}
+            }
+
             const ws = WaveSurfer.create({
                 container: container,
-                waveColor: 'rgba(255,255,255,0.06)',
-                progressColor: 'rgba(255,255,255,0.22)',
-                cursorColor: 'rgba(255,255,255,0.12)',
+                waveColor: '#0a0a0a',      // very dark wave color (nearly black)
+                progressColor: '#ffffff',  // bright white progress
+                cursorColor: 'transparent',
                 barWidth: 3,
                 barRadius: 3,
                 barGap: 1,
                 height: 60,
                 responsive: true,
-                mediaControls: false,
+                backend: 'MediaElement'
             });
+
+            // keep reference for safety / cleanup
+            container._wsInstance = ws;
 
             ws.load(url);
 
