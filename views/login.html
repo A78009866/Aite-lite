@@ -40,6 +40,10 @@
             box-shadow: 0 4px 15px rgba(57, 130, 247, 0.4);
             transition: all 0.3s ease;
         }
+        .glow-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body class="flex flex-col justify-center items-center p-5">
@@ -57,14 +61,12 @@
         <form id="loginForm" method="post" action="/login">
             <div class="mb-6">
                 <label class="block mb-2 text-sm font-medium text-gray-300">اسم المستخدم</label>
-                <input type="text" name="username" id="id_username" class="glass-input w-full p-4 rounded-xl" required placeholder="username">
+                <input type="text" name="username" id="id_username" class="glass-input w-full p-4 rounded-xl text-left" dir="ltr" required placeholder="username">
             </div>
 
             <div class="mb-8">
                 <label class="block mb-2 text-sm font-medium text-gray-300">كلمة المرور</label>
-                <div class="relative">
-                    <input type="password" name="password" id="id_password" class="glass-input w-full p-4 rounded-xl" required placeholder="********">
-                </div>
+                <input type="password" name="password" id="id_password" class="glass-input w-full p-4 rounded-xl text-left" dir="ltr" required placeholder="********">
             </div>
 
             <button type="submit" id="submitBtn" class="glow-btn w-full p-4 rounded-xl text-white font-bold text-lg flex justify-center items-center gap-2">
@@ -79,50 +81,68 @@
     </div>
 
     <script>
-        // تم توحيد المفتاح ليتطابق مع register.html و accounts.html
+        // المفتاح الموحد لجميع الصفحات
         const STORAGE_KEY = 'aite_accounts_secure_v2';
 
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const username = document.getElementById('id_username').value.trim();
             const password = document.getElementById('id_password').value;
             const btn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
+            const spinner = document.getElementById('btnSpinner');
 
             if(username && password) {
-                // تشفير كلمة المرور للحفظ الآمن (Base64)
-                const encryptedPass = btoa(password);
+                // إظهار حالة التحميل
+                btn.disabled = true;
+                btnText.textContent = "جاري التحقق...";
+                spinner.classList.remove('hidden');
 
-                let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-                
-                // البحث إذا كان الحساب موجوداً مسبقاً لتحديث بياناته أو إضافة جديد
-                const existingIndex = accounts.findIndex(a => a.username === username);
-                
-                const accountData = {
-                    username: username,
-                    auth_token: encryptedPass, 
-                    full_name: (existingIndex > -1) ? accounts[existingIndex].full_name : username,
-                    profile_picture_url: (existingIndex > -1) ? accounts[existingIndex].profile_picture_url : 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png'
-                };
+                try {
+                    // 1. جلب البيانات العامة (الاسم والصورة) من السيرفر
+                    // ملاحظة: تأكد من إضافة الـ route في server.js كما ذكرت لك سابقاً
+                    const response = await fetch(`/api/get-public-info?username=${encodeURIComponent(username)}`);
+                    const data = await response.json();
+                    
+                    let fullName = username; 
+                    let profilePic = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
 
-                if (existingIndex > -1) {
-                    accounts[existingIndex] = accountData;
-                } else {
-                    accounts.unshift(accountData);
+                    if (data.found) {
+                        fullName = data.full_name;
+                        profilePic = data.profile_picture_url;
+                    }
+
+                    // 2. تشفير كلمة المرور للحفظ المحلي (Base64)
+                    const encryptedPass = btoa(password);
+
+                    // 3. تحديث قائمة الحسابات في Local Storage
+                    let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                    
+                    // إزالة أي نسخة قديمة من نفس الحساب
+                    accounts = accounts.filter(a => a.username !== username);
+                    
+                    // إضافة البيانات الجديدة في البداية
+                    accounts.unshift({
+                        username: username,
+                        full_name: fullName,
+                        profile_picture_url: profilePic,
+                        auth_token: encryptedPass
+                    });
+
+                    // حفظ آخر 8 حسابات فقط لضمان الأداء
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts.slice(0, 8)));
+
+                } catch (error) {
+                    console.error("Error saving account details:", error);
                 }
 
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts.slice(0, 8)));
-            }
-
-            btn.disabled = true;
-            document.getElementById('btnText').textContent = "جاري الحفظ والدخول...";
-            document.getElementById('btnSpinner').classList.remove('hidden');
-
-            setTimeout(() => {
+                // 4. إرسال النموذج فعلياً للسيرفر لإنشاء الجلسة (Session)
                 this.submit();
-            }, 500);
+            }
         });
 
+        // لتعبئة الحساب تلقائياً إذا تم اختياره من صفحة الحسابات
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const user = urlParams.get('username');
