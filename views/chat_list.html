@@ -2364,5 +2364,37 @@ async function fetchAndDisplayFamilies() {
         }
 
     </script>
+<script>
+(function saveCurrentAccountLocally() {
+    const STORAGE_KEY = 'trimer_accounts_v1';
+    
+    // نستخدم الـ API الموجود بالفعل لجلب بيانات المستخدم الحالي
+    fetch('/api/profile')
+        .then(r => r.json())
+        .then(user => {
+            if (user && user.username) {
+                let accounts = [];
+                try { 
+                    accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); 
+                } catch(e) { accounts = []; }
+                
+                // 1. نحذف الحساب إذا كان موجوداً مسبقاً (لتحديث بياناته كالصورة الجديدة)
+                accounts = accounts.filter(a => a.username !== user.username);
+                
+                // 2. نضيف الحساب الحالي في مقدمة القائمة
+                accounts.unshift({
+                    username: user.username,
+                    full_name: user.full_name || user.username,
+                    profile_picture_url: user.profile_picture_url
+                });
+                
+                // 3. نحتفظ بآخر 5 حسابات فقط
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts.slice(0, 5)));
+            }
+        })
+        .catch(err => console.error('فشل الحفظ التلقائي للحساب', err));
+})();
+</script>
+
 </body>
 </html>
