@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إنشاء حساب جديد</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>إنشاء حساب جديد — Trimer</title>
     <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/46/1000084215-removebg-preview.png">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #000000;
-            background-image: 
+            background-image:
                 radial-gradient(circle at 80% 10%, rgba(57, 130, 247, 0.12) 0%, transparent 25%),
                 radial-gradient(circle at 20% 90%, rgba(255, 60, 100, 0.08) 0%, transparent 25%);
             color: #e4e6eb;
@@ -49,14 +49,13 @@
             transform: translateY(-2px);
         }
         .glow-btn:disabled {
-            background: #444; /* لون رمادي عند التعطيل */
+            background: #444;
             box-shadow: none;
             cursor: not-allowed;
             transform: none;
             opacity: 0.8;
         }
 
-        /* --- تنسيق منطقة الصور --- */
         .images-upload-wrapper {
             position: relative;
             width: 100%;
@@ -137,7 +136,7 @@
             left: 0;
             display: none;
         }
-        
+
         .hidden-input { display: none; }
     </style>
 </head>
@@ -152,12 +151,12 @@
 
     <div class="glass-card p-8 rounded-2xl w-full max-w-md">
         <h2 class="text-center mb-8 text-2xl font-bold text-white">إنشاء حساب جديد</h2>
-        
-        <form method="POST" action="/register" enctype="multipart/form-data" id="registrationForm">
-            
+
+        <form method="POST" action="/register" enctype="multipart/form-data" id="registrationForm" novalidate>
+
             <div class="images-upload-wrapper">
                 <div class="cover-upload-area" onclick="document.getElementById('id_cover_photo').click()">
-                    <img id="coverPreviewImg" class="preview-img">
+                    <img id="coverPreviewImg" class="preview-img" alt="cover preview">
                     <div class="placeholder-content" id="coverPlaceholder">
                         <i class="fas fa-image text-2xl mb-1"></i>
                         <div class="placeholder-text">اضغط لإضافة غلاف</div>
@@ -166,7 +165,7 @@
                 <input type="file" name="cover_photo" id="id_cover_photo" class="hidden-input" accept="image/*" onchange="previewImage(this, 'coverPreviewImg', 'coverPlaceholder')">
 
                 <div class="profile-upload-area" onclick="document.getElementById('id_profile_picture').click()">
-                    <img id="profilePreviewImg" class="preview-img rounded-full">
+                    <img id="profilePreviewImg" class="preview-img rounded-full" alt="profile preview">
                     <div class="placeholder-content" id="profilePlaceholder">
                         <i class="fas fa-camera text-xl"></i>
                         <div class="placeholder-text text-[10px]">صورة</div>
@@ -197,7 +196,7 @@
                 <span id="btnText">إنشاء حساب</span>
                 <i id="btnSpinner" class="fas fa-spinner fa-spin hidden"></i>
             </button>
-            
+
         </form>
 
         <div class="text-center mt-6 text-sm text-gray-400">
@@ -206,7 +205,7 @@
     </div>
 
     <script>
-        // دالة المعاينة المحسنة
+        // --- معاينة الصور ---
         function previewImage(input, imgId, placeholderId) {
             const file = input.files[0];
             if (file) {
@@ -214,16 +213,16 @@
                 reader.onload = function(e) {
                     const img = document.getElementById(imgId);
                     const placeholder = document.getElementById(placeholderId);
-                    
+
                     img.src = e.target.result;
-                    img.style.display = 'block'; // إظهار الصورة
-                    placeholder.style.display = 'none'; // إخفاء النص والأيقونة
+                    img.style.display = 'block';
+                    placeholder.style.display = 'none';
                 }
                 reader.readAsDataURL(file);
             }
         }
 
-        // إظهار/إخفاء كلمة المرور
+        // --- إظهار/إخفاء كلمة المرور ---
         document.querySelectorAll('.toggle-password').forEach(item => {
             item.addEventListener('click', function () {
                 const targetId = this.getAttribute('data-target');
@@ -240,15 +239,37 @@
             });
         });
 
-        // مؤشر التحميل داخل الزر
-        document.getElementById('registrationForm').addEventListener('submit', function(event) {
+        // --- حفظ الحساب محلياً قبل إرسال النموذج ---
+        const REG_STORAGE_KEY = 'trimer_accounts_v1';
+        function loadAccounts() { try { return JSON.parse(localStorage.getItem(REG_STORAGE_KEY) || '[]'); } catch (e) { return []; } }
+        function saveAccounts(list) { localStorage.setItem(REG_STORAGE_KEY, JSON.stringify(list || [])); }
+
+        document.getElementById('registrationForm').addEventListener('submit', function (event) {
             const btn = document.getElementById('submitBtn');
             const btnText = document.getElementById('btnText');
             const btnSpinner = document.getElementById('btnSpinner');
-            
+
             btn.disabled = true;
-            btnText.textContent = 'جاري التسجيل...'; // تغيير النص
-            btnSpinner.classList.remove('hidden'); // إظهار الأيقونة الدوارة
+            btnText.textContent = 'جاري التسجيل...';
+            btnSpinner.classList.remove('hidden');
+
+            // read minimal data to save locally (profile image as dataURL if preview available)
+            const username = (document.getElementById('id_username').value || '').trim();
+            const fullname = (document.getElementById('id_fullname').value || '').trim() || username;
+            const profileImgEl = document.getElementById('profilePreviewImg');
+            const profileSrc = (profileImgEl && profileImgEl.src && profileImgEl.style.display !== 'none') ? profileImgEl.src : null;
+
+            if (username) {
+                let accounts = loadAccounts().filter(a => a.username !== username);
+                accounts.unshift({
+                    username: username,
+                    full_name: fullname,
+                    profile_picture_url: profileSrc || 'https://via.placeholder.com/80?text=Trimer'
+                });
+                saveAccounts(accounts.slice(0, 8)); // keep up to 8 most recent
+            }
+
+            // allow normal form submit to server
         });
     </script>
 </body>
