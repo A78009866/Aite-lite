@@ -496,26 +496,32 @@
 <body class="min-h-screen">
 
 <header class="sticky top-0 z-50 glass-navbar p-3">
-    <nav class="flex justify-between items-center max-w-6xl mx-auto">
+    <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
         
-        <div class="relative group"> <button id="profileMenuButton" class="relative block focus:outline-none" onclick="toggleProfileDropdown(event)">
+        <div class="relative group z-[60]"> 
+            <button id="profileMenuButton" class="relative block focus:outline-none" onclick="toggleProfileDropdown(event)">
                 <span class="avatar-with-dot">
-                  <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
-                  <span id="meOnlineDot" class="online-dot" style="display:none;"></span>
+                    <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                    <span id="meOnlineDot" class="online-dot" style="display:none;"></span>
                 </span>
             </button>
 
-            <div id="profileDropdown" class="absolute top-12 left-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden border border-gray-700 bg-black/90 backdrop-blur-md z-50">
-                <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
-                    <i class="fas fa-user text-lg ml-3 text-blue-400"></i>
-                    الملف الشخصي
+            <div id="profileDropdown" class="absolute top-12 right-0 mt-2 w-52 rounded-xl shadow-2xl glass-dropdown hidden border border-gray-700 bg-black/95 backdrop-blur-lg z-[70] overflow-hidden">
+                
+                <a href="/profile" class="flex items-center px-4 py-4 text-white hover:bg-white/10 transition duration-200">
+                    <div class="bg-blue-500/20 p-2 rounded-lg ml-3">
+                        <i class="fas fa-user text-blue-400"></i>
+                    </div>
+                    <span class="text-sm font-semibold">الملف الشخصي</span>
                 </a>
                 
-                <div class="border-t border-gray-700 opacity-50"></div>
+                <div class="border-t border-gray-800 mx-2"></div>
 
-                <a href="/settings" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-b-lg transition duration-200">
-                    <i class="fas fa-cog text-lg ml-3 text-gray-400"></i>
-                    الإعدادات
+                <a href="/settings" class="flex items-center px-4 py-4 text-white hover:bg-white/10 transition duration-200">
+                    <div class="bg-gray-500/20 p-2 rounded-lg ml-3">
+                        <i class="fas fa-cog text-gray-400"></i>
+                    </div>
+                    <span class="text-sm font-semibold">الإعدادات</span>
                 </a>
             </div>
         </div>
@@ -526,12 +532,12 @@
             </a>
         </div>
 
-        <div class="header-actions flex gap-3">
-            <button id="searchBtn" class="action-btn text-white hover:text-blue-400 transition" title="بحث" onclick="openSearchPage()">
+        <div class="header-actions flex items-center gap-2">
+            <button id="searchBtn" class="action-btn p-2 text-gray-300 hover:text-white transition" title="بحث" onclick="openSearchPage()">
                 <i class="fas fa-search text-xl"></i>
             </button>
 
-            <button id="createBtn" class="action-btn text-white hover:text-green-400 transition" title="إنشاء" onclick="toggleCreateModal()">
+            <button id="createBtn" class="action-btn p-2 text-gray-300 hover:text-white transition" title="إنشاء" onclick="toggleCreateModal()">
                 <i class="fas fa-plus text-xl"></i>
             </button>
         </div>
@@ -540,22 +546,43 @@
 </header>
 
 <script>
+    /**
+     * وظيفة إظهار/إخفاء قائمة البروفيل
+     */
     function toggleProfileDropdown(event) {
-        event.stopPropagation(); // منع إغلاق القائمة فوراً عند الضغط
+        // منع انتشار الحدث لكي لا يتم إغلاق القائمة فوراً بواسطة مستمع الضغط الخارجي
+        event.stopPropagation();
         const dropdown = document.getElementById('profileDropdown');
         dropdown.classList.toggle('hidden');
     }
 
-    // إغلاق القائمة عند النقر في أي مكان آخر في الصفحة
+    /**
+     * إغلاق القائمة تلقائياً عند الضغط في أي مكان خارجها
+     */
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('profileDropdown');
         const button = document.getElementById('profileMenuButton');
         
-        if (!button.contains(event.target) && !dropdown.contains(event.target)) {
-            dropdown.classList.add('hidden');
+        if (dropdown && !dropdown.classList.contains('hidden')) {
+            if (!button.contains(event.target) && !dropdown.contains(event.target)) {
+                dropdown.classList.add('hidden');
+            }
         }
     });
+
+    // تحديث صورة البروفيل في الهيدر عند تحميل الصفحة
+    (function updateNavAvatar() {
+        fetch('/api/profile')
+            .then(res => res.json())
+            .then(user => {
+                if (user && user.profile_picture_url) {
+                    document.getElementById('userProfilePic').src = user.profile_picture_url;
+                }
+            })
+            .catch(err => console.error("Error loading nav avatar:", err));
+    })();
 </script>
+
 
 
     <main class="max-w-6xl mx-auto p-4">
