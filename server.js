@@ -3287,6 +3287,36 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
   next(err);
 });
+// 1. مسار عرض صفحة الإعدادات
+app.get('/settings', (req, res) => {
+  if (!req.session || !req.session.user) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'settings.html'));
+});
+
+// 2. API لتغيير كلمة المرور
+app.post('/api/change-password', async (req, res) => {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ ok: false, error: 'غير مصرح' });
+  }
+
+  const { newPassword } = req.body;
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ ok: false, error: 'كلمة المرور ضعيفة' });
+  }
+
+  try {
+    const uid = req.session.user.uid;
+    // تحديث كلمة المرور في Firebase Auth
+    await admin.auth().updateUser(uid, {
+      password: newPassword
+    });
+
+    res.json({ ok: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Error changing password:', err);
+    res.status(500).json({ ok: false, error: 'فشل تغيير كلمة المرور' });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
