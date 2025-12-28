@@ -1528,7 +1528,20 @@ app.post('/api/friends/accept', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
-
+// مسار حذف منشور (Post)
+app.delete('/api/posts/:id', async (req, res) => {
+  try {
+    const postId = req.params.id;
+    // هنا يتم الحذف من قاعدة البيانات الخاصة بك (Firebase كمثال)
+     await db.ref('posts').child(postId).remove(); 
+    
+    console.log(`تم حذف المنشور: ${postId}`);
+    res.json({ ok: true, message: "تم الحذف بنجاح" });
+  } catch (error) {
+    console.error("خطأ في الحذف:", error);
+    res.status(500).json({ ok: false, error: "فشل حذف المنشور" });
+  }
+});
 // Reject/Decline friend request
 app.post('/api/friends/reject', requireAuth, async (req, res) => {
   const toId = req.session.userId;
