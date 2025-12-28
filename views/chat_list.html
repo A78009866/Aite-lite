@@ -239,25 +239,19 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* Make waveform black and progress bright white (match create_post preview) */
+        /* Waveform: make fully black background and initial strip white.
+           On play we switch the unplayed wave to gray and keep the white progress moving. */
         .waveform-post {
             height: 60px; 
-            background: #000; /* fully black background */
+            background: #000000; /* fully black */
             border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.04);
             overflow: hidden;
         }
 
-        /* Ensure audio play button doesn't turn blue on hover, keep it white-ish */
-        .audio-play-button, .audio-play-button i {
-            color: #e5e7eb !important;
-        }
-        .audio-play-button:hover, .audio-play-button:focus {
-            color: #ffffff !important;
-        }
-
-        .waveform-post .wavesurfer {
-            background: transparent;
+        /* Ensure audio play button doesn't turn blue on hover */
+        .audio-play-button:hover {
+            color: #e5e7eb !important; /* muted light color */
         }
 
         .custom-scrollbar::-webkit-scrollbar {
@@ -855,39 +849,43 @@
             }
         });
 
-        // Initialize WaveSurfer for post audio with black background & white progress
+        function setWSColors(ws, waveColor, progressColor) {
+            try {
+                if (typeof ws.setWaveColor === 'function') ws.setWaveColor(waveColor);
+                else if (ws.drawer && typeof ws.drawer.setWaveColor === 'function') ws.drawer.setWaveColor(waveColor);
+            } catch (e) {}
+            try {
+                if (typeof ws.setProgressColor === 'function') ws.setProgressColor(progressColor);
+                else if (ws.drawer && typeof ws.drawer.setProgressColor === 'function') ws.drawer.setProgressColor(progressColor);
+            } catch (e) {}
+        }
+
         function initializePostWaveSurfer(postId, url) {
             const container = document.getElementById(`waveform-${postId}`);
             if (!container) return;
 
-            // Destroy previous WaveSurfer instance attached to this container (safety)
-            if (container._wsInstance && typeof container._wsInstance.destroy === 'function') {
-                try { container._wsInstance.destroy(); } catch(e){}
-            }
-
+            // default: show a white strip on black background (idle state)
             const ws = WaveSurfer.create({
                 container: container,
-                waveColor: '#0a0a0a',      // very dark wave color (nearly black)
-                progressColor: '#ffffff',  // bright white progress
+                waveColor: '#ffffff',      // initial strip: white (idle)
+                progressColor: '#ffffff',  // progress will also be white (we'll update colors on play)
                 cursorColor: 'transparent',
                 barWidth: 3,
                 barRadius: 3,
                 barGap: 1,
                 height: 60,
                 responsive: true,
-                backend: 'MediaElement'
+                mediaControls: false,
             });
-
-            // keep reference for safety / cleanup
-            container._wsInstance = ws;
 
             ws.load(url);
 
             const playButton = container.closest('.glass-post-card').querySelector('.audio-play-button');
             if (playButton) {
                 playButton.onclick = () => {
+                    // ensure only one audio/wave is active
                     if (activeWaveSurfer && activeWaveSurfer !== ws) {
-                        activeWaveSurfer.pause();
+                        try { activeWaveSurfer.pause(); } catch(e){}
                         const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
                         if (otherPostCard) {
                             const pb = otherPostCard.querySelector('.audio-play-button i');
@@ -919,10 +917,24 @@
                     }
                 };
 
+                // when play starts -> change unplayed wave to gray so white progress is visible
+                ws.on('play', () => {
+                    setWSColors(ws, '#6b7280' /* gray for unplayed */, '#ffffff' /* white progress */);
+                });
+
+                // when paused or finished -> revert to white strip idle style
+                const revertToIdle = () => {
+                    setWSColors(ws, '#ffffff', '#ffffff');
+                    if (playButton) {
+                        playButton.querySelector('i').classList.remove('fa-pause');
+                        playButton.querySelector('i').classList.add('fa-play');
+                    }
+                    if (activeWaveSurfer === ws) activeWaveSurfer = null;
+                };
+                ws.on('pause', revertToIdle);
                 ws.on('finish', () => {
-                    playButton.querySelector('i').classList.remove('fa-pause');
-                    playButton.querySelector('i').classList.add('fa-play');
-                    activeWaveSurfer = null;
+                    revertToIdle();
+                    try { ws.seekTo(0); } catch(e) {}
                 });
             }
         }
@@ -1011,7 +1023,7 @@
             
             video.currentTime = 0;
             if (playOverlay) playOverlay.classList.remove('hidden'); 
-            if (controlIcon) { controlIcon.classList.remove('fa-pause'); controlIcon.classList.add('fa-play'); }
+            if (controlIcon) controlIcon.classList.remove('fa-pause'), controlIcon.classList.add('fa-play');
             activeVideo = null;
             
             video.removeEventListener('timeupdate', updateVideoProgress);
