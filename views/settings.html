@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الإعدادات - Aite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #000000; color: #e4e6eb; font-family: 'Segoe UI', sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center pt-6 px-4 pb-20">
+
+    <div class="w-full max-w-md flex items-center justify-between mb-8">
+        <a href="/" class="text-gray-400 hover:text-white text-xl"><i class="fas fa-arrow-right"></i></a>
+        <h1 class="text-2xl font-bold">الإعدادات</h1>
+        <div class="w-5"></div> </div>
+
+    <div class="w-full max-w-md space-y-6">
+        
+        <div class="bg-gray-900 p-4 rounded-xl border border-gray-800">
+            <h2 class="text-lg font-semibold mb-3 text-blue-400">الحساب</h2>
+            <a href="/edit_profile" class="flex items-center justify-between w-full p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition">
+                <span class="flex items-center">
+                    <i class="fas fa-user-edit ml-3 text-gray-400"></i> تعديل الملف الشخصي
+                </span>
+                <i class="fas fa-chevron-left text-gray-500"></i>
+            </a>
+        </div>
+
+        <div class="bg-gray-900 p-4 rounded-xl border border-gray-800">
+            <h2 class="text-lg font-semibold mb-4 text-blue-400">الأمان</h2>
+            <form id="changePasswordForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">كلمة المرور الجديدة</label>
+                    <input type="password" id="newPassword" required 
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500" placeholder="أدخل كلمة المرور الجديدة">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">تأكيد كلمة المرور</label>
+                    <input type="password" id="confirmPassword" required 
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500" placeholder="أعد إدخال كلمة المرور">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                    حفظ كلمة المرور
+                </button>
+            </form>
+            <p id="msg" class="text-center text-sm mt-3 hidden"></p>
+        </div>
+
+        <div class="pt-8">
+            <button onclick="logout()" class="w-full border border-red-600 text-red-500 hover:bg-red-600 hover:text-white font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2">
+                <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // دالة تغيير كلمة المرور
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newPass = document.getElementById('newPassword').value;
+            const confirmPass = document.getElementById('confirmPassword').value;
+            const msg = document.getElementById('msg');
+
+            if (newPass.length < 6) {
+                showMsg('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'red');
+                return;
+            }
+            if (newPass !== confirmPass) {
+                showMsg('كلمات المرور غير متطابقة', 'red');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ newPassword: newPass })
+                });
+                const data = await res.json();
+                
+                if (data.ok) {
+                    showMsg('تم تغيير كلمة المرور بنجاح', 'green');
+                    document.getElementById('changePasswordForm').reset();
+                } else {
+                    showMsg(data.error || 'حدث خطأ', 'red');
+                }
+            } catch (err) {
+                showMsg('فشل الاتصال بالخادم', 'red');
+            }
+        });
+
+        function showMsg(text, color) {
+            const msg = document.getElementById('msg');
+            msg.textContent = text;
+            msg.className = `text-center text-sm mt-3 block text-${color}-500`;
+        }
+
+        // دالة تسجيل الخروج
+        function logout() {
+            if(confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+                window.location.href = '/logout';
+            }
+        }
+    </script>
+</body>
+</html>
