@@ -725,107 +725,153 @@ function closeMediaViewer() {
 }
 
 /* ---------------- WaveSurfer helpers (audio posts) ---------------- */
-        function initializePostWaveSurfer(postId, url) {
-            const container = document.getElementById(`waveform-${postId}`);
-            if (!container) return;
 
-            // idle: white strip on black background
-            const ws = WaveSurfer.create({
-                container: container,
-                waveColor: '#4A4A4A',      // idle: white (unplayed)
-                progressColor: '#ffffff',  // progress white
-                cursorColor: 'transparent',
-                barWidth: 3,
-                barRadius: 3,
-                barGap: 1,
-                height: 60,
-                responsive: true,
-                mediaControls: false,
-            });
+/* Add setWSColors and redrawWS (copied/adapted from main chat_list implementation)
+   These helpers try multiple internal APIs for compatibility with different wavesurfer versions.
+*/
+function setWSColors(ws, waveColor, progressColor) {
+    try {
+        if (typeof ws.setWaveColor === 'function') ws.setWaveColor(waveColor);
+        else if (ws.drawer && typeof ws.drawer.setWaveColor === 'function') ws.drawer.setWaveColor(waveColor);
+    } catch (e) {}
+    try {
+        if (typeof ws.setProgressColor === 'function') ws.setProgressColor(progressColor);
+        else if (ws.drawer && typeof ws.drawer.setProgressColor === 'function') ws.drawer.setProgressColor(progressColor);
+    } catch (e) {}
+}
 
-            ws.load(url);
-
-            const playButton = container.closest('.glass-post-card').querySelector('.audio-play-button');
-            if (playButton) {
-                playButton.onclick = () => {
-                    // stop other active audio/waves
-                    if (activeWaveSurfer && activeWaveSurfer !== ws) {
-                        try { activeWaveSurfer.pause(); } catch(e){}
-                        const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
-                        if (otherPostCard) {
-                            const pb = otherPostCard.querySelector('.audio-play-button i');
-                            if (pb) { pb.classList.remove('fa-pause'); pb.classList.add('fa-play'); }
-                        }
-                    }
-                    if (activeVideo) {
-                        const activePostId = activeVideo.id.split('-')[1];
-                        const controlIcon = document.getElementById(`control-icon-${activePostId}`);
-                        const playOverlay = document.getElementById(`play-overlay-${activePostId}`);
-                        activeVideo.pause();
-                        if (controlIcon) {
-                            controlIcon.classList.remove('fa-pause');
-                            controlIcon.classList.add('fa-play');
-                        }
-                        if (playOverlay) playOverlay.classList.remove('hidden');
-                        activeVideo = null;
-                    }
-                    
-                    if (ws.isPlaying()) {
-                        ws.pause();
-                        playButton.querySelector('i').classList.remove('fa-pause');
-                        playButton.querySelector('i').classList.add('fa-play');
-                    } else {
-                        ws.play();
-                        playButton.querySelector('i').classList.remove('fa-play');
-                        playButton.querySelector('i').classList.add('fa-pause');
-                        activeWaveSurfer = ws;
-                    }
-                };
-
-                // When play starts -> set unplayed wave to gray so the white progress is visible moving over it
-                ws.on('play', () => {
-                    // set unplayed -> gray, progress -> white
-                    setWSColors(ws, '#6b7280' /* gray for unplayed */, '#ffffff' /* white progress */);
-                    // redraw to apply immediately
-                    redrawWS(ws);
-                });
-
-                // During playback we don't need to change colors continuously; progressColor stays white.
-                // When paused -> revert to idle white strip
-                ws.on('pause', () => {
-                    // revert unplayed to white and progress to white (idle appearance)
-                    setWSColors(ws, '#ffffff', '#ffffff');
-                    redrawWS(ws);
-                    const btn = playButton;
-                    if (btn) {
-                        btn.querySelector('i').classList.remove('fa-pause');
-                        btn.querySelector('i').classList.add('fa-play');
-                    }
-                    if (activeWaveSurfer === ws) activeWaveSurfer = null;
-                });
-
-                // When playback finishes -> make the whole waveform white (set both colors to white and redraw)
-                ws.on('finish', () => {
-                    setWSColors(ws, '#ffffff', '#ffffff');
-                    redrawWS(ws);
-                    const btn = playButton;
-                    if (btn) btn.querySelector('i').classList.remove('fa-pause'), btn.querySelector('i').classList.add('fa-play');
-                    try { ws.seekTo(0); } catch(e) {}
-                    activeWaveSurfer = null;
-                });
-
-                // Extra safety: if audio processes to near end, ensure final state becomes full white
-                ws.on('audioprocess', (time) => {
-                    try {
-                        const duration = ws.getDuration ? ws.getDuration() : 0;
-                        if (duration > 0 && time / duration > 0.995) {
-                            setWSColors(ws, '#ffffff', '#ffffff');
-                            redrawWS(ws);
-                        }
-                    } catch(e){}
-                });
-            }
+function redrawWS(ws) {
+    try {
+        if (typeof ws.drawBuffer === 'function') {
+            ws.drawBuffer();
+            return;
         }
+        if (ws.drawer && typeof ws.drawer.drawBuffer === 'function') {
+            ws.drawer.drawBuffer();
+            return;
+        }
+        // fallback: trigger a tiny seek to force repaint
+        if (typeof ws.getDuration === 'function' && ws.getDuration() > 0) {
+            const d = ws.getDuration();
+            const current = ws.getCurrentTime ? ws.getCurrentTime() : 0;
+            ws.seekTo(Math.min(1, (current + 0.0001) / (d || 1)));
+            ws.seekTo(Math.min(1, current / (d || 1)));
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
+/* Unified initialize that stores instance in audioWaveSurfers and matches main feed behavior */
+function initializePostWaveSurfer(postId, url) {
+    const container = document.getElementById(`waveform-${postId}`);
+    if (!container) return;
+
+    // create wavesurfer
+    const ws = WaveSurfer.create({
+        container: container,
+        waveColor: '#4A4A4A',      // idle: subtle unplayed
+        progressColor: '#ffffff',  // progress white
+        cursorColor: 'transparent',
+        barWidth: 3,
+        barRadius: 3,
+        barGap: 1,
+        height: 60,
+        responsive: true,
+        mediaControls: false,
+    });
+
+    // store immediately so toggleAudioPlay can reference it
+    audioWaveSurfers[postId] = ws;
+
+    try { ws.load(url); } catch(e){}
+
+    const postCard = container.closest('.glass-post-card');
+    const playButton = postCard ? postCard.querySelector('.audio-play-button') : null;
+
+    if (playButton) {
+        playButton.onclick = () => {
+            // stop other active audio/waves
+            if (activeWaveSurfer && activeWaveSurfer !== ws) {
+                try { activeWaveSurfer.pause(); } catch(e){}
+                const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
+                if (otherPostCard) {
+                    const pb = otherPostCard.querySelector('.audio-play-button i');
+                    if (pb) { pb.classList.remove('fa-pause'); pb.classList.add('fa-play'); }
+                }
+            }
+
+            // stop active video if exists
+            if (activeVideo) {
+                const activePostId = activeVideo.id.split('-')[1];
+                const controlIcon = document.getElementById(`control-icon-${activePostId}`);
+                const playOverlay = document.getElementById(`play-overlay-${activePostId}`);
+                activeVideo.pause();
+                if (controlIcon) {
+                    controlIcon.classList.remove('fa-pause');
+                    controlIcon.classList.add('fa-play');
+                }
+                if (playOverlay) playOverlay.classList.remove('hidden');
+                // detach listeners safely
+                try {
+                    activeVideo.removeEventListener('timeupdate', updateVideoProgress);
+                    activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
+                    activeVideo.removeEventListener('ended', handleVideoEnd);
+                } catch(e){}
+                activeVideo = null;
+            }
+
+            if (ws.isPlaying()) {
+                ws.pause();
+                playButton.querySelector('i').classList.remove('fa-pause');
+                playButton.querySelector('i').classList.add('fa-play');
+            } else {
+                ws.play();
+                playButton.querySelector('i').classList.remove('fa-play');
+                playButton.querySelector('i').classList.add('fa-pause');
+                activeWaveSurfer = ws;
+            }
+        };
+
+        // events to manage colors & UI similar to main feed
+        ws.on('play', () => {
+            // set unplayed -> gray, progress -> white
+            setWSColors(ws, '#6b7280', '#ffffff');
+            redrawWS(ws);
+        });
+
+        ws.on('pause', () => {
+            // revert unplayed to white and progress to white (idle appearance)
+            setWSColors(ws, '#ffffff', '#ffffff');
+            redrawWS(ws);
+            const btn = playButton;
+            if (btn) {
+                btn.querySelector('i').classList.remove('fa-pause');
+                btn.querySelector('i').classList.add('fa-play');
+            }
+            if (activeWaveSurfer === ws) activeWaveSurfer = null;
+        });
+
+        ws.on('finish', () => {
+            setWSColors(ws, '#ffffff', '#ffffff');
+            redrawWS(ws);
+            const btn = playButton;
+            if (btn) btn.querySelector('i').classList.remove('fa-pause'), btn.querySelector('i').classList.add('fa-play');
+            try { ws.seekTo(0); } catch(e) {}
+            activeWaveSurfer = null;
+        });
+
+        ws.on('audioprocess', (time) => {
+            try {
+                const duration = ws.getDuration ? ws.getDuration() : 0;
+                if (duration > 0 && time / duration > 0.995) {
+                    setWSColors(ws, '#ffffff', '#ffffff');
+                    redrawWS(ws);
+                }
+            } catch(e){}
+        });
+    }
+}
 
 function toggleAudioPlay(postId) {
     const ws = audioWaveSurfers[postId];
@@ -866,11 +912,13 @@ function createPostCard(post) {
                 </div>`;
         } else if (post.media.type === 'audio') {
             mediaContent = `
-                <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
-                    <button id="audio-btn-${post.postId}" class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300 flex-shrink-0" onclick="toggleAudioPlay('${post.postId}')">
-                        <i class="fas fa-play"></i>
-                    </button>
-                    <div id="waveform-${post.postId}" class="waveform-post flex-grow" data-src="${post.media.url}"></div>
+                <div class="mt-3">
+                    <div class="audio-play-wrapper">
+                        <button id="audio-btn-${post.postId}" class="audio-play-button" onclick="toggleAudioPlay('${post.postId}')">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div id="waveform-${post.postId}" class="waveform-post flex-grow" data-src="${post.media.url}"></div>
+                    </div>
                 </div>`;
         }
     }
@@ -1474,7 +1522,6 @@ function togglePostMenu(postId, userId, event, menuButton) {
     } else {
         document.getElementById('deleteOptionBtn').style.display = 'none';
     }
-    postMenu.classList.remove('hidden');
 }
 
 document.addEventListener('click', (event) => {
