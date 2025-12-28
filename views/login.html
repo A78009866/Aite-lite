@@ -79,11 +79,10 @@
     </div>
 
     <script>
-        // مفتاح التخزين الموحد (تأكد أنه نفس المستخدم في صفحة الحسابات)
-        const STORAGE_KEY = 'aite_accounts_final_v3';
+        // تم توحيد المفتاح ليتطابق مع register.html و accounts.html
+        const STORAGE_KEY = 'aite_accounts_secure_v2';
 
         document.getElementById('loginForm').addEventListener('submit', function(e) {
-            // 1. منع الإرسال اللحظي لحفظ البيانات أولاً
             e.preventDefault();
 
             const username = document.getElementById('id_username').value.trim();
@@ -94,7 +93,6 @@
                 // تشفير كلمة المرور للحفظ الآمن (Base64)
                 const encryptedPass = btoa(password);
 
-                // جلب الحسابات الحالية
                 let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
                 
                 // البحث إذا كان الحساب موجوداً مسبقاً لتحديث بياناته أو إضافة جديد
@@ -102,7 +100,7 @@
                 
                 const accountData = {
                     username: username,
-                    auth_token: encryptedPass, // حفظ التشفير للدخول المباشر
+                    auth_token: encryptedPass, 
                     full_name: (existingIndex > -1) ? accounts[existingIndex].full_name : username,
                     profile_picture_url: (existingIndex > -1) ? accounts[existingIndex].profile_picture_url : 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png'
                 };
@@ -113,22 +111,18 @@
                     accounts.unshift(accountData);
                 }
 
-                // حفظ القائمة المحدثة
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts.slice(0, 8)));
             }
 
-            // 2. إظهار تأثير التحميل
             btn.disabled = true;
             document.getElementById('btnText').textContent = "جاري الحفظ والدخول...";
             document.getElementById('btnSpinner').classList.remove('hidden');
 
-            // 3. إرسال النموذج للسيرفر بعد 500 ملي ثانية لضمان الحفظ
             setTimeout(() => {
                 this.submit();
             }, 500);
         });
 
-        // لتعبئة اسم المستخدم تلقائياً إذا جاء من صفحة الحسابات
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const user = urlParams.get('username');
