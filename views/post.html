@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>عرض المنشور — Aite</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#070708;
+      --panel: rgba(18,18,20,0.6);
+      --border: rgba(255,255,255,0.04);
+      --text: #e6eefb;
+      --muted:#9aa0a6;
+    }
+    body{ margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family: "Segoe UI", Tahoma, Verdana, sans-serif; padding:20px; }
+    .container{ max-width:900px; margin:0 auto; }
+
+    .glass{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:14px;
+      backdrop-filter: blur(10px);
+    }
+
+    .topbar { display:flex; gap:12px; align-items:center; margin-bottom:14px; }
+    .back { color:var(--muted); cursor:pointer; border:1px solid rgba(255,255,255,0.02); padding:8px 10px; border-radius:8px; background:transparent; }
+
+    .post-card { display:flex; flex-direction:column; gap:12px; }
+    .author { display:flex; gap:12px; align-items:center; }
+    .author img{ width:56px; height:56px; border-radius:10px; object-fit:cover; border:1px solid rgba(255,255,255,0.04); }
+
+    .content { white-space:pre-wrap; line-height:1.5; color:var(--text); }
+
+    .media { width:100%; border-radius:10px; overflow:hidden; background:#000; }
+
+    .actions { display:flex; gap:8px; align-items:center; margin-top:6px; }
+    .btn { padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.04); background:transparent; cursor:pointer; color:var(--text); display:inline-flex; gap:8px; align-items:center; }
+    .btn.primary { background: rgba(255,255,255,0.02); }
+
+    .comments { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+    .comment { background: rgba(0,0,0,0.22); border-radius:10px; padding:8px; display:flex; gap:10px; align-items:flex-start; }
+    .comment .meta { flex:1; }
+    .small-avatar { width:36px; height:36px; border-radius:8px; object-fit:cover; }
+
+    .comment-input { display:flex; gap:8px; margin-top:8px; align-items:center; }
+    input[type="text"].cinput { flex:1; padding:10px 12px; border-radius:999px; background:transparent; border:1px solid rgba(255,255,255,0.04); color:var(--text); outline:none; }
+
+    .muted { color:var(--muted); font-size:13px; }
+
+    @media (max-width:640px){ .author img{ width:48px; height:48px } .small-avatar{ width:30px;height:30px } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <button class="back" onclick="goBack()">← العودة</button>
+      <h2 style="margin:0; font-weight:800">عرض المنشور</h2>
+    </div>
+
+    <div id="postWrap" class="glass post-card">
+      <div id="loading" class="muted">جاري تحميل المنشور...</div>
+
+      <!-- Post content is injected here -->
+      <div id="postContent" style="display:none;">
+        <div class="author">
+          <img id="authorAvatar" src="" alt="avatar">
+          <div>
+            <div id="authorName" style="font-weight:800"></div>
+            <div id="postTime" class="muted" style="font-size:13px"></div>
+          </div>
+          <div style="margin-inline-start:auto">
+            <button id="postOptionsBtn" class="btn" onclick="openOptions()">•••</button>
+          </div>
+        </div>
+
+        <div id="postText" class="content"></div>
+
+        <div id="postMedia" class="media"></div>
+
+        <div class="muted" id="statsLine"></div>
+
+        <div class="actions">
+          <button id="likeBtn" class="btn" onclick="toggleLike()"><i id="likeIcon" class="far fa-heart"></i> <span id="likeLabel">إعجاب</span></button>
+          <button id="commentToggleBtn" class="btn" onclick="scrollToComments()"><i class="far fa-comment-dots"></i> تعليق</button>
+          <button id="shareBtn" class="btn" onclick="sharePost()">مشاركة</button>
+        </div>
+
+        <div id="commentsSection" class="comments" style="margin-top:6px">
+          <div style="font-weight:700">التعليقات</div>
+          <div id="commentsList" class="mt-2"></div>
+
+          <div class="comment-input">
+            <img id="myAvatarSmall" src="" class="small-avatar" alt="me">
+            <input id="commentInput" class="cinput" type="text" placeholder="أضف تعليقاً..." onkeydown="if(event.key==='Enter') postComment()">
+            <button id="postCommentBtn" class="btn primary" onclick="postComment()">نشر</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Utilities
+    function goBack(){ if(document.referrer) history.back(); else window.location.href = '/chat_list'; }
+    function $id(id){ return document.getElementById(id); }
+    function escapeHtml(s){ if(!s && s !== 0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    function fmtTime(ts){
+      const d = new Date(Number(ts)||Date.now());
+      return d.toLocaleString('ar-EG', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    // Read postId query
+    const params = new URLSearchParams(window.location.search);
+    const postId = params.get('id');
+
+    // State
+    let currentPost = null;
+    let currentUserId = null;
+
+    // Init
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadProfile();
+      if(!postId) { $id('loading').textContent = 'معرّف المنشور مفقود.'; return; }
+      await loadPostById(postId);
+      setupCommentsSSE(postId);
+    });
+
+    async function loadProfile(){
+      try{
+        const res = await fetch('/api/profile', { credentials:'same-origin' });
+        if(res.ok){
+          const data = await res.json();
+          currentUserId = data.id;
+          $id('myAvatarSmall').src = data.profile_picture_url || 'https://via.placeholder.com/40';
+        }
+      }catch(e){ /* ignore */ }
+    }
+
+    // Fetch posts list and find the requested post (server currently doesn't expose single-get)
+    async function loadPostById(pid){
+      try{
+        const res = await fetch('/api/posts', { credentials:'same-origin' });
+        const data = await res.json();
+        if(!res.ok || !data.ok){ $id('loading').textContent = 'فشل في جلب المنشور.'; return; }
+        const post = (data.posts || []).find(p => String(p.postId) === String(pid) || String(p.postId) === decodeURIComponent(pid));
+        if(!post){
+          // attempt /api/posts/user/:userId fallback not possible; show not found
+          $id('loading').textContent = 'المنشور غير موجود أو غير متاح.';
+          return;
+        }
+        currentPost = post;
+        renderPost(post);
+      }catch(e){
+        console.error(e);
+        $id('loading').textContent = 'خطأ في الاتصال.';
+      }
+    }
+
+    function renderPost(p){
+      $id('loading').style.display = 'none';
+      $id('postContent').style.display = 'block';
+
+      $id('authorAvatar').src = p.user?.profile_picture_url || 'https://via.placeholder.com/80';
+      $id('authorName').innerHTML = escapeHtml(p.user?.username || 'مستخدم');
+      $id('postTime').textContent = fmtTime(p.timestamp);
+
+      $id('postText').innerHTML = escapeHtml(p.content || '');
+
+      // media
+      const mediaWrap = $id('postMedia');
+      mediaWrap.innerHTML = '';
+      if(p.media && p.media.type === 'image'){
+        mediaWrap.innerHTML = `<img src="${escapeHtml(p.media.url)}" style="width:100%; height:auto; display:block;">`;
+      } else if(p.media && p.media.type === 'video'){
+        mediaWrap.innerHTML = `<video id="theVideo" src="${escapeHtml(p.media.url)}" controls style="width:100%;height:auto;background:#000"></video>`;
+      } else if(p.media && p.media.type === 'audio'){
+        mediaWrap.innerHTML = `<audio controls src="${escapeHtml(p.media.url)}" style="width:100%"></audio>`;
+      }
+
+      $id('statsLine').textContent = `${p.likes || 0} إعجاب • ${p.commentsCount || 0} تعليق`;
+
+      // like button state
+      // The feed already provided is_liked property
+      setLikeState(!!p.is_liked, p.likes || 0);
+
+      // load comments
+      fetchAndRenderComments(p.postId);
+    }
+
+    function setLikeState(isLiked, likesCount){
+      const likeIcon = $id('likeIcon');
+      $id('likeLabel').textContent = 'إعجاب';
+      if(isLiked){
+        likeIcon.className = 'fas fa-heart';
+        $id('likeBtn').classList.add('primary');
+      } else {
+        likeIcon.className = 'far fa-heart';
+        $id('likeBtn').classList.remove('primary');
+      }
+      // update stats line (preserve comments)
+      const parts = $id('statsLine').textContent.split('•');
+      const commentsPart = parts[1] ? parts[1].trim() : `${currentPost.commentsCount||0} تعليق`;
+      $id('statsLine').textContent = `${likesCount} إعجاب • ${commentsPart}`;
+    }
+
+    async function toggleLike(){
+      if(!currentPost) return;
+      try{
+        $id('likeBtn').disabled = true;
+        const res = await fetch(`/api/posts/${currentPost.postId}/like`, { method:'POST', credentials:'same-origin' });
+        const data = await res.json();
+        if(res.ok && data.ok){
+          // update UI
+          currentPost.is_liked = !!data.is_liked;
+          currentPost.likes = data.newLikes || data.likes || currentPost.likes;
+          setLikeState(currentPost.is_liked, currentPost.likes || 0);
+        } else {
+          console.warn('like failed', data);
+        }
+      }catch(e){
+        console.error(e);
+      }finally{
+        $id('likeBtn').disabled = false;
+      }
+    }
+
+    // COMMENTS
+    async function fetchAndRenderComments(pid){
+      try{
+        const res = await fetch(`/api/posts/${pid}/comments`, { credentials:'same-origin' });
+        const data = await res.json();
+        if(!res.ok || !data.ok){
+          $id('commentsList').innerHTML = `<div class="muted">فشل في تحميل التعليقات.</div>`;
+          return;
+        }
+        renderCommentsList(data.comments || []);
+      }catch(e){
+        console.error(e);
+        $id('commentsList').innerHTML = `<div class="muted">خطأ في الاتصال.</div>`;
+      }
+    }
+
+    function renderCommentsList(list){
+      const c = $id('commentsList');
+      if(!list.length) { c.innerHTML = `<div class="muted">لا توجد تعليقات بعد.</div>`; return; }
+      c.innerHTML = list.map(commentToHtml).join('');
+    }
+
+    function commentToHtml(cm){
+      return `
+        <div class="comment" id="comment-${cm.commentId}">
+          <img src="${escapeHtml(cm.user?.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar">
+          <div class="meta">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="font-weight:700">${escapeHtml(cm.user?.username || 'مستخدم')}</div>
+              <div class="muted" style="font-size:12px">${new Date(cm.timestamp).toLocaleString('ar-EG', { hour:'2-digit', minute:'2-digit' })}</div>
+            </div>
+            <div style="margin-top:6px">${escapeHtml(cm.content)}</div>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+              <button class="btn" onclick="toggleCommentLike('${currentPost.postId}','${cm.commentId}', this)"> <i class="far fa-heart"></i> <span id="c-likes-${cm.commentId}">${cm.likes||0}</span></button>
+              <button class="btn" onclick="openReplyBox('${cm.commentId}')">رد</button>
+            </div>
+            <div id="replies-${cm.commentId}" style="margin-top:8px"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function postComment(){
+      const input = $id('commentInput');
+      const txt = (input.value||'').trim();
+      if(!txt || !currentPost) return;
+      $id('postCommentBtn').disabled = true;
+      try{
+        const res = await fetch(`/api/posts/${currentPost.postId}/comment`, {
+          method:'POST',
+          headers: { 'Content-Type':'application/json' },
+          credentials:'same-origin',
+          body: JSON.stringify({ content: txt })
+        });
+        const data = await res.json();
+        if(res.ok && data.ok){
+          input.value = '';
+          // refresh comments list
+          fetchAndRenderComments(currentPost.postId);
+          // update comments count on stats line
+          currentPost.commentsCount = data.newComments || (currentPost.commentsCount||0) + 1;
+          const likesPart = (currentPost.likes||0) + ' إعجاب';
+          $id('statsLine').textContent = `${currentPost.likes||0} إعجاب • ${currentPost.commentsCount || 0} تعليق`;
+        } else {
+          alert(data.error || 'فشل نشر التعليق');
+        }
+      }catch(e){
+        console.error(e);
+        alert('فشل في الاتصال');
+      }finally{
+        $id('postCommentBtn').disabled = false;
+      }
+    }
+
+    function openReplyBox(commentId){
+      const container = $id('replies-'+commentId);
+      container.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <input id="reply-input-${commentId}" type="text" placeholder="أكتب رد..." style="flex:1;padding:8px;border-radius:999px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--text)">
+          <button class="btn" onclick="postReply('${commentId}')">إرسال</button>
+        </div>
+      `;
+      const inp = $id('reply-input-'+commentId); if(inp) inp.focus();
+    }
+
+    async function postReply(commentId){
+      const inp = $id('reply-input-'+commentId);
+      if(!inp) return;
+      const txt = (inp.value||'').trim();
+      if(!txt) return;
+      try{
+        const res = await fetch(`/api/posts/${currentPost.postId}/comments/${commentId}/reply`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          credentials:'same-origin',
+          body: JSON.stringify({ content: txt })
+        });
+        const data = await res.json();
+        if(res.ok && data.ok){
+          // re-render comments
+          fetchAndRenderComments(currentPost.postId);
+        } else alert(data.error || 'فشل إرسال الرد');
+      }catch(e){ console.error(e); alert('فشل في الاتصال'); }
+    }
+
+    async function toggleCommentLike(postId, commentId, btn){
+      try{
+        btn.disabled = true;
+        const res = await fetch(`/api/posts/${postId}/comments/${commentId}/like`, { method:'POST', credentials:'same-origin' });
+        const data = await res.json();
+        if(res.ok && data.ok){
+          $id('c-likes-'+commentId).textContent = data.likes;
+          // optionally toggle icon
+          const icon = btn.querySelector('i');
+          if(icon) icon.className = data.is_liked ? 'fas fa-heart' : 'far fa-heart';
+        }
+      }catch(e){ console.error(e); } finally { btn.disabled = false; }
+    }
+
+    // SSE for comments (server has stream)
+    let commentsES = null;
+    function setupCommentsSSE(pid){
+      try{
+        if(typeof EventSource === 'undefined') return;
+        if(commentsES) commentsES.close();
+        commentsES = new EventSource(`/api/posts/${pid}/comments/stream`);
+        commentsES.addEventListener('comment_added', (e)=>{
+          try{
+            const c = JSON.parse(e.data||'{}');
+            // append
+            const list = $id('commentsList');
+            if(list) list.insertAdjacentHTML('beforeend', commentToHtml(c));
+          }catch(err){ console.error(err); }
+        });
+        commentsES.addEventListener('comments_snapshot', (e)=>{
+          try{
+            const items = JSON.parse(e.data||'[]');
+            renderCommentsList(items);
+          }catch(err){ console.error(err); }
+        });
+        commentsES.onerror = (err) => { /* reconnect handled by browser */ };
+      }catch(e){ console.warn('SSE not available', e); }
+    }
+
+    function scrollToComments(){ window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }); }
+
+    async function sharePost(){
+      try{
+        const url = window.location.href;
+        if(navigator.share){
+          await navigator.share({ title: 'منشور من Aite', url });
+        } else {
+          await navigator.clipboard.writeText(url);
+          alert('تم نسخ رابط المنشور');
+        }
+      }catch(e){ console.error(e); alert('فشل المشاركة'); }
+    }
+
+    function openOptions(){ alert('قائمة الخيارات ستظهر هنا — (حذف، تبليغ، ...)'); }
+
+  </script>
+</body>
+</html>
