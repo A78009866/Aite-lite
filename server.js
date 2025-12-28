@@ -157,7 +157,10 @@ app.get('/check-status', (req, res) => {
     res.redirect('/login');
   }
 });
-
+// إضافة هذا المسار في قسم Routes: Pages (ضعه بالقرب من باقي app.get للـ views)
+app.get('/families', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'families.html'));
+});
 app.get('/chat_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'chat_list.html')); });
 app.get('/users_list', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'users_list.html')); }); // friends (chats) list
 app.get('/all_users', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'all_users.html')); }); // all users + requests
