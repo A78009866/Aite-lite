@@ -191,7 +191,6 @@ app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__
 
 // انقل هذا الجزء للأعلى قليلاً في ملف server.js
 app.get('/settings', (req, res) => {
-  if (!req.session || !req.session.user) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'views', 'settings.html'));
 });
 
