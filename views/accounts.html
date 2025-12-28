@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>الحسابات — Trimer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
+  <style>
+    body { background:#000; color:#e4e6eb; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .card { background: rgba(20,20,20,0.6); backdrop-filter: blur(12px); border:1px solid rgba(255,255,255,0.06); }
+    .avatar { width:56px; height:56px; border-radius:12px; object-fit:cover; }
+    .btn-ghost { background: transparent; border:1px solid rgba(255,255,255,0.08); padding:.45rem .7rem; border-radius:10px; color:#e4e6eb; }
+    .btn-primary { background:linear-gradient(135deg,#3982f7,#2a61b8); padding:.5rem .9rem; border-radius:10px; color:#fff; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+
+  <div class="w-full max-w-2xl">
+    <div class="mb-6 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" class="h-12 w-12 rounded-xl" alt="Trimer">
+        <h1 class="text-2xl font-bold">الحسابات المحفوظة</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/login" class="btn-ghost">تسجيل دخول آخر</a>
+        <a href="/register" class="btn-primary">إنشاء حساب جديد</a>
+      </div>
+    </div>
+
+    <div class="card p-6 rounded-2xl">
+      <p id="intro" class="text-gray-300 mb-4">هنا تظهر الحسابات التي سجلت الدخول بها سابقاً. اضغط على أي حساب لتسجيل الدخول فوراً.</p>
+
+      <div id="accountsList" class="space-y-3">
+        <!-- accounts injected here -->
+      </div>
+
+      <div id="emptyState" class="text-center text-gray-400 mt-6 hidden">
+        لا توجد حسابات محفوظة بعد. <a href="/login" class="text-[#3982f7] font-semibold">تسجيل دخول</a> أو <a href="/register" class="text-[#3982f7] font-semibold">إنشاء حساب</a>.
+      </div>
+
+      <form id="hiddenLoginForm" method="post" action="/login" style="display:none;">
+        <input type="hidden" name="username" id="hidden_username">
+        <!-- server expects username (username@trimer.io is used server-side) -->
+      </form>
+
+    </div>
+
+    <div class="mt-5 text-sm text-gray-400">
+      ملاحظة: الحسابات محفوظة فقط محلياً على هذا المتصفح. يمكن حذف أي حساب بالضغط على أيقونة الحذف.
+    </div>
+  </div>
+
+<script>
+  const STORAGE_KEY = 'trimer_accounts_v1'; // إمكانية تغيير النسخة لاحقاً
+  const DEFAULT_AVATAR = 'https://via.placeholder.com/80?text=Trimer';
+
+  function loadAccounts() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      console.error('Failed to parse accounts', e);
+      return [];
+    }
+  }
+
+  function saveAccounts(list) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list || []));
+  }
+
+  function removeAccount(username) {
+    let accounts = loadAccounts();
+    accounts = accounts.filter(a => a.username !== username);
+    saveAccounts(accounts);
+    render();
+  }
+
+  function render() {
+    const listEl = document.getElementById('accountsList');
+    const emptyEl = document.getElementById('emptyState');
+    listEl.innerHTML = '';
+    const accounts = loadAccounts();
+
+    if (!accounts || accounts.length === 0) {
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+    emptyEl.classList.add('hidden');
+
+    accounts.forEach(acc => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex items-center justify-between bg-black/30 p-3 rounded-lg';
+
+      const left = document.createElement('div');
+      left.className = 'flex items-center gap-3 cursor-pointer';
+      left.title = `سجل الدخول باسم ${acc.username}`;
+      left.onclick = () => loginWith(acc.username);
+
+      const img = document.createElement('img');
+      img.className = 'avatar';
+      img.src = acc.profile_picture_url || DEFAULT_AVATAR;
+      img.alt = acc.username;
+
+      const info = document.createElement('div');
+      info.innerHTML = `<div class="font-semibold">${acc.full_name || acc.username}</div><div class="text-xs text-gray-400">@${acc.username}</div>`;
+
+      left.appendChild(img);
+      left.appendChild(info);
+
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center gap-2';
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn-ghost';
+      removeBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+      removeBtn.title = 'حذف الحساب';
+      removeBtn.onclick = (e) => { e.stopPropagation(); if (confirm("هل تريد حذف هذا الحساب من هذا المتصفح؟")) removeAccount(acc.username); };
+
+      const quickLogin = document.createElement('button');
+      quickLogin.type = 'button';
+      quickLogin.className = 'btn-primary';
+      quickLogin.innerHTML = '<i class="fas fa-sign-in-alt ml-2"></i>دخول';
+      quickLogin.onclick = (e) => { e.stopPropagation(); loginWith(acc.username); };
+
+      actions.appendChild(removeBtn);
+      actions.appendChild(quickLogin);
+
+      wrapper.appendChild(left);
+      wrapper.appendChild(actions);
+
+      listEl.appendChild(wrapper);
+    });
+  }
+
+  function loginWith(username) {
+    // ضع اسم المستخدم في الحقل المخفي وقدم النموذج
+    document.getElementById('hidden_username').value = username;
+    // لإظهار تأثير للمستخدم، يمكن تعطيل الصفحة مؤقتاً
+    // ثم إرسال النموذج
+    document.getElementById('hiddenLoginForm').submit();
+  }
+
+  // initialization
+  render();
+</script>
+
+</body>
+</html>
