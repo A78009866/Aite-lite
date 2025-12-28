@@ -616,7 +616,7 @@
         let commentsEventSource = null;
 
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-        const DEFAULT_AVATAR = 'https://via.placeholder.com/40';
+        const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
         const CREATE_FAMILY_BG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
         const postsFeed = document.getElementById('postsFeed');
@@ -1347,21 +1347,26 @@ function createCommentHtml(comment, postId) {
             `;
         }
 
-        function renderFamilyCard(f) {
-            const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : 'https://via.placeholder.com/160x100?text=Family';
-            const members = f.membersCount || 0;
-            const isMember = !!f.is_member;
-            const badge = isMember ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
-            return `
-                <div class="family-card" data-family-id="${escapeAttr(f.familyId)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId)}', ${isMember})">
-                    <img src="${escapeHtml(img)}" alt="${escapeHtml(f.name)}">
-                    <div class="meta">
-                        <div class="name">${escapeHtml(f.name)} ${isMember ? '' : ''}</div>
-                        <div class="count">${members} عضو • ${badge}</div>
-                    </div>
-                </div>
-            `;
-        }
+        // الرابط الموحد للصورة الافتراضية
+const DEFAULT_FAM_IMG = "https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop";
+
+function renderFamilies(families) {
+  const container = document.getElementById('familiesList');
+  container.innerHTML = families.map(fam => {
+    // إذا لم تكن هناك صورة (null أو empty)، استخدم الصورة الافتراضية
+    const displayImg = fam.imageUrl || DEFAULT_FAM_IMG;
+    
+    return `
+      <div class="family-item" onclick="openChat('${fam.id}')">
+        <img src="${displayImg}" class="family-avatar" alt="${fam.name}" 
+             onerror="this.src='${DEFAULT_FAM_IMG}'"> 
+        <div class="family-info">
+          <div class="family-name">${fam.name}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
         async function fetchAndDisplayFamilies() {
             if (!familiesRow) return;
