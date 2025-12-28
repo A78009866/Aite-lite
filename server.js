@@ -154,9 +154,16 @@ app.get('/check-status', (req, res) => {
   if (req.session && req.session.userId) {
     res.redirect('/chat_list');
   } else {
-    res.redirect('/login');
+    // توجيه إلى صفحة الحسابات المحفوظة عندما لا يكون المستخدم مسجلاً
+    res.redirect('/accounts');
   }
 });
+
+// مسار صفحة الحسابات (تُعرض عندما لا يكون المستخدم مسجلاً)
+app.get('/accounts', (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'accounts.html'));
+});
+
 // إضافة هذا المسار في قسم Routes: Pages (ضعه بالقرب من باقي app.get للـ views)
 app.get('/families', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'families.html'));
@@ -423,7 +430,8 @@ app.get('/logout', async (req, res) => {
 
   req.session.destroy(() => {
     res.clearCookie('connect.sid');
-    res.redirect('/login');
+    // بعد تسجيل الخروج نوجّه المستخدم إلى صفحة الحسابات المحفوظة
+    res.redirect('/accounts');
   });
 });
 
