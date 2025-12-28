@@ -198,7 +198,96 @@ app.get('/create-family', requireAuth, (req, res) => {
 app.get('/family/:familyId', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'family.html'));
 });
+app.get('/search', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'search.html'));
+});
 
+// API: بحث بسيط يجمع من posts, reels, profiles (فلترة بسيطة على الخادم)
+app.get('/api/search', requireAuth, async (req, res) => {
+  try {
+    const qRaw = String(req.query.q || '').trim();
+    const q = qRaw.toLowerCase();
+    if (!q) return res.json({ ok: true, posts: [], reels: [], people: [] });
+
+    // جلب البيانات الأساسية
+    const [postsSnap, reelsSnap, profilesSnap] = await Promise.all([
+      db.ref('posts').once('value'),
+      db.ref('reels').once('value'),
+      db.ref('profiles').once('value')
+    ]);
+
+    const profilesObj = profilesSnap.val() || {};
+    // Normalize profiles array
+    const profilesArr = Object.values(profilesObj).map(p => ({
+      id: p.id || p.uid || '',
+      username: (p.username || '').toLowerCase(),
+      usernameRaw: p.username || '',
+      full_name: (p.full_name || '').toLowerCase(),
+      full_nameRaw: p.full_name || '',
+      profile_picture_url: p.profile_picture_url || ''
+    }));
+
+    // search people
+    const people = profilesArr.filter(u => {
+      return (u.username && u.username.includes(q)) || (u.full_name && u.full_name.includes(q));
+    }).slice(0, 30).map(u => ({ id: u.id, username: u.usernameRaw, full_name: u.full_nameRaw, profile_picture_url: u.profile_picture_url }));
+
+    // search posts (check content + author username/full_name)
+    const postsObj = postsSnap.val() || {};
+    const postsArr = Object.values(postsObj);
+    const matchedPosts = [];
+    for (const p of postsArr) {
+      const content = (p.content || '').toLowerCase();
+      const author = profilesObj[p.userId] || {};
+      const authorName = (author.username || '').toLowerCase();
+      const authorFull = (author.full_name || '').toLowerCase();
+      if (content.includes(q) || authorName.includes(q) || authorFull.includes(q)) {
+        matchedPosts.push({
+          postId: p.postId || p.id || '',
+          userId: p.userId || '',
+          content: p.content || '',
+          timestamp: p.timestamp || 0,
+          media: p.media || null,
+          user: {
+            username: author.username || author.displayName || 'مستخدم',
+            profile_picture_url: author.profile_picture_url || ''
+          }
+        });
+      }
+      if (matchedPosts.length >= 30) break;
+    }
+
+    // search reels (description + author)
+    const reelsObj = reelsSnap.val() || {};
+    const reelsArr = Object.values(reelsObj);
+    const matchedReels = [];
+    for (const r of reelsArr) {
+      const desc = (r.description || '').toLowerCase();
+      const author = profilesObj[r.userId] || {};
+      const authorName = (author.username || '').toLowerCase();
+      const authorFull = (author.full_name || '').toLowerCase();
+      if (desc.includes(q) || authorName.includes(q) || authorFull.includes(q)) {
+        matchedReels.push({
+          reelId: r.reelId || r.id || '',
+          userId: r.userId || '',
+          description: r.description || '',
+          timestamp: r.timestamp || 0,
+          videoUrl: r.videoUrl || r.video_url || '',
+          user: {
+            username: author.username || author.displayName || 'مستخدم',
+            profile_picture_url: author.profile_picture_url || ''
+          }
+        });
+      }
+      if (matchedReels.length >= 30) break;
+    }
+
+    res.json({ ok: true, posts: matchedPosts, reels: matchedReels, people: people });
+  } catch (err) {
+    console.error('Search API error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
