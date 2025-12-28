@@ -46,22 +46,10 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* Make waveform black/glassy like create_post (idle: white strip; playing: gray unplayed / white progress) */
         .waveform-post {
             height: 60px;
-            background: #000000; /* fully black */
+            background-color: #0f172a;
             border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.04);
-            overflow: hidden;
-        }
-
-        /* prevent blue hover on play button, use light glass color */
-        .audio-play-button:hover {
-            color: #e5e7eb !important;
-        }
-
-        .waveform-post {
-            height: 60px;
         }
 
         .custom-scrollbar::-webkit-scrollbar {
@@ -533,7 +521,7 @@ let currentPostIdToDelete = null;
 let currentOptionsPostId = null;
 let currentOptionsUserId = null;
 
-/* ---------------- Toast helper (black glassy) ------------------ */
+/* ---------------- Toast helper (black glassy) ---------------- */
 function showToast(message, opts = {}) {
     const { type = 'info', duration = 3500 } = opts;
     let container = document.getElementById('toastContainer');
@@ -681,28 +669,15 @@ function closeMediaViewer() {
 }
 
 /* ---------------- WaveSurfer helpers (audio posts) ---------------- */
-
-function setWSColors(ws, waveColor, progressColor) {
-    try {
-        if (typeof ws.setWaveColor === 'function') ws.setWaveColor(waveColor);
-        else if (ws.drawer && typeof ws.drawer.setWaveColor === 'function') ws.drawer.setWaveColor(waveColor);
-    } catch (e) {}
-    try {
-        if (typeof ws.setProgressColor === 'function') ws.setProgressColor(progressColor);
-        else if (ws.drawer && typeof ws.drawer.setProgressColor === 'function') ws.drawer.setProgressColor(progressColor);
-    } catch (e) {}
-}
-
 function initializePostWaveSurfer(postId, url) {
     const container = document.getElementById(`waveform-${postId}`);
     if (!container) return null;
     if (audioWaveSurfers[postId]) return audioWaveSurfers[postId];
-    // idle: white strip on black background
     const wavesurfer = WaveSurfer.create({
         container: container,
-        waveColor: '#ffffff',     // idle: white
-        progressColor: '#ffffff', // progress white (we'll set unplayed to gray on play)
-        cursorColor: 'transparent',
+        waveColor: '#4f46e5',
+        progressColor: '#06b6d4',
+        cursorColor: '#1d4ed8',
         barWidth: 3,
         barRadius: 3,
         barGap: 3,
@@ -711,37 +686,26 @@ function initializePostWaveSurfer(postId, url) {
         backend: 'MediaElement',
     });
     wavesurfer.load(url);
-
     wavesurfer.on('ready', () => {
         const btn = document.getElementById(`audio-btn-${postId}`);
         if (btn) btn.querySelector('i').className = 'fas fa-play';
     });
-
-    // When play -> set unplayed wave to gray so white progress advances on top
     wavesurfer.on('play', () => {
-        setWSColors(wavesurfer, '#6b7280', '#ffffff'); // gray unplayed, white progress
         const btn = document.getElementById(`audio-btn-${postId}`);
         if (btn) btn.querySelector('i').className = 'fas fa-pause';
         if (activeWaveSurfer && activeWaveSurfer !== wavesurfer) activeWaveSurfer.pause();
         activeWaveSurfer = wavesurfer;
     });
-
     wavesurfer.on('pause', () => {
-        // revert to idle white strip (unplayed white)
-        setWSColors(wavesurfer, '#ffffff', '#ffffff');
         const btn = document.getElementById(`audio-btn-${postId}`);
         if (btn) btn.querySelector('i').className = 'fas fa-play';
-        if (activeWaveSurfer === wavesurfer) activeWaveSurfer = null;
     });
-
     wavesurfer.on('finish', () => {
-        setWSColors(wavesurfer, '#ffffff', '#ffffff');
         const btn = document.getElementById(`audio-btn-${postId}`);
         if (btn) btn.querySelector('i').className = 'fas fa-play';
         wavesurfer.seekTo(0);
         activeWaveSurfer = null;
     });
-
     audioWaveSurfers[postId] = wavesurfer;
     return wavesurfer;
 }
@@ -945,7 +909,7 @@ function openReplyBox(commentId) {
 
 // Post a reply to a comment
 async function postReply(postId, commentId) {
-    const input = document.getElementById(`reply-input-${comment.commentId}`) || document.getElementById(`reply-input-${commentId}`);
+    const input = document.getElementById(`reply-input-${commentId}`);
     if (!input) return;
     const content = input.value.trim();
     if (!content) return;
