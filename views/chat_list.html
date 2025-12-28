@@ -76,31 +76,43 @@
             position: relative; z-index: 2; text-align: center;
         }
 
+        /* Enlarged/touch-friendly family card with horizontal scroll for long names */
         .family-card {
-            min-width: 160px;
-            max-width: 160px;
-            height: 110px;
+            min-width: 220px;
+            max-width: 260px;
+            height: 130px;
             border-radius: 12px;
             background: rgba(20,20,20,0.6);
             border: 1px solid rgba(255,255,255,0.06);
             display: flex;
             gap: 10px;
-            padding: 10px;
+            padding: 12px;
             align-items: center;
             cursor: pointer;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            overflow: hidden;
         }
         .family-card img {
-            width: 72px; height: 72px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+            width: 88px; height: 88px; border-radius: 12px; object-fit: cover; flex-shrink: 0;
         }
         .family-card .meta {
             flex: 1; overflow: hidden;
         }
+
+        /* Make name scrollable horizontally to allow showing long family names */
         .family-card .meta .name {
-            font-weight: 700; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+            font-weight: 800;
+            color: #fff;
+            white-space: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
         }
+        .family-card .meta .name::-webkit-scrollbar { height: 6px; }
+        .family-card .meta .name::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 6px; }
+
         .family-card .meta .count {
-            font-size: 12px; color: #9ca3af; margin-top: 6px;
+            font-size: 12px; color: #9ca3af; margin-top: 8px;
         }
 
         /* --- Reels Tray CSS (NEW) --- */
@@ -422,6 +434,20 @@
         .option-btn.danger { background: linear-gradient(90deg,#7f1d1d, #ef4444); color:white; border:none; }
         .option-btn:active { transform: translateY(1px); }
         .option-row { display:flex; gap:10px; margin-bottom:10px; }
+
+        /* View all families button style */
+        #viewAllFamiliesBtn {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 6px 10px;
+            border-radius: 8px;
+            color: #cbd5e1;
+            font-size: 13px;
+        }
+        #viewAllFamiliesBtn:hover {
+            background: rgba(255,255,255,0.02);
+            color: #fff;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -470,7 +496,8 @@
         <div id="familiesWrapper" class="max-w-xl mx-auto mt-4">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-white font-bold">العائلات</h2>
-                <a href="/create-family" class="text-sm text-gray-400 hover:text-white">إنشاء عائلة جديدة</a>
+                <!-- استبدل رابط إنشاء عائلة بزر عرض كل العائلات -->
+                <button id="viewAllFamiliesBtn" onclick="window.location.href='/families'">عرض كل العائلات</button>
             </div>
             <div id="familiesRow" class="families-row">
                 </div>
@@ -1479,7 +1506,7 @@ function renderFamilyCard(f) {
                    : DEFAULT_FAM_IMG;
     
     const members = f.membersCount || 0;
-    const isMember = !!f.is_member;
+    const isMember = f.is_member || (f.members && (f.members[document && document.getElementById ? (document.getElementById('userProfilePic') && document.getElementById('userProfilePic').dataset ? document.getElementById('userProfilePic').dataset.uid : null) : null]) ? true : false);
     
     // شارات الحالة (عضو أو مقفل)
     const badge = isMember 
@@ -1492,7 +1519,7 @@ function renderFamilyCard(f) {
                  alt="${escapeHtml(f.name)}" 
                  onerror="this.onerror=null;this.src='${DEFAULT_FAM_IMG}';">
             <div class="meta">
-                <div class="name">${escapeHtml(f.name)}</div>
+                <div class="name" title="${escapeHtml(f.name || '')}">${escapeHtml(f.name)}</div>
                 <div class="count">${members} عضو • ${badge}</div>
             </div>
         </div>
@@ -2224,6 +2251,56 @@ async function fetchAndDisplayFamilies() {
         function escapeAttr(s) {
             if (!s && s !== 0) return '';
             return String(s).replace(/"/g, '&quot;');
+        }
+
+        // optional: seek video helper for click on progress bar
+        function seekVideo(postId, event) {
+            event.stopPropagation();
+            const bar = event.currentTarget || event.target;
+            const rect = bar.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const percent = x / rect.width;
+            const video = document.getElementById(`video-${postId}`);
+            if (video && video.duration) {
+                video.currentTime = video.duration * percent;
+            }
+        }
+
+        function toggleAudioPlay(postId) {
+            const btn = document.getElementById(`audio-btn-${postId}`);
+            const wf = document.getElementById(`waveform-${postId}`);
+            if (!wf) return;
+            const ws = WaveSurfer && WaveSurfer.instances ? WaveSurfer.instances.find(i => i.container === wf) : null;
+            // fallback: keep activeWaveSurfer management used earlier
+            if (activeWaveSurfer && activeWaveSurfer !== ws) {
+                try { activeWaveSurfer.pause(); } catch(e){}
+            }
+            if (ws) {
+                if (ws.isPlaying()) {
+                    ws.pause();
+                    if (btn) { btn.querySelector('i').classList.remove('fa-pause'); btn.querySelector('i').classList.add('fa-play'); }
+                } else {
+                    ws.play();
+                    if (btn) { btn.querySelector('i').classList.remove('fa-play'); btn.querySelector('i').classList.add('fa-pause'); }
+                    activeWaveSurfer = ws;
+                }
+            } else {
+                // If not found (older wavesurfer versions), attempt toggle via stored reference in initialize
+                try {
+                    if (activeWaveSurfer && activeWaveSurfer.isPlaying && activeWaveSurfer.container === wf) {
+                        activeWaveSurfer.pause();
+                        if (btn) { btn.querySelector('i').classList.remove('fa-pause'); btn.querySelector('i').classList.add('fa-play'); }
+                    }
+                } catch (e) {}
+            }
+        }
+
+        function toggleFullscreen(postId, ev) {
+            ev.stopPropagation();
+            const video = document.getElementById(`video-${postId}`);
+            if (!video) return;
+            if (video.requestFullscreen) video.requestFullscreen().catch(()=>{});
+            else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen().catch(()=>{});
         }
 
     </script>
