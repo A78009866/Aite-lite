@@ -191,7 +191,7 @@ app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__
 // 1. مسار عرض صفحة الإعدادات
 // للتجربة فقط (احذف التحقق مؤقتاً)
 app.get('/settings', (req, res) => {
-  res.sendFile(path.join(__dirname, 'settings.html'));
+  res.sendFile(path.join(__dirname, 'views', 'settings.html'));
 });
 // ---------------- Admin Page route (جديد) ----------------
 // الصفحة محمية بطبقة requireAuth ثم requireAdmin
