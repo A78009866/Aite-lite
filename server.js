@@ -188,7 +188,11 @@ app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__di
 
 // Notifications page
 app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
-
+// 1. مسار عرض صفحة الإعدادات
+// للتجربة فقط (احذف التحقق مؤقتاً)
+app.get('/settings', (req, res) => {
+  res.sendFile(path.join(__dirname, 'settings.html'));
+});
 // ---------------- Admin Page route (جديد) ----------------
 // الصفحة محمية بطبقة requireAuth ثم requireAdmin
 app.get('/admin', requireAuth, requireAdmin, (req, res) => {
@@ -3287,11 +3291,7 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
   next(err);
 });
-// 1. مسار عرض صفحة الإعدادات
-// للتجربة فقط (احذف التحقق مؤقتاً)
-app.get('/settings', (req, res) => {
-  res.sendFile(path.join(__dirname, 'settings.html'));
-});
+
 
 
 // 2. API لتغيير كلمة المرور
