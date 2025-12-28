@@ -23,7 +23,6 @@
             filter: drop-shadow(0 0 15px rgba(57, 130, 247, 0.4));
         }
 
-        /* Glass Container for the list */
         .accounts-container {
             max-width: 400px;
             width: 100%;
@@ -31,7 +30,6 @@
             padding: 20px;
         }
 
-        /* Individual Account Card */
         .account-card {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
@@ -42,6 +40,7 @@
             position: relative;
             overflow: hidden;
             cursor: pointer;
+            user-select: none; /* منع تحديد النص عند النقر */
         }
 
         .account-card:hover {
@@ -59,26 +58,37 @@
             border-color: #3982f7;
         }
 
-        /* Remove Button (X) */
+        /* زر الحذف (X) */
         .remove-btn {
             position: absolute;
-            top: 15px;
-            left: 15px; /* RTL logic */
-            color: #6b7280;
-            opacity: 0;
+            top: 10px;
+            left: 10px; /* في اليسار لأن الصفحة RTL */
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(255, 0, 0, 0.1);
+            color: #ff5555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0; /* مخفي افتراضياً */
             transition: all 0.2s;
-            padding: 5px;
-            z-index: 10;
+            z-index: 20; /* لضمان أنه فوق الكارت */
+            border: 1px solid transparent;
         }
+        
+        /* إظهار الزر عند تحويم الفأرة على الكارت */
         .account-card:hover .remove-btn {
             opacity: 1;
         }
+
         .remove-btn:hover {
-            color: #ef4444;
+            background: #ff5555;
+            color: white;
             transform: scale(1.1);
+            border-color: #ff8888;
         }
 
-        /* Add Account Button */
         .add-account-btn {
             background: transparent;
             border: 1px dashed rgba(255, 255, 255, 0.2);
@@ -91,30 +101,12 @@
             background: rgba(57, 130, 247, 0.05);
         }
 
-        /* Animation */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-in {
             animation: fadeIn 0.4s ease-out forwards;
-        }
-
-        /* Notif Badge Style */
-        .notif-badge {
-            background: #ef4444;
-            font-size: 10px;
-            height: 18px;
-            min-width: 18px;
-            padding: 0 5px;
-            border-radius: 9px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            border: 2px solid #000;
         }
     </style>
 </head>
@@ -123,9 +115,9 @@
     <div class="text-center mb-10 logo-container animate-fade-in">
         <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" 
              class="w-20 h-20 rounded-2xl object-cover mx-auto mb-4 border border-white/10" 
-             alt="Trimer Logo">
-        <h1 class="text-4xl font-bold tracking-wider text-white">Trimer</h1>
-        <p class="text-gray-400 text-sm mt-2">اختر حساباً للدخول</p>
+             alt="Aite Logo">
+        <h1 class="text-4xl font-bold tracking-wider text-white">Aite</h1>
+        <p class="text-gray-400 text-sm mt-2">اختر حساباً للمتابعة</p>
     </div>
 
     <div class="accounts-container space-y-4" id="accountsListWrapper">
@@ -140,7 +132,7 @@
         </a>
         
         <div class="text-center mt-8">
-            <a href="/register" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">إنشاء حساب جديد</a>
+            <a href="/register" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">إنشاء حساب جديد في Aite</a>
         </div>
     </div>
 
@@ -160,21 +152,26 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
         }
 
+        // دالة الحذف
         function removeAccount(e, username) {
-            e.stopPropagation(); // منع النقر على الكارت عند حذف الحساب
+            // منع انتشار الحدث حتى لا يتم تفعيل النقر على الكارت (تسجيل الدخول)
+            e.stopPropagation(); 
             e.preventDefault();
             
-            if(confirm('هل تريد إزالة هذا الحساب من القائمة؟')) {
+            if(confirm('هل تريد إزالة الحساب @' + username + ' من هذه القائمة؟')) {
                 let accounts = loadAccounts();
                 accounts = accounts.filter(acc => acc.username !== username);
                 saveAccounts(accounts);
+                
+                // إعادة رسم القائمة
                 renderAccounts();
             }
         }
 
+        // دالة الدخول المباشر
         function handleAccountClick(username) {
-            // توجيه لصفحة الدخول مع تمرير اسم المستخدم
-            // ملاحظة: ستحتاج لتحديث login.html لقراءة هذا الباراميتر إذا أردت تعبئته تلقائياً
+            // توجيه مباشر لصفحة الدخول مع تمرير الاسم
+            // سيقوم المتصفح بإكمال كلمة المرور إذا كانت محفوظة
             window.location.href = `/login?username=${encodeURIComponent(username)}`;
         }
 
@@ -185,18 +182,18 @@
             container.innerHTML = '';
 
             if (accounts.length === 0) {
-                // حالة عدم وجود حسابات
-                window.location.href = '/login'; // توجيه تلقائي للدخول إذا كانت القائمة فارغة
+                // إذا لم توجد حسابات، نذهب لصفحة الدخول العادية
+                // window.location.href = '/login'; 
+                container.innerHTML = '<p class="text-center text-gray-500">لا توجد حسابات محفوظة</p>';
                 return;
             }
 
             accounts.forEach((acc, index) => {
                 const imgUrl = acc.profile_picture_url || DEFAULT_AVATAR;
-                // تأخير بسيط للأنيميشن لكل كارت
                 const delayStyle = `animation-delay: ${index * 100}ms`;
 
                 const cardHtml = `
-                    <div class="account-card flex items-center p-4 gap-4 animate-fade-in" 
+                    <div class="account-card flex items-center p-4 gap-4 animate-fade-in group" 
                          style="${delayStyle}"
                          onclick="handleAccountClick('${acc.username}')">
                         
@@ -205,7 +202,7 @@
                                  class="w-14 h-14 rounded-full object-cover account-avatar bg-gray-800" 
                                  alt="${acc.username}"
                                  onerror="this.src='${DEFAULT_AVATAR}'">
-                             </div>
+                        </div>
 
                         <div class="flex-grow text-right">
                             <h3 class="text-white font-bold text-lg leading-tight truncate">${acc.full_name || acc.username}</h3>
@@ -216,7 +213,7 @@
                             <i class="fas fa-times"></i>
                         </button>
                         
-                        <div class="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div class="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity mr-2">
                              <i class="fas fa-chevron-left"></i>
                         </div>
                     </div>
