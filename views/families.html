@@ -27,6 +27,34 @@
       box-shadow: 0 10px 40px rgba(0,0,0,0.6);
     }
 
+    .search-container {
+      margin-top: 20px;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 12px 40px 12px 12px;
+      color: white;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .search-icon {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+    }
+
     .families-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -80,11 +108,11 @@
       background: transparent;
       border: 1px solid rgba(255,255,255,0.06);
       color: #cbd5e1;
-      padding: 8px 10px;
+      padding: 10px 14px;
       border-radius: 10px;
       display:flex;
-      gap:8px;
       align-items:center;
+      justify-content: center;
     }
     .back-btn:hover { background: rgba(255,255,255,0.02); color: #fff; }
 
@@ -99,24 +127,27 @@
   <div class="glass-page">
     <div class="page-header">
       <div>
-        <div class="page-title">كل العائلات</div>
-        <div class="text-sm text-gray-400">قائمة بالعائلات المتاحة — اضغط على أي بطاقة للانتقال إلى صفحة العائلة</div>
+        <div class="page-title">ابحث عن عائلتك</div>
+        <div class="text-sm text-gray-400">أو انضم لعائلة جديدة</div>
       </div>
       <div>
-        <button class="back-btn" onclick="goBack()">
+        <button class="back-btn" onclick="goBack()" title="رجوع">
           <i class="fas fa-arrow-right"></i>
-          صفحة العودة
         </button>
       </div>
     </div>
 
-    <div id="familiesGrid" class="families-grid" style="margin-top:18px;">
-      <!-- tiles injected here -->
+    <div class="search-container">
+      <i class="fas fa-search search-icon"></i>
+      <input type="text" id="familySearch" class="search-input" placeholder="اكتب اسم العائلة للبحث..." onkeyup="filterFamilies()">
     </div>
+
+    <div id="familiesGrid" class="families-grid" style="margin-top:18px;">
+      </div>
 
     <div id="emptyState" class="empty-state hidden">
       <i class="far fa-frown text-3xl mb-3"></i>
-      <div class="mt-2">لا توجد عائلات بعد.</div>
+      <div class="mt-2" id="emptyMessage">لا توجد عائلات بعد.</div>
       <div class="mt-2 text-sm">يمكنك إنشاء عائلة من خلال صفحة الملف الشخصي أو الضغط على زر "إنشاء عائلة" في الصفحة الرئيسية.</div>
     </div>
   </div>
@@ -125,9 +156,9 @@
     const DEFAULT_FAM_IMG = "https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop";
     const grid = document.getElementById('familiesGrid');
     const empty = document.getElementById('emptyState');
+    let allFamilies = []; // لتخزين البيانات الأصلية للبحث
 
     function goBack() {
-      // navigate back to chat_list if possible
       if (document.referrer && document.referrer.includes('/chat_list')) {
         window.history.back();
       } else {
@@ -161,30 +192,41 @@
       window.location.href = `/family/${id}`;
     }
 
+    // وظيفة تصفية العائلات عند البحث
+    function filterFamilies() {
+      const query = document.getElementById('familySearch').value.toLowerCase();
+      const filtered = allFamilies.filter(f => (f.name || '').toLowerCase().includes(query));
+      
+      if (filtered.length === 0) {
+        empty.classList.remove('hidden');
+        document.getElementById('emptyMessage').innerText = "لم يتم العثور على نتائج للبحث.";
+        grid.innerHTML = '';
+      } else {
+        empty.classList.add('hidden');
+        grid.innerHTML = filtered.map(f => createTileHtml(f)).join('');
+      }
+    }
+
     async function fetchFamilies() {
       try {
         const res = await fetch('/api/families', { credentials: 'same-origin' });
         const data = await res.json();
         if (res.ok && data.ok) {
-          const families = data.families || [];
-          if (families.length === 0) {
-            empty.classList.remove('hidden');
-            grid.innerHTML = '';
-            return;
-          }
-          empty.classList.add('hidden');
-          grid.innerHTML = families.map(f => createTileHtml(f)).join('');
+          allFamilies = data.families || [];
         } else {
-          // fallback: try my families
           const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
           const d2 = await res2.json();
-          if (res2.ok && d2.ok && d2.families && d2.families.length > 0) {
-            empty.classList.add('hidden');
-            grid.innerHTML = d2.families.map(f => createTileHtml({ ...f, is_member: true })).join('');
-          } else {
-            empty.classList.remove('hidden');
-            grid.innerHTML = '';
+          if (res2.ok && d2.ok && d2.families) {
+            allFamilies = d2.families.map(f => ({ ...f, is_member: true }));
           }
+        }
+        
+        if (allFamilies.length === 0) {
+          empty.classList.remove('hidden');
+          grid.innerHTML = '';
+        } else {
+          empty.classList.add('hidden');
+          grid.innerHTML = allFamilies.map(f => createTileHtml(f)).join('');
         }
       } catch (err) {
         console.error('Failed to fetch families', err);
