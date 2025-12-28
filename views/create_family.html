@@ -19,7 +19,27 @@
     .pad{padding:18px}
     .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
     .title{font-weight:700}
-    .home-btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--glass);color:var(--accent);cursor:pointer;font-weight:700;text-decoration:none}
+    
+    /* تعديل زر العودة ليصبح دائرياً */
+    .home-btn{
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--glass);
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .home-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: scale(1.05);
+    }
+
     .preview{
       height:220px;border-radius:10px;background:linear-gradient(180deg,#071018,#0b0b0b);display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--border);cursor:pointer;
       position:relative;
@@ -50,9 +70,13 @@
       <div class="top">
         <div>
           <div id="pageTitle" class="title">إنشاء عائلة</div>
-          <div class="note">اختر صورة ثم أدخل اسم العائلة واضغط إنشاء</div>
+          <div class="note">اختر صورة، أدخل الاسم، ثم اضغط إنشاء</div>
         </div>
-        <a href="/chat_list" class="home-btn" title="العودة للرئيسية">العودة للرئيسية</a>
+        <a href="/chat_list" class="home-btn" title="العودة للرئيسية">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5m7 7l-7-7 7-7"/>
+          </svg>
+        </a>
       </div>
 
       <label for="fileInput" class="preview" id="previewArea" title="انقر لاختيار صورة">
@@ -65,13 +89,12 @@
         <button class="btn" id="createBtn" type="submit">إنشاء</button>
       </form>
 
-      <div class="note">بعد الإنشاء ستظهر لك نافذة تحتوي اسم العائلة، صورتها والرمز لنسخه أو إلغاء والعودة للرئيسية.</div>
+      <div class="note">بعد الإنشاء ستظهر نافذة تحتوي على رمز العائلة لنسخه.</div>
 
       <input id="fileInput" type="file" accept="image/*" style="display:none" />
     </div>
   </main>
 
-  <!-- result overlay (black) -->
   <div id="resultOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
     <div class="card" onclick="event.stopPropagation()">
       <div class="thumb"><img id="resultImg" src="" alt="صورة العائلة"></div>
@@ -103,10 +126,8 @@
     const copyBtn = document.getElementById('copyBtn');
     const cancelBtn = document.getElementById('cancelBtn');
 
-    // open file picker when preview clicked
     previewArea.addEventListener('click', () => fileInput.click());
 
-    // drag & drop
     previewArea.addEventListener('dragover', e => { e.preventDefault(); previewArea.style.opacity = 0.95; });
     previewArea.addEventListener('dragleave', () => { previewArea.style.opacity = 1; });
     previewArea.addEventListener('drop', e => {
@@ -182,17 +203,14 @@
       }
     });
 
-    // Cancel -> redirect to home
     cancelBtn.addEventListener('click', () => {
       window.location.href = '/chat_list';
     });
 
-    // clicking outside the card closes overlay and returns home
     overlay.addEventListener('click', () => {
       window.location.href = '/chat_list';
     });
 
-    // keyboard accessibility: Esc closes overlay and goes home
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && overlay.style.display === 'flex') {
         window.location.href = '/chat_list';
