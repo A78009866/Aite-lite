@@ -1,394 +1,352 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>عرض المنشور — Aite</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>عرض المنشور</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #000; color: #e4e6eb; font-family: 'Segoe UI', sans-serif; min-height: 100vh; padding-bottom: 20px; }
+        
+        .glass-navbar { background-color: rgba(30,30,30,0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.1); }
+        
+        .glass-post-card { background-color: rgba(20,20,20,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; }
+        
+        /* Audio Player */
+        .audio-play-wrapper { background: #000; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); padding: 10px; display: flex; align-items: center; gap: 12px; }
+        .audio-play-button { width: 44px; height: 44px; border-radius: 10px; background: #fff; color: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; }
+        .audio-play-button:active { transform: scale(0.95); }
+        .waveform-post { height: 60px; flex-grow: 1; }
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+        /* Comment Modal (Bottom Sheet) */
+        .glass-modal-bg { background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
+        .glass-comment-modal-content { background: #18191a; border-radius: 20px 20px 0 0; border-top: 1px solid rgba(255,255,255,0.15); height: 75vh; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .glass-comment-modal-content.open { transform: translateY(0); }
+        .modal-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 12px auto; }
+        
+        /* Verify Badge */
+        .verified-badge-img { width: 14px; height: 14px; margin-right: 4px; vertical-align: middle; }
 
-  <style>
-    :root{
-      --bg:#070708;
-      --panel: rgba(18,18,20,0.6);
-      --border: rgba(255,255,255,0.04);
-      --text: #e6eefb;
-      --muted:#9aa0a6;
-    }
-    body{ margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family: "Segoe UI", Tahoma, Verdana, sans-serif; padding:20px; }
-    .container{ max-width:900px; margin:0 auto; }
-
-    .glass{
-      background: var(--panel);
-      border:1px solid var(--border);
-      border-radius:12px;
-      padding:14px;
-      backdrop-filter: blur(10px);
-    }
-
-    .topbar { display:flex; gap:12px; align-items:center; margin-bottom:14px; }
-    .back { color:var(--muted); cursor:pointer; border:1px solid rgba(255,255,255,0.02); padding:8px 10px; border-radius:8px; background:transparent; }
-
-    .post-card { display:flex; flex-direction:column; gap:12px; }
-    .author { display:flex; gap:12px; align-items:center; }
-    .author img{ width:56px; height:56px; border-radius:10px; object-fit:cover; border:1px solid rgba(255,255,255,0.04); }
-
-    .content { white-space:pre-wrap; line-height:1.5; color:var(--text); }
-
-    .media { width:100%; border-radius:10px; overflow:hidden; background:#000; }
-
-    .actions { display:flex; gap:8px; align-items:center; margin-top:6px; }
-    .btn { padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.04); background:transparent; cursor:pointer; color:var(--text); display:inline-flex; gap:8px; align-items:center; }
-    .btn.primary { background: rgba(255,255,255,0.02); }
-
-    .comments { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
-    .comment { background: rgba(0,0,0,0.22); border-radius:10px; padding:8px; display:flex; gap:10px; align-items:flex-start; }
-    .comment .meta { flex:1; }
-    .small-avatar { width:36px; height:36px; border-radius:8px; object-fit:cover; }
-
-    .comment-input { display:flex; gap:8px; margin-top:8px; align-items:center; }
-    input[type="text"].cinput { flex:1; padding:10px 12px; border-radius:999px; background:transparent; border:1px solid rgba(255,255,255,0.04); color:var(--text); outline:none; }
-
-    .muted { color:var(--muted); font-size:13px; }
-
-    @media (max-width:640px){ .author img{ width:48px; height:48px } .small-avatar{ width:30px;height:30px } }
-  </style>
+        /* Comments */
+        .comment-item { padding: 8px; border-radius: 12px; background: #131313; border: 1px solid #222; margin-bottom: 8px; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="topbar">
-      <button class="back" onclick="goBack()">← العودة</button>
-      <h2 style="margin:0; font-weight:800">عرض المنشور</h2>
+
+    <header class="sticky top-0 z-50 glass-navbar p-3 flex items-center gap-4">
+        <button onclick="window.history.back()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white">
+            <i class="fas fa-arrow-right text-xl"></i>
+        </button>
+        <h1 class="text-xl font-bold text-white">المنشور</h1>
+    </header>
+
+    <main id="postContainer" class="max-w-xl mx-auto p-4 mt-2">
+        <div class="text-center py-20 text-gray-500">
+            <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
+            <p>جاري تحميل المنشور...</p>
+        </div>
+    </main>
+
+    <div id="commentModal" class="hidden fixed inset-0 z-50 flex items-end justify-center glass-modal-bg" onclick="closeCommentModal()">
+        <div id="commentModalContent" class="glass-comment-modal-content w-full max-w-xl" onclick="event.stopPropagation()">
+            <div class="w-full flex justify-center" onclick="closeCommentModal()">
+                <div class="modal-handle"></div>
+            </div>
+            <div class="flex justify-between items-center px-4 pb-2 border-b border-gray-800">
+                <h3 class="text-lg font-bold text-white">التعليقات</h3>
+                <button onclick="closeCommentModal()" class="text-gray-400 p-2"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="commentsList" class="flex-grow overflow-y-auto p-4 custom-scrollbar"></div>
+            <div class="p-3 border-t border-gray-800 bg-[#18191a]">
+                <div class="flex items-center gap-2 bg-[#242526] p-2 rounded-3xl border border-gray-700">
+                    <input type="text" id="newCommentInput" placeholder="أضف تعليقاً..." class="flex-grow bg-transparent text-white text-sm px-2 focus:outline-none">
+                    <button id="postCommentBtn" class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white"><i class="fas fa-arrow-up text-sm"></i></button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="postWrap" class="glass post-card">
-      <div id="loading" class="muted">جاري تحميل المنشور...</div>
+    <script>
+        // --- Logic to Fetch and Render Post ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const postId = urlParams.get('id');
+        const postContainer = document.getElementById('postContainer');
+        const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
+        
+        let currentPostId = postId;
+        let activeWaveSurfer = null;
+        let activeVideo = null;
 
-      <!-- Post content is injected here -->
-      <div id="postContent" style="display:none;">
-        <div class="author">
-          <img id="authorAvatar" src="" alt="avatar">
-          <div>
-            <div id="authorName" style="font-weight:800"></div>
-            <div id="postTime" class="muted" style="font-size:13px"></div>
-          </div>
-          <div style="margin-inline-start:auto">
-            <button id="postOptionsBtn" class="btn" onclick="openOptions()">•••</button>
-          </div>
-        </div>
-
-        <div id="postText" class="content"></div>
-
-        <div id="postMedia" class="media"></div>
-
-        <div class="muted" id="statsLine"></div>
-
-        <div class="actions">
-          <button id="likeBtn" class="btn" onclick="toggleLike()"><i id="likeIcon" class="far fa-heart"></i> <span id="likeLabel">إعجاب</span></button>
-          <button id="commentToggleBtn" class="btn" onclick="scrollToComments()"><i class="far fa-comment-dots"></i> تعليق</button>
-          <button id="shareBtn" class="btn" onclick="sharePost()">مشاركة</button>
-        </div>
-
-        <div id="commentsSection" class="comments" style="margin-top:6px">
-          <div style="font-weight:700">التعليقات</div>
-          <div id="commentsList" class="mt-2"></div>
-
-          <div class="comment-input">
-            <img id="myAvatarSmall" src="" class="small-avatar" alt="me">
-            <input id="commentInput" class="cinput" type="text" placeholder="أضف تعليقاً..." onkeydown="if(event.key==='Enter') postComment()">
-            <button id="postCommentBtn" class="btn primary" onclick="postComment()">نشر</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // Utilities
-    function goBack(){ if(document.referrer) history.back(); else window.location.href = '/chat_list'; }
-    function $id(id){ return document.getElementById(id); }
-    function escapeHtml(s){ if(!s && s !== 0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-    function fmtTime(ts){
-      const d = new Date(Number(ts)||Date.now());
-      return d.toLocaleString('ar-EG', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-    }
-
-    // Read postId query
-    const params = new URLSearchParams(window.location.search);
-    const postId = params.get('id');
-
-    // State
-    let currentPost = null;
-    let currentUserId = null;
-
-    // Init
-    document.addEventListener('DOMContentLoaded', async () => {
-      await loadProfile();
-      if(!postId) { $id('loading').textContent = 'معرّف المنشور مفقود.'; return; }
-      await loadPostById(postId);
-      setupCommentsSSE(postId);
-    });
-
-    async function loadProfile(){
-      try{
-        const res = await fetch('/api/profile', { credentials:'same-origin' });
-        if(res.ok){
-          const data = await res.json();
-          currentUserId = data.id;
-          $id('myAvatarSmall').src = data.profile_picture_url || 'https://via.placeholder.com/40';
-        }
-      }catch(e){ /* ignore */ }
-    }
-
-    // Fetch posts list and find the requested post (server currently doesn't expose single-get)
-    async function loadPostById(pid){
-      try{
-        const res = await fetch('/api/posts', { credentials:'same-origin' });
-        const data = await res.json();
-        if(!res.ok || !data.ok){ $id('loading').textContent = 'فشل في جلب المنشور.'; return; }
-        const post = (data.posts || []).find(p => String(p.postId) === String(pid) || String(p.postId) === decodeURIComponent(pid));
-        if(!post){
-          // attempt /api/posts/user/:userId fallback not possible; show not found
-          $id('loading').textContent = 'المنشور غير موجود أو غير متاح.';
-          return;
-        }
-        currentPost = post;
-        renderPost(post);
-      }catch(e){
-        console.error(e);
-        $id('loading').textContent = 'خطأ في الاتصال.';
-      }
-    }
-
-    function renderPost(p){
-      $id('loading').style.display = 'none';
-      $id('postContent').style.display = 'block';
-
-      $id('authorAvatar').src = p.user?.profile_picture_url || 'https://via.placeholder.com/80';
-      $id('authorName').innerHTML = escapeHtml(p.user?.username || 'مستخدم');
-      $id('postTime').textContent = fmtTime(p.timestamp);
-
-      $id('postText').innerHTML = escapeHtml(p.content || '');
-
-      // media
-      const mediaWrap = $id('postMedia');
-      mediaWrap.innerHTML = '';
-      if(p.media && p.media.type === 'image'){
-        mediaWrap.innerHTML = `<img src="${escapeHtml(p.media.url)}" style="width:100%; height:auto; display:block;">`;
-      } else if(p.media && p.media.type === 'video'){
-        mediaWrap.innerHTML = `<video id="theVideo" src="${escapeHtml(p.media.url)}" controls style="width:100%;height:auto;background:#000"></video>`;
-      } else if(p.media && p.media.type === 'audio'){
-        mediaWrap.innerHTML = `<audio controls src="${escapeHtml(p.media.url)}" style="width:100%"></audio>`;
-      }
-
-      $id('statsLine').textContent = `${p.likes || 0} إعجاب • ${p.commentsCount || 0} تعليق`;
-
-      // like button state
-      // The feed already provided is_liked property
-      setLikeState(!!p.is_liked, p.likes || 0);
-
-      // load comments
-      fetchAndRenderComments(p.postId);
-    }
-
-    function setLikeState(isLiked, likesCount){
-      const likeIcon = $id('likeIcon');
-      $id('likeLabel').textContent = 'إعجاب';
-      if(isLiked){
-        likeIcon.className = 'fas fa-heart';
-        $id('likeBtn').classList.add('primary');
-      } else {
-        likeIcon.className = 'far fa-heart';
-        $id('likeBtn').classList.remove('primary');
-      }
-      // update stats line (preserve comments)
-      const parts = $id('statsLine').textContent.split('•');
-      const commentsPart = parts[1] ? parts[1].trim() : `${currentPost.commentsCount||0} تعليق`;
-      $id('statsLine').textContent = `${likesCount} إعجاب • ${commentsPart}`;
-    }
-
-    async function toggleLike(){
-      if(!currentPost) return;
-      try{
-        $id('likeBtn').disabled = true;
-        const res = await fetch(`/api/posts/${currentPost.postId}/like`, { method:'POST', credentials:'same-origin' });
-        const data = await res.json();
-        if(res.ok && data.ok){
-          // update UI
-          currentPost.is_liked = !!data.is_liked;
-          currentPost.likes = data.newLikes || data.likes || currentPost.likes;
-          setLikeState(currentPost.is_liked, currentPost.likes || 0);
+        if (!postId) {
+            postContainer.innerHTML = '<div class="text-center py-10 text-red-400">رابط المنشور غير صالح.</div>';
         } else {
-          console.warn('like failed', data);
+            fetchPost();
         }
-      }catch(e){
-        console.error(e);
-      }finally{
-        $id('likeBtn').disabled = false;
-      }
-    }
 
-    // COMMENTS
-    async function fetchAndRenderComments(pid){
-      try{
-        const res = await fetch(`/api/posts/${pid}/comments`, { credentials:'same-origin' });
-        const data = await res.json();
-        if(!res.ok || !data.ok){
-          $id('commentsList').innerHTML = `<div class="muted">فشل في تحميل التعليقات.</div>`;
-          return;
+        async function fetchPost() {
+            try {
+                // Try fetching specific post (Assuming you added the route in server.js)
+                const res = await fetch(`/api/posts/one/${postId}`);
+                const data = await res.json();
+
+                if (res.ok && data.ok && data.post) {
+                    renderPost(data.post);
+                } else {
+                    postContainer.innerHTML = '<div class="text-center py-10 text-gray-500">لم يتم العثور على المنشور أو تم حذفه.</div>';
+                }
+            } catch (error) {
+                console.error(error);
+                postContainer.innerHTML = '<div class="text-center py-10 text-red-400">خطأ في الاتصال.</div>';
+            }
         }
-        renderCommentsList(data.comments || []);
-      }catch(e){
-        console.error(e);
-        $id('commentsList').innerHTML = `<div class="muted">خطأ في الاتصال.</div>`;
-      }
-    }
 
-    function renderCommentsList(list){
-      const c = $id('commentsList');
-      if(!list.length) { c.innerHTML = `<div class="muted">لا توجد تعليقات بعد.</div>`; return; }
-      c.innerHTML = list.map(commentToHtml).join('');
-    }
+        function renderPost(post) {
+            let mediaHtml = '';
+            
+            // Generate Media HTML
+            if (post.media) {
+                if (post.media.type === 'image') {
+                    mediaHtml = `<div class="mt-3"><img src="${post.media.url}" class="w-full rounded-lg object-contain bg-black max-h-[500px]"></div>`;
+                } else if (post.media.type === 'video') {
+                    mediaHtml = `
+                        <div class="mt-3 relative w-full aspect-video bg-black rounded-lg overflow-hidden group">
+                            <video id="video-${post.postId}" src="${post.media.url}" class="w-full h-full object-contain" onclick="toggleVideo('${post.postId}')"></video>
+                            <div id="play-overlay-${post.postId}" class="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+                                <i class="fas fa-play text-white text-5xl opacity-80"></i>
+                            </div>
+                        </div>`;
+                } else if (post.media.type === 'audio') {
+                    mediaHtml = `
+                        <div class="mt-3 audio-play-wrapper">
+                            <button id="audio-btn-${post.postId}" class="audio-play-button" onclick="toggleAudio('${post.postId}')">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <div id="waveform-${post.postId}" class="waveform-post" data-url="${post.media.url}"></div>
+                        </div>`;
+                }
+            }
 
-    function commentToHtml(cm){
-      return `
-        <div class="comment" id="comment-${cm.commentId}">
-          <img src="${escapeHtml(cm.user?.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar">
-          <div class="meta">
-            <div style="display:flex;align-items:center;gap:8px">
-              <div style="font-weight:700">${escapeHtml(cm.user?.username || 'مستخدم')}</div>
-              <div class="muted" style="font-size:12px">${new Date(cm.timestamp).toLocaleString('ar-EG', { hour:'2-digit', minute:'2-digit' })}</div>
-            </div>
-            <div style="margin-top:6px">${escapeHtml(cm.content)}</div>
-            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-              <button class="btn" onclick="toggleCommentLike('${currentPost.postId}','${cm.commentId}', this)"> <i class="far fa-heart"></i> <span id="c-likes-${cm.commentId}">${cm.likes||0}</span></button>
-              <button class="btn" onclick="openReplyBox('${cm.commentId}')">رد</button>
-            </div>
-            <div id="replies-${cm.commentId}" style="margin-top:8px"></div>
-          </div>
-        </div>
-      `;
-    }
+            const verifiedBadge = post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : '';
+            const likeClass = post.is_liked ? 'text-red-500 fas' : 'text-gray-400 far';
+            const likeBtnColor = post.is_liked ? 'text-red-500' : 'text-gray-400';
 
-    async function postComment(){
-      const input = $id('commentInput');
-      const txt = (input.value||'').trim();
-      if(!txt || !currentPost) return;
-      $id('postCommentBtn').disabled = true;
-      try{
-        const res = await fetch(`/api/posts/${currentPost.postId}/comment`, {
-          method:'POST',
-          headers: { 'Content-Type':'application/json' },
-          credentials:'same-origin',
-          body: JSON.stringify({ content: txt })
-        });
-        const data = await res.json();
-        if(res.ok && data.ok){
-          input.value = '';
-          // refresh comments list
-          fetchAndRenderComments(currentPost.postId);
-          // update comments count on stats line
-          currentPost.commentsCount = data.newComments || (currentPost.commentsCount||0) + 1;
-          const likesPart = (currentPost.likes||0) + ' إعجاب';
-          $id('statsLine').textContent = `${currentPost.likes||0} إعجاب • ${currentPost.commentsCount || 0} تعليق`;
-        } else {
-          alert(data.error || 'فشل نشر التعليق');
+            const html = `
+                <div class="glass-post-card p-4 shadow-xl">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center" onclick="window.location.href='/profile?userId=${post.userId}'">
+                            <img src="${post.user.profile_picture_url}" class="w-12 h-12 rounded-full border border-gray-600 object-cover ml-3 cursor-pointer">
+                            <div>
+                                <div class="text-white font-bold cursor-pointer hover:text-blue-400 text-lg">${post.user.username} ${verifiedBadge}</div>
+                                <div class="text-gray-400 text-xs">${new Date(post.timestamp).toLocaleString('ar-EG')}</div>
+                            </div>
+                        </div>
+                        <button class="text-gray-400 p-2" onclick="openOptions('${post.postId}')"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+
+                    <p class="text-gray-100 text-lg whitespace-pre-wrap leading-relaxed mb-2" dir="auto">${post.content}</p>
+
+                    ${mediaHtml}
+
+                    <div class="flex justify-between items-center text-gray-400 text-sm mt-4 pb-2 border-b border-gray-700">
+                        <span id="likes-count-${post.postId}"><i class="fas fa-heart ml-1"></i> ${post.likes}</span>
+                        <span class="cursor-pointer hover:text-white" onclick="openComments('${post.postId}')"><i class="fas fa-comment ml-1"></i> ${post.commentsCount} تعليق</span>
+                    </div>
+
+                    <div class="flex justify-around mt-3 pt-2">
+                        <button class="flex items-center gap-2 ${likeBtnColor} hover:text-red-500 transition w-full justify-center py-2" onclick="handleLike('${post.postId}', this)">
+                            <i class="${likeClass} fa-heart text-xl"></i>
+                            <span class="font-bold">إعجاب</span>
+                        </button>
+                        <button class="flex items-center gap-2 text-gray-400 hover:text-blue-400 transition w-full justify-center py-2" onclick="openComments('${post.postId}')">
+                            <i class="far fa-comment-dots text-xl"></i>
+                            <span class="font-bold">تعليق</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            postContainer.innerHTML = html;
+
+            // Init WaveSurfer if audio
+            if (post.media && post.media.type === 'audio') {
+                setTimeout(() => initWaveSurfer(post.postId, post.media.url), 100);
+            }
         }
-      }catch(e){
-        console.error(e);
-        alert('فشل في الاتصال');
-      }finally{
-        $id('postCommentBtn').disabled = false;
-      }
-    }
 
-    function openReplyBox(commentId){
-      const container = $id('replies-'+commentId);
-      container.innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-          <input id="reply-input-${commentId}" type="text" placeholder="أكتب رد..." style="flex:1;padding:8px;border-radius:999px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--text)">
-          <button class="btn" onclick="postReply('${commentId}')">إرسال</button>
-        </div>
-      `;
-      const inp = $id('reply-input-'+commentId); if(inp) inp.focus();
-    }
+        // --- Interaction Functions ---
 
-    async function postReply(commentId){
-      const inp = $id('reply-input-'+commentId);
-      if(!inp) return;
-      const txt = (inp.value||'').trim();
-      if(!txt) return;
-      try{
-        const res = await fetch(`/api/posts/${currentPost.postId}/comments/${commentId}/reply`, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          credentials:'same-origin',
-          body: JSON.stringify({ content: txt })
-        });
-        const data = await res.json();
-        if(res.ok && data.ok){
-          // re-render comments
-          fetchAndRenderComments(currentPost.postId);
-        } else alert(data.error || 'فشل إرسال الرد');
-      }catch(e){ console.error(e); alert('فشل في الاتصال'); }
-    }
-
-    async function toggleCommentLike(postId, commentId, btn){
-      try{
-        btn.disabled = true;
-        const res = await fetch(`/api/posts/${postId}/comments/${commentId}/like`, { method:'POST', credentials:'same-origin' });
-        const data = await res.json();
-        if(res.ok && data.ok){
-          $id('c-likes-'+commentId).textContent = data.likes;
-          // optionally toggle icon
-          const icon = btn.querySelector('i');
-          if(icon) icon.className = data.is_liked ? 'fas fa-heart' : 'far fa-heart';
+        async function handleLike(pid, btn) {
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/posts/${pid}/like`, { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) {
+                    const icon = btn.querySelector('i');
+                    const countSpan = document.getElementById(`likes-count-${pid}`);
+                    
+                    if (data.action === 'liked') {
+                        icon.classList.remove('far', 'text-gray-400');
+                        icon.classList.add('fas', 'text-red-500');
+                        btn.classList.add('text-red-500');
+                        btn.classList.remove('text-gray-400');
+                    } else {
+                        icon.classList.remove('fas', 'text-red-500');
+                        icon.classList.add('far', 'text-gray-400');
+                        btn.classList.remove('text-red-500');
+                        btn.classList.add('text-gray-400');
+                    }
+                    if(countSpan) countSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${data.newLikes}`;
+                }
+            } catch(e) { console.error(e); }
+            btn.disabled = false;
         }
-      }catch(e){ console.error(e); } finally { btn.disabled = false; }
-    }
 
-    // SSE for comments (server has stream)
-    let commentsES = null;
-    function setupCommentsSSE(pid){
-      try{
-        if(typeof EventSource === 'undefined') return;
-        if(commentsES) commentsES.close();
-        commentsES = new EventSource(`/api/posts/${pid}/comments/stream`);
-        commentsES.addEventListener('comment_added', (e)=>{
-          try{
-            const c = JSON.parse(e.data||'{}');
-            // append
-            const list = $id('commentsList');
-            if(list) list.insertAdjacentHTML('beforeend', commentToHtml(c));
-          }catch(err){ console.error(err); }
-        });
-        commentsES.addEventListener('comments_snapshot', (e)=>{
-          try{
-            const items = JSON.parse(e.data||'[]');
-            renderCommentsList(items);
-          }catch(err){ console.error(err); }
-        });
-        commentsES.onerror = (err) => { /* reconnect handled by browser */ };
-      }catch(e){ console.warn('SSE not available', e); }
-    }
-
-    function scrollToComments(){ window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }); }
-
-    async function sharePost(){
-      try{
-        const url = window.location.href;
-        if(navigator.share){
-          await navigator.share({ title: 'منشور من Aite', url });
-        } else {
-          await navigator.clipboard.writeText(url);
-          alert('تم نسخ رابط المنشور');
+        // --- Audio Logic ---
+        function initWaveSurfer(id, url) {
+            const container = document.getElementById(`waveform-${id}`);
+            if(!container) return;
+            const ws = WaveSurfer.create({
+                container: container,
+                waveColor: '#4A4A4A',
+                progressColor: '#ffffff',
+                barWidth: 3,
+                barRadius: 3,
+                cursorWidth: 0,
+                height: 60,
+                responsive: true
+            });
+            ws.load(url);
+            container.wsInstance = ws;
+            
+            ws.on('finish', () => {
+                const btn = document.getElementById(`audio-btn-${id}`);
+                btn.innerHTML = '<i class="fas fa-play"></i>';
+                ws.stop();
+            });
         }
-      }catch(e){ console.error(e); alert('فشل المشاركة'); }
-    }
 
-    function openOptions(){ alert('قائمة الخيارات ستظهر هنا — (حذف، تبليغ، ...)'); }
+        function toggleAudio(id) {
+            const container = document.getElementById(`waveform-${id}`);
+            const btn = document.getElementById(`audio-btn-${id}`);
+            if(!container || !container.wsInstance) return;
+            const ws = container.wsInstance;
 
-  </script>
+            // Pause others
+            if(activeVideo) { activeVideo.pause(); activeVideo = null; }
+            if(activeWaveSurfer && activeWaveSurfer !== ws) {
+                activeWaveSurfer.pause();
+                const oldBtn = activeWaveSurfer.container.parentElement.querySelector('button');
+                if(oldBtn) oldBtn.innerHTML = '<i class="fas fa-play"></i>';
+            }
+
+            if(ws.isPlaying()) {
+                ws.pause();
+                btn.innerHTML = '<i class="fas fa-play"></i>';
+            } else {
+                ws.play();
+                btn.innerHTML = '<i class="fas fa-pause"></i>';
+                activeWaveSurfer = ws;
+            }
+        }
+
+        // --- Video Logic ---
+        function toggleVideo(id) {
+            const video = document.getElementById(`video-${id}`);
+            const overlay = document.getElementById(`play-overlay-${id}`);
+            
+            if(activeWaveSurfer) { activeWaveSurfer.pause(); activeWaveSurfer = null; }
+            if(activeVideo && activeVideo !== video) {
+                activeVideo.pause();
+                const oldOverlay = activeVideo.parentElement.querySelector('div[id^="play-overlay"]');
+                if(oldOverlay) oldOverlay.classList.remove('hidden');
+            }
+
+            if(video.paused) {
+                video.play();
+                overlay.classList.add('hidden');
+                activeVideo = video;
+            } else {
+                video.pause();
+                overlay.classList.remove('hidden');
+            }
+        }
+
+        // --- Comment Modal Logic ---
+        function openComments(pid) {
+            currentPostId = pid;
+            document.getElementById('commentModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('commentModalContent').classList.add('open'), 10);
+            fetchComments(pid);
+        }
+
+        function closeCommentModal() {
+            document.getElementById('commentModalContent').classList.remove('open');
+            setTimeout(() => document.getElementById('commentModal').classList.add('hidden'), 300);
+        }
+
+        async function fetchComments(pid) {
+            const list = document.getElementById('commentsList');
+            list.innerHTML = '<div class="text-center p-4"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            const res = await fetch(`/api/posts/${pid}/comments`);
+            const data = await res.json();
+            
+            if(data.ok) {
+                if(data.comments.length === 0) {
+                    list.innerHTML = '<div class="text-center text-gray-500 mt-10">لا توجد تعليقات. كن الأول!</div>';
+                    return;
+                }
+                list.innerHTML = data.comments.map(c => `
+                    <div class="comment-item">
+                        <div class="flex gap-2">
+                            <img src="${c.user.profile_picture_url}" class="w-8 h-8 rounded-full">
+                            <div>
+                                <div class="text-sm font-bold text-white">${c.user.username}</div>
+                                <div class="text-gray-300 text-sm">${c.content}</div>
+                                <div class="text-xs text-gray-500 mt-1">${new Date(c.timestamp).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Post Comment
+        document.getElementById('postCommentBtn').onclick = async () => {
+            const input = document.getElementById('newCommentInput');
+            const content = input.value.trim();
+            if(!content) return;
+
+            input.disabled = true;
+            await fetch(`/api/posts/${currentPostId}/comment`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content})
+            });
+            input.value = '';
+            input.disabled = false;
+            fetchComments(currentPostId); // Refresh
+        };
+
+        // --- Options / Delete (Simple Mock) ---
+        function openOptions(pid) {
+             if(confirm("هل تريد حذف هذا المنشور؟")) {
+                 fetch(`/api/posts/${pid}`, { method: 'DELETE' })
+                 .then(r => r.json())
+                 .then(d => {
+                     if(d.ok) {
+                         alert('تم الحذف');
+                         window.location.href = '/chat_list';
+                     } else {
+                         alert('فشل الحذف (قد لا تملك الصلاحية)');
+                     }
+                 });
+             }
+        }
+
+    </script>
 </body>
 </html>
