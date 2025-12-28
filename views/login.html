@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تسجيل الدخول — Trimer</title>
+    <title>تسجيل الدخول — Aite</title>
     <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/46/1000084215-removebg-preview.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -19,16 +19,13 @@
             min-height: 100vh;
         }
 
-        /* Glassmorphism Card */
         .glass-card {
             background: rgba(20, 20, 20, 0.6);
             backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
         }
 
-        /* Inputs */
         .glass-input {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -42,50 +39,23 @@
             outline: none;
         }
 
-        .logo-img {
-            height: 70px;
-            width: 70px;
-            object-fit: cover;
-            border-radius: 14px;
-            margin-left: 15px;
-            box-shadow: 0 0 20px rgba(57, 130, 247, 0.3);
-        }
-
-        .toggle-password {
-            position: absolute;
-            top: 50%;
-            left: 15px;
-            transform: translateY(-50%);
-            cursor: pointer;
-            transition: color 0.3s;
-        }
-        .toggle-password:hover { color: #3982f7; }
-
-        /* Button Glow & States */
         .glow-btn {
             background: linear-gradient(135deg, #3982f7 0%, #2a61b8 100%);
             box-shadow: 0 4px 15px rgba(57, 130, 247, 0.4);
             transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
         }
         .glow-btn:hover:not(:disabled) {
             box-shadow: 0 6px 20px rgba(57, 130, 247, 0.6);
             transform: translateY(-2px);
-        }
-        .glow-btn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-            transform: none;
         }
     </style>
 </head>
 <body class="flex flex-col justify-center items-center min-h-screen p-5">
 
     <div class="text-center mb-8 z-10">
-        <a class="text-5xl font-bold text-white hover:text-gray-200 no-underline flex items-center tracking-wide justify-center" href="/">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" class="logo-img" alt="شعار Trimer">
-            Trimer
+        <a class="text-5xl font-bold text-white hover:text-gray-200 no-underline flex items-center tracking-wide justify-center gap-4" href="/">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" class="h-[70px] w-[70px] rounded-xl object-cover shadow-lg shadow-blue-500/30" alt="شعار Aite">
+            Aite
         </a>
     </div>
 
@@ -101,8 +71,8 @@
             <div class="mb-8 group">
                 <label for="id_password" class="block mb-2 text-sm font-medium text-gray-300 group-hover:text-[#3982f7] transition-colors">كلمة المرور</label>
                 <div class="relative">
-                    <input type="password" name="password" id="id_password" class="glass-input w-full p-4 pr-4 rounded-xl" required placeholder="ادخل كلمة المرور">
-                    <i class="fas fa-eye toggle-password text-gray-500" data-target="id_password"></i>
+                    <input type="password" name="password" id="id_password" class="glass-input w-full p-4 pr-10 rounded-xl" required placeholder="ادخل كلمة المرور">
+                    <i class="fas fa-eye toggle-password text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer" onclick="togglePass()"></i>
                 </div>
             </div>
 
@@ -125,44 +95,57 @@
     </div>
 
     <script>
-        // 1. إظهار/إخفاء كلمة المرور
-        document.querySelectorAll('.toggle-password').forEach(item => {
-            item.addEventListener('click', function () {
-                const targetId = this.getAttribute('data-target');
-                const passwordField = document.getElementById(targetId);
-                if (passwordField.type === "password") {
-                    passwordField.type = "text";
-                    this.classList.remove('fa-eye');
-                    this.classList.add('fa-eye-slash');
-                } else {
-                    passwordField.type = "password";
-                    this.classList.remove('fa-eye-slash');
-                    this.classList.add('fa-eye');
-                }
-            });
-        });
+        const LOGIN_STORAGE_KEY = 'aite_accounts_secure_v2';
 
-        // 2. التعامل مع زر الإرسال والمؤشر
+        function togglePass() {
+            const passField = document.getElementById('id_password');
+            const icon = document.querySelector('.toggle-password');
+            if (passField.type === "password") {
+                passField.type = "text";
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                passField.type = "password";
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             const btn = document.getElementById('submitBtn');
-            const btnText = document.getElementById('btnText');
-            const btnSpinner = document.getElementById('btnSpinner');
+            const username = document.getElementById('id_username').value.trim();
+            const password = document.getElementById('id_password').value;
 
-            // تعطيل الزر وإظهار المؤشر
+            if(username && password) {
+                try {
+                    let accounts = JSON.parse(localStorage.getItem(LOGIN_STORAGE_KEY) || '[]');
+                    const existingIndex = accounts.findIndex(a => a.username === username);
+                    
+                    // تشفير كلمة المرور للحفظ الآمن
+                    const encryptedPass = btoa(password);
+
+                    const newAccountData = {
+                        username: username,
+                        auth_token: encryptedPass, // حفظ مشفر
+                        full_name: existingIndex > -1 ? accounts[existingIndex].full_name : username,
+                        profile_picture_url: existingIndex > -1 ? accounts[existingIndex].profile_picture_url : null
+                    };
+
+                    if (existingIndex > -1) accounts[existingIndex] = newAccountData;
+                    else accounts.unshift(newAccountData);
+                    
+                    localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(accounts.slice(0, 8)));
+                } catch(err) { console.error(err); }
+            }
+
             btn.disabled = true;
-            btnText.textContent = "جاري الدخول...";
-            btnSpinner.classList.remove('hidden');
+            document.getElementById('btnText').textContent = "جاري الدخول...";
+            document.getElementById('btnSpinner').classList.remove('hidden');
         });
 
-        // 3. قراءة اسم المستخدم من الرابط (للدعم مع صفحة accounts.html)
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const usernameParam = urlParams.get('username');
-            
             if (usernameParam) {
-                const usernameInput = document.getElementById('id_username');
-                usernameInput.value = usernameParam;
-                // التركيز مباشرة على حقل كلمة المرور لتجربة أسرع
+                document.getElementById('id_username').value = usernameParam;
                 document.getElementById('id_password').focus();
             }
         });
