@@ -1,145 +1,232 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>الحسابات — Trimer</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
-  <style>
-    body { background:#000; color:#e4e6eb; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .card { background: rgba(20,20,20,0.6); backdrop-filter: blur(12px); border:1px solid rgba(255,255,255,0.06); }
-    .avatar { width:56px; height:56px; border-radius:12px; object-fit:cover; }
-    .btn-ghost { background: transparent; border:1px solid rgba(255,255,255,0.08); padding:.45rem .7rem; border-radius:10px; color:#e4e6eb; }
-    .btn-primary { background:linear-gradient(135deg,#3982f7,#2a61b8); padding:.5rem .9rem; border-radius:10px; color:#fff; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الحسابات المحفوظة — Trimer</title>
+    <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/46/1000084215-removebg-preview.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #000000;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(57, 130, 247, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 80% 90%, rgba(120, 50, 220, 0.1) 0%, transparent 30%);
+            color: #e4e6eb;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .logo-container img {
+            filter: drop-shadow(0 0 15px rgba(57, 130, 247, 0.4));
+        }
+
+        /* Glass Container for the list */
+        .accounts-container {
+            max-width: 400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Individual Account Card */
+        .account-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .account-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px) scale(1.02);
+            border-color: rgba(57, 130, 247, 0.4);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+        }
+
+        .account-avatar {
+            border: 2px solid rgba(57, 130, 247, 0.3);
+            transition: border-color 0.3s;
+        }
+        .account-card:hover .account-avatar {
+            border-color: #3982f7;
+        }
+
+        /* Remove Button (X) */
+        .remove-btn {
+            position: absolute;
+            top: 15px;
+            left: 15px; /* RTL logic */
+            color: #6b7280;
+            opacity: 0;
+            transition: all 0.2s;
+            padding: 5px;
+            z-index: 10;
+        }
+        .account-card:hover .remove-btn {
+            opacity: 1;
+        }
+        .remove-btn:hover {
+            color: #ef4444;
+            transform: scale(1.1);
+        }
+
+        /* Add Account Button */
+        .add-account-btn {
+            background: transparent;
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            color: #9ca3af;
+            transition: all 0.3s;
+        }
+        .add-account-btn:hover {
+            border-color: #3982f7;
+            color: #fff;
+            background: rgba(57, 130, 247, 0.05);
+        }
+
+        /* Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        /* Notif Badge Style */
+        .notif-badge {
+            background: #ef4444;
+            font-size: 10px;
+            height: 18px;
+            min-width: 18px;
+            padding: 0 5px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            border: 2px solid #000;
+        }
+    </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-6">
+<body class="flex flex-col items-center justify-center py-10">
 
-  <div class="w-full max-w-2xl">
-    <div class="mb-6 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" class="h-12 w-12 rounded-xl" alt="Trimer">
-        <h1 class="text-2xl font-bold">الحسابات المحفوظة</h1>
-      </div>
-      <div class="flex items-center gap-2">
-        <a href="/login" class="btn-ghost">تسجيل دخول آخر</a>
-        <a href="/register" class="btn-primary">إنشاء حساب جديد</a>
-      </div>
+    <div class="text-center mb-10 logo-container animate-fade-in">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" 
+             class="w-20 h-20 rounded-2xl object-cover mx-auto mb-4 border border-white/10" 
+             alt="Trimer Logo">
+        <h1 class="text-4xl font-bold tracking-wider text-white">Trimer</h1>
+        <p class="text-gray-400 text-sm mt-2">اختر حساباً للدخول</p>
     </div>
 
-    <div class="card p-6 rounded-2xl">
-      <p id="intro" class="text-gray-300 mb-4">هنا تظهر الحسابات التي سجلت الدخول بها سابقاً. اضغط على أي حساب لتسجيل الدخول فوراً.</p>
+    <div class="accounts-container space-y-4" id="accountsListWrapper">
+        </div>
 
-      <div id="accountsList" class="space-y-3">
-        <!-- accounts injected here -->
-      </div>
-
-      <div id="emptyState" class="text-center text-gray-400 mt-6 hidden">
-        لا توجد حسابات محفوظة بعد. <a href="/login" class="text-[#3982f7] font-semibold">تسجيل دخول</a> أو <a href="/register" class="text-[#3982f7] font-semibold">إنشاء حساب</a>.
-      </div>
-
-      <form id="hiddenLoginForm" method="post" action="/login" style="display:none;">
-        <input type="hidden" name="username" id="hidden_username">
-      </form>
-
+    <div class="accounts-container mt-2">
+        <a href="/login" class="add-account-btn w-full p-4 rounded-xl flex items-center justify-center gap-3 font-semibold group cursor-pointer no-underline block">
+            <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                <i class="fas fa-plus text-sm"></i>
+            </div>
+            <span>تسجيل الدخول بحساب آخر</span>
+        </a>
+        
+        <div class="text-center mt-8">
+            <a href="/register" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">إنشاء حساب جديد</a>
+        </div>
     </div>
 
-    <div class="mt-5 text-sm text-gray-400">
-      ملاحظة: الحسابات محفوظة محلياً على هذا المتصفح فقط. يمكنك حذف أي حساب بالضغط على أيقونة الحذف.
-    </div>
-  </div>
+    <script>
+        const STORAGE_KEY = 'trimer_accounts_v1';
+        const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
 
-<script>
-  const STORAGE_KEY = 'trimer_accounts_v1';
-  const DEFAULT_AVATAR = 'https://via.placeholder.com/80?text=Trimer';
+        function loadAccounts() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
 
-  function loadAccounts() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      console.error('Failed to parse accounts', e);
-      return [];
-    }
-  }
+        function saveAccounts(list) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        }
 
-  function saveAccounts(list) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list || []));
-  }
+        function removeAccount(e, username) {
+            e.stopPropagation(); // منع النقر على الكارت عند حذف الحساب
+            e.preventDefault();
+            
+            if(confirm('هل تريد إزالة هذا الحساب من القائمة؟')) {
+                let accounts = loadAccounts();
+                accounts = accounts.filter(acc => acc.username !== username);
+                saveAccounts(accounts);
+                renderAccounts();
+            }
+        }
 
-  function removeAccount(username) {
-    let accounts = loadAccounts();
-    accounts = accounts.filter(a => a.username !== username);
-    saveAccounts(accounts);
-    render();
-  }
+        function handleAccountClick(username) {
+            // توجيه لصفحة الدخول مع تمرير اسم المستخدم
+            // ملاحظة: ستحتاج لتحديث login.html لقراءة هذا الباراميتر إذا أردت تعبئته تلقائياً
+            window.location.href = `/login?username=${encodeURIComponent(username)}`;
+        }
 
-  function render() {
-    const listEl = document.getElementById('accountsList');
-    const emptyEl = document.getElementById('emptyState');
-    listEl.innerHTML = '';
-    const accounts = loadAccounts();
+        function renderAccounts() {
+            const container = document.getElementById('accountsListWrapper');
+            const accounts = loadAccounts();
 
-    if (!accounts || accounts.length === 0) {
-      emptyEl.classList.remove('hidden');
-      return;
-    }
-    emptyEl.classList.add('hidden');
+            container.innerHTML = '';
 
-    accounts.forEach(acc => {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'flex items-center justify-between bg-black/30 p-3 rounded-lg';
+            if (accounts.length === 0) {
+                // حالة عدم وجود حسابات
+                window.location.href = '/login'; // توجيه تلقائي للدخول إذا كانت القائمة فارغة
+                return;
+            }
 
-      const left = document.createElement('div');
-      left.className = 'flex items-center gap-3 cursor-pointer';
-      left.title = `سجل الدخول باسم ${acc.username}`;
-      left.onclick = () => loginWith(acc.username);
+            accounts.forEach((acc, index) => {
+                const imgUrl = acc.profile_picture_url || DEFAULT_AVATAR;
+                // تأخير بسيط للأنيميشن لكل كارت
+                const delayStyle = `animation-delay: ${index * 100}ms`;
 
-      const img = document.createElement('img');
-      img.className = 'avatar';
-      img.src = acc.profile_picture_url || DEFAULT_AVATAR;
-      img.alt = acc.username;
+                const cardHtml = `
+                    <div class="account-card flex items-center p-4 gap-4 animate-fade-in" 
+                         style="${delayStyle}"
+                         onclick="handleAccountClick('${acc.username}')">
+                        
+                        <div class="relative">
+                            <img src="${imgUrl}" 
+                                 class="w-14 h-14 rounded-full object-cover account-avatar bg-gray-800" 
+                                 alt="${acc.username}"
+                                 onerror="this.src='${DEFAULT_AVATAR}'">
+                             </div>
 
-      const info = document.createElement('div');
-      info.innerHTML = `<div class="font-semibold">${acc.full_name || acc.username}</div><div class="text-xs text-gray-400">@${acc.username}</div>`;
+                        <div class="flex-grow text-right">
+                            <h3 class="text-white font-bold text-lg leading-tight truncate">${acc.full_name || acc.username}</h3>
+                            <p class="text-gray-400 text-sm font-mono truncate">@${acc.username}</p>
+                        </div>
 
-      left.appendChild(img);
-      left.appendChild(info);
+                        <button class="remove-btn" onclick="removeAccount(event, '${acc.username}')" title="إزالة الحساب">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        
+                        <div class="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <i class="fas fa-chevron-left"></i>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += cardHtml;
+            });
+        }
 
-      const actions = document.createElement('div');
-      actions.className = 'flex items-center gap-2';
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn-ghost';
-      removeBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-      removeBtn.title = 'حذف الحساب';
-      removeBtn.onclick = (e) => { e.stopPropagation(); if (confirm("هل تريد حذف هذا الحساب من هذا المتصفح؟")) removeAccount(acc.username); };
-
-      const quickLogin = document.createElement('button');
-      quickLogin.type = 'button';
-      quickLogin.className = 'btn-primary';
-      quickLogin.innerHTML = '<i class="fas fa-sign-in-alt ml-2"></i>دخول';
-      quickLogin.onclick = (e) => { e.stopPropagation(); loginWith(acc.username); };
-
-      actions.appendChild(removeBtn);
-      actions.appendChild(quickLogin);
-
-      wrapper.appendChild(left);
-      wrapper.appendChild(actions);
-
-      listEl.appendChild(wrapper);
-    });
-  }
-
-  function loginWith(username) {
-    document.getElementById('hidden_username').value = username;
-    document.getElementById('hiddenLoginForm').submit();
-  }
-
-  // initialization
-  render();
-</script>
-
+        // Initialize
+        document.addEventListener('DOMContentLoaded', renderAccounts);
+    </script>
 </body>
 </html>
