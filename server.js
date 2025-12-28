@@ -3288,10 +3288,11 @@ app.use((err, req, res, next) => {
   next(err);
 });
 // 1. مسار عرض صفحة الإعدادات
+// للتجربة فقط (احذف التحقق مؤقتاً)
 app.get('/settings', (req, res) => {
-  if (!req.session || !req.session.user) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'settings.html'));
 });
+
 
 // 2. API لتغيير كلمة المرور
 app.post('/api/change-password', async (req, res) => {
