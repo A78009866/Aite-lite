@@ -105,16 +105,43 @@
             const account = accounts.find(a => a.username === username);
 
             if (account && account.auth_token) {
-                // محاكاة عملية الدخول الآمن:
-                // نقوم بفك تشفير كلمة المرور (أو التوكن) داخلياً واستخدامها
+                // محاكاة عملية الدخول الآمن
                 try {
-                    const decodedPass = atob(account.auth_token); // فك التشفير
-                    console.log(`Logging in securely as ${username}...`);
+                    // فك تشفير كلمة المرور المخزنة
+                    const decodedPass = atob(account.auth_token);
                     
-                    // توجيه مباشر للصفحة الرئيسية كما طلبت
-                    window.location.href = '/'; 
+                    // إنشاء نموذج (Form) ديناميكي لإرسال البيانات للسيرفر
+                    // هذا يضمن إنشاء جلسة (Session) في السيرفر
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/login';
+                    form.style.display = 'none';
+
+                    // حقل اسم المستخدم
+                    const userField = document.createElement('input');
+                    userField.type = 'hidden';
+                    userField.name = 'username';
+                    userField.value = username;
+                    form.appendChild(userField);
+
+                    // حقل كلمة المرور
+                    const passField = document.createElement('input');
+                    passField.type = 'hidden';
+                    passField.name = 'password';
+                    passField.value = decodedPass;
+                    form.appendChild(passField);
+
+                    // إضافة النموذج للصفحة وإرساله
+                    document.body.appendChild(form);
+                    
+                    // تأثير بسيط للانتظار
+                    document.body.style.opacity = '0.5';
+                    document.body.style.cursor = 'wait';
+                    
+                    form.submit();
+
                 } catch (e) {
-                    console.error("Auth error");
+                    console.error("Auth error", e);
                     window.location.href = `/login?username=${encodeURIComponent(username)}`;
                 }
             } else {
