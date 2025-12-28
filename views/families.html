@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>العائلات — Aite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body {
+      background: linear-gradient(180deg,#020202 0%, #070707 100%);
+      color: #e6eefb;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    .glass-page {
+      max-width: 980px;
+      margin: 36px auto;
+      background: rgba(10,10,12,0.6);
+      border: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    }
+
+    .families-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .family-tile {
+      background: rgba(20,20,20,0.55);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.05);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .family-tile:hover { transform: translateY(-6px); box-shadow: 0 8px 30px rgba(0,0,0,0.7); }
+
+    .family-tile img { width: 88px; height: 88px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
+
+    .tile-meta { overflow: hidden; }
+    .tile-name {
+      font-weight: 800;
+      font-size: 1.02rem;
+      color: #fff;
+      white-space: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .tile-name::-webkit-scrollbar { height: 6px; }
+    .tile-name::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 6px; }
+
+    .tile-sub {
+      color: #9ca3af;
+      font-size: .9rem;
+      margin-top: 8px;
+    }
+
+    .page-header {
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .page-title { font-size: 1.4rem; font-weight: 900; color: #fff; }
+
+    .back-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #cbd5e1;
+      padding: 8px 10px;
+      border-radius: 10px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.02); color: #fff; }
+
+    .empty-state {
+      text-align:center;
+      color: #9ca3af;
+      padding: 36px 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="glass-page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">كل العائلات</div>
+        <div class="text-sm text-gray-400">قائمة بالعائلات المتاحة — اضغط على أي بطاقة للانتقال إلى صفحة العائلة</div>
+      </div>
+      <div>
+        <button class="back-btn" onclick="goBack()">
+          <i class="fas fa-arrow-right"></i>
+          صفحة العودة
+        </button>
+      </div>
+    </div>
+
+    <div id="familiesGrid" class="families-grid" style="margin-top:18px;">
+      <!-- tiles injected here -->
+    </div>
+
+    <div id="emptyState" class="empty-state hidden">
+      <i class="far fa-frown text-3xl mb-3"></i>
+      <div class="mt-2">لا توجد عائلات بعد.</div>
+      <div class="mt-2 text-sm">يمكنك إنشاء عائلة من خلال صفحة الملف الشخصي أو الضغط على زر "إنشاء عائلة" في الصفحة الرئيسية.</div>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_FAM_IMG = "https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop";
+    const grid = document.getElementById('familiesGrid');
+    const empty = document.getElementById('emptyState');
+
+    function goBack() {
+      // navigate back to chat_list if possible
+      if (document.referrer && document.referrer.includes('/chat_list')) {
+        window.history.back();
+      } else {
+        window.location.href = '/chat_list';
+      }
+    }
+
+    function escapeHtml(s) {
+      if (!s && s !== 0) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function createTileHtml(f) {
+      const img = (f.imageUrl && f.imageUrl.length > 0 && !f.imageUrl.includes('placeholder')) ? f.imageUrl : DEFAULT_FAM_IMG;
+      const members = f.membersCount || (f.members ? Object.keys(f.members).length : 0);
+      const isMember = !!f.is_member;
+      const badge = isMember ? '<span style="color:#34d399;font-weight:700;margin-left:8px">عضو</span>' : '<span style="color:#f59e0b;font-weight:700;margin-left:8px">مقفل</span>';
+      const idAttr = encodeURIComponent(f.familyId || f.id || '');
+      return `
+        <div class="family-tile" data-family-id="${idAttr}" onclick="openFamily('${idAttr}')">
+          <img src="${escapeHtml(img)}" alt="${escapeHtml(f.name || '')}" onerror="this.onerror=null;this.src='${DEFAULT_FAM_IMG}';">
+          <div class="tile-meta">
+            <div class="tile-name" title="${escapeHtml(f.name || '')}">${escapeHtml(f.name || '')}</div>
+            <div class="tile-sub">${members} عضو ${badge}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openFamily(id) {
+      window.location.href = `/family/${id}`;
+    }
+
+    async function fetchFamilies() {
+      try {
+        const res = await fetch('/api/families', { credentials: 'same-origin' });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          const families = data.families || [];
+          if (families.length === 0) {
+            empty.classList.remove('hidden');
+            grid.innerHTML = '';
+            return;
+          }
+          empty.classList.add('hidden');
+          grid.innerHTML = families.map(f => createTileHtml(f)).join('');
+        } else {
+          // fallback: try my families
+          const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
+          const d2 = await res2.json();
+          if (res2.ok && d2.ok && d2.families && d2.families.length > 0) {
+            empty.classList.add('hidden');
+            grid.innerHTML = d2.families.map(f => createTileHtml({ ...f, is_member: true })).join('');
+          } else {
+            empty.classList.remove('hidden');
+            grid.innerHTML = '';
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch families', err);
+        empty.classList.remove('hidden');
+        grid.innerHTML = '';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchFamilies);
+  </script>
+</body>
+</html>
