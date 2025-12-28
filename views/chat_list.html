@@ -240,7 +240,8 @@
         }
 
         /* Waveform: fully black background.
-           Idle: white strip. When playing: unplayed becomes gray and white progress moves on top. */
+           Idle: white strip. When playing: unplayed becomes gray and white progress moves on top.
+           When playback reaches the end we'll set both colors to white so the whole waveform appears white. */
         .waveform-post {
             height: 60px; 
             background: #000000; /* fully black */
@@ -896,12 +897,35 @@
             } catch (e) {}
         }
 
+        // Helper to force redraw of the waveform after color changes (uses available APIs)
+        function redrawWS(ws) {
+            try {
+                if (typeof ws.drawBuffer === 'function') {
+                    ws.drawBuffer();
+                    return;
+                }
+                if (ws.drawer && typeof ws.drawer.drawBuffer === 'function') {
+                    ws.drawer.drawBuffer();
+                    return;
+                }
+                // fallback: try to trigger a small seek so the renderer updates
+                if (typeof ws.getDuration === 'function' && ws.getDuration() > 0) {
+                    const d = ws.getDuration();
+                    const current = ws.getCurrentTime ? ws.getCurrentTime() : 0;
+                    ws.seekTo(Math.min(1, (current + 0.0001) / (d || 1)));
+                    ws.seekTo(Math.min(1, current / (d || 1)));
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
         // Initialize WaveSurfer for each audio post with the requested colors/behavior
         function initializePostWaveSurfer(postId, url) {
             const container = document.getElementById(`waveform-${postId}`);
             if (!container) return;
 
-            // idle: white strip on black background (as requested)
+            // idle: white strip on black background
             const ws = WaveSurfer.create({
                 container: container,
                 waveColor: '#ffffff',      // idle: white (unplayed)
@@ -956,22 +980,45 @@
 
                 // When play starts -> set unplayed wave to gray so the white progress is visible moving over it
                 ws.on('play', () => {
+                    // set unplayed -> gray, progress -> white
                     setWSColors(ws, '#6b7280' /* gray for unplayed */, '#ffffff' /* white progress */);
+                    // redraw to apply immediately
+                    redrawWS(ws);
                 });
 
-                // When paused or finished -> revert to idle white strip
-                const revertToIdle = () => {
+                // During playback we don't need to change colors continuously; progressColor stays white.
+                // When paused -> revert to idle white strip
+                ws.on('pause', () => {
+                    // revert unplayed to white and progress to white (idle appearance)
                     setWSColors(ws, '#ffffff', '#ffffff');
-                    if (playButton) {
-                        playButton.querySelector('i').classList.remove('fa-pause');
-                        playButton.querySelector('i').classList.add('fa-play');
+                    redrawWS(ws);
+                    const btn = playButton;
+                    if (btn) {
+                        btn.querySelector('i').classList.remove('fa-pause');
+                        btn.querySelector('i').classList.add('fa-play');
                     }
                     if (activeWaveSurfer === ws) activeWaveSurfer = null;
-                };
-                ws.on('pause', revertToIdle);
+                });
+
+                // When playback finishes -> make the whole waveform white (set both colors to white and redraw)
                 ws.on('finish', () => {
-                    revertToIdle();
+                    setWSColors(ws, '#ffffff', '#ffffff');
+                    redrawWS(ws);
+                    const btn = playButton;
+                    if (btn) btn.querySelector('i').classList.remove('fa-pause'), btn.querySelector('i').classList.add('fa-play');
                     try { ws.seekTo(0); } catch(e) {}
+                    activeWaveSurfer = null;
+                });
+
+                // Extra safety: if audio processes to near end, ensure final state becomes full white
+                ws.on('audioprocess', (time) => {
+                    try {
+                        const duration = ws.getDuration ? ws.getDuration() : 0;
+                        if (duration > 0 && time / duration > 0.995) {
+                            setWSColors(ws, '#ffffff', '#ffffff');
+                            redrawWS(ws);
+                        }
+                    } catch(e){}
                 });
             }
         }
