@@ -188,11 +188,13 @@ app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__di
 
 // Notifications page
 app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
-// 1. مسار عرض صفحة الإعدادات
-// للتجربة فقط (احذف التحقق مؤقتاً)
+
+// انقل هذا الجزء للأعلى قليلاً في ملف server.js
 app.get('/settings', (req, res) => {
+  if (!req.session || !req.session.user) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'views', 'settings.html'));
 });
+
 // ---------------- Admin Page route (جديد) ----------------
 // الصفحة محمية بطبقة requireAuth ثم requireAdmin
 app.get('/admin', requireAuth, requireAdmin, (req, res) => {
