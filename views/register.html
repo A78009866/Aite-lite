@@ -16,6 +16,7 @@
                 radial-gradient(circle at 20% 90%, rgba(255, 60, 100, 0.08) 0%, transparent 25%);
             color: #e4e6eb;
             overflow-x: hidden;
+            min-height: 100vh;
         }
 
         .glass-card {
@@ -109,8 +110,8 @@
                 <div>
                     <label class="block mb-2 text-sm font-medium text-gray-300">كلمة المرور</label>
                     <div class="relative">
-                        <input type="password" name="password" id="id_password" class="glass-input w-full p-3 rounded-xl" required placeholder="********">
-                        <i class="fas fa-eye toggle-password text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer" onclick="togglePass('id_password', this)"></i>
+                        <input type="password" name="password" id="id_password" class="glass-input w-full p-3 rounded-xl pl-10" required placeholder="********">
+                        <i class="fas fa-eye toggle-password text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer hover:text-white transition-colors" onclick="togglePass('id_password', this)"></i>
                     </div>
                 </div>
             </div>
@@ -127,6 +128,7 @@
     </div>
 
     <script>
+        // معاينة الصور
         function previewImage(input, imgId, placeholderId) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -139,24 +141,31 @@
             }
         }
 
+        // إظهار/إخفاء كلمة المرور
         function togglePass(inputId, icon) {
             const input = document.getElementById(inputId);
             if (input.type === "password") {
                 input.type = "text";
                 icon.classList.replace('fa-eye', 'fa-eye-slash');
+                icon.style.color = "#3982f7"; // تلوين الأيقونة عند الإظهار
             } else {
                 input.type = "password";
                 icon.classList.replace('fa-eye-slash', 'fa-eye');
+                icon.style.color = ""; // إعادة اللون الطبيعي
             }
         }
 
-        // استخدام نفس مفتاح التخزين الموحد
+        // مفتاح التخزين الموحد
         const REG_STORAGE_KEY = 'aite_accounts_secure_v2';
+        const DEFAULT_PROFILE_IMG = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
         
         function loadAccounts() { try { return JSON.parse(localStorage.getItem(REG_STORAGE_KEY) || '[]'); } catch (e) { return []; } }
         function saveAccounts(list) { localStorage.setItem(REG_STORAGE_KEY, JSON.stringify(list)); }
 
         document.getElementById('registrationForm').addEventListener('submit', function (event) {
+            // لا نمنع الإرسال الافتراضي (e.preventDefault) لأننا نريد إرسال البيانات للسيرفر
+            // لكننا ننفذ كود الحفظ المحلي قبل أن تغادر الصفحة
+
             const btn = document.getElementById('submitBtn');
             const username = (document.getElementById('id_username').value || '').trim();
             const fullname = (document.getElementById('id_fullname').value || '').trim() || username;
@@ -169,17 +178,25 @@
             document.getElementById('btnSpinner').classList.remove('hidden');
 
             if (username && password) {
-                // نقوم بتشفير كلمة المرور قبل الحفظ (Base64)
-                // هذا يمنع ظهور كلمة المرور واضحة إذا نظر شخص ما إلى المتصفح
+                // تشفير كلمة المرور للحفظ المحلي فقط
                 const encryptedPass = btoa(password);
+
+                // تحديد صورة البروفايل: إذا رفع صورة نستخدم معاينتها (DataURL)
+                // إذا لم يرفع، نستخدم الصورة الافتراضية
+                let savedImg = DEFAULT_PROFILE_IMG;
+                if (profileImgEl.style.display !== 'none' && profileImgEl.src) {
+                    savedImg = profileImgEl.src;
+                }
 
                 let accounts = loadAccounts().filter(a => a.username !== username);
                 accounts.unshift({
                     username: username,
                     full_name: fullname,
-                    auth_token: encryptedPass, // حفظ النسخة المشفرة
-                    profile_picture_url: (profileImgEl.style.display !== 'none') ? profileImgEl.src : null
+                    auth_token: encryptedPass,
+                    profile_picture_url: savedImg
                 });
+                
+                // حفظ آخر 8 حسابات
                 saveAccounts(accounts.slice(0, 8));
             }
         });
