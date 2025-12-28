@@ -205,7 +205,43 @@ app.get('/search', requireAuth, (req, res) => {
 app.get('/post.html', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'post.html'));
 });
+// API: Get Single Post by ID
+app.get('/api/posts/one/:postId', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const { postId } = req.params;
 
+  try {
+    const postSnap = await db.ref(`posts/${postId}`).once('value');
+    if (!postSnap.exists()) return res.status(404).json({ ok: false, error: 'Post not found' });
+
+    let post = postSnap.val();
+    
+    // Fetch User Info
+    const userSnap = await db.ref(`profiles/${post.userId}`).once('value');
+    const userData = userSnap.val() || {};
+    
+    // Check Like Status
+    const likeSnap = await db.ref(`likes/${postId}/${currentUserId}`).once('value');
+    const isLiked = likeSnap.exists();
+
+    const finalPost = {
+      ...post,
+      commentsCount: post.commentsCount || 0,
+      is_liked: isLiked,
+      user: {
+        username: userData.username || 'مستخدم',
+        profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150',
+        is_online: !!userData.is_online,
+        is_verified: !!userData.is_verified
+      }
+    };
+
+    res.json({ ok: true, post: finalPost });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false });
+  }
+});
 // دعم المسار القصير /post مع تمرير الاستعلامات (مثلاً /post?id=XYZ)
 app.get('/post', requireAuth, (req, res) => {
   const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
