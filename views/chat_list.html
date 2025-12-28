@@ -239,8 +239,8 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* Waveform: make fully black background and initial strip white.
-           On play we switch the unplayed wave to gray and keep the white progress moving. */
+        /* Waveform: fully black background.
+           Idle: white strip. When playing: unplayed becomes gray and white progress moves on top. */
         .waveform-post {
             height: 60px; 
             background: #000000; /* fully black */
@@ -249,9 +249,44 @@
             overflow: hidden;
         }
 
-        /* Ensure audio play button doesn't turn blue on hover */
+        /* New wrapper for audio area: make the frame black */
+        .audio-play-wrapper {
+            background: #000000; /* black frame */
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.04);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Play button: white background, black icon */
+        .audio-play-button {
+            background: #ffffff;
+            color: #000000;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            transition: transform .12s ease, box-shadow .12s ease;
+            cursor: pointer;
+        }
+        .audio-play-button i {
+            color: #000000; /* icon black */
+        }
         .audio-play-button:hover {
-            color: #e5e7eb !important; /* muted light color */
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+        }
+
+        /* Ensure hover doesn't turn play icon blue */
+        .audio-play-button:hover i {
+            color: #000000 !important;
         }
 
         .custom-scrollbar::-webkit-scrollbar {
@@ -849,6 +884,7 @@
             }
         });
 
+        // Helper to set WaveSurfer colors (safe)
         function setWSColors(ws, waveColor, progressColor) {
             try {
                 if (typeof ws.setWaveColor === 'function') ws.setWaveColor(waveColor);
@@ -860,15 +896,16 @@
             } catch (e) {}
         }
 
+        // Initialize WaveSurfer for each audio post with the requested colors/behavior
         function initializePostWaveSurfer(postId, url) {
             const container = document.getElementById(`waveform-${postId}`);
             if (!container) return;
 
-            // default: show a white strip on black background (idle state)
+            // idle: white strip on black background (as requested)
             const ws = WaveSurfer.create({
                 container: container,
-                waveColor: '#ffffff',      // initial strip: white (idle)
-                progressColor: '#ffffff',  // progress will also be white (we'll update colors on play)
+                waveColor: '#ffffff',      // idle: white (unplayed)
+                progressColor: '#ffffff',  // progress white
                 cursorColor: 'transparent',
                 barWidth: 3,
                 barRadius: 3,
@@ -883,7 +920,7 @@
             const playButton = container.closest('.glass-post-card').querySelector('.audio-play-button');
             if (playButton) {
                 playButton.onclick = () => {
-                    // ensure only one audio/wave is active
+                    // stop other active audio/waves
                     if (activeWaveSurfer && activeWaveSurfer !== ws) {
                         try { activeWaveSurfer.pause(); } catch(e){}
                         const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
@@ -917,12 +954,12 @@
                     }
                 };
 
-                // when play starts -> change unplayed wave to gray so white progress is visible
+                // When play starts -> set unplayed wave to gray so the white progress is visible moving over it
                 ws.on('play', () => {
                     setWSColors(ws, '#6b7280' /* gray for unplayed */, '#ffffff' /* white progress */);
                 });
 
-                // when paused or finished -> revert to white strip idle style
+                // When paused or finished -> revert to idle white strip
                 const revertToIdle = () => {
                     setWSColors(ws, '#ffffff', '#ffffff');
                     if (playButton) {
@@ -1083,11 +1120,13 @@
                     `;
                 } else if (post.media.type === 'audio') {
                     mediaContent = `
-                        <div class="mt-3 flex items-center space-x-3 space-x-reverse bg-gray-800 p-3 rounded-lg">
-                            <button class="audio-play-button text-white text-xl hover:text-blue-400 transition duration-300">
-                                <i class="fas fa-play"></i>
-                            </button>
-                            <div id="waveform-${post.postId}" class="waveform-post flex-grow"></div>
+                        <div class="mt-3">
+                            <div class="audio-play-wrapper">
+                                <button id="audio-btn-${post.postId}" class="audio-play-button" onclick="toggleAudioPlay('${post.postId}')">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <div id="waveform-${post.postId}" class="waveform-post flex-grow" data-src="${post.media.url}"></div>
+                            </div>
                         </div>
                     `;
                 }
