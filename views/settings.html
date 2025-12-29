@@ -8,10 +8,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* خلفية الصفحة مع تدرج خفيف لتعزيز تأثير الزجاج */
-        body { 
-            background: radial-gradient(circle at top, #1a1a1a, #000000); 
-            color: #e4e6eb; 
-            font-family: 'Segoe UI', sans-serif; 
+        body {
+            background: radial-gradient(circle at top, #1a1a1a, #000000);
+            color: #e4e6eb;
+            font-family: 'Segoe UI', sans-serif;
         }
 
         /* تأثير الزجاج الأسود (Black Glassmorphism) */
@@ -44,6 +44,58 @@
             background: rgba(255, 255, 255, 0.2);
             border-color: rgba(255, 255, 255, 0.4);
         }
+
+        /* Modal common styles (black glass) */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 60;
+        }
+        .modal-backdrop.open { display: flex; }
+
+        .modal-glass {
+            width: 94%;
+            max-width: 420px;
+            border-radius: 14px;
+            padding: 18px;
+            background: rgba(8, 10, 14, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+            color: #e6eefb;
+        }
+
+        .modal-title { font-weight: 800; font-size: 1.05rem; }
+
+        .eye-btn {
+            position: absolute;
+            inset-inline-start: 8px; /* since dir=rtl, inset-inline-start is left */
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            cursor: pointer;
+            padding: 6px;
+        }
+
+        /* small helper for input wrapper */
+        .input-wrap { position: relative; }
+
+        /* inline error text style */
+        .inline-error { color: #fb7185; font-size: 0.9rem; margin-top: 8px; }
+
+        /* polished confirm text inside modal */
+        .modal-note { color: #9ca3af; font-size: 0.95rem; margin-top: 8px; }
+
+        /* disabled button appearance */
+        button[disabled] { opacity: 0.6; cursor: not-allowed; }
+
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center pt-6 px-4 pb-20">
@@ -53,11 +105,11 @@
             <i class="fas fa-arrow-right"></i>
         </a>
         <h1 class="text-2xl font-bold tracking-wide">الإعدادات</h1>
-        <div class="w-5"></div> 
+        <div class="w-5"></div>
     </div>
 
     <div class="w-full max-w-md space-y-6">
-        
+
         <div class="glass-panel p-5 rounded-2xl">
             <h2 class="text-sm font-bold mb-4 text-gray-400 uppercase tracking-widest">الحساب</h2>
             <a href="/edit_profile" class="flex items-center justify-between w-full p-4 glass-button rounded-xl">
@@ -73,45 +125,123 @@
             <form id="changePasswordForm" class="space-y-4">
                 <div>
                     <label class="block text-xs text-gray-400 mb-2 mr-1">كلمة المرور الجديدة</label>
-                    <input type="password" id="newPassword" required 
-                        class="glass-input w-full rounded-xl p-3 text-white focus:outline-none" 
-                        placeholder="••••••••">
+                    <div class="input-wrap">
+                        <input type="password" id="newPassword" required
+                            class="glass-input w-full rounded-xl p-3 text-white focus:outline-none"
+                            placeholder="••••••••" autocomplete="new-password">
+                        <button type="button" class="eye-btn" aria-label="Toggle visibility" onclick="toggleEye('newPassword', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-xs text-gray-400 mb-2 mr-1">تأكيد كلمة المرور</label>
-                    <input type="password" id="confirmPassword" required 
-                        class="glass-input w-full rounded-xl p-3 text-white focus:outline-none" 
-                        placeholder="••••••••">
+                    <div class="input-wrap">
+                        <input type="password" id="confirmPassword" required
+                            class="glass-input w-full rounded-xl p-3 text-white focus:outline-none"
+                            placeholder="••••••••" autocomplete="new-password">
+                        <button type="button" class="eye-btn" aria-label="Toggle visibility" onclick="toggleEye('confirmPassword', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="w-full glass-button text-white font-bold py-3 px-4 rounded-xl mt-2 active:scale-95 transition-transform">
+                <button type="submit" id="changePassBtn" class="w-full glass-button text-white font-bold py-3 px-4 rounded-xl mt-2 active:scale-95 transition-transform">
                     تحديث كلمة المرور
                 </button>
             </form>
             <p id="msg" class="text-center text-sm mt-4 hidden"></p>
         </div>
 
-        <div class="pt-6">
-            <button onclick="logout()" class="w-full border border-red-900/50 bg-red-950/10 text-red-500 hover:bg-red-600 hover:text-white font-bold py-4 px-4 rounded-2xl transition-all flex items-center justify-center gap-2">
+        <div class="pt-2">
+            <button id="logoutBtn" onclick="openLogoutModal()" class="w-full border border-red-900/50 bg-red-950/10 text-red-500 hover:bg-red-600 hover:text-white font-bold py-4 px-4 rounded-2xl transition-all flex items-center justify-center gap-2">
                 <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+            </button>
+        </div>
+
+        <div class="pt-2">
+            <button id="deleteAccountBtn" onclick="openDeleteModal()" class="w-full border border-gray-700 bg-transparent text-white font-semibold py-4 px-4 rounded-2xl transition-all flex items-center justify-center gap-2">
+                <i class="fas fa-trash-alt text-red-500"></i> حذف الحساب
             </button>
         </div>
 
     </div>
 
-    <script>
-        /**
-         * ملاحظات مهمة لهذه النسخة:
-         * - نرسل credentials: 'include' في fetch ليتم إرسال الكوكي (الجلسة) مع الطلب.
-         * - في حال استجابة 401 نعرض رسالة ثم نعيد التوجيه إلى /login.
-         * - showMsg تم تبسيطها لتعمل بثبات مع Tailwind وألوان مباشرة.
-         */
+    <!-- Logout Confirmation Modal (black glass) -->
+    <div id="logoutModal" class="modal-backdrop" onclick="closeLogoutModal(event)">
+        <div class="modal-glass" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between">
+                <div>
+                    <div class="modal-title">تأكيد تسجيل الخروج</div>
+                    <div class="modal-note">هل تريد تسجيل الخروج الآن؟ ستحتاج لتسجيل الدخول مرة أخرى للدخول إلى حسابك.</div>
+                </div>
+                <button onclick="closeLogoutModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
 
+            <div class="mt-4 flex gap-3">
+                <button onclick="closeLogoutModal()" class="flex-1 glass-button py-2 rounded-lg font-semibold">إلغاء</button>
+                <button onclick="confirmLogout()" id="logoutConfirmBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold">تسجيل الخروج</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Account Modal (password confirm) -->
+    <div id="deleteModal" class="modal-backdrop" onclick="closeDeleteModal(event)">
+        <div class="modal-glass" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between">
+                <div>
+                    <div class="modal-title">حذف الحساب نهائياً</div>
+                    <div class="modal-note">سيتم حذف حسابك وكل بياناتك نهائياً. الرجاء إدخال كلمة المرور لتأكيد الحذف.</div>
+                </div>
+                <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+
+            <form id="deleteAccountForm" class="mt-4">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-2 mr-1">كلمة المرور</label>
+                    <div class="input-wrap">
+                        <input type="password" id="deletePasswordInput" required
+                               class="glass-input w-full rounded-xl p-3 text-white focus:outline-none"
+                               placeholder="أدخل كلمة المرور للتأكيد" autocomplete="current-password">
+                        <button type="button" class="eye-btn" aria-label="Toggle visibility" onclick="toggleEye('deletePasswordInput', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div id="deleteError" class="inline-error hidden"></div>
+                </div>
+
+                <div class="mt-4 flex gap-3">
+                    <button type="button" onclick="closeDeleteModal()" class="flex-1 glass-button py-2 rounded-lg font-semibold">إلغاء</button>
+                    <button id="confirmDeleteAccountBtn" type="submit" class="flex-1 bg-red-700 hover:bg-red-800 text-white py-2 rounded-lg font-semibold">حذف الحساب</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Toggle eye visibility for password fields
+        function toggleEye(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
+            } else {
+                input.type = 'password';
+                if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
+            }
+            input.focus();
+        }
+
+        // Change password logic (same as before, slightly improved feedback)
         document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            clearMsg();
-
             const newPass = document.getElementById('newPassword').value.trim();
             const confirmPass = document.getElementById('confirmPassword').value.trim();
+            const msgEl = document.getElementById('msg');
+
+            msgEl.classList.add('hidden');
+            msgEl.textContent = '';
 
             if (newPass.length < 6) {
                 showMsg('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'red');
@@ -122,76 +252,137 @@
                 return;
             }
 
+            const btn = document.getElementById('changePassBtn');
+            btn.disabled = true;
+            btn.textContent = 'جاري التحديث...';
+
             try {
                 const res = await fetch('/api/change-password', {
                     method: 'POST',
-                    credentials: 'include', // مهم جدًا لإرسال cookie/session
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ newPassword: newPass })
                 });
-
-                // تعامل مع حالات الخطأ الشائعة
-                if (res.status === 401) {
-                    showMsg('غير مصرح. سيتم إعادة التوجيه لتسجيل الدخول...', 'red');
-                    setTimeout(() => { window.location.href = '/login'; }, 1400);
-                    return;
-                }
-                if (res.status === 403) {
-                    showMsg('لا تمتلك صلاحية لتغيير كلمة المرور.', 'red');
-                    return;
-                }
-
-                let data = {};
-                try {
-                  data = await res.json();
-                } catch (jsonErr) {
-                  // قد يكون رد غير JSON — نعرض رسالة عامة
-                  console.error('Could not parse JSON response:', jsonErr);
-                }
+                const data = await res.json();
 
                 if (res.ok && data.ok) {
-                    showMsg(data.message || 'تم تحديث كلمة المرور بنجاح', 'green');
+                    showMsg('تم تحديث كلمة المرور بنجاح', 'green');
                     document.getElementById('changePasswordForm').reset();
                 } else {
-                    showMsg(data.error || data.message || 'حدث خطأ ما', 'red');
+                    showMsg(data.error || 'حدث خطأ ما', 'red');
                 }
             } catch (err) {
-                console.error('Change password request failed:', err);
-                // رسالة الخطأ "Could not establish connection. Receiving end does not exist." عادة من امتداد (extension)
-                // وليس خطأ في التطبيق نفسه؛ هنا نعرض رسالة عامة للمستخدم.
-                showMsg('فشل الاتصال بالخادم. تحقق من اتصالك أو سجّل الدخول مرة أخرى.', 'red');
+                showMsg('فشل الاتصال بالخادم', 'red');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'تحديث كلمة المرور';
             }
         });
 
         function showMsg(text, color) {
             const msg = document.getElementById('msg');
             msg.textContent = text;
-            msg.classList.remove('hidden');
-            msg.classList.add('block');
+            msg.style.display = 'block';
+            msg.style.color = (color === 'green') ? '#86efac' : '#fb7185';
+        }
 
-            // لون النص المباشر لتفادي تعارض أسماء classes المولدة ديناميكياً
-            if (color === 'green') {
-                msg.style.color = '#34d399'; // tailwind green-400
-            } else if (color === 'red') {
-                msg.style.color = '#fb7185'; // tailwind red-400
-            } else {
-                msg.style.color = '#e5e7eb';
+        // --- Logout modal control ---
+        function openLogoutModal() {
+            document.getElementById('logoutModal').classList.add('open');
+            document.getElementById('logoutModal').style.display = 'flex';
+        }
+        function closeLogoutModal(e) {
+            if (e && e.target && e.target.id === 'logoutModal') {
+                document.getElementById('logoutModal').classList.remove('open');
+                document.getElementById('logoutModal').style.display = 'none';
+                return;
             }
+            document.getElementById('logoutModal').classList.remove('open');
+            document.getElementById('logoutModal').style.display = 'none';
+        }
+        function confirmLogout() {
+            // use the modal confirm button to redirect to /logout
+            window.location.href = '/logout';
         }
 
-        function clearMsg() {
-            const msg = document.getElementById('msg');
-            msg.textContent = '';
-            msg.classList.add('hidden');
-            msg.classList.remove('block');
-            msg.style.color = '';
+        // --- Delete account modal control ---
+        function openDeleteModal() {
+            document.getElementById('deleteModal').classList.add('open');
+            document.getElementById('deleteModal').style.display = 'flex';
+            document.getElementById('deletePasswordInput').value = '';
+            document.getElementById('deleteError').classList.add('hidden');
+            document.getElementById('deleteError').textContent = '';
+            setTimeout(() => { document.getElementById('deletePasswordInput').focus(); }, 120);
         }
-
-        function logout() {
-            if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
-                window.location.href = '/logout';
+        function closeDeleteModal(e) {
+            if (e && e.target && e.target.id === 'deleteModal') {
+                document.getElementById('deleteModal').classList.remove('open');
+                document.getElementById('deleteModal').style.display = 'none';
+                return;
             }
+            document.getElementById('deleteModal').classList.remove('open');
+            document.getElementById('deleteModal').style.display = 'none';
         }
+
+        // Handle delete account submission
+        document.getElementById('deleteAccountForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pwd = document.getElementById('deletePasswordInput').value || '';
+            const errEl = document.getElementById('deleteError');
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+
+            if (!pwd || pwd.trim().length === 0) {
+                errEl.textContent = 'الرجاء إدخال كلمة المرور لتأكيد الحذف';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            const btn = document.getElementById('confirmDeleteAccountBtn');
+            btn.disabled = true;
+            btn.textContent = 'جارٍ الحذف...';
+
+            try {
+                // send request to account deletion endpoint
+                // NOTE: ensure backend supports this endpoint: POST /api/account/delete { password }
+                const res = await fetch('/api/account/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ password: pwd })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.ok) {
+                    // close modal and redirect to accounts page
+                    closeDeleteModal();
+                    // optional small delay for UX
+                    setTimeout(() => {
+                        window.location.href = '/accounts';
+                    }, 300);
+                } else {
+                    // show returned error
+                    errEl.textContent = data.error || 'فشل حذف الحساب. تأكد من كلمة المرور.';
+                    errEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errEl.textContent = 'خطأ في الاتصال.';
+                errEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'حذف الحساب';
+            }
+        });
+
+        // prevent closing modal with Escape inadvertently? allow escape to close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeLogoutModal();
+                closeDeleteModal();
+            }
+        });
+
     </script>
 </body>
 </html>
