@@ -3324,6 +3324,7 @@ app.post('/api/change-password', requireAuth, async (req, res) => {
 // يتطلب وضع متغير البيئة FIREBASE_WEB_API_KEY
 const fetch = require('node-fetch'); // إذا لم يكن مثبتاً، ثبت بواسطة: npm i node-fetch@2
 
+// استبدل مسار الحذف الموجود في server.js بهذا الكود المحسن
 app.post('/api/account/delete', requireAuth, async (req, res) => {
   const uid = req.session.userId;
   const password = (req.body && req.body.password) ? String(req.body.password) : '';
@@ -3332,22 +3333,25 @@ app.post('/api/account/delete', requireAuth, async (req, res) => {
   if (!password) return res.status(400).json({ ok: false, error: 'Password required' });
 
   try {
-    // احصل على البريد من الجلسة أو من قاعدة البيانات
-    let email = req.session.email;
-    if (!email) {
-      const snap = await db.ref(`profiles/${uid}`).once('value');
-      const profile = snap.val() || {};
-      email = profile.email || profile.username ? `${profile.username}@trimer.io` : null;
-    }
+    // 1. جلب بيانات المستخدم (اسم المستخدم والبريد) قبل الحذف
+    const snap = await db.ref(`profiles/${uid}`).once('value');
+    const profile = snap.val() || {};
+    // نحتاج اسم المستخدم لنرسله للعميل ليحذفه من LocalStorage
+    const usernameToDelete = profile.username; 
+    
+    let email = req.session.email || profile.email;
+    if (!email && usernameToDelete) email = `${usernameToDelete}@trimer.io`;
+    
     if (!email) return res.status(400).json({ ok: false, error: 'Email not found for user' });
 
+    // تأكد من وجود مفتاح API في ملف .env
     const apiKey = process.env.FIREBASE_WEB_API_KEY;
     if (!apiKey) {
-      console.error('FIREBASE_WEB_API_KEY not configured');
+      console.error('FIREBASE_WEB_API_KEY not configured in .env');
       return res.status(500).json({ ok: false, error: 'Server misconfiguration' });
     }
 
-    // تحقق من كلمة المرور عبر REST API (signInWithPassword)
+    // 2. التحقق من كلمة المرور
     const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
     const resp = await fetch(verifyUrl, {
       method: 'POST',
@@ -3355,43 +3359,40 @@ app.post('/api/account/delete', requireAuth, async (req, res) => {
       body: JSON.stringify({ email, password, returnSecureToken: true })
     });
 
-    const verifyData = await resp.json();
-
     if (!resp.ok) {
-      // لا تكشف الكثير للمستخدم، أعطِ رسالة عامة
-      return res.status(403).json({ ok: false, error: 'Invalid credentials' });
+      return res.status(403).json({ ok: false, error: 'كلمة المرور غير صحيحة.' });
     }
 
-    // الآن حذف المستخدم عبر Admin SDK + تنظيف DB (أفضل-جهد)
+    // 3. حذف المستخدم والموارد
     try {
-      // 1) حذف المستخدم من Firebase Auth
-      await admin.auth().deleteUser(uid).catch(err => { throw err; });
+      await admin.auth().deleteUser(uid);
 
-      // 2) تنظيف البيانات ذات الصلة في Realtime Database (تخصيص حسب مخططك)
       const updates = {};
       updates[`profiles/${uid}`] = null;
       updates[`chats/${uid}`] = null;
       updates[`friends/${uid}`] = null;
-      updates[`friend_requests/${uid}`] = null;
       updates[`notifications/${uid}`] = null;
-      // يمكنك إضافة مسارات أخرى تحتاج للحذف (messages, posts, comments...) حسب رغبتك
-      await db.ref().update(updates).catch(() => { /* best-effort */ });
+      // تنظيف الجلسات المرتبطة
+      updates[`sessions/${req.sessionID}`] = null;
 
-      // 3) إنهاء الجلسة
+      await db.ref().update(updates).catch(() => {});
+
+      // 4. تدمير الجلسة وإرجاع اسم المستخدم المحذوف
       req.session.destroy(() => {
-        // تنظيف كوكي الجلسة
+        // نرسل اسم المستخدم هنا
+        res.json({ ok: true, message: 'Account deleted', deletedUsername: usernameToDelete });
       });
 
-      return res.json({ ok: true, message: 'Account deleted' });
     } catch (deleteErr) {
       console.error('Error deleting user resources:', deleteErr);
-      return res.status(500).json({ ok: false, error: 'Failed to delete account' });
+      return res.status(500).json({ ok: false, error: 'Failed to delete account logic' });
     }
   } catch (err) {
     console.error('Account delete error:', err);
     return res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
+
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
 });
