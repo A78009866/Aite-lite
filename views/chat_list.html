@@ -158,8 +158,9 @@
         .reel-card-item:active { transform: scale(0.97); }
 
         /* show poster image or fallback */
-        .reel-card-item img {
+        .reel-card-item img.reel-thumb {
             width: 100%; height: 100%; object-fit: cover; pointer-events: none; display: block;
+            background: #000;
         }
         .reel-card-item video {
             display: none; /* avoid showing ugly autoplay frame; we only keep video for potential later use */
@@ -491,6 +492,33 @@
             background: rgba(255,255,255,0.02);
             color: #fff;
         }
+
+        /* Fix: ensure liked heart icon stays red visually (stronger rule) */
+        .liked-heart {
+            color: #ef4444 !important;
+        }
+
+        /* Copy feedback small tooltip */
+        .copy-feedback {
+            position: absolute;
+            top: -32px;
+            right: 8px;
+            background: rgba(0,0,0,0.75);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 80;
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity .18s, transform .18s;
+            pointer-events: none;
+        }
+        .copy-feedback.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
     </style>
 </head>
 <body class="min-h-screen">
@@ -572,7 +600,7 @@
 
     // تحديث صورة البروفيل في الهيدر عند تحميل الصفحة
     (function updateNavAvatar() {
-        fetch('/api/profile')
+        fetch('/api/profile', { credentials: 'same-origin' })
             .then(res => res.json())
             .then(user => {
                 if (user && user.profile_picture_url) {
@@ -896,7 +924,8 @@
             try {
                 const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
                 });
 
                 const result = await response.json();
@@ -926,17 +955,43 @@
         }
 
         // Open bottom sheet with appropriate options
-        function openPostOptionsModal(postId, userId) {
+        async function openPostOptionsModal(postId, userId) {
             currentOptionsPostId = postId;
             currentOptionsUserId = userId;
             postOptionsMessage.classList.add('hidden');
-            // If owner -> show delete, hide add-friend
-            if (currentUserId && userId === currentUserId) {
-                postOptionsDeleteBtn.style.display = 'flex';
-                postOptionsAddFriendBtn.style.display = 'none';
-            } else {
-                postOptionsDeleteBtn.style.display = 'none';
-                postOptionsAddFriendBtn.style.display = 'flex';
+
+            // Determine whether to show delete/add friend based on relationship:
+            // - if owner => show delete
+            // - else if friend => hide add friend
+            // - else show add friend
+            try {
+                const res = await fetch(`/api/profile?userId=${encodeURIComponent(userId)}`, { credentials: 'same-origin' });
+                let profileData = null;
+                if (res.ok) profileData = await res.json();
+
+                const isOwner = currentUserId && userId === currentUserId;
+                const isFriend = profileData && profileData.is_friend;
+
+                if (isOwner) {
+                    postOptionsDeleteBtn.style.display = 'flex';
+                    postOptionsAddFriendBtn.style.display = 'none';
+                } else {
+                    postOptionsDeleteBtn.style.display = 'none';
+                    if (isFriend) {
+                        postOptionsAddFriendBtn.style.display = 'none';
+                    } else {
+                        postOptionsAddFriendBtn.style.display = 'flex';
+                    }
+                }
+            } catch (e) {
+                // fallback: if any failure, default to showing add friend (unless owner)
+                if (currentUserId && userId === currentUserId) {
+                    postOptionsDeleteBtn.style.display = 'flex';
+                    postOptionsAddFriendBtn.style.display = 'none';
+                } else {
+                    postOptionsDeleteBtn.style.display = 'none';
+                    postOptionsAddFriendBtn.style.display = 'flex';
+                }
             }
 
             postOptionsModal.classList.remove('hidden');
@@ -1317,6 +1372,17 @@
                 </button>
             `;
 
+            // copy link button (next to comment)
+            const copyButtonHtml = `
+                <div class="relative">
+                  <button class="flex items-center text-gray-400 hover:text-white transition w-full justify-center gap-2" 
+                          onclick="copyPostLink('${post.postId}', this)" title="نسخ رابط المنشور">
+                      <i class="fas fa-link text-lg"></i>
+                  </button>
+                  <div class="copy-feedback" aria-hidden="true">تم النسخ</div>
+                </div>
+            `;
+
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
                     <div class="flex items-start justify-between mb-3">
@@ -1349,13 +1415,35 @@
                             <i class="${likeIconClass} ml-2 like-icon text-lg"></i>
                             <span class="text-sm font-medium">إعجاب</span>
                         </button>
+
                         <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="handleComment('${post.postId}')">
                             <i class="fas fa-comment-dots text-lg"></i>
                             <span class="text-sm font-medium">تعليق</span>
                         </button>
+
+                        ${copyButtonHtml}
                     </div>
                 </div>
             `;
+        }
+
+        // helper: copy post link
+        function copyPostLink(postId, btnEl) {
+            const url = `${location.origin}/post?id=${encodeURIComponent(postId)}`;
+            navigator.clipboard.writeText(url).then(() => {
+                // show small feedback bubble
+                const container = btnEl.closest('.relative') || btnEl.parentElement;
+                const feedback = container.querySelector('.copy-feedback');
+                if (feedback) {
+                    feedback.classList.add('show');
+                    setTimeout(() => feedback.classList.remove('show'), 1400);
+                } else {
+                    // fallback alert
+                    alert('تم نسخ الرابط');
+                }
+            }).catch(() => {
+                alert('فشل النسخ — انسخ الرابط يدوياً:\n' + url);
+            });
         }
 
         // Helper to update comment count shown on post card and in modal badge
@@ -1392,9 +1480,10 @@
 
         // Create comment HTML (uses enriched comment object returned by server)
 function createCommentHtml(comment, postId) {
-    const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
-    const likedClass = comment.is_liked ? 'text-red-400' : 'text-gray-400';
-    const likeIcon = comment.is_liked ? 'fas' : 'far';
+    const liked = !!comment.is_liked;
+    const likedClass = liked ? 'text-red-400' : 'text-gray-400';
+    const likeIcon = liked ? 'fas' : 'far';
+    const likeIconStyle = liked ? 'style="color:#ef4444"' : '';
     const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
         <div class="reply-item flex items-start gap-2">
             <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
@@ -1422,14 +1511,14 @@ function createCommentHtml(comment, postId) {
                         </div>
                         <div class="flex items-center gap-2 comment-actions">
                             <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
-                                <i class="${likeIcon} fa-heart"></i>
+                                <i class="${likeIcon} fa-heart liked-heart" ${likeIconStyle}></i>
                                 <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
                             </button>
                             <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
                                 <i class="fas fa-reply"></i>
                                 <span class="text-xs">رد</span>
                             </button>
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 ${((comment.repliesCount||0) > (comment.recentReplies ? comment.recentReplies.length : 0)) ? '' : 'hidden'}" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
                                 <i class="fas fa-angle-down"></i>
                                 <span class="text-xs">عرض الردود</span>
                             </button>
@@ -1464,16 +1553,17 @@ function createCommentHtml(comment, postId) {
                 if (res.ok && data.ok) {
                     const countEl = document.getElementById(`comment-like-count-${commentId}`);
                     if (countEl) countEl.textContent = data.likes;
+
+                    // Update visual state strongly (so SSE re-renders will reflect current server state soon)
+                    const i = btnEl.querySelector('i');
                     if (data.is_liked) {
                         btnEl.classList.remove('text-gray-400');
                         btnEl.classList.add('text-red-400');
-                        const i = btnEl.querySelector('i');
-                        if (i) { i.classList.remove('far'); i.classList.add('fas'); }
+                        if (i) { i.classList.remove('far'); i.classList.add('fas'); i.classList.add('liked-heart'); i.style.color = '#ef4444'; }
                     } else {
                         btnEl.classList.remove('text-red-400');
                         btnEl.classList.add('text-gray-400');
-                        const i = btnEl.querySelector('i');
-                        if (i) { i.classList.remove('fas'); i.classList.add('far'); }
+                        if (i) { i.classList.remove('fas'); i.classList.add('far'); i.classList.remove('liked-heart'); i.style.color = ''; }
                     }
                 } else {
                     console.warn('Like comment failed', data);
@@ -1624,48 +1714,6 @@ function renderFamilyCard(f) {
     `;
 }
 
-async function fetchAndDisplayFamilies() {
-    if (!familiesRow) return;
-    
-    // حالة التحميل
-    familiesRow.innerHTML = '<div class="text-gray-400 p-4">جاري تحميل العائلات...</div>';
-    
-    try {
-        // دائماً اظهر بطاقة "إنشاء عائلة" في البداية
-        const createHtml = renderCreateFamilyCard();
-        let html = createHtml;
-
-        // محاولة جلب كل العائلات
-        const res = await fetch('/api/families', { credentials: 'same-origin' });
-        const data = await res.json();
-
-        if (res.ok && data.ok) {
-            const families = data.families || [];
-            const famHtml = families.map(f => renderFamilyCard(f)).join('');
-            html += famHtml;
-        } else {
-            // حالة احتياطية (Fallback): جلب عائلاتي فقط في حال فشل المسار العام
-            try {
-                const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
-                const d2 = await res2.json();
-                if (res2.ok && d2.ok) {
-                    const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
-                    html += famHtml2;
-                }
-            } catch (e) {
-                console.error('Fallback fetch failed', e);
-            }
-        }
-        
-        familiesRow.innerHTML = html;
-
-    } catch (e) {
-        console.error('Failed to load families', e);
-        // في حال الخطأ الكلي، اظهر بطاقة الإنشاء فقط
-        familiesRow.innerHTML = renderCreateFamilyCard();
-    }
-}
-
         function onCreateFamilyClick() {
             // simply navigate to create-family page (server view)
             window.location.href = '/create-family';
@@ -1746,17 +1794,20 @@ async function fetchAndDisplayFamilies() {
         function createReelsTrayHtml(reels) {
             if(!reels || reels.length === 0) return '';
             const items = reels.map(r => {
-                const thumb = r.thumbnailUrl || r.posterUrl || ''; 
-                // show poster image if available, otherwise show solid black block
-                const posterHtml = thumb
-                  ? `<img src="${escapeHtml(thumb)}" alt="thumbnail" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23000%22/></svg>'">`
-                  : `<div class="w-full h-full bg-black"></div>`;
+                // prefer explicit thumbnail fields, else provide data-video-src for client-side capture
+                const thumb = r.thumbnailUrl || r.posterUrl || '';
+                const videoSrc = r.videoUrl || r.video_url || r.video || '';
 
-                const userPic = r.user && r.user.profile_picture_url ? escapeHtml(r.user.profile_picture_url) : '${DEFAULT_AVATAR}';
+                const posterHtml = thumb
+                  ? `<img class="reel-thumb" src="${escapeHtml(thumb)}" alt="thumbnail" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22110%22 height=%22190%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23000%22/></svg>'">`
+                  : `<img class="reel-thumb" data-video-src="${escapeAttr(videoSrc)}" src="" alt="thumbnail" />`;
+
+                const userPic = r.user && r.user.profile_picture_url ? escapeHtml(r.user.profile_picture_url) : DEFAULT_AVATAR;
                 const username = r.user && r.user.username ? escapeHtml(r.user.username) : 'user';
+                const reelId = escapeAttr(r.reelId || r.id || '');
 
                 return `
-                <div class="reel-card-item" onclick="window.location.href='/reels?id=${escapeAttr(r.reelId)}'">
+                <div class="reel-card-item" data-reel-id="${reelId}" onclick="window.location.href='/reels?id=${reelId}'">
                   ${posterHtml}
                   <div class="reel-play-icon"><i class="fas fa-play"></i></div>
                   <div class="reel-user-avatar">
@@ -1780,6 +1831,93 @@ async function fetchAndDisplayFamilies() {
             `;
         }
 
+        // Generate an image thumbnail from the first frame of the remote video (promise)
+        function generateThumbnailFromVideoUrl(videoUrl, width = 300, seekTo = 0.5) {
+            return new Promise((resolve, reject) => {
+                if (!videoUrl) return reject(new Error('No video url'));
+                const video = document.createElement('video');
+                video.crossOrigin = 'anonymous';
+                video.preload = 'auto';
+                video.muted = true;
+                video.src = videoUrl;
+
+                const clean = () => {
+                    try { video.pause(); } catch (e) {}
+                    video.src = '';
+                    video.load && video.load();
+                };
+
+                const onLoaded = () => {
+                    // choose a safe seek time
+                    const t = Math.min(seekTo, (video.duration || seekTo));
+                    const handleSeeked = () => {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            const ratio = video.videoWidth ? (video.videoHeight ? (video.videoWidth / video.videoHeight) : 1) : 1;
+                            const h = Math.round(width / ratio);
+                            canvas.width = width;
+                            canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+                            clean();
+                            resolve(dataURL);
+                        } catch (err) {
+                            clean();
+                            reject(err);
+                        }
+                    };
+                    // seek then draw
+                    video.currentTime = t;
+                    video.addEventListener('seeked', handleSeeked, { once: true });
+                };
+
+                const onError = (e) => {
+                    clean();
+                    reject(new Error('Video load error'));
+                };
+
+                video.addEventListener('loadedmetadata', onLoaded, { once: true });
+                video.addEventListener('error', onError, { once: true });
+
+                // as a fallback, if loadedmetadata didn't fire within X seconds, reject
+                const fallbackTimer = setTimeout(() => {
+                    reject(new Error('timeout loading video metadata'));
+                    try { video.pause(); } catch (e) {}
+                }, 8000);
+
+                // clear fallback on resolve/reject
+                const wrapResolve = (v) => { clearTimeout(fallbackTimer); resolve(v); };
+                const wrapReject = (err) => { clearTimeout(fallbackTimer); reject(err); };
+                // override resolve/reject in local scope
+                resolve = wrapResolve;
+                reject = wrapReject;
+            });
+        }
+
+        // Find reel img tags generated without thumbnail and generate poster images for them
+        async function generateThumbnailsForReels() {
+            const imgs = document.querySelectorAll('img.reel-thumb[data-video-src]');
+            if (!imgs || imgs.length === 0) return;
+            for (const img of imgs) {
+                const videoSrc = img.getAttribute('data-video-src');
+                if (!videoSrc) continue;
+                // skip if src already set
+                if (img.src && img.src.trim().length > 0) continue;
+                try {
+                    const dataUrl = await generateThumbnailFromVideoUrl(videoSrc, 220, 0.3);
+                    img.src = dataUrl;
+                } catch (e) {
+                    // if thumbnail generation fails, set a fallback solid image
+                    img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="190"><rect width="100%" height="100%" fill="%23000"/><text x="50%" y="50%" font-size="16" fill="%23fff" text-anchor="middle" dominant-baseline="middle">No preview</text></svg>';
+                    console.warn('thumbnail generation failed for', videoSrc, e);
+                } finally {
+                    // remove attribute to avoid reprocessing
+                    img.removeAttribute('data-video-src');
+                }
+            }
+        }
+
         // rest of existing functions (fetch posts, comments, likes, etc.)
         // Fetch and display posts (feed)
         async function fetchAndDisplayPosts() {
@@ -1788,7 +1926,7 @@ async function fetchAndDisplayFamilies() {
             try {
                 // Parallel fetch: posts + reels
                 const [postsRes, reelsData] = await Promise.all([
-                    fetch('/api/posts').then(r => r.ok ? r.json() : {ok:false}),
+                    fetch('/api/posts', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {ok:false}),
                     fetchReelsData()
                 ]);
 
@@ -1803,6 +1941,8 @@ async function fetchAndDisplayFamilies() {
                         // Even if no posts, show reels if available
                         if(reelsHtml) postsFeed.innerHTML = reelsHtml;
                         postsFeed.innerHTML += '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
+                        // generate thumbnails for reels (if needed)
+                        setTimeout(generateThumbnailsForReels, 80);
                         return;
                     }
                     
@@ -1852,8 +1992,18 @@ async function fetchAndDisplayFamilies() {
                         audioPostsToInit.forEach(ap => {
                             initializePostWaveSurfer(ap.postId, ap.url);
                         });
+                        // generate thumbnails for reels (if needed)
+                        generateThumbnailsForReels();
                     }, 100); 
 
+                } else {
+                    // if posts fetch failed but reels present
+                    if (reelsHtml) {
+                        postsFeed.innerHTML = reelsHtml;
+                        setTimeout(generateThumbnailsForReels, 80);
+                    } else {
+                        postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
+                    }
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -1868,7 +2018,8 @@ async function fetchAndDisplayFamilies() {
             try {
                 const response = await fetch(`/api/posts/${postId}/like`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
                 });
 
                 const result = await response.json();
@@ -2161,7 +2312,7 @@ async function fetchAndDisplayFamilies() {
              if(userIds.length === 0) return;
 
              try {
-                const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.ok ? r.json() : null).catch(()=>null));
+                const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).catch(()=>null));
                 const profiles = await Promise.all(promises);
                 
                 profiles.forEach(p => {
@@ -2232,7 +2383,7 @@ async function fetchAndDisplayFamilies() {
         });
         
         document.addEventListener('DOMContentLoaded', () => {
-            fetch('/api/profile')
+            fetch('/api/profile', { credentials: 'same-origin' })
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
                     const profilePicElement = document.getElementById('userProfilePic');
@@ -2414,7 +2565,7 @@ async function fetchAndDisplayFamilies() {
     const STORAGE_KEY = 'trimer_accounts_v1';
     
     // نستخدم الـ API الموجود بالفعل لجلب بيانات المستخدم الحالي
-    fetch('/api/profile')
+    fetch('/api/profile', { credentials: 'same-origin' })
         .then(r => r.json())
         .then(user => {
             if (user && user.username) {
