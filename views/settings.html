@@ -144,7 +144,7 @@
 
     <div id="deleteModal" class="modal-backdrop" onclick="closeDeleteModal()"><div class="modal-glass" onclick="event.stopPropagation()">
         <h3 class="font-bold text-lg text-red-500">حذف الحساب نهائياً</h3>
-        <p class="text-gray-400 text-sm mt-2">سيتم حذف بياناتك من السيرفر ومن مركز الحسابات. أدخل كلمة المرور للتأكيد.</p>
+        <p class="text-gray-400 text-sm mt-2">سيتم حذف بياناتك من السيرفر وإزالته من هذا الجهاز. أدخل كلمة المرور للتأكيد.</p>
         <form id="deleteAccountForm" class="mt-4">
             <div class="input-wrap">
                 <input type="password" id="deletePasswordInput" required class="glass-input w-full rounded-xl p-3 text-white focus:outline-none" placeholder="كلمة المرور">
@@ -159,6 +159,7 @@
     </div></div>
 
     <script>
+        // إعدادات التبديل للعين (كلمة المرور)
         function toggleEye(id, btn) {
             const el = document.getElementById(id);
             const icon = btn.querySelector('i');
@@ -166,26 +167,78 @@
             else { el.type = 'password'; icon.classList.replace('fa-eye-slash', 'fa-eye'); }
         }
 
+        // دوال فتح وإغلاق النوافذ المنبثقة
         function openLogoutModal() { document.getElementById('logoutModal').classList.add('open'); }
         function closeLogoutModal() { document.getElementById('logoutModal').classList.remove('open'); }
         function openDeleteModal() { document.getElementById('deleteModal').classList.add('open'); }
         function closeDeleteModal() { document.getElementById('deleteModal').classList.remove('open'); }
 
+        // منطق تغيير كلمة المرور
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newPass = document.getElementById('newPassword').value;
+            const confirmPass = document.getElementById('confirmPassword').value;
+            const msgEl = document.getElementById('msg');
+            const btn = document.getElementById('changePassBtn');
+
+            msgEl.classList.add('hidden');
+            msgEl.className = 'text-center text-sm mt-4 hidden'; // reset classes
+
+            if (newPass !== confirmPass) {
+                msgEl.textContent = 'كلمات المرور غير متطابقة.';
+                msgEl.classList.add('text-red-500');
+                msgEl.classList.remove('hidden');
+                return;
+            }
+
+            if (newPass.length < 6) {
+                msgEl.textContent = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
+                msgEl.classList.add('text-red-500');
+                msgEl.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'جارٍ التحديث...';
+
+            try {
+                const res = await fetch('/api/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ newPassword: newPass })
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    msgEl.textContent = 'تم تغيير كلمة المرور بنجاح.';
+                    msgEl.className = 'text-center text-sm mt-4 text-green-400';
+                    document.getElementById('changePasswordForm').reset();
+                } else {
+                    msgEl.textContent = data.error || 'حدث خطأ ما.';
+                    msgEl.className = 'text-center text-sm mt-4 text-red-500';
+                }
+            } catch (err) {
+                msgEl.textContent = 'فشل الاتصال بالسيرفر.';
+                msgEl.className = 'text-center text-sm mt-4 text-red-500';
+            } finally {
+                msgEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'تحديث كلمة المرور';
+            }
+        });
+
+        // منطق حذف الحساب (تم الإصلاح ليتوافق مع LocalStorage والتوجيه)
         document.getElementById('deleteAccountForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const pwd = document.getElementById('deletePasswordInput').value;
             const errEl = document.getElementById('deleteError');
             const btn = document.getElementById('confirmDeleteAccountBtn');
 
+            errEl.classList.add('hidden');
             btn.disabled = true;
-            btn.textContent = 'جارٍ الحذف...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحذف...';
 
             try {
-                // استخدام الرابط الصحيح لجلب بيانات المستخدم الحالي
-                const userRes = await fetch('/api/user-data');
-                const userData = await userRes.json();
-                const currentUsername = userData.username;
-
                 const res = await fetch('/api/account/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -194,19 +247,32 @@
                 const data = await res.json();
 
                 if (data.ok) {
-                    const STORAGE_KEY = 'saved_accounts';
-                    let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-                    accounts = accounts.filter(acc => acc.username !== currentUsername);
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+                    // مفتاح التخزين الصحيح كما في accounts.html
+                    const STORAGE_KEY = 'aite_accounts_secure_v2';
+                    
+                    // إزالة الحساب من LocalStorage إذا أرجع السيرفر اسم المستخدم
+                    if (data.deletedUsername) {
+                        try {
+                            let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                            accounts = accounts.filter(acc => acc.username !== data.deletedUsername);
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+                        } catch (storageErr) {
+                            console.error('LocalStorage cleanup error', storageErr);
+                        }
+                    }
+
+                    // التوجيه لصفحة الحسابات
                     window.location.href = '/accounts';
                 } else {
                     errEl.textContent = data.error || 'فشل الحذف. تأكد من كلمة المرور.';
                     errEl.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'حذف الحساب';
                 }
             } catch (err) {
+                console.error(err);
                 errEl.textContent = 'خطأ في الاتصال بالسيرفر.';
                 errEl.classList.remove('hidden');
-            } finally {
                 btn.disabled = false;
                 btn.textContent = 'حذف الحساب';
             }
