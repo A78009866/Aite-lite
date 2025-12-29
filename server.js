@@ -3320,7 +3320,78 @@ app.post('/api/change-password', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: msg });
   }
 });
+// إضافة: DELETE account endpoint (باستخدام تحقق بكلمة المرور عبر Firebase REST + حذف بواسطة Admin SDK)
+// يتطلب وضع متغير البيئة FIREBASE_WEB_API_KEY
+const fetch = require('node-fetch'); // إذا لم يكن مثبتاً، ثبت بواسطة: npm i node-fetch@2
 
+app.post('/api/account/delete', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  const password = (req.body && req.body.password) ? String(req.body.password) : '';
+
+  if (!uid) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  if (!password) return res.status(400).json({ ok: false, error: 'Password required' });
+
+  try {
+    // احصل على البريد من الجلسة أو من قاعدة البيانات
+    let email = req.session.email;
+    if (!email) {
+      const snap = await db.ref(`profiles/${uid}`).once('value');
+      const profile = snap.val() || {};
+      email = profile.email || profile.username ? `${profile.username}@trimer.io` : null;
+    }
+    if (!email) return res.status(400).json({ ok: false, error: 'Email not found for user' });
+
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) {
+      console.error('FIREBASE_WEB_API_KEY not configured');
+      return res.status(500).json({ ok: false, error: 'Server misconfiguration' });
+    }
+
+    // تحقق من كلمة المرور عبر REST API (signInWithPassword)
+    const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
+    const resp = await fetch(verifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+
+    const verifyData = await resp.json();
+
+    if (!resp.ok) {
+      // لا تكشف الكثير للمستخدم، أعطِ رسالة عامة
+      return res.status(403).json({ ok: false, error: 'Invalid credentials' });
+    }
+
+    // الآن حذف المستخدم عبر Admin SDK + تنظيف DB (أفضل-جهد)
+    try {
+      // 1) حذف المستخدم من Firebase Auth
+      await admin.auth().deleteUser(uid).catch(err => { throw err; });
+
+      // 2) تنظيف البيانات ذات الصلة في Realtime Database (تخصيص حسب مخططك)
+      const updates = {};
+      updates[`profiles/${uid}`] = null;
+      updates[`chats/${uid}`] = null;
+      updates[`friends/${uid}`] = null;
+      updates[`friend_requests/${uid}`] = null;
+      updates[`notifications/${uid}`] = null;
+      // يمكنك إضافة مسارات أخرى تحتاج للحذف (messages, posts, comments...) حسب رغبتك
+      await db.ref().update(updates).catch(() => { /* best-effort */ });
+
+      // 3) إنهاء الجلسة
+      req.session.destroy(() => {
+        // تنظيف كوكي الجلسة
+      });
+
+      return res.json({ ok: true, message: 'Account deleted' });
+    } catch (deleteErr) {
+      console.error('Error deleting user resources:', deleteErr);
+      return res.status(500).json({ ok: false, error: 'Failed to delete account' });
+    }
+  } catch (err) {
+    console.error('Account delete error:', err);
+    return res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
 });
