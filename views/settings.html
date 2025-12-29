@@ -99,11 +99,19 @@
     </div>
 
     <script>
-        // دالة تغيير كلمة المرور (نفس المنطق البرمجي السابق مع تحسين المظهر)
+        /**
+         * ملاحظات مهمة لهذه النسخة:
+         * - نرسل credentials: 'include' في fetch ليتم إرسال الكوكي (الجلسة) مع الطلب.
+         * - في حال استجابة 401 نعرض رسالة ثم نعيد التوجيه إلى /login.
+         * - showMsg تم تبسيطها لتعمل بثبات مع Tailwind وألوان مباشرة.
+         */
+
         document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const newPass = document.getElementById('newPassword').value;
-            const confirmPass = document.getElementById('confirmPassword').value;
+            clearMsg();
+
+            const newPass = document.getElementById('newPassword').value.trim();
+            const confirmPass = document.getElementById('confirmPassword').value.trim();
 
             if (newPass.length < 6) {
                 showMsg('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'red');
@@ -117,30 +125,70 @@
             try {
                 const res = await fetch('/api/change-password', {
                     method: 'POST',
+                    credentials: 'include', // مهم جدًا لإرسال cookie/session
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ newPassword: newPass })
                 });
-                const data = await res.json();
-                
-                if (data.ok) {
-                    showMsg('تم تحديث كلمة المرور بنجاح', 'green');
+
+                // تعامل مع حالات الخطأ الشائعة
+                if (res.status === 401) {
+                    showMsg('غير مصرح. سيتم إعادة التوجيه لتسجيل الدخول...', 'red');
+                    setTimeout(() => { window.location.href = '/login'; }, 1400);
+                    return;
+                }
+                if (res.status === 403) {
+                    showMsg('لا تمتلك صلاحية لتغيير كلمة المرور.', 'red');
+                    return;
+                }
+
+                let data = {};
+                try {
+                  data = await res.json();
+                } catch (jsonErr) {
+                  // قد يكون رد غير JSON — نعرض رسالة عامة
+                  console.error('Could not parse JSON response:', jsonErr);
+                }
+
+                if (res.ok && data.ok) {
+                    showMsg(data.message || 'تم تحديث كلمة المرور بنجاح', 'green');
                     document.getElementById('changePasswordForm').reset();
                 } else {
-                    showMsg(data.error || 'حدث خطأ ما', 'red');
+                    showMsg(data.error || data.message || 'حدث خطأ ما', 'red');
                 }
             } catch (err) {
-                showMsg('فشل الاتصال بالخادم', 'red');
+                console.error('Change password request failed:', err);
+                // رسالة الخطأ "Could not establish connection. Receiving end does not exist." عادة من امتداد (extension)
+                // وليس خطأ في التطبيق نفسه؛ هنا نعرض رسالة عامة للمستخدم.
+                showMsg('فشل الاتصال بالخادم. تحقق من اتصالك أو سجّل الدخول مرة أخرى.', 'red');
             }
         });
 
         function showMsg(text, color) {
             const msg = document.getElementById('msg');
             msg.textContent = text;
-            msg.className = `text-center text-sm mt-4 block text-${color}-400 font-medium`;
+            msg.classList.remove('hidden');
+            msg.classList.add('block');
+
+            // لون النص المباشر لتفادي تعارض أسماء classes المولدة ديناميكياً
+            if (color === 'green') {
+                msg.style.color = '#34d399'; // tailwind green-400
+            } else if (color === 'red') {
+                msg.style.color = '#fb7185'; // tailwind red-400
+            } else {
+                msg.style.color = '#e5e7eb';
+            }
+        }
+
+        function clearMsg() {
+            const msg = document.getElementById('msg');
+            msg.textContent = '';
+            msg.classList.add('hidden');
+            msg.classList.remove('block');
+            msg.style.color = '';
         }
 
         function logout() {
-            if(confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+            if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
                 window.location.href = '/logout';
             }
         }
