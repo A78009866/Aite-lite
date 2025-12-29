@@ -3296,27 +3296,28 @@ app.use((err, req, res, next) => {
 
 
 // 2. API لتغيير كلمة المرور
-app.post('/api/change-password', async (req, res) => {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ ok: false, error: 'غير مصرح' });
+app.post('/api/change-password', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { newPassword } = req.body;
+
+  if (!userId) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
-  const { newPassword } = req.body;
   if (!newPassword || newPassword.length < 6) {
     return res.status(400).json({ ok: false, error: 'كلمة المرور ضعيفة' });
   }
 
   try {
-    const uid = req.session.user.uid;
-    // تحديث كلمة المرور في Firebase Auth
-    await admin.auth().updateUser(uid, {
-      password: newPassword
-    });
+    // التأكد من تحديث كلمة المرور للمستخدم الحالي (باستخدام uid الصحيح)
+    await admin.auth().updateUser(userId, { password: newPassword });
 
-    res.json({ ok: true, message: 'Password updated successfully' });
+    res.json({ ok: true, message: 'تم تحديث كلمة المرور بنجاح' });
   } catch (err) {
     console.error('Error changing password:', err);
-    res.status(500).json({ ok: false, error: 'فشل تغيير كلمة المرور' });
+    // تعامل مع أخطاء Firebase Auth المحتملة
+    const msg = err && err.message ? err.message : 'فشل تغيير كلمة المرور';
+    res.status(500).json({ ok: false, error: msg });
   }
 });
 
