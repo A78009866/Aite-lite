@@ -23,10 +23,13 @@
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
         }
 
+        /* تعديل الحقل: إضافة مسافة يسارية للأيقونة */
         .glass-input {
             background: rgba(255, 255, 255, 0.05) !important;
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             transition: all 0.3s ease;
+            padding-left: 40px !important; /* مسافة للأيقونة في اليسار */
+            padding-right: 12px !important; /* مسافة طبيعية للكتابة في اليمين */
         }
 
         .glass-input:focus {
@@ -72,9 +75,10 @@
 
         .modal-title { font-weight: 800; font-size: 1.05rem; }
 
+        /* تعديل زر العين: تثبيته في اليسار */
         .eye-btn {
             position: absolute;
-            inset-inline-start: 8px; /* since dir=rtl, inset-inline-start is left */
+            left: 10px; /* تثبيت في أقصى اليسار */
             top: 50%;
             transform: translateY(-50%);
             background: transparent;
@@ -82,6 +86,7 @@
             color: #cbd5e1;
             cursor: pointer;
             padding: 6px;
+            z-index: 10;
         }
 
         /* small helper for input wrapper */
@@ -166,7 +171,6 @@
 
     </div>
 
-    <!-- Logout Confirmation Modal (black glass) -->
     <div id="logoutModal" class="modal-backdrop" onclick="closeLogoutModal(event)">
         <div class="modal-glass" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
             <div class="flex items-start justify-between">
@@ -184,7 +188,6 @@
         </div>
     </div>
 
-    <!-- Delete Account Modal (password confirm) -->
     <div id="deleteModal" class="modal-backdrop" onclick="closeDeleteModal(event)">
         <div class="modal-glass" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
             <div class="flex items-start justify-between">
@@ -344,7 +347,6 @@
 
             try {
                 // send request to account deletion endpoint
-                // NOTE: ensure backend supports this endpoint: POST /api/account/delete { password }
                 const res = await fetch('/api/account/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -357,12 +359,10 @@
                 if (res.ok && data.ok) {
                     // close modal and redirect to accounts page
                     closeDeleteModal();
-                    // optional small delay for UX
                     setTimeout(() => {
                         window.location.href = '/accounts';
                     }, 300);
                 } else {
-                    // show returned error
                     errEl.textContent = data.error || 'فشل حذف الحساب. تأكد من كلمة المرور.';
                     errEl.classList.remove('hidden');
                 }
@@ -375,7 +375,7 @@
             }
         });
 
-        // prevent closing modal with Escape inadvertently? allow escape to close
+        // allow escape to close
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeLogoutModal();
