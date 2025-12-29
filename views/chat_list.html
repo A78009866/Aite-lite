@@ -158,9 +158,8 @@
         .reel-card-item:active { transform: scale(0.97); }
 
         /* show poster image or fallback */
-        .reel-card-item img.reel-thumb {
+        .reel-card-item img {
             width: 100%; height: 100%; object-fit: cover; pointer-events: none; display: block;
-            background: #000;
         }
         .reel-card-item video {
             display: none; /* avoid showing ugly autoplay frame; we only keep video for potential later use */
@@ -493,31 +492,23 @@
             color: #fff;
         }
 
-        /* Fix: ensure liked heart icon stays red visually (stronger rule) */
-        .liked-heart {
-            color: #ef4444 !important;
+        /* toast */
+        .toast {
+          position: fixed;
+          left: 50%;
+          transform: translateX(-50%);
+          bottom: 90px;
+          background: rgba(0,0,0,0.8);
+          color: #fff;
+          padding: 8px 14px;
+          border-radius: 10px;
+          z-index: 2000;
+          box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+          font-weight: 600;
+          opacity: 0;
+          transition: opacity .18s;
         }
-
-        /* Copy feedback small tooltip */
-        .copy-feedback {
-            position: absolute;
-            top: -32px;
-            right: 8px;
-            background: rgba(0,0,0,0.75);
-            color: #fff;
-            padding: 4px 8px;
-            border-radius: 8px;
-            font-size: 12px;
-            z-index: 80;
-            opacity: 0;
-            transform: translateY(6px);
-            transition: opacity .18s, transform .18s;
-            pointer-events: none;
-        }
-        .copy-feedback.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        .toast.show { opacity: 1; }
 
     </style>
 </head>
@@ -600,7 +591,7 @@
 
     // تحديث صورة البروفيل في الهيدر عند تحميل الصفحة
     (function updateNavAvatar() {
-        fetch('/api/profile', { credentials: 'same-origin' })
+        fetch('/api/profile')
             .then(res => res.json())
             .then(user => {
                 if (user && user.profile_picture_url) {
@@ -700,9 +691,14 @@
                     التعليقات 
                     <span id="commentCountBadge" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">0</span>
                 </h3>
-                <button id="closeCommentModalBtn" class="close-btn-circle text-gray-300 hover:text-white" onclick="closeCommentModal()">
-                    <i class="fas fa-times text-sm"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                  <button id="copyLinkHeaderBtn" class="close-btn-circle text-gray-300 hover:text-white" title="نسخ رابط المنشور" onclick="copyPostLink(currentPostIdForComments, event)">
+                    <i class="fas fa-link text-sm"></i>
+                  </button>
+                  <button id="closeCommentModalBtn" class="close-btn-circle text-gray-300 hover:text-white" onclick="closeCommentModal()">
+                      <i class="fas fa-times text-sm"></i>
+                  </button>
+                </div>
             </div>
             
             <div id="commentsList" class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#18191a] min-h-0">
@@ -924,8 +920,7 @@
             try {
                 const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin'
+                    headers: { 'Content-Type': 'application/json' }
                 });
 
                 const result = await response.json();
@@ -960,36 +955,33 @@
             currentOptionsUserId = userId;
             postOptionsMessage.classList.add('hidden');
 
-            // Determine whether to show delete/add friend based on relationship:
-            // - if owner => show delete
-            // - else if friend => hide add friend
-            // - else show add friend
-            try {
-                const res = await fetch(`/api/profile?userId=${encodeURIComponent(userId)}`, { credentials: 'same-origin' });
-                let profileData = null;
-                if (res.ok) profileData = await res.json();
+            // hide delete by default; will be shown if owner
+            postOptionsDeleteBtn.style.display = 'none';
+            postOptionsAddFriendBtn.style.display = 'none';
 
-                const isOwner = currentUserId && userId === currentUserId;
-                const isFriend = profileData && profileData.is_friend;
-
-                if (isOwner) {
-                    postOptionsDeleteBtn.style.display = 'flex';
-                    postOptionsAddFriendBtn.style.display = 'none';
-                } else {
-                    postOptionsDeleteBtn.style.display = 'none';
-                    if (isFriend) {
-                        postOptionsAddFriendBtn.style.display = 'none';
+            // If owner -> show delete, hide add-friend
+            if (currentUserId && userId === currentUserId) {
+                postOptionsDeleteBtn.style.display = 'flex';
+                postOptionsAddFriendBtn.style.display = 'none';
+            } else {
+                // Not owner: need to check friendship status before showing add friend
+                try {
+                    const res = await fetch('/api/friends', { credentials: 'same-origin' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const friends = Array.isArray(data.friends) ? data.friends.map(f => f.id || f.userId || f.uid) : [];
+                        const isFriend = friends.includes(userId);
+                        if (!isFriend) {
+                            postOptionsAddFriendBtn.style.display = 'flex';
+                        } else {
+                            postOptionsAddFriendBtn.style.display = 'none';
+                        }
                     } else {
+                        // If check failed, default to showing add friend (optimistic)
                         postOptionsAddFriendBtn.style.display = 'flex';
                     }
-                }
-            } catch (e) {
-                // fallback: if any failure, default to showing add friend (unless owner)
-                if (currentUserId && userId === currentUserId) {
-                    postOptionsDeleteBtn.style.display = 'flex';
-                    postOptionsAddFriendBtn.style.display = 'none';
-                } else {
-                    postOptionsDeleteBtn.style.display = 'none';
+                } catch (err) {
+                    console.warn('Failed to check friendship', err);
                     postOptionsAddFriendBtn.style.display = 'flex';
                 }
             }
@@ -1042,7 +1034,7 @@
                           if (d.count > 0) { fr.style.display = 'inline-flex'; fr.textContent = d.count > 99 ? '99+' : String(d.count); }
                         }
                       }).catch(()=>{});
-                    // Optionally hide add button or give visual feedback
+                    // hide the add button after sending
                     postOptionsAddFriendBtn.style.display = 'none';
                 } else {
                     const err = data && data.error ? data.error : 'فشل إرسال الطلب';
@@ -1372,17 +1364,6 @@
                 </button>
             `;
 
-            // copy link button (next to comment)
-            const copyButtonHtml = `
-                <div class="relative">
-                  <button class="flex items-center text-gray-400 hover:text-white transition w-full justify-center gap-2" 
-                          onclick="copyPostLink('${post.postId}', this)" title="نسخ رابط المنشور">
-                      <i class="fas fa-link text-lg"></i>
-                  </button>
-                  <div class="copy-feedback" aria-hidden="true">تم النسخ</div>
-                </div>
-            `;
-
             return `
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
                     <div class="flex items-start justify-between mb-3">
@@ -1405,7 +1386,12 @@
 
                     <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
                         <span><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
-                        <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
+                        <span class="flex items-center">
+                          <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
+                          <button title="نسخ رابط المنشور" class="text-gray-400 hover:text-white mr-2" onclick="copyPostLink('${post.postId}', event)">
+                            <i class="fas fa-link"></i>
+                          </button>
+                        </span>
                     </div>
 
                     <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
@@ -1415,35 +1401,13 @@
                             <i class="${likeIconClass} ml-2 like-icon text-lg"></i>
                             <span class="text-sm font-medium">إعجاب</span>
                         </button>
-
                         <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="handleComment('${post.postId}')">
                             <i class="fas fa-comment-dots text-lg"></i>
                             <span class="text-sm font-medium">تعليق</span>
                         </button>
-
-                        ${copyButtonHtml}
                     </div>
                 </div>
             `;
-        }
-
-        // helper: copy post link
-        function copyPostLink(postId, btnEl) {
-            const url = `${location.origin}/post?id=${encodeURIComponent(postId)}`;
-            navigator.clipboard.writeText(url).then(() => {
-                // show small feedback bubble
-                const container = btnEl.closest('.relative') || btnEl.parentElement;
-                const feedback = container.querySelector('.copy-feedback');
-                if (feedback) {
-                    feedback.classList.add('show');
-                    setTimeout(() => feedback.classList.remove('show'), 1400);
-                } else {
-                    // fallback alert
-                    alert('تم نسخ الرابط');
-                }
-            }).catch(() => {
-                alert('فشل النسخ — انسخ الرابط يدوياً:\n' + url);
-            });
         }
 
         // Helper to update comment count shown on post card and in modal badge
@@ -1480,10 +1444,10 @@
 
         // Create comment HTML (uses enriched comment object returned by server)
 function createCommentHtml(comment, postId) {
-    const liked = !!comment.is_liked;
-    const likedClass = liked ? 'text-red-400' : 'text-gray-400';
-    const likeIcon = liked ? 'fas' : 'far';
-    const likeIconStyle = liked ? 'style="color:#ef4444"' : '';
+    const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
+    // Force heart color to red as requested (outline when not liked, filled when liked)
+    const likedClass = 'text-red-400';
+    const likeIcon = comment.is_liked ? 'fas' : 'far';
     const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
         <div class="reply-item flex items-start gap-2">
             <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
@@ -1511,14 +1475,14 @@ function createCommentHtml(comment, postId) {
                         </div>
                         <div class="flex items-center gap-2 comment-actions">
                             <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
-                                <i class="${likeIcon} fa-heart liked-heart" ${likeIconStyle}></i>
+                                <i class="${likeIcon} fa-heart"></i>
                                 <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
                             </button>
                             <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
                                 <i class="fas fa-reply"></i>
                                 <span class="text-xs">رد</span>
                             </button>
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 ${((comment.repliesCount||0) > (comment.recentReplies ? comment.recentReplies.length : 0)) ? '' : 'hidden'}" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
                                 <i class="fas fa-angle-down"></i>
                                 <span class="text-xs">عرض الردود</span>
                             </button>
@@ -1553,17 +1517,11 @@ function createCommentHtml(comment, postId) {
                 if (res.ok && data.ok) {
                     const countEl = document.getElementById(`comment-like-count-${commentId}`);
                     if (countEl) countEl.textContent = data.likes;
-
-                    // Update visual state strongly (so SSE re-renders will reflect current server state soon)
+                    // Always keep heart red; only switch outline/solid
                     const i = btnEl.querySelector('i');
-                    if (data.is_liked) {
-                        btnEl.classList.remove('text-gray-400');
-                        btnEl.classList.add('text-red-400');
-                        if (i) { i.classList.remove('far'); i.classList.add('fas'); i.classList.add('liked-heart'); i.style.color = '#ef4444'; }
-                    } else {
-                        btnEl.classList.remove('text-red-400');
-                        btnEl.classList.add('text-gray-400');
-                        if (i) { i.classList.remove('fas'); i.classList.add('far'); i.classList.remove('liked-heart'); i.style.color = ''; }
+                    if (i) {
+                        if (data.is_liked) { i.classList.remove('far'); i.classList.add('fas'); }
+                        else { i.classList.remove('fas'); i.classList.add('far'); }
                     }
                 } else {
                     console.warn('Like comment failed', data);
@@ -1714,6 +1672,48 @@ function renderFamilyCard(f) {
     `;
 }
 
+async function fetchAndDisplayFamilies() {
+    if (!familiesRow) return;
+    
+    // حالة التحميل
+    familiesRow.innerHTML = '<div class="text-gray-400 p-4">جاري تحميل العائلات...</div>';
+    
+    try {
+        // دائماً اظهر بطاقة "إنشاء عائلة" في البداية
+        const createHtml = renderCreateFamilyCard();
+        let html = createHtml;
+
+        // محاولة جلب كل العائلات
+        const res = await fetch('/api/families', { credentials: 'same-origin' });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+            const families = data.families || [];
+            const famHtml = families.map(f => renderFamilyCard(f)).join('');
+            html += famHtml;
+        } else {
+            // حالة احتياطية (Fallback): جلب عائلاتي فقط في حال فشل المسار العام
+            try {
+                const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
+                const d2 = await res2.json();
+                if (res2.ok && d2.ok) {
+                    const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
+                    html += famHtml2;
+                }
+            } catch (e) {
+                console.error('Fallback fetch failed', e);
+            }
+        }
+        
+        familiesRow.innerHTML = html;
+
+    } catch (e) {
+        console.error('Failed to load families', e);
+        // في حال الخطأ الكلي، اظهر بطاقة الإنشاء فقط
+        familiesRow.innerHTML = renderCreateFamilyCard();
+    }
+}
+
         function onCreateFamilyClick() {
             // simply navigate to create-family page (server view)
             window.location.href = '/create-family';
@@ -1794,20 +1794,18 @@ function renderFamilyCard(f) {
         function createReelsTrayHtml(reels) {
             if(!reels || reels.length === 0) return '';
             const items = reels.map(r => {
-                // prefer explicit thumbnail fields, else provide data-video-src for client-side capture
-                const thumb = r.thumbnailUrl || r.posterUrl || '';
-                const videoSrc = r.videoUrl || r.video_url || r.video || '';
-
+                const thumb = r.thumbnailUrl || r.posterUrl || ''; 
+                const videoUrl = r.videoUrl || r.video_url || '';
+                // show poster image if available, otherwise show placeholder for later thumbnail extraction
                 const posterHtml = thumb
-                  ? `<img class="reel-thumb" src="${escapeHtml(thumb)}" alt="thumbnail" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22110%22 height=%22190%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23000%22/></svg>'">`
-                  : `<img class="reel-thumb" data-video-src="${escapeAttr(videoSrc)}" src="" alt="thumbnail" />`;
+                  ? `<img src="${escapeHtml(thumb)}" alt="thumbnail" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23000%22/></svg>'">`
+                  : `<img id="reel-thumb-${escapeAttr(r.reelId)}" data-video-url="${escapeAttr(videoUrl)}" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'><rect width='100%' height='100%' fill='%23000'/></svg>" alt="thumbnail" class="w-full h-full object-cover">`;
 
                 const userPic = r.user && r.user.profile_picture_url ? escapeHtml(r.user.profile_picture_url) : DEFAULT_AVATAR;
                 const username = r.user && r.user.username ? escapeHtml(r.user.username) : 'user';
-                const reelId = escapeAttr(r.reelId || r.id || '');
 
                 return `
-                <div class="reel-card-item" data-reel-id="${reelId}" onclick="window.location.href='/reels?id=${reelId}'">
+                <div class="reel-card-item" onclick="window.location.href='/reels?id=${escapeAttr(r.reelId)}'">
                   ${posterHtml}
                   <div class="reel-play-icon"><i class="fas fa-play"></i></div>
                   <div class="reel-user-avatar">
@@ -1831,89 +1829,67 @@ function renderFamilyCard(f) {
             `;
         }
 
-        // Generate an image thumbnail from the first frame of the remote video (promise)
-        function generateThumbnailFromVideoUrl(videoUrl, width = 300, seekTo = 0.5) {
-            return new Promise((resolve, reject) => {
-                if (!videoUrl) return reject(new Error('No video url'));
-                const video = document.createElement('video');
-                video.crossOrigin = 'anonymous';
-                video.preload = 'auto';
-                video.muted = true;
-                video.src = videoUrl;
-
-                const clean = () => {
-                    try { video.pause(); } catch (e) {}
-                    video.src = '';
-                    video.load && video.load();
-                };
-
-                const onLoaded = () => {
-                    // choose a safe seek time
-                    const t = Math.min(seekTo, (video.duration || seekTo));
-                    const handleSeeked = () => {
-                        try {
-                            const canvas = document.createElement('canvas');
-                            const ratio = video.videoWidth ? (video.videoHeight ? (video.videoWidth / video.videoHeight) : 1) : 1;
-                            const h = Math.round(width / ratio);
-                            canvas.width = width;
-                            canvas.height = h;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const dataURL = canvas.toDataURL('image/jpeg', 0.8);
-                            clean();
-                            resolve(dataURL);
-                        } catch (err) {
-                            clean();
-                            reject(err);
-                        }
-                    };
-                    // seek then draw
-                    video.currentTime = t;
-                    video.addEventListener('seeked', handleSeeked, { once: true });
-                };
-
-                const onError = (e) => {
-                    clean();
-                    reject(new Error('Video load error'));
-                };
-
-                video.addEventListener('loadedmetadata', onLoaded, { once: true });
-                video.addEventListener('error', onError, { once: true });
-
-                // as a fallback, if loadedmetadata didn't fire within X seconds, reject
-                const fallbackTimer = setTimeout(() => {
-                    reject(new Error('timeout loading video metadata'));
-                    try { video.pause(); } catch (e) {}
-                }, 8000);
-
-                // clear fallback on resolve/reject
-                const wrapResolve = (v) => { clearTimeout(fallbackTimer); resolve(v); };
-                const wrapReject = (err) => { clearTimeout(fallbackTimer); reject(err); };
-                // override resolve/reject in local scope
-                resolve = wrapResolve;
-                reject = wrapReject;
-            });
-        }
-
-        // Find reel img tags generated without thumbnail and generate poster images for them
-        async function generateThumbnailsForReels() {
-            const imgs = document.querySelectorAll('img.reel-thumb[data-video-src]');
-            if (!imgs || imgs.length === 0) return;
+        // generate thumbnail from video frame for reel thumbnails that lacked server poster
+        async function generateReelThumbnails() {
+            const imgs = document.querySelectorAll('img[id^="reel-thumb-"][data-video-url]');
             for (const img of imgs) {
-                const videoSrc = img.getAttribute('data-video-src');
-                if (!videoSrc) continue;
-                // skip if src already set
-                if (img.src && img.src.trim().length > 0) continue;
+                const videoUrl = img.getAttribute('data-video-url');
+                if (!videoUrl) continue;
+                // don't regenerate if already has a data-src attribute filled with base64
+                if (img.dataset.generated === '1') continue;
+
                 try {
-                    const dataUrl = await generateThumbnailFromVideoUrl(videoSrc, 220, 0.3);
-                    img.src = dataUrl;
-                } catch (e) {
-                    // if thumbnail generation fails, set a fallback solid image
-                    img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="190"><rect width="100%" height="100%" fill="%23000"/><text x="50%" y="50%" font-size="16" fill="%23fff" text-anchor="middle" dominant-baseline="middle">No preview</text></svg>';
-                    console.warn('thumbnail generation failed for', videoSrc, e);
-                } finally {
-                    // remove attribute to avoid reprocessing
-                    img.removeAttribute('data-video-src');
+                    const video = document.createElement('video');
+                    video.crossOrigin = 'anonymous';
+                    video.preload = 'auto';
+                    video.muted = true;
+                    video.src = videoUrl;
+
+                    // wait for metadata so we can seek
+                    await new Promise((resolve, reject) => {
+                        const onError = () => { cleanup(); reject(new Error('Video load error')); };
+                        const onLoaded = () => {
+                            // pick a frame at 0.8s or at 10% of duration
+                            const t = Math.min(0.8, (video.duration || 1) * 0.1);
+                            const seekHandler = () => {
+                                try {
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = Math.min(640, video.videoWidth || 640);
+                                    canvas.height = Math.min(480, video.videoHeight || 480);
+                                    const ctx = canvas.getContext('2d');
+                                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                                    img.src = dataUrl;
+                                    img.dataset.generated = '1';
+                                } catch (e) {
+                                    // ignore canvas taint or draw errors
+                                } finally {
+                                    cleanup();
+                                    resolve();
+                                }
+                            };
+                            const cleanup = () => {
+                                video.removeEventListener('error', onError);
+                                video.removeEventListener('loadedmetadata', onLoaded);
+                                video.removeEventListener('seeked', seekHandler);
+                                try { video.src = ''; } catch(e){}
+                            };
+                            // seek then grab
+                            video.currentTime = Math.min(t, (video.duration || 0));
+                            video.addEventListener('seeked', seekHandler);
+                        };
+                        video.addEventListener('error', onError);
+                        video.addEventListener('loadedmetadata', onLoaded);
+                        // in case the browser fires loadeddata quickly
+                        setTimeout(() => {
+                            // fallback resolve after 3s
+                            resolve();
+                        }, 3000);
+                    });
+                } catch (err) {
+                    // ignore errors (CORS will often block canvas extraction)
+                    // leave placeholder poster
+                    // console.warn('thumbnail generation failed', err);
                 }
             }
         }
@@ -1926,7 +1902,7 @@ function renderFamilyCard(f) {
             try {
                 // Parallel fetch: posts + reels
                 const [postsRes, reelsData] = await Promise.all([
-                    fetch('/api/posts', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {ok:false}),
+                    fetch('/api/posts').then(r => r.ok ? r.json() : {ok:false}),
                     fetchReelsData()
                 ]);
 
@@ -1941,8 +1917,8 @@ function renderFamilyCard(f) {
                         // Even if no posts, show reels if available
                         if(reelsHtml) postsFeed.innerHTML = reelsHtml;
                         postsFeed.innerHTML += '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
-                        // generate thumbnails for reels (if needed)
-                        setTimeout(generateThumbnailsForReels, 80);
+                        // after inserting, try generating thumbnails for reels
+                        setTimeout(generateReelThumbnails, 100);
                         return;
                     }
                     
@@ -1992,15 +1968,15 @@ function renderFamilyCard(f) {
                         audioPostsToInit.forEach(ap => {
                             initializePostWaveSurfer(ap.postId, ap.url);
                         });
-                        // generate thumbnails for reels (if needed)
-                        generateThumbnailsForReels();
+                        // after rendering reels, attempt thumbnail capture for any missing posters
+                        generateReelThumbnails();
                     }, 100); 
 
                 } else {
-                    // if posts fetch failed but reels present
+                    // if postsRes not ok, still render reels if available
                     if (reelsHtml) {
                         postsFeed.innerHTML = reelsHtml;
-                        setTimeout(generateThumbnailsForReels, 80);
+                        setTimeout(generateReelThumbnails, 100);
                     } else {
                         postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
                     }
@@ -2018,8 +1994,7 @@ function renderFamilyCard(f) {
             try {
                 const response = await fetch(`/api/posts/${postId}/like`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin'
+                    headers: { 'Content-Type': 'application/json' }
                 });
 
                 const result = await response.json();
@@ -2312,7 +2287,7 @@ function renderFamilyCard(f) {
              if(userIds.length === 0) return;
 
              try {
-                const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).catch(()=>null));
+                const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.ok ? r.json() : null).catch(()=>null));
                 const profiles = await Promise.all(promises);
                 
                 profiles.forEach(p => {
@@ -2383,7 +2358,7 @@ function renderFamilyCard(f) {
         });
         
         document.addEventListener('DOMContentLoaded', () => {
-            fetch('/api/profile', { credentials: 'same-origin' })
+            fetch('/api/profile')
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
                     const profilePicElement = document.getElementById('userProfilePic');
@@ -2559,13 +2534,67 @@ function renderFamilyCard(f) {
             else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen().catch(()=>{});
         }
 
+        // Copy post link function
+        function copyPostLink(postId, event) {
+            if (event && event.stopPropagation) event.stopPropagation();
+            if (!postId) {
+                showToast('رابط غير متوفر');
+                return;
+            }
+            const url = `${window.location.origin}/post?id=${encodeURIComponent(postId)}`;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('تم نسخ رابط المنشور');
+                }).catch(() => {
+                    // fallback
+                    fallbackCopyTextToClipboard(url);
+                });
+            } else {
+                fallbackCopyTextToClipboard(url);
+            }
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('تم نسخ رابط المنشور');
+            } catch (err) {
+                showToast('فشل نسخ الرابط');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        // small toast implementation
+        function showToast(msg, timeout = 1800) {
+            let t = document.getElementById('globalToast');
+            if (!t) {
+                t = document.createElement('div');
+                t.id = 'globalToast';
+                t.className = 'toast';
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(t._timer);
+            t._timer = setTimeout(() => {
+                t.classList.remove('show');
+            }, timeout);
+        }
+
     </script>
 <script>
 (function saveCurrentAccountLocally() {
     const STORAGE_KEY = 'trimer_accounts_v1';
     
     // نستخدم الـ API الموجود بالفعل لجلب بيانات المستخدم الحالي
-    fetch('/api/profile', { credentials: 'same-origin' })
+    fetch('/api/profile')
         .then(r => r.json())
         .then(user => {
             if (user && user.username) {
