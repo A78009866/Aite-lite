@@ -65,12 +65,13 @@
             padding: 4px;
             z-index: 10;
         }
+        .error-box { background: rgba(255,0,0,0.06); border: 1px solid rgba(255,0,0,0.12); padding: 8px; border-radius: 8px; color: #ffdddd; display: none; margin-bottom: 12px;}
     </style>
 </head>
 <body class="flex items-center justify-center p-4">
     <div class="glass-card w-full max-w-md rounded-3xl p-8 md:p-10">
         
-        <div class="text-center mb-10">
+        <div class="text-center mb-6">
             <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" 
                  class="h-14 w-14 rounded-xl mx-auto mb-4 object-cover shadow-lg shadow-blue-500/20" 
                  alt="شعار Aite">
@@ -78,7 +79,9 @@
             <p class="text-gray-400 font-medium">مرحباً بعودتك</p>
         </div>
 
-        <form action="/login" method="post" id="loginForm" class="space-y-6">
+        <div id="errorBox" class="error-box"></div>
+
+        <form action="/login" method="post" id="loginForm" class="space-y-4">
             <div class="input-group space-y-2">
                 <label for="id_username" class="text-sm font-medium text-gray-300 mr-1">اسم المستخدم</label>
                 <div class="relative">
@@ -106,12 +109,13 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn-primary w-full py-4 rounded-xl text-white font-bold text-lg mt-4">
-                دخول
+            <button type="submit" id="loginBtn" class="btn-primary w-full py-4 rounded-xl text-white font-bold text-lg mt-2 flex items-center justify-center gap-3">
+                <span id="loginBtnText">دخول</span>
+                <i id="loginSpinner" class="fas fa-spinner fa-spin hidden"></i>
             </button>
         </form>
 
-        <div class="mt-8 flex flex-col gap-4 text-center">
+        <div class="mt-6 flex flex-col gap-4 text-center">
             <div class="flex items-center gap-4 text-gray-600">
                 <div class="h-px flex-1 bg-gray-800"></div>
                 <span class="text-xs uppercase tracking-wider font-semibold text-gray-500">أو</span>
@@ -142,44 +146,105 @@
             }
         }
 
-        const STORAGE_KEY = 'saved_accounts';
+        const STORAGE_KEY = 'aite_accounts_secure_v2';
+        const DEFAULT_PROFILE_PIC = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+        const errorBox = document.getElementById('errorBox');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginSpinner = document.getElementById('loginSpinner');
+        const loginBtnText = document.getElementById('loginBtnText');
+
+        function loadAccounts() {
+            try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (e) { return []; }
+        }
+        function saveAccounts(list) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        }
+
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+
             const username = document.getElementById('id_username').value.trim();
             const password = document.getElementById('id_password').value;
 
-            if (username && password) {
-                try {
-                    const response = await fetch(`/api/user-data?username=${encodeURIComponent(username)}`);
-                    let fullName = username;
-                    let profilePic = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+            if (!username || !password) {
+                showError('اسم المستخدم وكلمة المرور مطلوبان.');
+                return;
+            }
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        fullName = data.full_name || username;
-                        if (data.profile_picture_url && data.profile_picture_url.trim() !== "") {
-                            profilePic = data.profile_picture_url;
+            // show loading
+            loginBtn.disabled = true;
+            loginSpinner.classList.remove('hidden');
+            loginBtnText.textContent = 'جاري تسجيل الدخول...';
+
+            try {
+                // Send credentials via JSON - server responds with JSON when Accept includes application/json
+                const resp = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await resp.json().catch(() => ({ ok: false, error: 'فشل في الاتصال بالخادم' }));
+
+                if (!data.ok) {
+                    showError(data.error || 'فشل في تسجيل الدخول.');
+                    loginBtn.disabled = false;
+                    loginSpinner.classList.add('hidden');
+                    loginBtnText.textContent = 'دخول';
+                    return;
+                }
+
+                // fetch public info (server side) to save after successful login
+                let fullName = username;
+                let profilePic = DEFAULT_PROFILE_PIC;
+                try {
+                    const infoResp = await fetch(`/api/get-public-info?username=${encodeURIComponent(username)}`, { credentials: 'include' });
+                    if (infoResp.ok) {
+                        const infoData = await infoResp.json();
+                        if (infoData && infoData.found) {
+                            fullName = infoData.full_name || fullName;
+                            if (infoData.profile_picture_url && infoData.profile_picture_url.trim() !== '') {
+                                profilePic = infoData.profile_picture_url;
+                            }
                         }
                     }
-
-                    const encryptedPass = btoa(password);
-                    let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-                    accounts = accounts.filter(a => a.username !== username);
-                    
-                    accounts.unshift({
-                        username: username,
-                        full_name: fullName,
-                        profile_picture_url: profilePic,
-                        auth_token: encryptedPass
-                    });
-
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts.slice(0, 8)));
-                } catch (error) {
-                    console.error("Error saving account:", error);
+                } catch (err) {
+                    // ignore - we will still save username
                 }
-                this.submit();
+
+                // save to localStorage AFTER successful server login
+                const encryptedPass = btoa(password);
+                let accounts = loadAccounts().filter(a => a.username !== username);
+                accounts.unshift({
+                    username: username,
+                    full_name: fullName,
+                    profile_picture_url: profilePic,
+                    auth_token: encryptedPass
+                });
+                saveAccounts(accounts.slice(0, 8));
+
+                // redirect to server-provided redirect or default
+                window.location.href = data.redirect || '/chat_list';
+
+            } catch (error) {
+                console.error("Error saving account:", error);
+                showError('فشل في الاتصال بالخادم.');
+                loginBtn.disabled = false;
+                loginSpinner.classList.add('hidden');
+                loginBtnText.textContent = 'دخول';
             }
         });
+
+        function showError(msg) {
+            errorBox.style.display = 'block';
+            errorBox.textContent = msg;
+        }
     </script>
 </body>
 </html>
