@@ -345,11 +345,18 @@ app.get('/api/search', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
+// --- helper: detect if client wants JSON (AJAX) ---
+function clientWantsJson(req) {
+  return (req.xhr) || (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1);
+}
+
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
+  const wantsJson = clientWantsJson(req);
+
   try {
-    if (!username) throw new Error('Username required');
+    if (!username) throw new Error('اسم المستخدم مطلوب');
     const email = `${username}@trimer.io`;
     const userRecord = await firebaseAuth.getUserByEmail(email);
     req.session.userId = userRecord.uid;
@@ -362,32 +369,65 @@ app.post('/login', async (req, res) => {
       last_seen: admin.database.ServerValue.TIMESTAMP
     });
 
+    if (wantsJson) {
+      // return some public info for client to save locally AFTER successful login
+      const profileSnap = await db.ref(`profiles/${userRecord.uid}`).once('value');
+      const profile = profileSnap.val() || {};
+      return res.json({
+        ok: true,
+        redirect: '/chat_list',
+        username: profile.username || username,
+        full_name: profile.full_name || username,
+        profile_picture_url: profile.profile_picture_url || profile.photoURL || DEFAULT_PROFILE_PIC_URL
+      });
+    }
+
     res.redirect('/chat_list');
   } catch (error) {
+    const msg = (error && error.message) ? error.message : 'Invalid username or password.';
+    if (wantsJson) {
+      return res.status(403).json({ ok: false, error: msg });
+    }
     res.redirect('/login?error=' + encodeURIComponent('Invalid username or password.'));
   }
 });
 
-// استبدل هذا الجزء في server.js
+// استبدال مسار /register بالمعدّل: يرد JSON عند طلب AJAX، ويعطي رسائل خطأ واضحة
 app.post('/register', upload.fields([{ name: 'profile_picture' }, { name: 'cover_photo' }]), async (req, res) => {
-  const { username, password, full_name } = req.body; // إضافة full_name هنا
-  let profile_picture_url = DEFAULT_PROFILE_PIC_URL; // استخدام الثابت المحدد في البداية الملف
-  let cover_photo_url = ''; // افتراضي فارغ
+  const wantsJson = clientWantsJson(req);
+  const { username, password, full_name } = req.body;
+  let profile_picture_url = DEFAULT_PROFILE_PIC_URL;
+  let cover_photo_url = '';
 
   try {
-    if (!username || !password) {
-      return res.redirect('/register?error=' + encodeURIComponent('Required fields missing.'));
+    // Basic server-side validations
+    if (!username || String(username).trim().length === 0) {
+      const errMsg = 'اسم المستخدم مطلوب.';
+      if (wantsJson) return res.status(400).json({ ok: false, error: errMsg });
+      return res.redirect('/register?error=' + encodeURIComponent(errMsg));
     }
+    if (/\s/.test(username)) {
+      const errMsg = 'لا يجب أن يحتوي اسم المستخدم على مسافات.';
+      if (wantsJson) return res.status(400).json({ ok: false, error: errMsg });
+      return res.redirect('/register?error=' + encodeURIComponent(errMsg));
+    }
+    if (!/^[A-Za-z0-9._-]{3,32}$/.test(username)) {
+      const errMsg = 'اسم المستخدم يجب أن يتكون من أحرف وأرقام ونقاط أو _ أو - وطوله بين 3 و 32.';
+      if (wantsJson) return res.status(400).json({ ok: false, error: errMsg });
+      return res.redirect('/register?error=' + encodeURIComponent(errMsg));
+    }
+    if (!password || password.length < 6) {
+      const errMsg = 'كلمة المرور قصيرة؛ يجب أن تكون 6 أحرف على الأقل.';
+      if (wantsJson) return res.status(400).json({ ok: false, error: errMsg });
+      return res.redirect('/register?error=' + encodeURIComponent(errMsg));
+    }
+
     const email = `${username}@trimer.io`;
 
-    // معالجة الصور المرفوعة
+    // process uploaded files (if any)
     if (req.files) {
-      if (req.files.profile_picture) {
-        profile_picture_url = req.files.profile_picture[0].path;
-      }
-      if (req.files.cover_photo) {
-        cover_photo_url = req.files.cover_photo[0].path;
-      }
+      if (req.files.profile_picture) profile_picture_url = req.files.profile_picture[0].path;
+      if (req.files.cover_photo) cover_photo_url = req.files.cover_photo[0].path;
     }
 
     const userRecord = await firebaseAuth.createUser({
@@ -395,27 +435,57 @@ app.post('/register', upload.fields([{ name: 'profile_picture' }, { name: 'cover
     });
 
     const profileData = {
-      id: userRecord.uid, 
-      username: username, 
-      full_name: full_name || username, // حفظ الاسم الكامل أو اسم المستخدم كاحتياط
+      id: userRecord.uid,
+      username: username,
+      full_name: full_name || username,
       email: email,
-      profile_picture_url: profile_picture_url, 
-      cover_photo_url: cover_photo_url, // حفظ صورة الغلاف
-      is_online: true, 
-      is_verified: false, 
+      profile_picture_url: profile_picture_url,
+      cover_photo_url: cover_photo_url,
+      is_online: true,
+      is_verified: false,
       bio: '',
       last_seen: admin.database.ServerValue.TIMESTAMP,
       postsCount: 0
     };
-    
+
     await db.ref('profiles/' + userRecord.uid).set(profileData);
 
     req.session.userId = userRecord.uid;
     req.session.email = email;
     await req.session.save();
+
+    if (wantsJson) {
+      return res.json({
+        ok: true,
+        redirect: '/chat_list',
+        username: username,
+        full_name: profileData.full_name,
+        profile_picture_url: profile_picture_url
+      });
+    }
+
     res.redirect('/chat_list');
   } catch (error) {
-    res.redirect('/register?error=' + encodeURIComponent(error.message));
+    // clear, user-friendly error messages
+    let errMsg = 'فشل في إنشاء الحساب.';
+    if (error && error.code) {
+      if (error.code === 'auth/email-already-exists' || (error.message && error.message.includes('already exists'))) {
+        errMsg = 'اسم المستخدم مأخوذ بالفعل.';
+      } else if (error.code === 'auth/invalid-password') {
+        errMsg = 'كلمة المرور غير صالحة.';
+      } else {
+        errMsg = error.message || errMsg;
+      }
+    } else if (error && error.message) {
+      errMsg = error.message;
+    }
+
+    console.error('Register error:', error);
+
+    if (wantsJson) {
+      return res.status(400).json({ ok: false, error: errMsg });
+    }
+    res.redirect('/register?error=' + encodeURIComponent(errMsg));
   }
 });
 
