@@ -1571,6 +1571,63 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
   }
 });
 
+// New endpoint: save/clear reaction on a message (persist reactions server-side)
+app.post('/api/messages/react', requireAuth, async (req, res) => {
+  // Body: { messageId: string, reaction: string|null } reaction allowed: laugh,sad,heart,angry,like OR null to remove
+  const userId = req.session.userId;
+  const { messageId, reaction } = req.body;
+  if (!messageId) return res.status(400).json({ ok: false, error: 'messageId required' });
+
+  const allowed = ['laugh', 'sad', 'heart', 'angry', 'like', null];
+  if (typeof reaction !== 'string' && reaction !== null) {
+    return res.status(400).json({ ok: false, error: 'reaction must be string or null' });
+  }
+  if (reaction !== null && !allowed.includes(reaction)) {
+    return res.status(400).json({ ok: false, error: 'invalid reaction' });
+  }
+
+  try {
+    const userReactionRef = db.ref(`message_reactions/${messageId}/${userId}`);
+    const prevSnap = await userReactionRef.once('value');
+    const prev = prevSnap.exists() ? prevSnap.val() : null;
+
+    // If prev === reaction -> remove (toggle off)
+    if (prev && prev === reaction) {
+      // remove
+      await userReactionRef.remove();
+      // decrement count
+      await db.ref(`message_reaction_counts/${messageId}/${prev}`).transaction(c => (c || 1) - 1);
+      const countsSnap = await db.ref(`message_reaction_counts/${messageId}`).once('value');
+      const counts = countsSnap.val() || {};
+      return res.json({ ok: true, counts, userReaction: null });
+    }
+
+    // Otherwise set new reaction (could be null for explicit remove)
+    if (reaction === null) {
+      // remove only
+      if (prev) {
+        await userReactionRef.remove();
+        await db.ref(`message_reaction_counts/${messageId}/${prev}`).transaction(c => (c || 1) - 1);
+      }
+    } else {
+      // set new
+      await userReactionRef.set(reaction);
+      // adjust counts
+      if (prev) {
+        await db.ref(`message_reaction_counts/${messageId}/${prev}`).transaction(c => (c || 1) - 1);
+      }
+      await db.ref(`message_reaction_counts/${messageId}/${reaction}`).transaction(c => (c || 0) + 1);
+    }
+
+    const countsSnap = await db.ref(`message_reaction_counts/${messageId}`).once('value');
+    const counts = countsSnap.val() || {};
+    res.json({ ok: true, counts, userReaction: reaction === prev ? null : reaction });
+  } catch (err) {
+    console.error('Error persisting reaction:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
 app.post('/api/mark_read', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { other_id } = req.body;
