@@ -547,6 +547,7 @@
             justify-content: center;
             background: linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15));
             transition: opacity 0.18s;
+            z-index: 30;
         }
         .video-play-overlay i {
             font-size: 54px;
@@ -554,6 +555,26 @@
             text-shadow: 0 6px 24px rgba(0,0,0,0.6);
         }
         .video-play-overlay.hidden { opacity: 0; pointer-events: none; }
+
+        /* fullscreen button (small) */
+        .video-fs-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px; /* left because dir=rtl; visually it's on top-left */
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            z-index: 40;
+            cursor: pointer;
+        }
+        .video-fs-btn i { font-size: 14px; }
+
         /* hide the old controls bar to keep the UI minimal */
         [id^="controls-bar-"] { display: none !important; }
 
@@ -1238,32 +1259,31 @@
         }
         
         function toggleVideoPlay(postId, event) {
-            event.stopPropagation();
+            if (event && event.stopPropagation) event.stopPropagation();
             const video = document.getElementById(`video-${postId}`);
             const playOverlay = document.getElementById(`play-overlay-${postId}`);
-            const controlIcon = document.getElementById(`control-icon-${postId}`);
-            const controlsBar = document.getElementById(`controls-bar-${postId}`);
+            // const controlIcon = document.getElementById(`control-icon-${postId}`);
+            // const controlsBar = document.getElementById(`controls-bar-${postId}`);
 
             if (!video) return;
 
+            // Pause any other active video
             if (activeVideo && activeVideo !== video) {
                 const activePostId = activeVideo.id.split('-')[1];
-                const activeControlIcon = document.getElementById(`control-icon-${activePostId}`);
                 const activePlayOverlay = document.getElementById(`play-overlay-${activePostId}`);
-                activeVideo.pause();
-                if (activeControlIcon) {
-                    activeControlIcon.classList.remove('fa-pause');
-                    activeControlIcon.classList.add('fa-play');
-                }
+                try { activeVideo.pause(); } catch(e){}
                 if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
-                
+                // remove event listeners for previous active video
                 activeVideo.removeEventListener('timeupdate', updateVideoProgress);
                 activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
                 activeVideo.removeEventListener('ended', handleVideoEnd);
+                activeVideo = null;
             }
+
+            // Pause any playing wave audio
             if (activeWaveSurfer) {
-                activeWaveSurfer.pause();
-                const otherPostCard = activeWaveSurfer.container.closest('.glass-post-card');
+                try { activeWaveSurfer.pause(); } catch(e){}
+                const otherPostCard = activeWaveSurfer.container && activeWaveSurfer.container.closest ? activeWaveSurfer.container.closest('.glass-post-card') : null;
                 if (otherPostCard) {
                     const apb = otherPostCard.querySelector('.audio-play-button i');
                     if (apb) { apb.classList.remove('fa-pause'); apb.classList.add('fa-play'); }
@@ -1272,19 +1292,22 @@
             }
             
             if (video.paused) {
-                video.play();
-                if (playOverlay) playOverlay.classList.add('hidden'); 
-                if (controlIcon) { controlIcon.classList.remove('fa-play'); controlIcon.classList.add('fa-pause'); }
-                activeVideo = video;
-                
-                video.addEventListener('timeupdate', updateVideoProgress);
-                video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
-                video.addEventListener('ended', handleVideoEnd);
-
+                video.play().then(() => {
+                    if (playOverlay) playOverlay.classList.add('hidden'); 
+                    activeVideo = video;
+                    video.addEventListener('timeupdate', updateVideoProgress);
+                    video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
+                    video.addEventListener('ended', handleVideoEnd);
+                }).catch((err) => {
+                    console.warn('Video play failed', err);
+                });
             } else {
                 video.pause();
                 if (playOverlay) playOverlay.classList.remove('hidden'); 
-                if (controlIcon) controlIcon.classList.remove('fa-pause'), controlIcon.classList.add('fa-play');
+                // remove event listeners when paused/stopped
+                video.removeEventListener('timeupdate', updateVideoProgress);
+                video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
+                video.removeEventListener('ended', handleVideoEnd);
                 activeVideo = null;
             }
         }
@@ -1316,11 +1339,9 @@
             const video = event.target;
             const postId = video.id.split('-')[1];
             const playOverlay = document.getElementById(`play-overlay-${postId}`);
-            const controlIcon = document.getElementById(`control-icon-${postId}`);
             
             video.currentTime = 0;
             if (playOverlay) playOverlay.classList.remove('hidden'); 
-            if (controlIcon) controlIcon.classList.remove('fa-pause'), controlIcon.classList.add('fa-play');
             activeVideo = null;
             
             video.removeEventListener('timeupdate', updateVideoProgress);
@@ -1357,9 +1378,13 @@
                                    onclick="toggleVideoPlay('${post.postId}', event)">
                             </video>
                             
-                            <div id="play-overlay-${post.postId}" class="video-play-overlay">
+                            <div id="play-overlay-${post.postId}" class="video-play-overlay" onclick="toggleVideoPlay('${post.postId}', event)">
                                 <i class="fas fa-play"></i>
                             </div>
+
+                            <button class="video-fs-btn" onclick="toggleFullscreen('${post.postId}', event)" title="تكبير">
+                              <i class="fas fa-expand"></i>
+                            </button>
                         </div>
                     `;
                 } else if (post.media.type === 'audio') {
@@ -2567,11 +2592,18 @@ async function fetchAndDisplayFamilies() {
         }
 
         function toggleFullscreen(postId, ev) {
-            ev.stopPropagation();
+            if (ev && ev.stopPropagation) ev.stopPropagation();
             const video = document.getElementById(`video-${postId}`);
             if (!video) return;
-            if (video.requestFullscreen) video.requestFullscreen().catch(()=>{});
-            else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen().catch(()=>{});
+            // Prefer element fullscreen on container for chrome mobile compatibility
+            const container = video.closest('.video-large') || video;
+            if (container.requestFullscreen) {
+                container.requestFullscreen().catch(()=>{});
+            } else if (container.webkitRequestFullscreen) {
+                container.webkitRequestFullscreen().catch(()=>{});
+            } else if (video.requestFullscreen) {
+                video.requestFullscreen().catch(()=>{});
+            }
         }
 
         // Copy post link function
