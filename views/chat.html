@@ -26,7 +26,7 @@ background-color: var(--bg);
 color: var(--muted);
 -webkit-font-smoothing: antialiased;
 direction: rtl;
-touch-action: pan-x pan-y;
+touch-action: pan-y;
 }
 .wrap {
 height: 100dvh;
@@ -128,6 +128,7 @@ word-break: break-word;
 cursor: pointer;
 position: relative;
 touch-action: manipulation;
+will-change: transform;
 }
 .incoming {
 align-self: flex-start;
@@ -417,6 +418,9 @@ margin-top: -4px;
   border-color: rgba(7,128,151,0.25);
 }
 
+/* color heart red when present */
+.reaction-chip[data-reaction="heart"] span:first-child { color: #ef4444; }
+
 /* New/Modified Online Dot */
 .avatar-with-dot { position: relative; display: inline-block; }
 .online-dot {
@@ -659,14 +663,13 @@ function renderReactionsBar(msgId) {
 
 /* Toggle reaction locally + attempt to sync to server */
 async function toggleReaction(msgId, reaction, nodeRef) {
+    // optimistic update
     const data = reactionsMap[msgId] || { counts: { laugh:0, sad:0, heart:0, angry:0, like:0 }, userReaction: null };
     const prev = data.userReaction;
     if (prev === reaction) {
-        // remove
         data.userReaction = null;
         data.counts[reaction] = Math.max((data.counts[reaction]||1)-1, 0);
     } else {
-        // switch
         if (prev) data.counts[prev] = Math.max((data.counts[prev]||1)-1, 0);
         data.userReaction = reaction;
         data.counts[reaction] = (data.counts[reaction]||0) + 1;
@@ -674,18 +677,40 @@ async function toggleReaction(msgId, reaction, nodeRef) {
     reactionsMap[msgId] = data;
     renderReactionsBar(msgId);
 
-    // best-effort POST to server to persist reaction if endpoint exists
+    // send to server for persistence (best-effort)
     try {
-        await fetch('/api/messages/react', {
-            method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'},
+        const resp = await fetch('/api/messages/react', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ messageId: msgId, reaction: data.userReaction })
         });
-    } catch (e) { /* ignore network error */ }
+        if (resp.ok) {
+            const json = await resp.json();
+            if (json && json.ok) {
+                // replace local counts with authoritative counts from server
+                const serverCounts = json.counts || {};
+                reactionsMap[msgId] = {
+                    counts: {
+                        laugh: serverCounts.laugh || 0,
+                        sad: serverCounts.sad || 0,
+                        heart: serverCounts.heart || 0,
+                        angry: serverCounts.angry || 0,
+                        like: serverCounts.like || 0
+                    },
+                    userReaction: json.userReaction || null
+                };
+                renderReactionsBar(msgId);
+            }
+        }
+    } catch (e) {
+        // network error -> keep optimistic UI; server will reconcile later when messages reload
+        console.warn('Could not persist reaction', e);
+    }
 }
 
 /* Render reaction popup near element */
 function showReactionPopup(targetEl, msg) {
-    // remove existing popup
     document.querySelectorAll('.reaction-popup').forEach(p=>p.remove());
     const popup = document.createElement('div');
     popup.className = 'reaction-popup';
@@ -706,15 +731,14 @@ function showReactionPopup(targetEl, msg) {
     });
     document.body.appendChild(popup);
 
-    // position popup above the message
+    // position popup above the message (centered)
     const rect = targetEl.getBoundingClientRect();
-    const left = rect.left + (rect.width / 2) - (popup.offsetWidth / 2);
-    const top = rect.top - popup.offsetHeight - 10;
-    // keep within viewport
+    const popupRect = popup.getBoundingClientRect();
+    const left = rect.left + (rect.width / 2) - (popupRect.width / 2);
+    const top = rect.top - popupRect.height - 8;
     popup.style.left = Math.max(8, left) + 'px';
     popup.style.top = Math.max(8, top) + 'px';
 
-    // hide after 4s if not interacted
     const timeout = setTimeout(()=>popup.remove(),4000);
     popup.onmouseenter = ()=>clearTimeout(timeout);
     popup.onmouseleave = ()=>setTimeout(()=>popup.remove(),800);
@@ -728,9 +752,9 @@ function createMessageElement(msg, myId) {
     el.dataset.messageId = msg.messageId;
     el.dataset.senderId = msg.senderId || '';
     el.title = 'انقر للتفاعل — اسحب للرد';
+
+    // click -> reaction popup (single-click)
     el.addEventListener('click', (e) => {
-        // single click opens reaction popup
-        // prevent double-click from firing single
         if (el._preventClick) { el._preventClick = false; return; }
         showReactionPopup(el, msg);
     });
@@ -752,33 +776,44 @@ function createMessageElement(msg, myId) {
         } else lastTap = now;
     });
 
-    // swipe-to-reply (pointer events)
-    let startX = 0, startY = 0, moved = false;
+    // swipe-to-reply (pointer events) with robust thresholds to avoid accidental movement
+    let startX = 0, startY = 0, moved = false, pointerId = null;
     el.addEventListener('pointerdown', (ev) => {
+        pointerId = ev.pointerId;
         startX = ev.clientX; startY = ev.clientY; moved = false;
-        el.setPointerCapture(ev.pointerId);
+        try { el.setPointerCapture(pointerId); } catch(e){}
+        el.style.transition = '';
     });
     el.addEventListener('pointermove', (ev) => {
+        if (ev.pointerId !== pointerId) return;
         const dx = ev.clientX - startX;
         const dy = ev.clientY - startY;
-        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+        // only consider mostly-horizontal gestures and require minimum threshold
+        if (Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy)) {
             moved = true;
-            // visual hint while swiping
-            const translate = Math.min(Math.max(dx, -80), 80);
+            const translate = Math.max(Math.min(dx, 80), -80); // limit
             el.style.transform = `translateX(${translate}px)`;
-            el.style.transition = 'transform 0s';
+            el.style.opacity = Math.max(0.6, 1 - Math.abs(translate) / 240);
         }
     });
     el.addEventListener('pointerup', (ev) => {
-        el.style.transition = 'transform .18s ease';
-        el.style.transform = 'translateX(0)';
-        if (moved) {
-            // consider swipe as reply trigger
-            setReplyTo(msg);
+        if (ev.pointerId === pointerId) {
+            const dx = ev.clientX - startX;
+            el.style.transition = 'transform .18s ease, opacity .18s ease';
+            el.style.transform = 'translateX(0)';
+            el.style.opacity = '';
+            try { el.releasePointerCapture(pointerId); } catch(e){}
+            if (moved && Math.abs(dx) > 60) {
+                // treat as reply gesture
+                setReplyTo(msg);
+            }
         }
-        try { el.releasePointerCapture(ev.pointerId); } catch(e){}
     });
-    el.addEventListener('pointercancel', ()=>{ el.style.transition = 'transform .18s ease'; el.style.transform = 'translateX(0)'; });
+    el.addEventListener('pointercancel', () => {
+        el.style.transition = 'transform .18s ease, opacity .18s ease';
+        el.style.transform = 'translateX(0)';
+        el.style.opacity = '';
+    });
 
     // build inner content
     let contentHtml = '';
@@ -817,9 +852,28 @@ function createMessageElement(msg, myId) {
 
     el.innerHTML = contentHtml;
 
-    // init empty reactions (if none)
+    // initialize reactionsMap if absent: try to read existing counts from DB (best-effort)
     if (!reactionsMap[msg.messageId]) {
+        // optimistic empty; later we may fetch counts when loading messages
         reactionsMap[msg.messageId] = { counts: { laugh:0, sad:0, heart:0, angry:0, like:0 }, userReaction: null };
+        // attempt to fetch counts from server (non-blocking)
+        fetch(`/api/message/${encodeURIComponent(msg.messageId)}/reactions`, { credentials: 'same-origin' })
+          .then(r => r.ok ? r.json() : null)
+          .then(j => {
+              if (j && j.ok && j.counts) {
+                  reactionsMap[msg.messageId] = {
+                      counts: {
+                          laugh: j.counts.laugh || 0,
+                          sad: j.counts.sad || 0,
+                          heart: j.counts.heart || 0,
+                          angry: j.counts.angry || 0,
+                          like: j.counts.like || 0
+                      },
+                      userReaction: j.userReaction || null
+                  };
+                  renderReactionsBar(msg.messageId);
+              }
+          }).catch(()=>{});
     }
     renderReactionsBar(msg.messageId);
 
@@ -1117,6 +1171,32 @@ async function fetchMessages() {
                             verifiedMap[uid] = false;
                         }
                     }));
+                }
+
+                // optionally fetch reaction counts for messages in batch (best-effort)
+                const msgIds = result.messages.map(m => m.messageId).filter(Boolean);
+                if (msgIds.length > 0) {
+                    try {
+                        const reacFetch = await fetch(`/api/messages/reactions?ids=${encodeURIComponent(msgIds.join(','))}`, { credentials: 'same-origin' });
+                        if (reacFetch.ok) {
+                            const reacJson = await reacFetch.json();
+                            if (reacJson && reacJson.ok && reacJson.items) {
+                                Object.keys(reacJson.items).forEach(mid => {
+                                    const item = reacJson.items[mid];
+                                    reactionsMap[mid] = {
+                                        counts: {
+                                            laugh: item.counts?.laugh || 0,
+                                            sad: item.counts?.sad || 0,
+                                            heart: item.counts?.heart || 0,
+                                            angry: item.counts?.angry || 0,
+                                            like: item.counts?.like || 0
+                                        },
+                                        userReaction: item.userReaction || null
+                                    };
+                                });
+                            }
+                        }
+                    } catch(e){}
                 }
 
                 for (const msg of result.messages) {
