@@ -125,7 +125,6 @@ font-size: 13px;
 line-height: 1.3;
 word-break: break-word;
 cursor: pointer;
-transition: transform 0.3s ease;
 }
 .incoming {
 align-self: flex-start;
@@ -400,55 +399,6 @@ margin-top: -4px;
   border: 1px solid rgba(255,255,255,0.06);
   vertical-align: middle;
 }
-
-/* Reactions styles */
-.reactions-popup {
-  position: fixed;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 8px 16px;
-  display: flex;
-  gap: 12px;
-  z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  animation: fadeIn 0.2s ease;
-}
-@keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.reaction-btn {
-  font-size: 24px;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-.reaction-btn:hover {
-  transform: scale(1.2);
-}
-.msg-reactions {
-  display: flex;
-  gap: 4px;
-  font-size: 12px;
-  margin-top: 4px;
-  justify-content: flex-end;
-}
-
-/* Nice cancel reply button */
-#cancel-reply-btn {
-  background: #ef4444;
-  border: none;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  cursor: pointer;
-  font-size: 12px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
 </style>
 <script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
@@ -482,7 +432,9 @@ margin-top: -4px;
 <span id="reply-sender"></span>
 <span id="reply-text"></span>
 </div>
-<button id="cancel-reply-btn" type="button" title="إلغاء الرد">×</button>
+<button id="cancel-reply-btn" type="button" title="إلغاء الرد">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+</button>
 </div>
 
 <div id="file-preview" style="display:none;">
@@ -574,9 +526,6 @@ let recordingTimer = null;
 let recordingSeconds = 0;
 let inputWaveSurfer = null;
 let audioWaveSurfers = {}; 
-let reactionsPopup = null;
-let longPressTimer = null;
-const validEmojis = ['❤️', '😢', '😡', '😂', '👍'];
 
 const RECORDING_STATE = {
     IDLE: 'idle',
@@ -584,6 +533,10 @@ const RECORDING_STATE = {
     READY_TO_SEND: 'ready'
 };
 let recordingState = RECORDING_STATE.IDLE;
+
+// Verified badge assets & map
+const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
+let verifiedMap = {}; // { userId: true/false }
 
 // Helper Functions
 function formatTime(dateString) {
@@ -619,11 +572,14 @@ function createAudioPlayer(src, isIncoming) {
     `;
 }
 function createMessageElement(msg, myId) {
+    // NOTE: Verified badge is intentionally NOT shown inside messages.
+    // Verified badges appear next to the profile/name at the top of the chat only.
     const isIncoming = (msg.senderId !== myId);
     const el = document.createElement('div');
     el.className = 'msg ' + (isIncoming ? 'incoming' : 'outgoing');
     el.dataset.messageId = msg.messageId;
-    el.dataset.senderId = msg.senderId;
+    el.title = 'انقر للرد';
+    el.addEventListener('click', () => { setReplyTo(msg); });
 
     let contentHtml = '';
     
@@ -660,38 +616,7 @@ function createMessageElement(msg, myId) {
     const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
     contentHtml += `<div class="meta-time">${formatTime(msg.timestamp)}${readStatus}</div>`;
 
-    contentHtml += `<div class="msg-reactions"></div>`;
-
     el.innerHTML = contentHtml;
-
-    // Add touch events for swipe and long press
-    let touchStartX = 0;
-    let touchStartTime = 0;
-    el.addEventListener('touchstart', e => {
-        touchStartX = e.touches[0].clientX;
-        touchStartTime = Date.now();
-        longPressTimer = setTimeout(() => showReactions(el, msg), 500);
-    });
-    el.addEventListener('touchmove', e => {
-        const deltaX = e.touches[0].clientX - touchStartX;
-        if (Math.abs(deltaX) > 20) {
-            clearTimeout(longPressTimer);
-            el.style.transform = `translateX(${deltaX}px)`;
-        }
-    });
-    el.addEventListener('touchend', e => {
-        clearTimeout(longPressTimer);
-        const touchEndX = e.changedTouches[0].clientX;
-        const deltaX = touchEndX - touchStartX;
-        const duration = Date.now() - touchStartTime;
-        if (Math.abs(deltaX) > 50 && duration < 500) {
-            setReplyTo(msg);
-        }
-        el.style.transition = 'transform 0.3s ease';
-        el.style.transform = 'translateX(0)';
-        setTimeout(() => el.style.transition = '', 300);
-    });
-
     return el;
 }
 function scrollToBottom() {
@@ -707,19 +632,9 @@ function setReplyTo(msg) {
     
     const isIncoming = (msg.senderId !== myId);
     
-    let previewContent = msg.content || '';
-    if (msg.media) {
-        let mediaTypeAr = '';
-        if (msg.media.type.startsWith('image')) mediaTypeAr = 'صورة';
-        else if (msg.media.type.startsWith('video')) mediaTypeAr = 'فيديو';
-        else if (msg.media.type.startsWith('audio')) mediaTypeAr = 'صوت';
-        else mediaTypeAr = 'ملف';
-        previewContent = mediaTypeAr + (previewContent ? ' - ' + previewContent : '');
-    }
-
     replyToMessage = {
         id: msg.messageId,
-        content: previewContent,
+        content: msg.content || (msg.media?.type ? `[${msg.media.type}]` : 'ملف مرفق'),
         senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت',
         senderId: msg.senderId
     };
@@ -733,62 +648,6 @@ function clearReplyTo() {
     replyContainer.style.display = 'none';
 }
 cancelReplyBtn.onclick = clearReplyTo;
-
-// Reactions
-function showReactions(el, msg) {
-    if (reactionsPopup) reactionsPopup.remove();
-    reactionsPopup = document.createElement('div');
-    reactionsPopup.className = 'reactions-popup';
-    validEmojis.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = 'reaction-btn';
-        btn.textContent = emoji;
-        btn.onclick = () => reactToMessage(msg.messageId, emoji);
-        reactionsPopup.appendChild(btn);
-    });
-    document.body.appendChild(reactionsPopup);
-    setTimeout(() => document.addEventListener('click', hideReactions, {once: true}), 100);
-}
-function hideReactions() {
-    if (reactionsPopup) {
-        reactionsPopup.remove();
-        reactionsPopup = null;
-    }
-}
-async function reactToMessage(messageId, emoji) {
-    try {
-        const res = await fetch(`/api/messages/${messageId}/react`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({emoji}),
-            credentials: 'same-origin'
-        });
-        if (res.ok) {
-            hideReactions();
-            fetchMessages(); // Refresh to show updated reactions
-        }
-    } catch (e) {
-        console.error('Reaction error:', e);
-    }
-}
-async function fetchMessageReactions(messageId) {
-    try {
-        const res = await fetch(`/api/messages/${messageId}/reactions`, {credentials: 'same-origin'});
-        const data = await res.json();
-        return data.reactions || [];
-    } catch (e) {
-        return [];
-    }
-}
-function renderReactions(el, reactions) {
-    const reactionsEl = el.querySelector('.msg-reactions');
-    if (!reactionsEl) return;
-    const grouped = {};
-    reactions.forEach(r => {
-        grouped[r.emoji] = (grouped[r.emoji] || 0) + 1;
-    });
-    reactionsEl.innerHTML = Object.entries(grouped).map(([emoji, count]) => `${emoji} ${count > 1 ? count : ''}`).join(' ');
-}
 
 // ---------------- UI/Composer Logic ----------------
 function updateComposerUI() {
@@ -1026,7 +885,6 @@ async function fetchMessages() {
 
         if (res.ok && result.ok && JSON.stringify(result.messages) !== JSON.stringify(lastMessages)) {
             lastMessages = result.messages;
-            const existingMsgs = Array.from(messagesEl.querySelectorAll('.msg')).map(m => m.dataset.messageId);
             messagesEl.innerHTML = ''; 
             
             if (result.messages.length === 0) {
@@ -1051,9 +909,6 @@ async function fetchMessages() {
                 for (const msg of result.messages) {
                     const el = createMessageElement(msg, myId);
                     messagesEl.appendChild(el);
-                    // Fetch and render reactions
-                    const reactions = await fetchMessageReactions(msg.messageId);
-                    renderReactions(el, reactions);
                 }
             }
 
@@ -1075,11 +930,16 @@ async function fetchMessages() {
 }
 
 function initializeAudioPlayers() {
+    // تدمير أي WaveSurfers سابقة لتجنب تداخل الذاكرة
+    Object.values(audioWaveSurfers).forEach(ws => ws.destroy());
+    audioWaveSurfers = {};
+
     document.querySelectorAll('.audio-waveform-container').forEach(container => {
         const src = container.dataset.src;
         const isIncoming = container.dataset.isIncoming === 'true';
         
-        if (container.childNodes.length === 0 && !audioWaveSurfers[src]) { 
+        // إنشاء Wavesurfer واحد لكل مصدر صوت فريد
+        if (!audioWaveSurfers[src]) { 
             const wavesurfer = WaveSurfer.create({
                 container: container,
                 waveColor: isIncoming ? '#94a3b8' : '#7dd3fc', 
@@ -1237,6 +1097,7 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
     setTimeout(scrollToBottom, 100); 
     updateComposerUI(); 
     
+    // تحديث الرسائل بشكل دوري
     setInterval(async () => { if (document.visibilityState === 'visible') await fetchMessages(); }, 3000); 
     window.addEventListener('focus', fetchMessages);
     window.addEventListener('focus', markRead);
@@ -1258,7 +1119,7 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
   });
   es.addEventListener('error', (err)=>{ console.warn('Notifications SSE error', err); });
 })();
-(function initUnreadUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
+(function initUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
 </script>
 </body>
 </html>
