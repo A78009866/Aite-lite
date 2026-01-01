@@ -3730,6 +3730,62 @@ app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ ok: false, error: 'Server error' });
 });
+// ============================================================
+// مسار جديد: جلب رسائل المحادثة (JSON) - يحل مشكلة التاريخ والصوت
+// ============================================================
+app.get('/api/messages/:chatId', async (req, res) => {
+  // التحقق من تسجيل الدخول
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'غير مصرح' });
+  }
+
+  const chatId = req.params.chatId;
+  const currentUserId = req.session.userId;
+
+  try {
+    // 1. إعداد مرجع الرسائل
+    const messagesRef = admin.database().ref(`chats/${chatId}/messages`);
+
+    // 2. جلب الرسائل (التعديل الأساسي هنا)
+    // نستخدم limitToLast(1000) لجلب أرشيف كبير من الرسائل (القديم والجديد)
+    // يمكنك زيادة الرقم أو إزالته تماماً لجلب كل شيء، لكن 1000 رقم آمن للأداء
+    const snapshot = await messagesRef
+      .orderByChild('timestamp')
+      .limitToLast(1000) 
+      .once('value');
+
+    const messages = [];
+    snapshot.forEach(child => {
+      // تجميع الرسائل في مصفوفة
+      messages.push({
+        ...child.val(),
+        messageId: child.key
+      });
+    });
+
+    // 3. جلب بيانات المستخدم الآخر (لعرض الاسم والصورة في الأعلى)
+    const parts = chatId.split('_');
+    // تحديد من هو الطرف الآخر بناءً على الـ ID
+    const otherUserId = parts[0] === currentUserId ? parts[1] : parts[0];
+    
+    const userSnapshot = await admin.database().ref('users/' + otherUserId).once('value');
+    const otherUserData = userSnapshot.val() || {};
+
+    // 4. إرسال البيانات كـ JSON
+    res.json({
+      messages: messages,
+      currentUserId: currentUserId,
+      otherUser: {
+        username: otherUserData.username || 'مستخدم',
+        avatar: otherUserData.profilePic || DEFAULT_PROFILE_PIC_URL // تأكد أن هذا المتغير معرف لديك في أعلى الملف
+      }
+    });
+
+  } catch (err) {
+    console.error('Error fetching json messages:', err);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب الرسائل' });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
