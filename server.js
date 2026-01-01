@@ -1491,9 +1491,11 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   }
 });
 
+// استبدل مسار إرسال الرسالة بهذا الكود المعدل
 app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, res) => {
   const senderId = req.session.userId;
   const contactId = req.body.other_id;
+  // نستقبل بيانات الرد (replied_to) من الـ Client
   const { content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
 
   const timestamp = admin.database.ServerValue.TIMESTAMP;
@@ -1504,7 +1506,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
     return res.status(400).json({ ok: false, error: 'No content to send.' });
   }
 
-  // Enforce friendship: cannot send unless friends
+  // التحقق من الصداقة (كما في الكود الأصلي)
   try {
     const isFriend = await areFriends(senderId, contactId);
     if (!isFriend) {
@@ -1514,6 +1516,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
     return res.status(500).json({ ok: false, error: 'Failed to verify friendship.' });
   }
 
+  // معالجة الملف المرفق
   if (req.file) {
     mediaUrl = req.file.path;
     if (req.file.mimetype && req.file.mimetype.startsWith('image/')) mediaType = 'image';
@@ -1534,6 +1537,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
       timestamp: timestamp,
       media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
       is_read: false,
+      // حفظ بيانات الرد كما وصلتنا من الـ Client (بالعربية)
       replied_to_id: replied_to_id || null,
       replied_to_content: replied_to_content || null,
       replied_to_sender: replied_to_sender || null
@@ -1541,9 +1545,17 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
 
     await messagesRef.set(messageData);
 
-    let previewText = content || (mediaType ? `[${mediaType}]` : 'ملف');
+    // --- بداية التعديل: تعريب معاينة الرسالة في قائمة المحادثات ---
+    let previewText = content;
+    if (!previewText) {
+        if (mediaType === 'image') previewText = '📷 صورة';
+        else if (mediaType === 'video') previewText = '🎥 فيديو';
+        else if (mediaType === 'audio') previewText = '🎤 تسجيل صوتي';
+        else previewText = '📎 ملف';
+    }
+    // --- نهاية التعديل ---
 
-    // تحديث ملخص الدردشة للمرسل إليه (زيادة عداد غير المقروء)
+    // تحديث ملخص الدردشة للمرسل إليه (زيادة العداد)
     await db.ref(`chats/${contactId}/${senderId}`).update({
       last_message_content: previewText,
       last_message_timestamp: timestamp,
@@ -1552,7 +1564,7 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
       last_message_sender_id: senderId
     });
 
-    // تحديث ملخص الدردشة للمرسل (العداد يبقى 0)
+    // تحديث ملخص الدردشة للمرسل (بدون زيادة العداد)
     await db.ref(`chats/${senderId}/${contactId}`).update({
       last_message_content: previewText,
       last_message_timestamp: timestamp,
@@ -1561,15 +1573,16 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
       last_message_sender_id: senderId
     });
 
-    // Convert timestamp to numeric for response
     const now = Date.now();
     messageData.timestamp = now;
     res.json({ ok: true, message: 'Sent', messageData: messageData });
 
   } catch (error) {
+    console.error('Error sending message:', error);
     res.status(500).json({ ok: false, error: 'Failed to send.' });
   }
 });
+
 
 app.post('/api/mark_read', requireAuth, async (req, res) => {
   const userId = req.session.userId;
