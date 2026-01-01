@@ -18,9 +18,9 @@
   
   /* ألوان الرسائل */
   --msg-incoming-bg: rgba(255, 255, 255, 0.08);
-  --msg-outgoing-bg: rgba(14, 165, 233, 0.25); /* لون أزرق خافت زجاجي */
+  --msg-outgoing-bg: rgba(14, 165, 233, 0.25);
   
-  /* ألوان الصوت الجديدة (أبيض ورمادي) */
+  /* ألوان الصوت */
   --wave-progress: #ffffff;
   --wave-base: rgba(255, 255, 255, 0.3);
 }
@@ -35,7 +35,7 @@ html, body {
   color: var(--muted);
   overflow: hidden; 
   touch-action: pan-y;
-  user-select: none; /* لمنع تحديد النص أثناء الضغط المطول */
+  user-select: none;
 }
 
 .wrap {
@@ -132,6 +132,9 @@ html, body {
   padding: 8px;
   cursor: pointer;
   text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* --- Messages Area --- */
@@ -147,7 +150,7 @@ html, body {
   flex: 1;
   overflow-y: auto;
   padding: 12px;
-  padding-bottom: 90px;
+  padding-bottom: 90px; /* Space for composer */
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -160,7 +163,7 @@ html, body {
   display: flex;
   width: 100%;
   position: relative;
-  margin-bottom: 4px;
+  margin-bottom: 12px; /* Increased margin for reactions space */
   touch-action: pan-y; 
 }
 
@@ -180,6 +183,8 @@ html, body {
   word-break: break-word;
   position: relative;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  /* Important: Allow reactions to pop out */
+  overflow: visible !important; 
 }
 
 /* Incoming */
@@ -282,47 +287,50 @@ html, body {
 /* Reaction Badge on Message */
 .msg-reaction-badge {
   position: absolute;
-  bottom: -10px;
-  left: -5px; /* Default for outgoing */
+  bottom: -12px; /* يخرج قليلاً خارج الفقاعة */
+  z-index: 10;
   background: #1e293b;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 2px solid #000; /* Border matches background to separate */
   border-radius: 12px;
-  padding: 2px 4px;
-  font-size: 12px;
+  padding: 2px 6px;
+  font-size: 14px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-  z-index: 5;
-  display: none; /* Hidden by default */
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
+  min-width: 24px;
+  height: 24px;
+  line-height: 1;
+}
+.outgoing-container .msg-reaction-badge {
+  left: -8px; 
 }
 .incoming-container .msg-reaction-badge {
-  left: auto;
-  right: -5px;
+  right: -8px;
 }
 
-/* Reaction Menu (Floating) */
+/* Reaction Menu (Floating & Fixed) */
 .reaction-menu {
-  position: absolute;
+  position: fixed; /* Fixed to viewport to avoid overflow clipping */
   background: rgba(30, 41, 59, 0.95);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 50px;
-  padding: 6px 10px;
+  padding: 8px 14px;
   display: none;
-  gap: 10px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-  z-index: 1000;
+  gap: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  z-index: 9999; /* Highest Z-Index */
   animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .reaction-item {
-  font-size: 20px;
+  font-size: 24px;
   cursor: pointer;
   transition: transform 0.1s;
   user-select: none;
+  line-height: 1;
 }
 .reaction-item:hover { transform: scale(1.3); }
 .reaction-item:active { transform: scale(0.9); }
@@ -377,12 +385,7 @@ html, body {
 .preview-filename { font-size: 12px; color: #fff; font-weight: 600; margin-bottom: 4px; }
 .preview-sub { font-size: 10px; color: #94a3b8; }
 
-/* Composer Audio Preview (Waveform) */
-.composer-audio-wave {
-  width: 100%;
-  height: 30px;
-  border-radius: 4px;
-}
+.composer-audio-wave { width: 100%; height: 30px; border-radius: 4px; }
 
 /* Close Button */
 .close-btn {
@@ -477,7 +480,9 @@ textarea:focus { border-color: var(--accent); }
 
 <div class="wrap">
   <div class="top">
-    <a href="/chat_list" class="back-btn"><i class="fas fa-chevron-right"></i></a>
+    <a href="/users_list" class="back-btn">
+      <i class="fas fa-chevron-right"></i>
+    </a>
     <a id="profile-link" href="#" class="user-row">
       <div class="avatar-with-dot">
         <img id="header-avatar" src="https://via.placeholder.com/40" class="avatar">
@@ -514,8 +519,7 @@ textarea:focus { border-color: var(--accent); }
       </button>
     </div>
 
-    <div id="file-preview-area">
-      </div>
+    <div id="file-preview-area"></div>
 
     <div class="input-row">
       <input type="file" id="media-input" style="display:none" accept="image/*,video/*,audio/*">
@@ -600,8 +604,18 @@ async function init() {
 
   // Hide Reaction Menu on click elsewhere
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.reaction-menu') && !e.target.closest('.msg')) {
-      reactionMenu.style.display = 'none';
+    if (!e.target.closest('.reaction-menu') && activeLongPressMsgId) {
+       // if clicked outside reaction menu
+       reactionMenu.style.display = 'none';
+       activeLongPressMsgId = null;
+    }
+  });
+  
+  // Handle Scroll to hide menu
+  messagesEl.addEventListener('scroll', () => {
+    if(reactionMenu.style.display === 'flex') {
+        reactionMenu.style.display = 'none';
+        activeLongPressMsgId = null;
     }
   });
 }
@@ -634,7 +648,7 @@ async function loadMessages(initial = false) {
     const data = await res.json();
     if(!data.ok) return;
 
-    // Check for updates by hashing IDs + Reaction status
+    // Check for updates by hashing IDs + Reaction
     const currentHash = JSON.stringify(data.messages.map(m => m.messageId + (m.reaction || '')));
     if (currentHash === lastMessagesHash) return; 
     lastMessagesHash = currentHash;
@@ -715,7 +729,6 @@ function createMsgElement(msg) {
         contentHtml += `<video src="${url}" controls class="msg-video"></video>`;
     } else if (type.startsWith('audio') || url.endsWith('.webm') || url.endsWith('.mp3')) {
        const audioId = 'audio-' + msg.messageId;
-       // Updated Play Button & White Theme
        contentHtml += `
          <div class="msg-audio-player">
            <button class="audio-play-btn" onclick="playAudio('${url}', '${audioId}', this)">
@@ -738,12 +751,16 @@ function createMsgElement(msg) {
   const check = isMe ? (msg.is_read ? '<i class="fas fa-check-double" style="color:#6ee7b7"></i>' : '<i class="fas fa-check"></i>') : '';
   contentHtml += `<div class="msg-meta">${time} ${check}</div>`;
 
-  // Reaction Badge (if exists)
+  // --- REACTION DISPLAY FIX ---
+  // If the message has a reaction, create the badge and append it
   if (msg.reaction) {
+    // Add margin to bubble to ensure space
+    bubble.style.marginBottom = "8px"; 
+    
     const badge = document.createElement('div');
     badge.className = 'msg-reaction-badge';
-    badge.style.display = 'flex';
     badge.textContent = msg.reaction;
+    // Append to bubble
     bubble.appendChild(badge);
   }
 
@@ -789,7 +806,7 @@ function handleMessageInteractions(element, messageId) {
   
   element.addEventListener('touchmove', () => clearTimeout(longPressTimer)); // Cancel on scroll
 
-  // Long Press (Mouse - Right Click override or Hold)
+  // Long Press (Mouse - Right Click override)
   element.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     showReactionMenu(element, messageId);
@@ -800,15 +817,29 @@ function showReactionMenu(element, messageId) {
   activeLongPressMsgId = messageId;
   const rect = element.getBoundingClientRect();
   
+  // Show first to get dimensions
   reactionMenu.style.display = 'flex';
-  // Position above the message
-  let top = rect.top - 50;
-  // Adjust horizontal
-  let left = rect.left + (rect.width / 2) - (reactionMenu.offsetWidth / 2);
   
-  // Boundary checks
-  if (top < 10) top = rect.bottom + 10;
+  const menuWidth = reactionMenu.offsetWidth;
+  const menuHeight = reactionMenu.offsetHeight;
+  
+  // Calculate Position (Fixed relative to viewport)
+  let top = rect.top - menuHeight - 10; // Default: Above message
+  let left = rect.left + (rect.width / 2) - (menuWidth / 2); // Center horizontally
+  
+  // Boundary Checks
+  // If too close to top edge, flip to bottom
+  if (top < 10) {
+    top = rect.bottom + 10;
+  }
+  
+  // If too close to left edge
   if (left < 10) left = 10;
+  
+  // If too close to right edge
+  if (left + menuWidth > window.innerWidth) {
+    left = window.innerWidth - menuWidth - 10;
+  }
   
   reactionMenu.style.top = `${top}px`;
   reactionMenu.style.left = `${left}px`;
@@ -821,20 +852,29 @@ async function sendReaction(emoji, messageId = activeLongPressMsgId) {
   if (!messageId) return;
   reactionMenu.style.display = 'none';
 
-  // Optimistic UI update (optional, but loadMessages will catch it)
-  
   try {
+    // Optimistic UI Update (optional, find the msg and add badge temporarily)
+    const msgEl = document.querySelector(`[data-msg-id="${messageId}"] .msg`);
+    if(msgEl) {
+        let badge = msgEl.querySelector('.msg-reaction-badge');
+        if(!badge) {
+            badge = document.createElement('div');
+            badge.className = 'msg-reaction-badge';
+            msgEl.appendChild(badge);
+        }
+        badge.textContent = emoji;
+    }
+
     await fetch(`/api/messages/${otherId}/reactions/${messageId}`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ reaction: emoji })
     });
-    loadMessages(false); // Force reload
+    // Server will update, next poll will confirm
   } catch (e) { console.error(e); }
 }
 
 function createHeartAnimation(element) {
-  // Simple visual feedback
   const heart = document.createElement('div');
   heart.textContent = '♥️';
   heart.style.position = 'absolute';
@@ -861,12 +901,10 @@ function renderComposerPreview(file, type) {
   wrapper.style.cssText = 'flex:1; display:flex; align-items:center; gap:10px; overflow:hidden;';
   
   if (type === 'audio') {
-     // Waveform container
      const waveContainer = document.createElement('div');
      waveContainer.id = 'composer-wave';
      waveContainer.style.flex = '1';
      
-     // Icon & Time
      const icon = document.createElement('div');
      icon.innerHTML = '<i class="fas fa-microphone" style="color:#ef4444; font-size:16px;"></i>';
      
@@ -879,7 +917,6 @@ function renderComposerPreview(file, type) {
      wrapper.appendChild(timeDisplay);
      filePreviewArea.appendChild(wrapper);
 
-     // Init WaveSurfer for Preview
      const url = URL.createObjectURL(file);
      setTimeout(() => {
         if(composerWaveSurfer) composerWaveSurfer.destroy();
@@ -898,7 +935,7 @@ function renderComposerPreview(file, type) {
       video.src = URL.createObjectURL(file);
       video.className = 'file-thumb';
       video.muted = true;
-      video.onloadedmetadata = () => video.currentTime = 1; // Seek to frame 1 for thumbnail
+      video.onloadedmetadata = () => video.currentTime = 1; 
       
       const info = document.createElement('div');
       info.className = 'preview-info';
@@ -908,7 +945,6 @@ function renderComposerPreview(file, type) {
       wrapper.appendChild(info);
       filePreviewArea.appendChild(wrapper);
   } else {
-      // Image or File
       const img = document.createElement('img');
       img.className = 'file-thumb';
       img.src = type === 'image' ? URL.createObjectURL(file) : '';
@@ -924,7 +960,6 @@ function renderComposerPreview(file, type) {
       filePreviewArea.appendChild(wrapper);
   }
 
-  // Add Close Button
   const closeBtn = document.createElement('button');
   closeBtn.className = 'close-btn';
   closeBtn.innerHTML = '<i class="fas fa-times" style="font-size:12px"></i>';
@@ -982,7 +1017,7 @@ function startRecording() {
        const blob = new Blob(audioChunks, { type: 'audio/webm' });
        uploadedFile = new File([blob], "voice.webm", { type: 'audio/webm' });
        resetRecordingUI();
-       renderComposerPreview(uploadedFile, 'audio'); // Actual Waveform Preview
+       renderComposerPreview(uploadedFile, 'audio'); 
        toggleSendButton();
     };
   }).catch(e => alert('Mic error'));
@@ -1009,15 +1044,15 @@ function toggleSendButton() {
   micBtn.style.display = hasContent ? 'none' : 'flex';
 }
 
-// --- Audio Player (White Theme) ---
+// --- Audio Player ---
 function initWaveform(containerId, url, isMe) {
   const container = document.getElementById(containerId);
   if (!container || audioWaveSurfers[containerId]) return;
 
   const ws = WaveSurfer.create({
     container: container,
-    waveColor: 'rgba(255, 255, 255, 0.4)', // White transparent
-    progressColor: '#ffffff', // Pure white
+    waveColor: 'rgba(255, 255, 255, 0.4)', 
+    progressColor: '#ffffff', 
     cursorColor: 'transparent',
     barWidth: 2, barRadius: 2, height: 26,
     responsive: true,
@@ -1086,12 +1121,10 @@ sendBtn.onclick = async () => {
       msgInput.value = '';
       msgInput.style.height = '38px';
       
-      // Clear File
       uploadedFile = null;
       filePreviewArea.style.display = 'none';
       if(composerWaveSurfer) { composerWaveSurfer.destroy(); composerWaveSurfer = null; }
       
-      // Clear Reply
       replyData = null;
       replyContainer.style.display = 'none';
       
@@ -1099,12 +1132,11 @@ sendBtn.onclick = async () => {
     }
   } catch(e) { alert('Error sending'); }
   
-  // Restore Button
   sendBtn.innerHTML = originalIcon;
   sendBtn.disabled = false;
 };
 
-// --- Swipe Logic (Restored) ---
+// --- Swipe Logic ---
 function enableSwipeToReply(container, contentEl, iconEl, msg) {
   let startX = 0, currentX = 0, isDragging = false;
   contentEl.addEventListener('touchstart', e => { startX = e.touches[0].clientX; isDragging=true; contentEl.style.transition='none'; }, {passive:true});
