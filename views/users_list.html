@@ -439,5 +439,50 @@
       }));
     }
   </script>
+    <script>
+    // نفس الكود السابق لضمان التناسق
+    function initPage() {
+        const path = window.location.pathname;
+        updateNavbarActiveState(path);
+
+        if (path === '/users_list') {
+            if (typeof fetchAndDisplayFriends === 'function') {
+                fetchAndDisplayFriends();
+                // تحديث العداد دورياً
+                if(window.friendsInterval) clearInterval(window.friendsInterval);
+                window.friendsInterval = setInterval(fetchAndDisplayFriends, 10000);
+            }
+        }
+        // ... باقي منطق الصفحات الأخرى إذا لزم الأمر
+    }
+
+    function updateNavbarActiveState(currentPath) {
+        // (انسخ نفس دالة updateNavbarActiveState من الكود السابق هنا)
+        const navLinks = [
+            { path: '/chat_list', id: 'nav-home' },
+            { path: '/users_list', id: 'messagesBtn' },
+            { path: '/reels', id: 'nav-reels' },
+            { path: '/notifications', id: 'notifBtn' },
+            { path: '/all_users', id: 'usersBtn' }
+        ];
+        
+        navLinks.forEach(link => {
+            let el = document.getElementById(link.id) || document.querySelector(`a[hx-get="${link.path}"]`);
+            if (el) {
+                el.className = el.className.replace('text-blue-400', 'text-gray-400 hover:text-white');
+                if (currentPath.includes(link.path)) {
+                    el.classList.remove('text-gray-400', 'hover:text-white');
+                    el.classList.add('text-blue-400');
+                }
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', initPage);
+    document.body.addEventListener('htmx:afterOnLoad', initPage);
+
+    // ************* ضع هنا دوال users_list الأصلية *************
+    // (fetchAndDisplayFriends, createUserCard, etc...)
+</script>
 </body>
 </html>
