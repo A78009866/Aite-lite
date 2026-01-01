@@ -4,19 +4,25 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>المحادثة</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 :root {
-  --bg: #000000;
-  --accent: #38bdf8; /* أزرق سماوي فاتح */
+  --bg: #000;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --accent: #7dd3fc;
+  --muted: #cbd5e1;
+  --reply-bg: rgba(255, 255, 255, 0.08);
+  --reply-border: rgba(255, 255, 255, 0.15);
   
-  /* ألوان الرسائل الزجاجية */
-  --glass-incoming-bg: rgba(255, 255, 255, 0.12);
-  --glass-incoming-border: rgba(255, 255, 255, 0.15);
+  /* ألوان الرسائل */
+  --msg-incoming-bg: rgba(255, 255, 255, 0.08);
+  --msg-outgoing-bg: rgba(14, 165, 233, 0.25);
   
-  --glass-outgoing-bg: rgba(14, 165, 233, 0.4);
-  --glass-outgoing-border: rgba(56, 189, 248, 0.3);
+  /* ألوان الصوت */
+  --wave-progress: #ffffff;
+  --wave-base: rgba(255, 255, 255, 0.3);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -26,9 +32,7 @@ html, body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: var(--bg);
-  /* خلفية ضبابية خفيفة جداً لإبراز الزجاج */
-  background-image: radial-gradient(circle at 50% 0%, #1a1a1a 0%, #000 70%);
-  color: #e2e8f0;
+  color: var(--muted);
   overflow: hidden; 
   touch-action: pan-y;
   user-select: none;
@@ -41,27 +45,26 @@ html, body {
   max-width: 980px;
   margin: 0 auto;
   position: relative;
+  background: var(--bg);
 }
 
 /* --- Header --- */
 .top {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg);
   z-index: 50;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  height: 60px;
+  border-bottom: 1px solid var(--glass-border);
+  height: 56px;
   flex-shrink: 0;
 }
 
 .user-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
   overflow: hidden;
   text-decoration: none;
@@ -70,29 +73,30 @@ html, body {
 
 .avatar-with-dot {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .avatar {
   width: 100%;
   height: 100%;
-  border-radius: 50%; /* دائري بالكامل لجمالية أكثر */
+  border-radius: 10px;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.1);
+  display: block;
 }
 
 .online-dot {
   position: absolute;
-  bottom: 0px;
-  left: 0px;
-  width: 11px;
-  height: 11px;
+  bottom: -2px;
+  left: -2px;
+  width: 10px;
+  height: 10px;
   background: #22c55e;
   border: 2px solid #000;
   border-radius: 50%;
-  box-shadow: 0 0 5px rgba(34, 197, 94, 0.5);
 }
 
 .meta {
@@ -105,7 +109,7 @@ html, body {
 .meta .name {
   font-weight: 700;
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -115,7 +119,7 @@ html, body {
 }
 
 .meta .sub {
-  font-size: 12px;
+  font-size: 11px;
   color: #94a3b8;
   white-space: nowrap;
   overflow: hidden;
@@ -127,20 +131,14 @@ html, body {
   font-size: 18px;
   padding: 8px;
   cursor: pointer;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.05);
-  width: 36px;
-  height: 36px;
+  text-decoration: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  text-decoration: none;
-  transition: background 0.2s;
 }
-.back-btn:active { background: rgba(255,255,255,0.15); }
 
 /* --- Messages Area --- */
-.glass-container {
+.glass {
   flex: 1;
   position: relative;
   overflow: hidden;
@@ -151,145 +149,58 @@ html, body {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
-  padding-bottom: 100px;
+  padding: 12px;
+  padding-bottom: 90px; /* Space for composer */
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   opacity: 0; 
   transition: opacity 0.2s ease;
 }
 
-/* --- Message Bubbles (The Glassy Look) --- */
+/* --- Message Bubbles --- */
 .msg-container {
   display: flex;
   width: 100%;
   position: relative;
-  margin-bottom: 16px; 
+  margin-bottom: 12px; 
   touch-action: pan-y; 
 }
 
 .msg-wrapper {
   position: relative;
-  max-width: 85%; /* أعرض قليلاً */
+  max-width: 80%;
   z-index: 2;
   transition: transform 0.1s linear; 
   will-change: transform;
 }
 
 .msg {
-  padding: 10px 14px;
-  border-radius: 18px;
-  font-size: 15px;
-  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.4;
   word-break: break-word;
   position: relative;
-  
-  /* Glassmorphism Magic */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); 
-  
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   overflow: visible !important; 
 }
 
-/* Incoming Glass */
+/* Incoming */
 .incoming-container { justify-content: flex-start; }
 .incoming-container .msg {
-  background: var(--glass-incoming-bg);
-  border: 1px solid var(--glass-incoming-border);
-  color: #f8fafc;
+  background: var(--msg-incoming-bg);
+  color: #f1f5f9;
   border-bottom-right-radius: 4px;
 }
 
-/* Outgoing Glass */
+/* Outgoing */
 .outgoing-container { justify-content: flex-end; }
 .outgoing-container .msg {
-  background: var(--glass-outgoing-bg);
-  /* تدرج لوني خفيف جداً للمرسل */
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.4), rgba(56, 189, 248, 0.25));
-  border: 1px solid var(--glass-outgoing-border);
-  color: #ffffff;
+  background: var(--msg-outgoing-bg);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.05);
   border-bottom-left-radius: 4px;
-  text-align: left;
-}
-/* إصلاح اتجاه النص للعربية داخل الرسائل الصادرة */
-.outgoing-container .msg * { text-align: right; direction: rtl; }
-
-
-/* Audio Player - Professional Look */
-.msg-audio-player {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 240px;
-  padding: 4px 0;
-}
-
-.audio-play-btn {
-  background: rgba(255, 255, 255, 0.9);
-  color: #000;
-  border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  transition: transform 0.1s;
-}
-.audio-play-btn:active { transform: scale(0.95); }
-
-.audio-waveform-container { 
-    flex: 1; 
-    height: 34px; 
-    min-width: 100px;
-    position: relative;
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    /* لجعل الموجة واضحة */
-    opacity: 0.9;
-}
-/* لا داعي للظل هنا ليبقى نظيفاً */
-
-.audio-time { 
-    font-size: 11px; 
-    font-weight: 600;
-    color: rgba(255,255,255,0.9); 
-    min-width: 32px; 
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Reply Context */
-.reply-context {
-  background: rgba(0, 0, 0, 0.25);
-  border-right: 3px solid rgba(255,255,255,0.6);
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  font-size: 11px;
-  display: flex;
-  flex-direction: column;
-  backdrop-filter: blur(5px);
-}
-.reply-context-sender { font-weight: 700; color: var(--accent); margin-bottom: 2px; }
-.reply-context-text { color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Metadata */
-.msg-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  margin-top: 5px;
-  font-size: 10px;
-  color: rgba(255,255,255,0.6);
-  font-weight: 500;
 }
 
 /* Reply Indicator Icon */
@@ -299,7 +210,7 @@ html, body {
   transform: translateY(-50%) scale(0);
   width: 32px;
   height: 32px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.1);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -314,33 +225,93 @@ html, body {
 .msg-image {
   max-width: 100%;
   height: auto;
-  border-radius: 12px;
+  border-radius: 10px;
   margin-top: 4px;
   display: block;
-  cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer; /* Clickable */
+  transition: opacity 0.2s;
 }
+.msg-image:active { opacity: 0.8; }
 
 .msg-video {
   max-width: 100%;
-  width: 260px;
-  max-height: 300px;
+  width: 260px; /* Fixed nice width */
+  max-height: 300px; /* Prevent huge vertical video */
   height: auto;
   border-radius: 12px;
   margin-top: 4px;
   display: block;
   background: #000;
-  border: 1px solid rgba(255,255,255,0.1);
+  object-fit: contain;
 }
 
-/* Reaction Badge */
+/* Audio Player */
+.msg-audio-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  padding: 6px 0;
+}
+
+.audio-play-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.audio-play-btn:active { background: rgba(255,255,255,0.3); }
+
+.audio-waveform-container { 
+    flex: 1; 
+    height: 30px; 
+    /* Important fix for disappearing waves */
+    min-width: 100px;
+    position: relative;
+    display: block;
+}
+.audio-time { font-size: 11px; color: rgba(255,255,255,0.8); min-width: 28px; text-align: center; }
+
+/* Reply Context */
+.reply-context {
+  background: rgba(0, 0, 0, 0.2);
+  border-right: 3px solid rgba(255,255,255,0.5);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+}
+.reply-context-sender { font-weight: 700; color: #fff; margin-bottom: 2px; }
+.reply-context-text { color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Metadata */
+.msg-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.6);
+}
+
+/* Reaction Badge on Message */
 .msg-reaction-badge {
   position: absolute;
-  bottom: -10px;
+  bottom: -12px;
   z-index: 10;
-  background: rgba(30, 41, 59, 0.9);
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255,255,255,0.2);
+  background: #1e293b;
+  border: 2px solid #000;
   border-radius: 12px;
   padding: 2px 6px;
   font-size: 14px;
@@ -348,166 +319,45 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 26px;
+  min-width: 24px;
   height: 24px;
+  line-height: 1;
 }
-.outgoing-container .msg-reaction-badge { left: -6px; }
-.incoming-container .msg-reaction-badge { right: -6px; }
+.outgoing-container .msg-reaction-badge { left: -8px; }
+.incoming-container .msg-reaction-badge { right: -8px; }
 
-/* Reaction Menu */
+/* Reaction Menu (Floating & Fixed) */
 .reaction-menu {
   position: fixed;
-  background: rgba(20, 20, 20, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 50px;
-  padding: 8px 16px;
+  padding: 8px 14px;
   display: none;
-  gap: 14px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  gap: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
   z-index: 9999;
   animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .reaction-item {
-  font-size: 26px;
+  font-size: 24px;
   cursor: pointer;
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.1s;
   user-select: none;
   line-height: 1;
 }
-.reaction-item:hover { transform: scale(1.35) translateY(-5px); }
+.reaction-item:hover { transform: scale(1.3); }
 .reaction-item:active { transform: scale(0.9); }
 
-/* --- Composer --- */
-.composer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(10, 10, 10, 0.8);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 10px 12px;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.3);
-}
-
-/* Reply Preview */
-#reply-container {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(255, 255, 255, 0.08);
-  border-left: 3px solid var(--accent);
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  animation: slideUp 0.2s ease-out;
-}
-@keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-.reply-info { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
-.reply-to-label { font-size: 11px; color: var(--accent); font-weight: 700; margin-bottom: 2px; }
-.reply-preview-text { font-size: 12px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* File Preview in Composer */
-#file-preview-area {
-  display: none;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  margin-bottom: 10px;
-  align-items: center;
-  gap: 10px;
-}
-.file-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; background: #222; }
-.preview-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-.preview-filename { font-size: 13px; color: #fff; font-weight: 600; margin-bottom: 2px; }
-.preview-sub { font-size: 11px; color: #94a3b8; }
-
-/* Input Row */
-.input-row { display: flex; align-items: flex-end; gap: 8px; }
-
-.action-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: #cbd5e1;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.2s;
-}
-.action-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
-.action-btn:active { transform: scale(0.9); }
-
-textarea {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 22px;
-  padding: 10px 16px;
-  color: #fff;
-  font-family: inherit;
-  font-size: 15px;
-  resize: none;
-  min-height: 42px;
-  max-height: 120px;
-  outline: none;
-  line-height: 1.4;
-  transition: border-color 0.2s;
-}
-textarea:focus { border-color: var(--accent); background: rgba(255, 255, 255, 0.12); }
-textarea::placeholder { color: #64748b; }
-
-/* Send Button */
-.send-btn {
-  background: var(--accent);
-  color: #000;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
-}
-.send-btn:hover { background: #7dd3fc; }
-.send-btn:disabled { background: #334155; color: #94a3b8; box-shadow: none; opacity: 0.7; }
-
-/* Recording UI */
-#recording-ui {
-  display: none;
-  flex: 1;
-  align-items: center;
-  gap: 12px;
-  background: linear-gradient(90deg, rgba(185, 28, 28, 0.15), rgba(0,0,0,0));
-  border-left: 2px solid #ef4444;
-  border-radius: 8px;
-  padding: 0 15px;
-  height: 42px;
-  animation: fadeIn 0.2s;
-}
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-.rec-dot { width: 12px; height: 12px; background: #ef4444; border-radius: 50%; box-shadow: 0 0 8px #ef4444; animation: pulse 1s infinite; }
-.rec-time { font-size: 14px; color: #fff; flex: 1; font-weight: 600; font-feature-settings: "tnum"; font-family: monospace; }
-.cancel-rec { color: #fca5a5; cursor: pointer; font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 6px; }
-.cancel-rec:hover { background: rgba(255,255,255,0.1); }
-@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-
-/* Image Overlay */
+/* --- Full Screen Image Overlay --- */
 .img-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(10px);
+  background-color: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
   z-index: 10000;
   display: none;
   align-items: center;
@@ -517,18 +367,20 @@ textarea::placeholder { color: #64748b; }
 }
 .img-overlay.active { display: flex; opacity: 1; }
 .img-overlay img {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: 95%;
+  max-height: 90%;
+  border-radius: 8px;
+  box-shadow: 0 5px 30px rgba(0,0,0,0.5);
   object-fit: contain;
   transition: transform 0.2s;
 }
 .img-close-btn {
   position: absolute;
   top: 20px;
-  left: 20px;
+  left: 20px; /* RTL layout */
   width: 44px;
   height: 44px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -536,9 +388,148 @@ textarea::placeholder { color: #64748b; }
   color: #fff;
   font-size: 20px;
   cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
   z-index: 10001;
 }
+.img-close-btn:active { background: rgba(255,255,255,0.3); }
+
+/* --- Composer --- */
+.composer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--bg);
+  border-top: 1px solid var(--glass-border);
+  padding: 8px 10px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Reply Preview */
+#reply-container {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--reply-bg);
+  border: 1px solid var(--reply-border);
+  padding: 8px 12px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  animation: slideUp 0.2s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.reply-info { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+.reply-to-label { font-size: 11px; color: var(--accent); font-weight: 700; margin-bottom: 2px; }
+.reply-preview-text { font-size: 11px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* File/Audio Preview in Composer */
+#file-preview-area {
+  display: none;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  align-items: center;
+  gap: 10px;
+}
+.file-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; background: #000; }
+.preview-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.preview-filename { font-size: 12px; color: #fff; font-weight: 600; margin-bottom: 4px; }
+.preview-sub { font-size: 10px; color: #94a3b8; }
+
+.composer-audio-wave { width: 100%; height: 30px; border-radius: 4px; }
+
+/* Close Button */
+.close-btn {
+  background: rgba(255,255,255,0.1);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  border: none;
+}
+.close-btn:hover { background: #ef4444; }
+
+/* Input Row */
+.input-row { display: flex; align-items: flex-end; gap: 8px; }
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.action-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.1); }
+
+textarea {
+  flex: 1;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 8px 14px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  resize: none;
+  min-height: 38px;
+  max-height: 120px;
+  outline: none;
+  line-height: 1.4;
+}
+textarea:focus { border-color: var(--accent); }
+
+/* Sending Spinner */
+.sending-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.send-btn {
+  background: #0ea5e9;
+  border: none;
+  color: #fff;
+}
+.send-btn:disabled { background: #334155; opacity: 0.7; }
+
+/* Recording UI */
+#recording-ui {
+  display: none;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  background: rgba(185, 28, 28, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 20px;
+  padding: 0 15px;
+  height: 38px;
+}
+.rec-dot { width: 10px; height: 10px; background: #ef4444; border-radius: 50%; animation: pulse 1s infinite; }
+.rec-time { font-size: 13px; color: #fff; flex: 1; font-weight: 600; font-feature-settings: "tnum"; }
+.cancel-rec { color: #fca5a5; cursor: pointer; font-size: 12px; font-weight: 600; }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
 </style>
 <script src="https://unpkg.com/wavesurfer.js"></script>
@@ -555,7 +546,7 @@ textarea::placeholder { color: #64748b; }
 <div class="wrap">
   <div class="top">
     <a href="/users_list" class="back-btn">
-      <i class="fas fa-arrow-right"></i>
+      <i class="fas fa-chevron-right"></i>
     </a>
     <a id="profile-link" href="#" class="user-row">
       <div class="avatar-with-dot">
@@ -569,7 +560,7 @@ textarea::placeholder { color: #64748b; }
     </a>
   </div>
 
-  <div class="glass-container">
+  <div class="glass">
     <div id="messages" class="messages"></div>
     
     <div id="reaction-menu" class="reaction-menu">
@@ -588,7 +579,7 @@ textarea::placeholder { color: #64748b; }
         <div class="reply-to-label">الرد على <span id="reply-to-name"></span></div>
         <div id="reply-to-text" class="reply-preview-text"></div>
       </div>
-      <button type="button" class="action-btn" id="cancel-reply" style="width:30px;height:30px;">
+      <button type="button" class="close-btn" id="cancel-reply">
         <i class="fas fa-times" style="font-size:12px"></i>
       </button>
     </div>
@@ -599,7 +590,7 @@ textarea::placeholder { color: #64748b; }
       <input type="file" id="media-input" style="display:none" accept="image/*,video/*,audio/*">
       
       <button type="button" class="action-btn" id="attach-btn">
-        <i class="fas fa-plus" style="font-size:18px"></i>
+        <i class="fas fa-paperclip" style="font-size:16px"></i>
       </button>
 
       <div id="recording-ui">
@@ -611,7 +602,7 @@ textarea::placeholder { color: #64748b; }
       <textarea id="msg-input" placeholder="اكتب رسالة..." rows="1"></textarea>
       
       <button type="button" class="action-btn" id="mic-btn">
-        <i class="fas fa-microphone" style="font-size:18px"></i>
+        <i class="fas fa-microphone" style="font-size:16px"></i>
       </button>
 
       <button type="submit" class="action-btn send-btn" id="send-btn" style="display:none">
@@ -633,7 +624,7 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let recTimerInterval = null;
-let audioWaveSurfers = {}; 
+let audioWaveSurfers = {}; // Stores { id: WaveSurferInstance }
 let composerWaveSurfer = null;
 let activeLongPressMsgId = null;
 
@@ -669,22 +660,22 @@ async function init() {
   await loadMessages(true);
   setInterval(() => loadMessages(false), 3000);
 
-  // Auto-resize Textarea
+  // Resize Textarea
   msgInput.addEventListener('input', function() {
     this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    this.style.height = Math.min(this.scrollHeight, 100) + 'px';
     toggleSendButton();
   });
 
-  // Global Clicks
+  // Hide Reaction Menu on click elsewhere
   document.addEventListener('click', (e) => {
-    // Hide reaction menu
     if (!e.target.closest('.reaction-menu') && activeLongPressMsgId) {
        reactionMenu.style.display = 'none';
        activeLongPressMsgId = null;
     }
   });
   
+  // Handle Scroll to hide menu
   messagesEl.addEventListener('scroll', () => {
     if(reactionMenu.style.display === 'flex') {
         reactionMenu.style.display = 'none';
@@ -692,6 +683,7 @@ async function init() {
     }
   });
 
+  // Close Image Overlay on ESC
   document.addEventListener('keydown', (e) => {
     if(e.key === 'Escape') closeImageModal();
   });
@@ -710,7 +702,7 @@ async function fetchProfile() {
         document.getElementById('header-online').style.display = 'block';
         const st = document.getElementById('header-status');
         st.textContent = 'متصل الآن';
-        st.style.color = '#4ade80';
+        st.style.color = '#22c55e';
       } else {
          document.getElementById('header-status').textContent = 'غير متصل';
       }
@@ -731,7 +723,7 @@ async function loadMessages(initial = false) {
 
     const isAtBottom = messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 60;
 
-    // Cleanup old wavesurfers
+    // Cleanup old wavesurfers to prevent memory leaks and disappearing lines
     Object.values(audioWaveSurfers).forEach(ws => ws.destroy());
     audioWaveSurfers = {};
 
@@ -766,7 +758,7 @@ function createMsgElement(msg) {
   const wrapper = document.createElement('div');
   wrapper.className = `msg-container ${isMe ? 'outgoing-container' : 'incoming-container'}`;
 
-  // Reply Icon
+  // Reply Icon for Swipe
   const icon = document.createElement('div');
   icon.className = 'reply-indicator-icon';
   icon.innerHTML = '<i class="fas fa-reply"></i>';
@@ -803,26 +795,29 @@ function createMsgElement(msg) {
     const type = msg.media.type || '';
     
     if (type.startsWith('image')) {
+        // Updated: Click to open full screen, remove scrollToBottom to fix jumping
         contentHtml += `<img src="${url}" class="msg-image" onclick="openImageModal('${url}')">`;
     } else if (type.startsWith('video')) {
+        // Updated: Added playsinline, styled container, removed onLoad scrolling
         contentHtml += `<video src="${url}" controls playsinline class="msg-video"></video>`;
     } else if (type.startsWith('audio') || url.endsWith('.webm') || url.endsWith('.mp3')) {
        const audioId = 'audio-' + msg.messageId;
        contentHtml += `
          <div class="msg-audio-player">
            <button class="audio-play-btn" onclick="playAudio('${url}', '${audioId}', this)">
-             <i class="fas fa-play" style="font-size:14px; margin-left:2px"></i>
+             <i class="fas fa-play" style="font-size:14px"></i>
            </button>
            <div id="${audioId}" class="audio-waveform-container"></div>
            <div class="audio-time">...</div>
          </div>
        `;
+       // Initialize waveform with a slight delay to ensure element is in DOM
        setTimeout(() => initWaveform(audioId, url, isMe), 150);
     }
   }
   
   if (msg.content) {
-    contentHtml += `<div style="margin-top:${msg.media?'8px':'0'}">${escapeHtml(msg.content)}</div>`;
+    contentHtml += `<div style="margin-top:${msg.media?'6px':'0'}">${escapeHtml(msg.content)}</div>`;
   }
   
   // Meta
@@ -831,7 +826,7 @@ function createMsgElement(msg) {
   contentHtml += `<div class="msg-meta">${time} ${check}</div>`;
 
   if (msg.reaction) {
-    bubble.style.marginBottom = "14px"; 
+    bubble.style.marginBottom = "8px"; 
     const badge = document.createElement('div');
     badge.className = 'msg-reaction-badge';
     badge.textContent = msg.reaction;
@@ -847,7 +842,7 @@ function createMsgElement(msg) {
   return wrapper;
 }
 
-// --- Image Viewer ---
+// --- Image Lightbox Functions ---
 function openImageModal(src) {
   const overlay = document.getElementById('image-overlay');
   const img = document.getElementById('overlay-img');
@@ -857,7 +852,9 @@ function openImageModal(src) {
 }
 
 function closeImageModal(e) {
+  // If e is present, ensure we clicked the background or close button, not the image itself
   if(e && e.target.id === 'overlay-img') return;
+  
   const overlay = document.getElementById('image-overlay');
   overlay.classList.remove('active');
   setTimeout(() => {
@@ -866,14 +863,15 @@ function closeImageModal(e) {
   }, 300);
 }
 
-// --- Interactions ---
+// --- Interactions: Double Tap & Long Press ---
 function handleMessageInteractions(element, messageId) {
   let touchStartTime = 0;
   let longPressTimer = null;
   let lastTap = 0;
 
   element.addEventListener('click', (e) => {
-    if(e.target.closest('button') || e.target.closest('img') || e.target.closest('.audio-waveform-container')) return;
+    // Don't trigger if clicked on audio button or interactive elements
+    if(e.target.closest('button') || e.target.closest('img')) return;
     
     const now = Date.now();
     if (now - lastTap < 300) {
@@ -969,7 +967,7 @@ function createHeartAnimation(element) {
   setTimeout(() => heart.remove(), 500);
 }
 
-// --- Preview in Composer ---
+// --- Audio Preview (Actual) ---
 function renderComposerPreview(file, type) {
   filePreviewArea.innerHTML = '';
   
@@ -982,7 +980,7 @@ function renderComposerPreview(file, type) {
      waveContainer.style.flex = '1';
      
      const icon = document.createElement('div');
-     icon.innerHTML = '<i class="fas fa-microphone-lines" style="color:#ef4444; font-size:20px;"></i>';
+     icon.innerHTML = '<i class="fas fa-microphone" style="color:#ef4444; font-size:16px;"></i>';
      
      const timeDisplay = document.createElement('div');
      timeDisplay.style.cssText = 'color:#fff; font-size:12px; font-weight:bold; min-width:30px;';
@@ -998,10 +996,10 @@ function renderComposerPreview(file, type) {
         if(composerWaveSurfer) composerWaveSurfer.destroy();
         composerWaveSurfer = WaveSurfer.create({
             container: '#composer-wave',
-            waveColor: 'rgba(255, 255, 255, 0.4)',
+            waveColor: 'rgba(255,255,255,0.4)',
             progressColor: '#ffffff',
             cursorColor: 'transparent',
-            barWidth: 3, barRadius: 3, barGap: 2, height: 30,
+            barWidth: 2, barRadius: 2, height: 30,
             url: url
         });
      }, 50);
@@ -1037,8 +1035,8 @@ function renderComposerPreview(file, type) {
   }
 
   const closeBtn = document.createElement('button');
-  closeBtn.className = 'action-btn';
-  closeBtn.innerHTML = '<i class="fas fa-times" style="font-size:14px"></i>';
+  closeBtn.className = 'close-btn';
+  closeBtn.innerHTML = '<i class="fas fa-times" style="font-size:12px"></i>';
   closeBtn.onclick = () => {
     uploadedFile = null;
     mediaInput.value = '';
@@ -1120,24 +1118,22 @@ function toggleSendButton() {
   micBtn.style.display = hasContent ? 'none' : 'flex';
 }
 
-// --- Audio Player Logic (The Fix) ---
+// --- Audio Player Logic (Fixed) ---
 function initWaveform(containerId, url, isMe) {
   const container = document.getElementById(containerId);
+  // Ensure container exists and doesn't already have a wavesurfer
   if (!container || audioWaveSurfers[containerId]) return;
 
   try {
       const ws = WaveSurfer.create({
         container: container,
-        waveColor: 'rgba(255, 255, 255, 0.25)', // لون باهت للمنطقة غير المسموعة
-        progressColor: '#ffffff',             // لون أبيض ناصع للمنطقة المسموعة
-        cursorColor: 'transparent',           // إخفاء مؤشر الماوس
-        barWidth: 4,                          // أعمدة عريضة (شكل احترافي)
-        barRadius: 4,                         // حواف ناعمة للأعمدة
-        barGap: 3,                            // مسافات بين الأعمدة
-        height: 34,                           // ارتفاع الموجة
+        waveColor: 'rgba(255, 255, 255, 0.4)', 
+        progressColor: '#ffffff', 
+        cursorColor: 'transparent',
+        barWidth: 2, 
+        barRadius: 2, 
+        height: 26,
         responsive: true,
-        normalize: true,                      // تعظيم ارتفاع الموجة لتملأ المكان
-        backend: 'WebAudio',
         url: url
       });
       
@@ -1149,9 +1145,8 @@ function initWaveform(containerId, url, isMe) {
         }
       });
       
-      ws.on('finish', () => {
-          const btn = document.querySelector(`button[onclick*="${containerId}"]`);
-          if(btn) btn.innerHTML = '<i class="fas fa-play" style="font-size:14px; margin-left:2px"></i>';
+      ws.on('error', (e) => {
+          console.error("WaveSurfer Error:", e);
       });
 
       audioWaveSurfers[containerId] = ws;
@@ -1164,10 +1159,9 @@ function playAudio(url, id, btn) {
   const ws = audioWaveSurfers[id];
   if(!ws) return;
   ws.playPause();
-  const isPlaying = ws.isPlaying();
-  btn.innerHTML = isPlaying 
-    ? '<i class="fas fa-pause" style="font-size:14px"></i>' 
-    : '<i class="fas fa-play" style="font-size:14px; margin-left:2px"></i>';
+  ws.on('play', () => btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>');
+  ws.on('pause', () => btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>');
+  ws.on('finish', () => btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>');
 }
 
 // --- Helpers ---
@@ -1192,9 +1186,10 @@ sendBtn.onclick = async () => {
   const content = msgInput.value.trim();
   if(!content && !uploadedFile) return;
 
+  // Show Spinner
   sendBtn.disabled = true;
   const originalIcon = sendBtn.innerHTML;
-  sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  sendBtn.innerHTML = '<div class="sending-spinner"></div>';
 
   const fd = new FormData();
   fd.append('other_id', otherId);
@@ -1213,7 +1208,7 @@ sendBtn.onclick = async () => {
       messagesEl.appendChild(createMsgElement(d.messageData));
       scrollToBottom();
       msgInput.value = '';
-      msgInput.style.height = '42px';
+      msgInput.style.height = '38px';
       
       uploadedFile = null;
       filePreviewArea.style.display = 'none';
@@ -1224,7 +1219,7 @@ sendBtn.onclick = async () => {
       
       toggleSendButton();
     }
-  } catch(e) { alert('فشل الإرسال'); }
+  } catch(e) { alert('Error sending'); }
   
   sendBtn.innerHTML = originalIcon;
   sendBtn.disabled = false;
