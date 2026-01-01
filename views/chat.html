@@ -456,6 +456,9 @@ transition: transform 180ms ease, opacity 180ms ease;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.06);
   box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Nice cancel X on reply */
@@ -594,6 +597,15 @@ transition: transform 180ms ease, opacity 180ms ease;
 
 </div>
 <script>
+/*
+  Enhanced chat client:
+  - Uses SSE for real-time messages & reactions (/api/messages/stream/:contactId)
+  - Per-message reactions (counts, my_reaction)
+  - Toggle reaction (POST to set, DELETE to remove)
+  - Mobile & desktop friendly: touch gestures, long-press reactions, swipe-to-reply
+  - Audio playback isolated per message; playing one pauses others; arrival of new messages doesn't stop current audio
+*/
+
 function getQuery(name) {
     const params = new URLSearchParams(window.location.search);
     return params.get(name);
@@ -632,30 +644,24 @@ let audioStream = null;
 let recordingTimer = null;
 let recordingSeconds = 0;
 let inputWaveSurfer = null;
-let audioWaveSurfers = {}; // { src: wavesurferInstance }
-let preservedAudioStates = {}; // preserve play/time across updates
+// audioWaveSurfers keyed by source URL (string) => wavesurfer instance
+let audioWaveSurfers = {};
+// mapping messageId -> audio src (for quick lookup)
+let messageAudioSrc = {};
 
-const RECORDING_STATE = {
-    IDLE: 'idle',
-    RECORDING: 'recording',
-    READY_TO_SEND: 'ready'
-};
+const RECORDING_STATE = { IDLE: 'idle', RECORDING: 'recording', READY_TO_SEND: 'ready' };
 let recordingState = RECORDING_STATE.IDLE;
 
 const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-let verifiedMap = {}; // { userId: true/false }
 
-// reactions persistence (localStorage)
-const REACTIONS_KEY = 'chat_msg_reactions_v1'; // bump version if format changes
-function loadReactions() {
-    try {
-        return JSON.parse(localStorage.getItem(REACTIONS_KEY) || '{}');
-    } catch (e) { return {}; }
-}
-function saveReactions(map) {
-    try { localStorage.setItem(REACTIONS_KEY, JSON.stringify(map)); } catch (e) {}
-}
-let reactionsMap = loadReactions(); // messageId -> emoji
+// local fallback storage for reactions when offline
+const LOCAL_REACTIONS_KEY = 'chat_local_reactions_v1';
+function loadLocalReactions(){ try{ return JSON.parse(localStorage.getItem(LOCAL_REACTIONS_KEY)||'{}'); }catch(e){ return {}; } }
+function saveLocalReactions(m){ try{ localStorage.setItem(LOCAL_REACTIONS_KEY, JSON.stringify(m)); }catch(e){} }
+let localReactions = loadLocalReactions();
+
+// SSE connection reference
+let messagesEventSource = null;
 
 // Helpers
 function formatTime(dateString) {
@@ -680,25 +686,24 @@ function escapeAttr(s) {
     return String(s).replace(/"/g, '&quot;');
 }
 
-// map media types to Arabic short label for reply preview
 function mediaTypeLabel(media) {
     if (!media) return 'ملف مرفق';
     const t = (media.type || '').toLowerCase();
     const url = (media.url || '').toLowerCase();
-    if (t.startsWith('image') || url.match(/\.(jpg|jpeg|png|gif|webp)$/)) return 'صورة';
-    if (t.startsWith('video') || url.match(/\.(mp4|webm|mov|mkv)$/)) return 'فيديو';
-    if (t.startsWith('audio') || url.endsWith('.webm') || url.endsWith('.mp3') || url.endsWith('.ogg')) return 'صوت';
+    if (t.includes('audio') || url.match(/\.(webm|mp3|ogg|wav|m4a)$/i)) return 'صوت';
+    if (t.includes('image') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return 'صورة';
+    if (t.includes('video') || url.match(/\.(mp4|webm|mov|mkv)$/i)) return 'فيديو';
     return 'ملف مرفق';
 }
 
-function createReactionBadge(emoji) {
+function createReactionBadge(emoji, count) {
     const el = document.createElement('div');
     el.className = 'msg-reaction-badge';
-    el.textContent = emoji;
+    el.innerHTML = `<span class="emoji">${escapeHtml(emoji)}</span>${count && count>1 ? `<span class="cnt" style="margin-inline-start:6px;font-size:12px;opacity:0.9">${count}</span>` : ''}`;
     return el;
 }
 
-function createAudioPlayer(src, isIncoming) {
+function createAudioPlayerHtml(src, isIncoming) {
     return `
         <div class="msg-audio-player" onclick="event.stopPropagation()">
             <button class="audio-play-btn" type="button" data-src="${escapeAttr(src)}" data-is-incoming="${isIncoming}" data-player>
@@ -710,15 +715,65 @@ function createAudioPlayer(src, isIncoming) {
     `;
 }
 
-// Create message element with added swipe & long-press handlers
+// Initialize wavesurfer for a single container element (avoid destroying other players)
+function initWaveSurferForContainer(containerEl, src, isIncoming, resumeState) {
+    if (!src || audioWaveSurfers[src]) return audioWaveSurfers[src];
+    try {
+        const ws = WaveSurfer.create({
+            container: containerEl,
+            waveColor: isIncoming ? '#94a3b8' : '#7dd3fc',
+            progressColor: isIncoming ? '#475569' : '#0891b2',
+            cursorColor: 'transparent',
+            barWidth: 2, height: 30, barGap: 2, barRadius: 2,
+        });
+        audioWaveSurfers[src] = ws;
+        ws.load(src);
+
+        const parent = containerEl.closest('.msg-audio-player');
+        const playerBtn = parent ? parent.querySelector('.audio-play-btn') : null;
+        const timeEl = parent ? parent.querySelector('.audio-time') : null;
+
+        ws.on('ready', () => {
+            if (timeEl) timeEl.textContent = formatAudioTime(ws.getDuration());
+            if (resumeState) {
+                try { if (resumeState.time) ws.setTime(resumeState.time); if (resumeState.playing) ws.play(); } catch(e){}
+            }
+        });
+        if (playerBtn) {
+            playerBtn.onclick = (e) => {
+                e.stopPropagation();
+                // pause any other playing waves
+                Object.keys(audioWaveSurfers).forEach(k => {
+                    if (k !== src && audioWaveSurfers[k] && typeof audioWaveSurfers[k].isPlaying==='function' && audioWaveSurfers[k].isPlaying()) {
+                        audioWaveSurfers[k].pause();
+                    }
+                });
+                ws.playPause();
+            };
+        }
+        ws.on('play', () => { if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; });
+        ws.on('pause', () => { if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>`; });
+        ws.on('audioprocess', (time) => { if (timeEl) timeEl.textContent = formatAudioTime(time); });
+        ws.on('finish', () => { ws.setTime(0); if (timeEl) timeEl.textContent = formatAudioTime(0); });
+
+        return ws;
+    } catch (e) {
+        console.error('WaveSurfer create error', e);
+        return null;
+    }
+}
+
+// Create message element (returns DOM element). message must include optional fields:
+// message.reactions (map userId->emoji), message.reaction_counts (map emoji->count), message.my_reaction
 function createMessageElement(msg, myId) {
     const isIncoming = (msg.senderId !== myId);
     const el = document.createElement('div');
     el.className = 'msg ' + (isIncoming ? 'incoming' : 'outgoing');
     el.dataset.messageId = msg.messageId;
+    el.dataset.myReaction = msg.my_reaction || '';
     el.title = 'انقر للرد';
-    el.setAttribute('role', 'button');
-    el.setAttribute('tabindex', '0');
+    el.setAttribute('role','button');
+    el.setAttribute('tabindex','0');
 
     let contentHtml = '';
 
@@ -736,13 +791,14 @@ function createMessageElement(msg, myId) {
     if (msg.media && msg.media.url) {
         const mediaUrl = msg.media.url;
         const mediaType = msg.media.type || 'raw';
-
-        if (mediaType.startsWith('image')) {
+        if (mediaType.startsWith('image') || mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة" onload="scrollToBottom()">`;
-        } else if (mediaType.startsWith('audio') || mediaUrl.endsWith('.webm') || mediaUrl.endsWith('.mp3')) {
-            contentHtml += createAudioPlayer(mediaUrl, isIncoming);
-        } else if (mediaType.startsWith('video')) {
-            contentHtml += `<video src="${escapeAttr(mediaUrl)}" controls class="msg-video" onload="scrollToBottom()"></video>`;
+        } else if (mediaType.startsWith('audio') || mediaUrl.match(/\.(webm|mp3|ogg|wav|m4a)$/i)) {
+            contentHtml += createAudioPlayerHtml(mediaUrl, isIncoming);
+            // map messageId -> audio src
+            messageAudioSrc[msg.messageId] = mediaUrl;
+        } else if (mediaType.startsWith('video') || mediaUrl.match(/\.(mp4|webm|mov|mkv)$/i)) {
+            contentHtml += `<video src="${escapeAttr(mediaUrl)}" controls class="msg-video" onloadeddata="scrollToBottom()"></video>`;
         } else {
             contentHtml += `<div style="padding:4px;border:1px solid rgba(255,255,255,0.2);border-radius:4px;margin-top:5px;"><a href="${escapeAttr(mediaUrl)}" target="_blank" style="color:var(--accent);text-decoration:none;">📎 ملف مرفق</a></div>`;
         }
@@ -757,640 +813,454 @@ function createMessageElement(msg, myId) {
 
     el.innerHTML = contentHtml;
 
-    // If reaction exists for that message - render it
-    const reaction = reactionsMap[msg.messageId];
-    if (reaction) {
-        const badge = createReactionBadge(reaction);
+    // render reaction badge if present (prefer server counts)
+    const reactionCounts = msg.reaction_counts || null;
+    const topEmoji = msg.my_reaction || (reactionCounts ? Object.keys(reactionCounts).sort((a,b)=>reactionCounts[b]-reactionCounts[a])[0] : null);
+    const topCount = topEmoji && reactionCounts ? reactionCounts[topEmoji] : (msg.my_reaction ? 1 : 0);
+    if (topEmoji) {
+        const badge = createReactionBadge(topEmoji, topCount);
         el.appendChild(badge);
     }
 
-    // swipe handling (touch) - RTL-aware: we'll accept left swipe (deltaX < -threshold) as reply gesture
-    let startX = 0, startY = 0, moved = false;
+    // Attach handlers: swipe-to-reply, long-press for reactions, click to reply
+    let startX=0, startY=0, moved=false, active=false;
     const threshold = 60;
-    let active = false;
+    function onPointerDown(e){ const p=(e.touches&&e.touches[0])||e; startX=p.clientX; startY=p.clientY; moved=false; active=true; el.classList.add('swipe-active'); }
+    function onPointerMove(e){ if(!active) return; const p=(e.touches&&e.touches[0])||e; const dx=p.clientX-startX; const dy=p.clientY-startY; if(Math.abs(dy)>30 && Math.abs(dx)<Math.abs(dy)) return; moved=true; const translate = Math.max(Math.min(dx,150),-150); el.style.transform = `translateX(${translate}px)`; }
+    function onPointerUp(e){ if(!active) return; active=false; el.classList.remove('swipe-active'); el.style.transition='transform 180ms ease'; const p=(e.changedTouches&&e.changedTouches[0])||e; const dx=p.clientX-startX; if(dx< -threshold) setReplyTo(msg); requestAnimationFrame(()=> el.style.transform='translateX(0)'); setTimeout(()=> el.style.transition='',200); }
 
-    function onPointerDown(e) {
-        const p = (e.touches && e.touches[0]) || e;
-        startX = p.clientX;
-        startY = p.clientY;
-        moved = false;
-        active = true;
-        el.classList.add('swipe-active');
-    }
-    function onPointerMove(e) {
-        if (!active) return;
-        const p = (e.touches && e.touches[0]) || e;
-        const dx = p.clientX - startX;
-        const dy = p.clientY - startY;
-        if (Math.abs(dy) > 30 && Math.abs(dx) < Math.abs(dy)) {
-            // vertical scroll - cancel swipe
-            return;
-        }
-        moved = true;
-        // apply transform (small resistance)
-        const translate = Math.max(Math.min(dx, 150), -150);
-        el.style.transform = `translateX(${translate}px)`;
-    }
-    function onPointerUp(e) {
-        if (!active) return;
-        active = false;
-        el.classList.remove('swipe-active');
-        el.style.transition = 'transform 180ms ease';
-        const p = (e.changedTouches && e.changedTouches[0]) || e;
-        const dx = p.clientX - startX;
-        // RTL: left swipe (dx negative) -> treat as reply
-        if (dx < -threshold) {
-            // trigger reply preview briefly and then animate back
-            // find the original message object (we have msg closure)
-            setReplyTo(msg);
-        }
-        // animate back to 0
-        requestAnimationFrame(()=> el.style.transform = 'translateX(0)');
-        setTimeout(()=> el.style.transition = '', 200);
-    }
+    // long press for reactions
+    let longPressTimer=null;
+    function startLongPress(ev){ ev.preventDefault && ev.preventDefault(); longPressTimer = setTimeout(()=> showReactionsForMessage(el, msg), 600); }
+    function cancelLongPress(){ if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; } }
 
-    // long-press for reactions (touch & mouse)
-    let longPressTimer = null;
-    function startLongPress(e) {
-        // prevent text selection
-        e.preventDefault && e.preventDefault();
-        longPressTimer = setTimeout(() => {
-            showReactionsForMessage(el, msg);
-        }, 600);
-    }
-    function cancelLongPress() {
-        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    }
+    el.addEventListener('touchstart', (ev)=>{ onPointerDown(ev); startLongPress(ev); }, { passive:false });
+    el.addEventListener('touchmove', (ev)=>{ onPointerMove(ev); cancelLongPress(); }, { passive:true });
+    el.addEventListener('touchend', (ev)=>{ onPointerUp(ev); cancelLongPress(); }, { passive:true });
+    el.addEventListener('mousedown', (ev)=>{ onPointerDown(ev); startLongPress(ev); });
+    el.addEventListener('mousemove', (ev)=>{ onPointerMove(ev); cancelLongPress(); });
+    el.addEventListener('mouseup', (ev)=>{ onPointerUp(ev); cancelLongPress(); });
+    el.addEventListener('mouseleave', (ev)=>{ onPointerUp(ev); cancelLongPress(); });
 
-    // attach touch + mouse handlers
-    el.addEventListener('touchstart', (ev) => { onPointerDown(ev); startLongPress(ev); }, { passive: false });
-    el.addEventListener('touchmove', (ev) => { onPointerMove(ev); cancelLongPress(); }, { passive: true });
-    el.addEventListener('touchend', (ev) => { onPointerUp(ev); cancelLongPress(); }, { passive: true });
-    el.addEventListener('mousedown', (ev) => { onPointerDown(ev); startLongPress(ev); });
-    el.addEventListener('mousemove', (ev) => { onPointerMove(ev); cancelLongPress(); });
-    el.addEventListener('mouseup', (ev) => { onPointerUp(ev); cancelLongPress(); });
-    el.addEventListener('mouseleave', (ev) => { onPointerUp(ev); cancelLongPress(); });
-
-    // regular click to quick-reply (desktop)
-    el.addEventListener('click', (ev) => {
-        // ignore clicks that were part of swipe/longpress
-        if (moved) { moved = false; return; }
-        setReplyTo(msg);
-    });
+    el.addEventListener('click', (ev)=>{ if(moved){ moved=false; return; } setReplyTo(msg); });
 
     return el;
 }
 
-function scrollToBottom() {
-    requestAnimationFrame(() => {
-        messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
-    });
+function scrollToBottom(){
+    requestAnimationFrame(()=> messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' }));
 }
 
-function setReplyTo(msg) {
-    if (msg.messageId === replyToMessage?.id) {
-        clearReplyTo();
-        return;
-    }
-    
+// Reply management
+function setReplyTo(msg){
+    if(msg.messageId === replyToMessage?.id){ clearReplyTo(); return; }
     const isIncoming = (msg.senderId !== myId);
     replyToMessage = {
         id: msg.messageId,
-        // build Arabic preview: prefix with label if media or "نص الرسالة"
-        content: msg.content ? `نص الرسالة: ${msg.content}` : (msg.media ? `${mediaTypeLabel(msg.media)}` : 'ملف مرفق'),
+        content: msg.content ? `نص الرسالة: ${msg.content}` : (msg.media ? mediaTypeLabel(msg.media) : 'ملف مرفق'),
         senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت',
         senderId: msg.senderId
     };
-
     document.getElementById('reply-sender').textContent = replyToMessage.senderName;
     document.getElementById('reply-text').textContent = replyToMessage.content;
     replyContainer.style.display = 'flex';
-    replyContainer.style.opacity = '1';
-    replyContainer.style.transform = 'translateY(0)';
 }
-
-function clearReplyTo() {
-    replyToMessage = null;
-    replyContainer.style.display = 'none';
-}
+function clearReplyTo(){ replyToMessage=null; replyContainer.style.display='none'; }
 cancelReplyBtn.onclick = clearReplyTo;
 
-// ---------------- UI/Composer Logic ----------------
-function updateComposerUI() {
-    msgInput.style.display = 'none';
-    recordingIndicator.style.display = 'none';
-    audioPreviewContainer.style.display = 'none';
-    attachFileBtn.style.display = 'none';
-    voiceBtn.style.display = 'flex';
-    sendBtn.style.display = 'none';
-    
+// Composer UI logic
+function updateComposerUI(){
+    msgInput.style.display='none';
+    recordingIndicator.style.display='none';
+    audioPreviewContainer.style.display='none';
+    attachFileBtn.style.display='none';
+    voiceBtn.style.display='flex';
+    sendBtn.style.display='none';
+
     if (uploadedFile && recordingState !== RECORDING_STATE.READY_TO_SEND) {
-        msgInput.style.display = 'block';
-        filePreview.style.display = 'flex';
-        voiceBtn.style.display = 'none';
-        sendBtn.style.display = 'flex';
-        attachFileBtn.style.display = 'flex';
+        msgInput.style.display='block';
+        filePreview.style.display='flex';
+        voiceBtn.style.display='none';
+        sendBtn.style.display='flex';
+        attachFileBtn.style.display='flex';
         return;
     }
-    
-    filePreview.style.display = 'none';
+    filePreview.style.display='none';
 
     if (msgInput.value.trim().length > 0 && recordingState === RECORDING_STATE.IDLE) {
-        msgInput.style.display = 'block';
-        attachFileBtn.style.display = 'flex';
-        voiceBtn.style.display = 'none';
-        sendBtn.style.display = 'flex';
+        msgInput.style.display='block';
+        attachFileBtn.style.display='flex';
+        voiceBtn.style.display='none';
+        sendBtn.style.display='flex';
         return;
     }
 
-    switch (recordingState) {
+    switch(recordingState){
         case RECORDING_STATE.IDLE:
-            msgInput.style.display = 'block';
-            attachFileBtn.style.display = 'flex';
+            msgInput.style.display='block';
+            attachFileBtn.style.display='flex';
             voiceIcon.innerHTML = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>`;
             voiceBtn.classList.remove('recording-active');
             break;
-            
         case RECORDING_STATE.RECORDING:
-            recordingIndicator.style.display = 'flex';
+            recordingIndicator.style.display='flex';
             voiceIcon.innerHTML = `<path d="M6 19h12v-6H6v6z"/>`;
             voiceBtn.classList.add('recording-active');
-            attachFileBtn.style.display = 'none';
+            attachFileBtn.style.display='none';
             break;
-            
         case RECORDING_STATE.READY_TO_SEND:
-            audioPreviewContainer.style.display = 'flex';
-            voiceBtn.style.display = 'none';
-            sendBtn.style.display = 'flex';
-            attachFileBtn.style.display = 'flex';
+            audioPreviewContainer.style.display='flex';
+            voiceBtn.style.display='none';
+            sendBtn.style.display='flex';
+            attachFileBtn.style.display='flex';
             break;
     }
 }
 msgInput.addEventListener('input', updateComposerUI);
 
-// ---------------- Voice Recording Logic ----------------
-function startRecording() {
+// Voice recording
+function startRecording(){
     if (recordingState !== RECORDING_STATE.IDLE) return;
-    
-    audioChunks = [];
-    recordingSeconds = 0;
-    
-    navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-            audioStream = stream;
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
-            mediaRecorder.start();
-            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-            
-            recordingState = RECORDING_STATE.RECORDING;
-            updateComposerUI();
-
-            recordingTimer = setInterval(() => {
-                recordingSeconds++;
-                recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`;
-            }, 1000);
-            
-            mediaRecorder.onstop = stopRecording;
-
-        }).catch(err => { 
-            alert('تعذر الوصول إلى الميكروفون. تأكد من منح الإذن.'); 
-            recordingState = RECORDING_STATE.IDLE;
-            updateComposerUI();
-        });
+    audioChunks = []; recordingSeconds = 0;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream=>{
+        audioStream = stream;
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
+        mediaRecorder.start();
+        mediaRecorder.ondataavailable = (e)=> audioChunks.push(e.data);
+        recordingState = RECORDING_STATE.RECORDING; updateComposerUI();
+        recordingTimer = setInterval(()=>{ recordingSeconds++; recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`; },1000);
+        mediaRecorder.onstop = stopRecording;
+    }).catch(err=>{
+        alert('تعذر الوصول إلى الميكروفون. تأكد من منح الإذن.');
+        recordingState = RECORDING_STATE.IDLE; updateComposerUI();
+    });
 }
-
-function stopRecording() {
+function stopRecording(){
     clearInterval(recordingTimer);
     recordingTimeEl.textContent = `جاري التسجيل... 0:00`;
-    
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-    }
-    
-    if (audioStream) {
-        audioStream.getTracks().forEach(track => track.stop());
-        audioStream = null;
-    }
-    
-    if (audioChunks.length > 0) {
+    if (mediaRecorder && mediaRecorder.state==='recording') mediaRecorder.stop();
+    if (audioStream) { audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; }
+    if (audioChunks.length>0){
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         uploadedFile = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
-        
         const audioURL = URL.createObjectURL(audioBlob);
-        
-        if (inputWaveSurfer) inputWaveSurfer.destroy();
-        inputWaveSurfer = WaveSurfer.create({
-            container: audioWaveformInput,
-            waveColor: '#7dd3fc',
-            progressColor: '#06b6d4',
-            cursorColor: 'transparent',
-            barWidth: 2, height: 30, barGap: 2, barRadius: 2,
-        });
-        
+        if (inputWaveSurfer) { try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; }
+        inputWaveSurfer = WaveSurfer.create({ container: audioWaveformInput, waveColor:'#7dd3fc', progressColor:'#06b6d4', cursorColor:'transparent', barWidth:2, height:30, barGap:2, barRadius:2 });
         inputWaveSurfer.load(audioURL);
-        inputWaveSurfer.on('ready', () => {
-             audioPreviewTime.textContent = formatAudioTime(inputWaveSurfer.getDuration());
-        });
-        
-        inputWaveSurfer.on('click', () => {
-             inputWaveSurfer.playPause();
-        });
-
+        inputWaveSurfer.on('ready', ()=> audioPreviewTime.textContent = formatAudioTime(inputWaveSurfer.getDuration()));
+        inputWaveSurfer.on('click', ()=> inputWaveSurfer.playPause());
         recordingState = RECORDING_STATE.READY_TO_SEND;
-    } else {
-        recordingState = RECORDING_STATE.IDLE;
-    }
-    
+    } else recordingState = RECORDING_STATE.IDLE;
     updateComposerUI();
 }
+function handleVoiceButton(){ if (recordingState === RECORDING_STATE.IDLE) startRecording(); else if (recordingState === RECORDING_STATE.RECORDING) stopRecording(); }
+function removeFile(){ if (inputWaveSurfer){ try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; } uploadedFile=null; audioChunks=[]; recordingState=RECORDING_STATE.IDLE; fileUpload.value=''; filePreview.innerHTML=''; updateComposerUI(); }
+audioPreviewCancelBtn.onclick = removeFile;
+voiceBtn.addEventListener('click', handleVoiceButton);
 
-function handleVoiceButton() {
-    if (recordingState === RECORDING_STATE.IDLE) {
-        startRecording();
-    } else if (recordingState === RECORDING_STATE.RECORDING) {
-        stopRecording();
+// initialize audio player for message (uses initWaveSurferForContainer)
+function initializeAudioForMessageElement(msgEl, resumeStates){
+    const container = msgEl.querySelector('.audio-waveform-container');
+    if (!container) return;
+    const src = container.dataset.src;
+    const isIncoming = container.dataset.isIncoming === 'true';
+    // only create wavesurfer for this src if not already existing
+    if (audioWaveSurfers[src]) {
+        // if existing instance was created targeting another container we might need to re-attach — WaveSurfer supports a single container, so skip re-creation.
+        return;
     }
+    initWaveSurferForContainer(container, src, isIncoming, resumeStates && resumeStates[src]);
 }
 
-function removeFile() {
-    if (inputWaveSurfer) {
-        inputWaveSurfer.destroy();
-        inputWaveSurfer = null;
-    }
-    uploadedFile = null; 
-    audioChunks = [];
-    recordingState = RECORDING_STATE.IDLE;
-    fileUpload.value = '';
-    filePreview.innerHTML = '';
-    updateComposerUI();
-}
+// SSE handling: connect, handle snapshot and incremental events
+function connectMessagesSSE(){
+    if(!otherId) return;
+    if (messagesEventSource) { try{ messagesEventSource.close(); }catch(e){} messagesEventSource=null; }
 
-// ---------------- Audio players init with preserve/resume support ----------------
-function initializeAudioPlayers(preserveStates = {}) {
-    // preserveStates: { src: { time: number, playing: bool } }
-    Object.values(audioWaveSurfers).forEach(ws => {
-        try { ws.destroy(); } catch (e) {}
-    });
-    audioWaveSurfers = {};
+    const url = `/api/messages/stream/${encodeURIComponent(otherId)}`;
+    messagesEventSource = new EventSource(url);
 
-    document.querySelectorAll('.audio-waveform-container').forEach(container => {
-        const src = container.dataset.src;
-        if (!src) return;
-        const isIncoming = container.dataset.isIncoming === 'true';
-        
-        if (!audioWaveSurfers[src]) { 
-            const wavesurfer = WaveSurfer.create({
-                container: container,
-                waveColor: isIncoming ? '#94a3b8' : '#7dd3fc', 
-                progressColor: isIncoming ? '#475569' : '#0891b2',
-                cursorColor: 'transparent',
-                barWidth: 2, height: 30, barGap: 2, barRadius: 2,
+    messagesEventSource.addEventListener('messages_snapshot', (e)=>{
+        try {
+            const payload = JSON.parse(e.data); // array of messages
+            // preserve current playing states
+            const preserve = {};
+            Object.keys(audioWaveSurfers).forEach(src=>{
+                try { preserve[src] = { time: audioWaveSurfers[src].getCurrentTime?audioWaveSurfers[src].getCurrentTime():0, playing: audioWaveSurfers[src].isPlaying?audioWaveSurfers[src].isPlaying():false }; } catch(e){ preserve[src] = { time:0, playing:false }; }
             });
-            audioWaveSurfers[src] = wavesurfer;
-            wavesurfer.load(src);
-
-            const playerBtn = document.querySelector(`.audio-play-btn[data-src="${escapeAttr(src)}"]`);
-            const timeEl = playerBtn ? playerBtn.closest('.msg-audio-player').querySelector('.audio-time') : null;
-            
-            wavesurfer.on('ready', () => {
-                if (timeEl) timeEl.textContent = formatAudioTime(wavesurfer.getDuration());
-                // resume previous state if present
-                const st = preserveStates && preserveStates[src];
-                if (st) {
-                    try {
-                        if (st.time) wavesurfer.setTime(st.time);
-                        if (st.playing) wavesurfer.play();
-                    } catch(e){}
-                }
-            });
-            
-            if (playerBtn) {
-              playerBtn.onclick = (e) => {
-                  e.stopPropagation();
-                  // stop other playing waves before toggling this one (so only one plays)
-                  Object.keys(audioWaveSurfers).forEach(k => {
-                      if (k !== src && audioWaveSurfers[k].isPlaying()) audioWaveSurfers[k].pause();
-                  });
-                  wavesurfer.playPause();
-              };
+            messagesEl.innerHTML = '';
+            for (const m of payload) {
+                const el = createMessageElement(m, myId);
+                messagesEl.appendChild(el);
             }
-            
-            wavesurfer.on('play', () => {
-                if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; 
+            // initialize audio only for each message individually and resume states
+            document.querySelectorAll('.audio-waveform-container').forEach(container => {
+                const src = container.dataset.src;
+                initializeAudioForMessageElement(container.closest('.msg'), preserve);
             });
-            wavesurfer.on('pause', () => {
-                if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>`; 
-            });
-            wavesurfer.on('audioprocess', (time) => {
-                if (timeEl) timeEl.textContent = formatAudioTime(time);
-            });
-            wavesurfer.on('finish', () => {
-                wavesurfer.setTime(0);
-                if (timeEl) timeEl.textContent = formatAudioTime(0);
-            });
-        }
+            scrollToBottom();
+        } catch (err) { console.error('messages_snapshot parse', err); }
+    });
+
+    messagesEventSource.addEventListener('message_added', (e)=>{
+        try {
+            const m = JSON.parse(e.data);
+            // append only if not already present
+            if (document.querySelector(`.msg[data-message-id="${m.messageId}"]`)) return;
+            const el = createMessageElement(m, myId);
+            messagesEl.appendChild(el);
+            // init audio for this element only
+            initializeAudioForMessageElement(el);
+            scrollToBottom();
+        } catch (err) { console.error('message_added parse', err); }
+    });
+
+    messagesEventSource.addEventListener('message_changed', (e)=>{
+        try {
+            const m = JSON.parse(e.data);
+            const existing = document.querySelector(`.msg[data-message-id="${m.messageId}"]`);
+            if (existing) {
+                // preserve scroll position approx & audio state for this message
+                const audioContainer = existing.querySelector('.audio-waveform-container');
+                const src = audioContainer ? audioContainer.dataset.src : null;
+                const resume = {};
+                if (src && audioWaveSurfers[src]) {
+                    try { resume[src] = { time: audioWaveSurfers[src].getCurrentTime?audioWaveSurfers[src].getCurrentTime():0, playing: audioWaveSurfers[src].isPlaying?audioWaveSurfers[src].isPlaying():false }; } catch(e){}
+                    // destroy previous wavesurfer for this src to re-create with new container if needed
+                    try { audioWaveSurfers[src].destroy(); delete audioWaveSurfers[src]; } catch(e){}
+                }
+                const newEl = createMessageElement(m, myId);
+                existing.replaceWith(newEl);
+                initializeAudioForMessageElement(newEl, resume);
+            } else {
+                // if not present, append
+                const el = createMessageElement(m, myId);
+                messagesEl.appendChild(el);
+                initializeAudioForMessageElement(el);
+            }
+        } catch (err) { console.error('message_changed parse', err); }
+    });
+
+    messagesEventSource.addEventListener('message_removed', (e)=>{
+        try {
+            const payload = JSON.parse(e.data); // { messageId }
+            const existing = document.querySelector(`.msg[data-message-id="${payload.messageId}"]`);
+            if (existing) existing.remove();
+        } catch (err) { console.error('message_removed parse', err); }
+    });
+
+    // reaction updates
+    messagesEventSource.addEventListener('reaction_updated', (e)=>{
+        try {
+            const payload = JSON.parse(e.data); // { messageId, reactions (map), reaction_counts (map), my_reaction }
+            const existing = document.querySelector(`.msg[data-message-id="${payload.messageId}"]`);
+            if (!existing) return;
+            existing.dataset.myReaction = payload.my_reaction || '';
+            const prevBadge = existing.querySelector('.msg-reaction-badge');
+            if (payload.reaction_counts && Object.keys(payload.reaction_counts).length>0) {
+                // show top reaction and its count
+                const topEmoji = Object.keys(payload.reaction_counts).sort((a,b)=>payload.reaction_counts[b]-payload.reaction_counts[a])[0];
+                const topCount = payload.reaction_counts[topEmoji];
+                if (prevBadge) prevBadge.remove();
+                existing.appendChild(createReactionBadge(topEmoji, topCount));
+            } else {
+                if (prevBadge) prevBadge.remove();
+            }
+        } catch (err) { console.error('reaction_updated parse', err); }
+    });
+
+    messagesEventSource.addEventListener('error', (err)=>{
+        console.warn('Messages SSE error', err);
+        // attempt reconnect with exponential backoff handled by browser automatically in EventSource
     });
 }
 
-// ---------------- Reactions UI ----------------
+// show reactions popup and handle toggle/post/delete
 function showReactionsForMessage(msgEl, msg) {
-    // position popup above the message element
+    // position popup
     const rect = msgEl.getBoundingClientRect();
     const popup = reactionsPopup;
-    popup.style.display = 'flex';
+    popup.style.display='flex';
     popup.classList.add('show');
-    popup.style.pointerEvents = 'auto';
-    // calculate center x of message and position popup to its left (rtl)
-    const popupWidth =  (popup.offsetWidth || 220);
+    popup.style.pointerEvents='auto';
+    const popupWidth = (popup.offsetWidth || 220);
     const top = window.scrollY + rect.top - (popup.offsetHeight || 48) - 10;
     const left = window.scrollX + rect.left + (rect.width/2) - (popupWidth/2);
     popup.style.top = `${top}px`;
     popup.style.left = `${left}px`;
 
-    // attach handlers for each reaction button
     const buttons = popup.querySelectorAll('.reaction-btn');
-    buttons.forEach(b => {
-        b.onclick = (ev) => {
+    const currentMyReaction = msgEl.dataset.myReaction || '';
+
+    buttons.forEach(b=>{
+        b.onclick = async (ev)=>{
             ev.stopPropagation();
             const emoji = b.dataset.reaction || b.textContent;
-            // Save reaction locally (persist)
-            reactionsMap[msg.messageId] = emoji;
-            saveReactions(reactionsMap);
-            // Attach badge to message element (remove previous if any)
-            // Find current element by messageId (it may have been re-rendered)
-            const messageEl = document.querySelector(`.msg[data-message-id="${msg.messageId}"]`);
-            if (messageEl) {
-                const existing = messageEl.querySelector('.msg-reaction-badge');
-                if (existing) existing.remove();
-                const badge = createReactionBadge(emoji);
-                messageEl.appendChild(badge);
+            // Toggle: if currentMyReaction === emoji => DELETE, else POST
+            const wasSame = currentMyReaction === emoji;
+            try {
+                if (wasSame) {
+                    await fetch(`/api/messages/${encodeURIComponent(msg.messageId)}/reaction`, {
+                        method: 'DELETE',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contactId: otherId })
+                    });
+                    // optimistic UI removal
+                    msgEl.dataset.myReaction = '';
+                    const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove();
+                } else {
+                    await fetch(`/api/messages/${encodeURIComponent(msg.messageId)}/reaction`, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contactId: otherId, reaction: emoji })
+                    });
+                    // optimistic UI add
+                    msgEl.dataset.myReaction = emoji;
+                    const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove();
+                    msgEl.appendChild(createReactionBadge(emoji, 1));
+                }
+            } catch (err) {
+                // fallback to local storage
+                if (wasSame) { delete localReactions[msg.messageId]; saveLocalReactions(localReactions); const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove(); }
+                else { localReactions[msg.messageId] = emoji; saveLocalReactions(localReactions); const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove(); msgEl.appendChild(createReactionBadge(emoji,1)); }
+            } finally {
+                hideReactionsPopup();
             }
-            hideReactionsPopup();
         };
     });
 
-    // clicking outside or scroll hides it
-    setTimeout(() => {
-        window.addEventListener('scroll', hideReactionsPopupOnce, { passive: true });
+    setTimeout(()=> {
+        window.addEventListener('scroll', hideReactionsPopupOnce, { passive:true });
         document.addEventListener('click', hideReactionsPopupOnce);
-        document.addEventListener('touchstart', hideReactionsPopupOnce, { passive: true });
-    }, 50);
+        document.addEventListener('touchstart', hideReactionsPopupOnce, { passive:true });
+    },50);
 }
+function hideReactionsPopup(){ const popup = reactionsPopup; popup.classList.remove('show'); popup.style.display='none'; popup.style.pointerEvents='none'; window.removeEventListener('scroll', hideReactionsPopupOnce); document.removeEventListener('click', hideReactionsPopupOnce); document.removeEventListener('touchstart', hideReactionsPopupOnce); }
+function hideReactionsPopupOnce(){ hideReactionsPopup(); }
 
-function hideReactionsPopup() {
-    const popup = reactionsPopup;
-    popup.classList.remove('show');
-    popup.style.display = 'none';
-    popup.style.pointerEvents = 'none';
-    window.removeEventListener('scroll', hideReactionsPopupOnce);
-    document.removeEventListener('click', hideReactionsPopupOnce);
-    document.removeEventListener('touchstart', hideReactionsPopupOnce);
-}
-function hideReactionsPopupOnce(e) {
-    hideReactionsPopup();
-}
-
-// ---------------- Main Logic Functions ----------------
-
-let otherProfileUsername = null;
-
-function renderHeaderName(name, isVerified) {
-    const nameEl = document.getElementById('other-name');
-    const escaped = escapeHtml(name);
-    if (isVerified) {
-        nameEl.innerHTML = `${escaped} <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">`;
-    } else {
-        nameEl.textContent = escaped;
-    }
-}
-
-async function fetchOtherProfile() {
+// Fetch initial profile (myId + other) and then open SSE
+async function fetchOtherProfile(){
     try {
         const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
         const profile = await res.json();
-        
-        const myProfileRes = await fetch('/api/profile', { credentials: 'same-origin' });
-        const myProfile = await myProfileRes.json();
-        myId = myProfile.id; 
-        
+        const myRes = await fetch('/api/profile', { credentials: 'same-origin' });
+        const myProfile = await myRes.json();
+        myId = myProfile.id;
         if (res.ok && profile) {
-            renderHeaderName(profile.full_name || profile.username, !!profile.is_verified);
-            let usernameText = `@${profile.username || ''}`;
-            if (profile.is_online) usernameText += ' · متصل الآن';
+            const nameEl = document.getElementById('other-name');
+            if (profile.is_verified) nameEl.innerHTML = `${escapeHtml(profile.full_name||profile.username)} <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">`;
+            else nameEl.textContent = profile.full_name || profile.username;
+            let usernameText = `@${profile.username||''}`; if (profile.is_online) usernameText += ' · متصل الآن';
             document.getElementById('other-username').textContent = usernameText;
             document.getElementById('other-avatar').src = profile.profile_picture_url;
             document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
-            
-            const dot = document.getElementById('other-online-dot');
-            if (dot) dot.style.display = profile.is_online ? 'inline-block' : 'none';
-
-            otherProfileUsername = profile.username || null;
-            verifiedMap[otherId] = !!profile.is_verified;
+            const dot = document.getElementById('other-online-dot'); if (dot) dot.style.display = profile.is_online ? 'inline-block' : 'none';
         }
-    } catch (error) {
-        console.error('Error fetching other profile:', error);
-        document.getElementById('other-name').textContent = 'خطأ في التحميل';
-    }
+    } catch (err) { console.error('fetchOtherProfile', err); document.getElementById('other-name').textContent='خطأ في التحميل'; }
 }
 
-async function markRead() {
+async function markRead(){
     if (!myId || !otherId) return;
     try {
-        await fetch('/api/mark_read', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ other_id: otherId })
-        });
-    } catch (error) {
-        console.warn('Could not mark messages as read:', error);
-    }
+        await fetch('/api/mark_read', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ other_id: otherId }) });
+    } catch (e){ console.warn('markRead failed', e); }
 }
 
-let isFetchingMessages = false;
-async function fetchMessages() {
-    if (isFetchingMessages) return; 
-    isFetchingMessages = true;
-
-    try {
-        // preserve playing states for audio players before we refresh DOM
-        preservedAudioStates = {};
-        Object.keys(audioWaveSurfers).forEach(src => {
-            try {
-                preservedAudioStates[src] = { time: audioWaveSurfers[src].getCurrentTime ? audioWaveSurfers[src].getCurrentTime() : 0, playing: audioWaveSurfers[src].isPlaying ? audioWaveSurfers[src].isPlaying() : false };
-            } catch (e) { preservedAudioStates[src] = { time: 0, playing: false }; }
-        });
-
-        const res = await fetch(`/api/messages/${otherId}`, { credentials: 'same-origin' });
-        const result = await res.json();
-
-        if (res.ok && result.ok && JSON.stringify(result.messages) !== JSON.stringify(lastMessages)) {
-            lastMessages = result.messages;
-            messagesEl.innerHTML = ''; 
-            
-            if (result.messages.length === 0) {
-                 messagesEl.innerHTML = '<div class="small" style="text-align:center">ابدأ محادثة بإرسال أول رسالة!</div>';
-            } else {
-                const senderIds = [...new Set(result.messages.map(m => m.senderId).filter(Boolean))];
-                const toFetch = senderIds.filter(id => typeof verifiedMap[id] === 'undefined');
-                if (toFetch.length > 0) {
-                    await Promise.all(toFetch.map(async uid => {
-                        try {
-                            const r = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' });
-                            if (!r.ok) { verifiedMap[uid] = false; return; }
-                            const d = await r.json();
-                            verifiedMap[uid] = !!d.is_verified;
-                        } catch (e) {
-                            verifiedMap[uid] = false;
-                        }
-                    }));
-                }
-
-                for (const msg of result.messages) {
-                    const el = createMessageElement(msg, myId);
-                    messagesEl.appendChild(el);
-                }
-            }
-
-            // initialize audio players, resuming any that were playing
-            initializeAudioPlayers(preservedAudioStates);
-            scrollToBottom();
-            
-            await markRead(); 
-        }
-    } catch (error) {
-        console.error('Error fetching messages:', error);
-        if (messagesEl.children.length < 2) {
-             messagesEl.innerHTML = '<div class="small" style="text-align:center; color: #ef4444;">حدث خطأ في الاتصال. حاول تحديث الصفحة.</div>';
-        }
-    } finally {
-        isFetchingMessages = false;
-    }
-}
-
-audioPreviewCancelBtn.onclick = removeFile;
-voiceBtn.addEventListener('click', handleVoiceButton);
-
-// send message (no change)
-async function sendMessage() {
+// sendMessage implementation
+async function sendMessage(){
     let content = msgInput.value.trim();
     if (!content && !uploadedFile) return;
-    
     sendBtn.disabled = true;
-    const originalIcon = sendBtn.innerHTML;
+    const orig = sendBtn.innerHTML;
     sendBtn.innerHTML = '<div class="spin" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;"></div>';
 
-    const formData = new FormData();
-    formData.append('other_id', otherId); 
-    if (content) formData.append('content', content);
-    
-    if (uploadedFile) {
-        formData.append('media', uploadedFile, uploadedFile.name);
-    }
-    
+    const form = new FormData();
+    form.append('other_id', otherId);
+    if (content) form.append('content', content);
+    if (uploadedFile) form.append('media', uploadedFile, uploadedFile.name);
     if (replyToMessage) {
-        formData.append('replied_to_id', replyToMessage.id);
-        formData.append('replied_to_content', replyToMessage.content);
-        formData.append('replied_to_sender', replyToMessage.senderName);
+        form.append('replied_to_id', replyToMessage.id);
+        form.append('replied_to_content', replyToMessage.content);
+        form.append('replied_to_sender', replyToMessage.senderName);
     }
-    
-    try {
-        const res = await fetch('/api/messages/send', {
-            method: 'POST', credentials: 'same-origin', body: formData
-        });
-        const result = await res.json();
-        
-        if (res.ok && result.ok && result.messageData) { 
-            const el = createMessageElement(result.messageData, myId);
-            messagesEl.appendChild(el); 
 
-            msgInput.value = '';
-            removeFile(); 
-            clearReplyTo();
-            scrollToBottom();
-            lastMessages = null; 
-            await fetchMessages(); 
+    try {
+        const res = await fetch('/api/messages/send', { method:'POST', credentials:'same-origin', body: form });
+        const data = await res.json();
+        if (res.ok && data.ok && data.messageData) {
+            // The message will be delivered via SSE 'message_added' event; but we can optimistically append
+            const el = createMessageElement(data.messageData, myId);
+            messagesEl.appendChild(el);
+            initializeAudioForMessageElement(el);
+            msgInput.value=''; removeFile(); clearReplyTo(); scrollToBottom();
         } else {
-            alert('فشل الإرسال: ' + (result.error || 'خطأ غير معروف'));
+            alert('فشل الإرسال: ' + (data.error || 'خطأ غير معروف'));
         }
     } catch (err) {
         alert('خطأ في الاتصال بالخادم. تأكد من أن الخادم يعمل.');
     } finally {
         sendBtn.disabled = false;
-        sendBtn.innerHTML = originalIcon;
+        sendBtn.innerHTML = orig;
         updateComposerUI();
     }
 }
 
-removeFileBtn.addEventListener('click', () => {
-    uploadedFile = null;
-    fileUpload.value = '';
-    updateComposerUI();
-});
-
-fileUpload.addEventListener('change', (e) => {
+// File attach handlers
+removeFileBtn.addEventListener('click', ()=>{ uploadedFile=null; fileUpload.value=''; updateComposerUI(); });
+fileUpload.addEventListener('change', (e)=>{
     const file = e.target.files[0];
     if (file) {
-        removeFile(); 
+        removeFile();
         uploadedFile = file;
         const reader = new FileReader();
-        reader.onload = (e) => {
-            let previewElement;
-            if (file.type.startsWith('image/')) { previewElement = document.createElement('img'); previewElement.src = e.target.result; previewElement.style.maxHeight = '40px'; previewElement.style.borderRadius = '4px'; }
-            else if (file.type.startsWith('video/')) { previewElement = document.createElement('video'); previewElement.src = e.target.result; previewElement.controls = true; previewElement.style.maxHeight = '40px'; previewElement.style.borderRadius = '4px'; }
-            else if (file.type.startsWith('audio/')) { previewElement = document.createElement('audio'); previewElement.src = e.target.result; previewElement.controls = true; }
-            else { previewElement = document.createElement('span'); previewElement.textContent = file.name; }
-            
-            filePreview.innerHTML = ''; 
-            filePreview.appendChild(previewElement);
-            
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'composer-btn btn';
-            removeBtn.style.cssText = 'width:24px;height:24px;background:#ef4444;margin-right:auto;';
-            removeBtn.innerHTML = '×';
-            removeBtn.onclick = () => { removeFile(); updateComposerUI(); };
-            filePreview.appendChild(removeBtn);
-            
+        reader.onload = (e)=>{
+            let preview;
+            if (file.type.startsWith('image/')) { preview = document.createElement('img'); preview.src = e.target.result; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; }
+            else if (file.type.startsWith('video/')) { preview = document.createElement('video'); preview.src = e.target.result; preview.controls=true; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; }
+            else if (file.type.startsWith('audio/')) { preview = document.createElement('audio'); preview.src = e.target.result; preview.controls=true; }
+            else { preview = document.createElement('span'); preview.textContent = file.name; }
+            filePreview.innerHTML=''; filePreview.appendChild(preview);
+            const rm = document.createElement('button'); rm.className='composer-btn btn'; rm.style.cssText='width:24px;height:24px;background:#ef4444;margin-right:auto;'; rm.innerHTML='×'; rm.onclick=()=>{ removeFile(); updateComposerUI(); }; filePreview.appendChild(rm);
             updateComposerUI();
-
         };
         reader.readAsDataURL(file);
-    } else {
-        removeFileBtn.onclick();
-    }
+    } else removeFileBtn.onclick();
 });
 
-sendForm.addEventListener('submit', e => { e.preventDefault(); sendMessage(); });
-msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+sendForm.addEventListener('submit', (e)=>{ e.preventDefault(); sendMessage(); });
+msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
 
-(async function init() {
-    if(!otherId) { window.location.href = '/chat_list'; return; }
+// Initialize: fetch profile, connect SSE
+(async function init(){
+    if (!otherId) { window.location.href = '/chat_list'; return; }
     await fetchOtherProfile();
-    await fetchMessages(); 
-    setTimeout(scrollToBottom, 100); 
-    updateComposerUI(); 
-    
-    // polling & visibility/ focus
-    setInterval(async () => { if (document.visibilityState === 'visible') await fetchMessages(); }, 3000); 
-    window.addEventListener('focus', fetchMessages);
+    connectMessagesSSE();
+    updateComposerUI();
+    // mark read on focus/visibility
+    setInterval(()=>{ if (document.visibilityState === 'visible') markRead(); }, 3000);
     window.addEventListener('focus', markRead);
 })();
 
-/* Notifications SSE badge */
+/* Notifications SSE badge (kept as previously) */
 (function setupNotifSSEChat(){
   if(!window.EventSource) return;
-  const es = new EventSource('/api/notifications/stream', { withCredentials: true });
-  es.addEventListener('notifications',(e)=>{
-    try{
-      const payload = JSON.parse(e.data);
-      const unread = payload.unread_count||0;
-      const badge = document.getElementById('notifBadgeChat');
-      if(badge){
-        if(unread>0){ badge.style.display='inline-flex'; badge.textContent = unread>99 ? '99+' : String(unread); }
-        else badge.style.display='none';
-      }
-    } catch(err){ console.error('SSE parse error', err); }
-  });
-  es.addEventListener('error', (err)=>{ console.warn('Notifications SSE error', err); });
+  try {
+    const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+    es.addEventListener('notifications',(e)=>{
+      try{
+        const payload = JSON.parse(e.data);
+        const unread = payload.unread_count||0;
+        const badge = document.getElementById('notifBadgeChat');
+        if(badge){
+          if(unread>0){ badge.style.display='inline-flex'; badge.textContent = unread>99 ? '99+' : String(unread); }
+          else badge.style.display='none';
+        }
+      } catch(err){ console.error('SSE parse error', err); }
+    });
+    es.addEventListener('error', (err)=>{ console.warn('Notifications SSE error', err); });
+  } catch(e){}
 })();
 (function initUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
 </script>
