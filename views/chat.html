@@ -8,15 +8,21 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 :root {
+  /* ألوانك الأصلية */
   --bg: #000;
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --accent: #7dd3fc;
   --muted: #cbd5e1;
-  --reply-bg: rgba(30, 41, 59, 0.95);
-  --reply-border: rgba(56, 189, 248, 0.3);
-  --msg-incoming: rgba(255, 255, 255, 0.08);
-  --msg-outgoing: #0ea5e9;
+  --reply-bg: rgba(255, 255, 255, 0.08);
+  --reply-border: rgba(255, 255, 255, 0.15);
+  
+  /* ألوان الرسائل الأصلية */
+  --msg-incoming-bg: rgba(255, 255, 255, 0.05);
+  --msg-incoming-border: rgba(255, 255, 255, 0.08);
+  --msg-outgoing-bg: rgba(10, 100, 150, 0.3);
+  --msg-outgoing-border: rgba(255, 255, 255, 0.03);
+  --msg-outgoing-text: #e6f7ff;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -27,7 +33,7 @@ html, body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: var(--bg);
   color: var(--muted);
-  overflow: hidden; /* لمنع التمرير العام */
+  overflow: hidden; 
   touch-action: pan-y;
 }
 
@@ -35,71 +41,76 @@ html, body {
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  max-width: 600px; /* تحسين للعرض */
+  max-width: 980px; /* العودة للحجم الأصلي */
   margin: 0 auto;
   position: relative;
-  background: #0f172a;
+  background: var(--bg);
 }
 
-/* --- Header --- */
+/* --- Header (بنفس ستايلك القديم) --- */
 .top {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(10px);
+  padding: 6px 10px;
+  background: var(--bg);
   z-index: 50;
   border-bottom: 1px solid var(--glass-border);
-  height: 60px;
+  height: 50px;
   flex-shrink: 0;
 }
 
 .user-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
   flex: 1;
   overflow: hidden;
+  text-decoration: none;
+  color: inherit;
 }
 
-.avatar-container {
+.avatar-with-dot {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
+  border-radius: 8px; /* حواف مربعة قليلاً كما في تصميمك */
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(135deg, #0b3146, #063048);
 }
 
 .avatar {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
+  border-radius: 8px;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.1);
+  display: block;
 }
 
 .online-dot {
   position: absolute;
-  bottom: 2px;
-  left: 2px;
+  bottom: -2px;
+  left: -2px;
   width: 10px;
   height: 10px;
   background: #22c55e;
-  border: 2px solid #0f172a;
+  border: 2px solid #000;
   border-radius: 50%;
 }
 
 .meta {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   justify-content: center;
   overflow: hidden;
 }
 
 .meta .name {
-  font-weight: 600;
-  color: #f1f5f9;
-  font-size: 15px;
+  font-weight: 700;
+  color: #e6f0fb;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -109,18 +120,17 @@ html, body {
 }
 
 .meta .sub {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: 10px;
+  color: #8aa5bd;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .back-btn {
-  color: #fff;
-  font-size: 18px;
+  color: var(--muted);
+  font-size: 16px;
   padding: 8px;
-  margin-right: -8px;
   cursor: pointer;
   text-decoration: none;
 }
@@ -137,24 +147,21 @@ html, body {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 12px;
-  padding-bottom: 90px; /* مساحة للمدخل */
+  padding: 12px;
+  padding-bottom: 90px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  /* إخفاء الشات مبدئياً لمنع القفزة */
+  gap: 8px;
   opacity: 0; 
   transition: opacity 0.2s ease;
-  /* Scroll behavior controlled via JS for initial load */
 }
 
-/* --- Message Bubbles --- */
+/* --- Message Bubbles (ستايلك الأصلي) --- */
 .msg-container {
   display: flex;
   width: 100%;
   position: relative;
   margin-bottom: 2px;
-  /* للسحب */
   touch-action: pan-y; 
 }
 
@@ -162,37 +169,36 @@ html, body {
   position: relative;
   max-width: 80%;
   z-index: 2;
-  transition: transform 0.1s linear; /* حركة سلسة جداً أثناء السحب */
+  transition: transform 0.1s linear; 
   will-change: transform;
 }
 
 .msg {
-  padding: 8px 12px;
-  border-radius: 16px;
-  font-size: 14px;
-  line-height: 1.4;
-  word-wrap: break-word;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.3;
+  word-break: break-word;
   position: relative;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-/* Incoming */
+/* Incoming Styles (Original) */
 .incoming-container { justify-content: flex-start; }
 .incoming-container .msg {
-  background: var(--msg-incoming);
-  color: #f1f5f9;
-  border-bottom-right-radius: 4px;
+  background: var(--msg-incoming-bg);
+  border: 1px solid var(--msg-incoming-border);
+  color: var(--muted);
 }
 
-/* Outgoing */
+/* Outgoing Styles (Original) */
 .outgoing-container { justify-content: flex-end; }
 .outgoing-container .msg {
-  background: var(--msg-outgoing);
-  color: #fff;
-  border-bottom-left-radius: 4px;
+  background: var(--msg-outgoing-bg);
+  border: 1px solid var(--msg-outgoing-border);
+  color: var(--msg-outgoing-text);
 }
 
-/* Reply Indicator Icon (Hidden by default) */
+/* Reply Indicator Icon */
 .reply-indicator-icon {
   position: absolute;
   top: 50%;
@@ -214,21 +220,30 @@ html, body {
 .msg-image, .msg-video {
   max-width: 100%;
   height: auto;
-  border-radius: 8px;
-  margin-top: 4px;
+  border-radius: 6px;
+  margin-top: 6px;
   display: block;
 }
 
-/* Audio Player */
+/* Audio Player (Original Style) */
 .msg-audio-player {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 200px;
-  padding: 4px 0;
+  width: 220px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 6px;
+  margin-top: 4px;
 }
+.incoming-container .msg-audio-player {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .audio-play-btn {
-  background: rgba(255,255,255,0.2);
+  background: #e6f7ff;
+  color: #0369a1;
   border: none;
   width: 32px;
   height: 32px;
@@ -236,26 +251,36 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
   cursor: pointer;
+  flex-shrink: 0;
 }
-.audio-waveform-container { flex: 1; height: 24px; }
-.audio-time { font-size: 10px; opacity: 0.8; min-width: 25px; }
+.incoming-container .audio-play-btn {
+  background: var(--muted);
+  color: var(--bg);
+}
+
+.audio-waveform-container { flex: 1; height: 30px; }
+.audio-time { font-size: 11px; color: rgba(255,255,255,0.7); min-width: 25px; }
 
 /* Reply Context Inside Message */
 .reply-context {
-  background: rgba(0,0,0,0.2);
-  border-right: 3px solid rgba(255,255,255,0.5);
-  border-radius: 6px;
-  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-right: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 6px 10px;
   margin-bottom: 6px;
   font-size: 11px;
   display: flex;
   flex-direction: column;
   cursor: pointer;
 }
-.reply-context-sender { font-weight: 700; color: var(--accent); margin-bottom: 2px; }
-.reply-context-text { opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.incoming-container .reply-context {
+  border-right-color: #cbd5e1;
+}
+
+.reply-context-sender { font-weight: 600; color: var(--accent); margin-bottom: 2px; }
+.incoming-container .reply-context-sender { color: #cbd5e1; }
+.reply-context-text { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Metadata */
 .msg-meta {
@@ -265,35 +290,35 @@ html, body {
   gap: 4px;
   margin-top: 4px;
   font-size: 10px;
-  opacity: 0.7;
+  color: #9fb3c8;
 }
 
-/* --- Composer Area --- */
+/* --- Composer Area (Original Style) --- */
 .composer {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  background: #0f172a;
-  border-top: 1px solid rgba(255,255,255,0.05);
-  padding: 8px 10px;
+  background-color: var(--bg);
+  border-top: 1px solid var(--glass-border);
+  padding: 6px 10px;
   z-index: 100;
   display: flex;
   flex-direction: column;
   gap: 0;
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.5);
 }
 
 /* Reply Preview Panel */
 #reply-container {
-  display: none; /* Flex when active */
+  display: none;
   align-items: center;
   justify-content: space-between;
   background: var(--reply-bg);
-  padding: 8px 12px;
+  border: 1px solid var(--reply-border);
+  padding: 6px 12px;
   border-radius: 12px;
   margin-bottom: 8px;
-  border-right: 4px solid var(--accent);
-  border-top: 1px solid rgba(255,255,255,0.1);
   animation: slideUp 0.2s ease-out;
 }
 @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -305,73 +330,78 @@ html, body {
   flex: 1;
 }
 .reply-to-label { font-size: 11px; color: var(--accent); font-weight: 700; margin-bottom: 2px; }
-.reply-preview-text { font-size: 12px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reply-preview-text { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Sexy Close Button */
+/* زر الإغلاق */
 .close-reply-btn {
-  background: rgba(255,255,255,0.1);
-  border: none;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
   width: 24px;
   height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: var(--muted);
   cursor: pointer;
   margin-right: 10px;
   transition: all 0.2s;
 }
-.close-reply-btn:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.close-reply-btn:hover { background: rgba(239, 68, 68, 0.4); color: #fff; border-color: transparent; }
 
 /* Input Row */
 .input-row {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-btn {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.2s;
 }
 .action-btn:active { background: rgba(255,255,255,0.1); }
 
 textarea {
   flex: 1;
-  background: rgba(255,255,255,0.05);
+  background: transparent;
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 20px;
-  padding: 10px 14px;
-  color: #fff;
+  border-radius: 18px;
+  padding: 8px 12px;
+  color: var(--muted);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   resize: none;
-  min-height: 40px;
-  max-height: 120px;
+  min-height: 36px;
+  max-height: 100px;
   outline: none;
   line-height: 1.3;
 }
-textarea::placeholder { color: #64748b; }
+textarea:focus { border-color: var(--accent); }
 
 .send-btn {
-  background: var(--accent);
-  color: #0f172a;
+  background: linear-gradient(180deg, #06b6d4, #0891b2);
+  color: #012;
+  border: none;
 }
-.send-btn:disabled { background: #334155; color: #64748b; }
+.send-btn:disabled { background: #444; color: #888; }
 
-.recording-active { background: #ef4444; color: white; animation: pulse 1.5s infinite; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+.recording-active { 
+  background: rgba(185, 28, 28, 0.4); 
+  border-color: rgba(239, 68, 68, 0.5); 
+  color: #fca5a5; 
+  animation: pulse 1.5s infinite; 
+}
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
 /* Recording UI */
 #recording-ui {
@@ -379,21 +409,23 @@ textarea::placeholder { color: #64748b; }
   flex: 1;
   align-items: center;
   gap: 10px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 20px;
+  background: rgba(185, 28, 28, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 18px;
   padding: 0 15px;
-  height: 40px;
+  height: 36px;
 }
-.rec-dot { width: 8px; height: 8px; background: #ef4444; border-radius: 50%; }
-.rec-time { font-size: 13px; color: #fff; flex: 1; }
-.cancel-rec { color: #ef4444; cursor: pointer; font-size: 13px; font-weight: 600; }
+.rec-dot { width: 8px; height: 8px; background: #ff6b6b; border-radius: 50%; animation: pulse 1s infinite; }
+.rec-time { font-size: 12px; color: #fca5a5; flex: 1; }
+.cancel-rec { color: #fca5a5; cursor: pointer; font-size: 12px; font-weight: 600; }
 
 /* File Preview */
 #file-preview-area {
   display: none;
-  padding: 8px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 8px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   margin-bottom: 8px;
   align-items: center;
   gap: 8px;
@@ -406,9 +438,9 @@ textarea::placeholder { color: #64748b; }
 
 <div class="wrap">
   <div class="top">
-    <a href="/chat_list" class="back-btn"><i class="fas fa-arrow-right"></i></a>
-    <div class="user-row" onclick="window.location.href=`/profile?userId=${otherId}`">
-      <div class="avatar-container">
+    <a href="/chat_list" class="back-btn"><i class="fas fa-chevron-right"></i></a>
+    <a id="profile-link" href="#" class="user-row">
+      <div class="avatar-with-dot">
         <img id="header-avatar" src="https://via.placeholder.com/40" class="avatar">
         <div id="header-online" class="online-dot" style="display:none"></div>
       </div>
@@ -416,7 +448,7 @@ textarea::placeholder { color: #64748b; }
         <div id="header-name" class="name">...</div>
         <div id="header-status" class="sub"></div>
       </div>
-    </div>
+    </a>
   </div>
 
   <div class="glass">
@@ -432,21 +464,22 @@ textarea::placeholder { color: #64748b; }
         <div id="reply-to-text" class="reply-preview-text"></div>
       </div>
       <button type="button" class="close-reply-btn" id="cancel-reply">
-        <i class="fas fa-times"></i>
+        <i class="fas fa-times" style="font-size:12px"></i>
       </button>
     </div>
 
     <div id="file-preview-area">
-      <div id="file-preview-content" style="flex:1; display:flex; align-items:center; gap:8px;"></div>
-      <button type="button" class="close-reply-btn" id="cancel-file" style="width:20px;height:20px;margin:0;">
-        <i class="fas fa-times" style="font-size:12px"></i>
+      <div id="file-preview-content" style="flex:1; display:flex; align-items:center; gap:8px; font-size:12px; color:#fff;"></div>
+      <button type="button" class="close-reply-btn" id="cancel-file" style="width:20px;height:20px;margin:0;background:#ef4444;border:none;color:#fff;">
+        <i class="fas fa-times" style="font-size:10px"></i>
       </button>
     </div>
 
     <div class="input-row">
       <input type="file" id="media-input" style="display:none" accept="image/*,video/*,audio/*">
+      
       <button type="button" class="action-btn" id="attach-btn">
-        <i class="fas fa-paperclip"></i>
+        <i class="fas fa-paperclip" style="font-size:14px"></i>
       </button>
 
       <div id="recording-ui">
@@ -458,11 +491,11 @@ textarea::placeholder { color: #64748b; }
       <textarea id="msg-input" placeholder="اكتب رسالة..." rows="1"></textarea>
       
       <button type="button" class="action-btn" id="mic-btn">
-        <i class="fas fa-microphone"></i>
+        <i class="fas fa-microphone" style="font-size:14px"></i>
       </button>
 
       <button type="submit" class="action-btn send-btn" id="send-btn" style="display:none">
-        <i class="fas fa-paper-plane"></i>
+        <i class="fas fa-paper-plane" style="font-size:14px"></i>
       </button>
     </div>
   </form>
@@ -473,8 +506,8 @@ textarea::placeholder { color: #64748b; }
 const urlParams = new URLSearchParams(window.location.search);
 const otherId = urlParams.get('contactId');
 let myId = null;
-let lastMessagesHash = ''; // بسيط للتحقق من التغيير
-let replyData = null; // { id, sender, content, type }
+let lastMessagesHash = ''; 
+let replyData = null; // { id, sender, content }
 let uploadedFile = null;
 let isRecording = false;
 let mediaRecorder = null;
@@ -500,26 +533,26 @@ const VERIFIED_ICON = `<img src="https://res.cloudinary.com/duixjs8az/image/uplo
 async function init() {
   if (!otherId) return window.location.href = '/chat_list';
   
-  // 1. Fetch My Profile (for ID)
+  // 1. Fetch My Profile
   try {
     const myRes = await fetch('/api/profile');
     const myData = await myRes.json();
     myId = myData.id;
   } catch(e) { console.error(e); }
 
-  // 2. Fetch Other Profile (Header)
+  // 2. Fetch Other Profile
   fetchProfile();
 
   // 3. Initial Messages Load
-  await loadMessages(true); // true = force scroll to bottom without animation
+  await loadMessages(true); 
 
-  // 4. Poll for new messages
+  // 4. Poll
   setInterval(() => loadMessages(false), 3000);
   
-  // 5. Setup Input resizing
+  // 5. Input Auto-Resize
   msgInput.addEventListener('input', function() {
     this.style.height = 'auto';
-    this.style.height = (this.scrollHeight) + 'px';
+    this.style.height = Math.min(this.scrollHeight, 100) + 'px';
     toggleSendButton();
   });
 }
@@ -532,12 +565,16 @@ async function fetchProfile() {
     if(data) {
       document.getElementById('header-name').innerHTML = escapeHtml(data.full_name || data.username) + (data.is_verified ? VERIFIED_ICON : '');
       document.getElementById('header-avatar').src = data.profile_picture_url || 'https://via.placeholder.com/40';
+      document.getElementById('profile-link').href = `/profile?userId=${otherId}`;
+      
+      const statusEl = document.getElementById('header-status');
       if(data.is_online) {
         document.getElementById('header-online').style.display = 'block';
-        document.getElementById('header-status').textContent = 'متصل الآن';
-        document.getElementById('header-status').style.color = '#22c55e';
+        statusEl.textContent = 'متصل الآن';
+        statusEl.style.color = '#22c55e';
       } else {
-         document.getElementById('header-status').textContent = 'غير متصل'; // او اخر ظهور
+         statusEl.textContent = 'غير متصل';
+         statusEl.style.color = '#8aa5bd';
       }
     }
   } catch(e) {}
@@ -551,24 +588,20 @@ async function loadMessages(initial = false) {
     if(!data.ok) return;
 
     const newHash = JSON.stringify(data.messages.map(m => m.messageId));
-    if (newHash === lastMessagesHash) return; // No changes
+    if (newHash === lastMessagesHash) return; 
     lastMessagesHash = newHash;
 
-    // Save current scroll position relative to bottom if not initial
     const isAtBottom = messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 50;
 
-    messagesEl.innerHTML = ''; // Re-render (inefficient but safe for synced deletion/edits)
+    messagesEl.innerHTML = ''; 
     
     data.messages.forEach(msg => {
       messagesEl.appendChild(createMsgElement(msg));
     });
 
     if (initial) {
-      // Instant scroll to bottom, then fade in
       messagesEl.scrollTop = messagesEl.scrollHeight;
-      requestAnimationFrame(() => {
-        messagesEl.style.opacity = '1';
-      });
+      requestAnimationFrame(() => { messagesEl.style.opacity = '1'; });
       markRead();
     } else if (isAtBottom) {
       scrollToBottom();
@@ -594,15 +627,11 @@ function createMsgElement(msg) {
   const wrapper = document.createElement('div');
   wrapper.className = `msg-container ${isMe ? 'outgoing-container' : 'incoming-container'}`;
 
-  // Reply Indicator Icon (depends on direction)
-  // If Incoming (Left aligned), pull Right -> Icon on Left
-  // If Outgoing (Right aligned), pull Left -> Icon on Right
+  // Reply Indicator Icon
   const icon = document.createElement('div');
   icon.className = 'reply-indicator-icon';
   icon.innerHTML = '<i class="fas fa-reply"></i>';
-  // Position icon based on direction
-  if (isMe) icon.style.left = '10px'; 
-  else icon.style.right = '10px';
+  if (isMe) icon.style.left = '10px'; else icon.style.right = '10px';
   wrapper.appendChild(icon);
 
   const inner = document.createElement('div');
@@ -611,7 +640,7 @@ function createMsgElement(msg) {
   const bubble = document.createElement('div');
   bubble.className = 'msg';
   
-  // Reply Context (if exists)
+  // Reply Context
   if (msg.replied_to_id) {
     const ctx = document.createElement('div');
     ctx.className = 'reply-context';
@@ -620,7 +649,6 @@ function createMsgElement(msg) {
       <div class="reply-context-text">${getLocalizedType(msg.replied_to_content)}</div>
     `;
     ctx.onclick = (e) => {
-        // Optional: Scroll to original message
         e.stopPropagation();
         const original = document.querySelector(`[data-msg-id="${msg.replied_to_id}"]`);
         if(original) original.scrollIntoView({behavior:'smooth', block:'center'});
@@ -636,7 +664,6 @@ function createMsgElement(msg) {
     if (type.startsWith('image')) contentHtml += `<img src="${url}" class="msg-image" onload="scrollToBottom()">`;
     else if (type.startsWith('video')) contentHtml += `<video src="${url}" controls class="msg-video"></video>`;
     else if (type.startsWith('audio') || url.endsWith('.webm') || url.endsWith('.mp3')) {
-       // Audio Player ID
        const audioId = 'audio-' + msg.messageId;
        contentHtml += `
          <div class="msg-audio-player">
@@ -647,15 +674,14 @@ function createMsgElement(msg) {
            <div class="audio-time">...</div>
          </div>
        `;
-       // Initialize waveform lazily or now
        setTimeout(() => initWaveform(audioId, url, isMe), 100);
     }
   }
   if (msg.content) {
-    contentHtml += `<div style="margin-top:${msg.media?'4px':'0'}">${escapeHtml(msg.content)}</div>`;
+    contentHtml += `<div style="margin-top:${msg.media?'6px':'0'}">${escapeHtml(msg.content)}</div>`;
   }
   
-  // Meta (Time + Check)
+  // Meta
   const time = new Date(msg.timestamp).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
   const check = isMe ? (msg.is_read ? '<i class="fas fa-check-double" style="color:#6ee7b7"></i>' : '<i class="fas fa-check"></i>') : '';
   contentHtml += `<div class="msg-meta">${time} ${check}</div>`;
@@ -664,12 +690,10 @@ function createMsgElement(msg) {
   inner.appendChild(bubble);
   wrapper.appendChild(inner);
 
-  // --- SWIPE TO REPLY LOGIC ---
+  // --- SWIPE TO REPLY ---
   enableSwipeToReply(wrapper, inner, icon, msg);
 
-  // Set ID for jumping
   wrapper.setAttribute('data-msg-id', msg.messageId);
-
   return wrapper;
 }
 
@@ -678,50 +702,28 @@ function enableSwipeToReply(container, contentEl, iconEl, msg) {
   let startX = 0;
   let currentX = 0;
   let isDragging = false;
-  const threshold = 60; // Distance to trigger reply
+  const threshold = 60; 
 
   contentEl.addEventListener('touchstart', (e) => {
     startX = e.touches[0].clientX;
     isDragging = true;
-    contentEl.style.transition = 'none'; // Remove transition for 1:1 movement
+    contentEl.style.transition = 'none';
   }, {passive: true});
 
   contentEl.addEventListener('touchmove', (e) => {
     if (!isDragging) return;
     const x = e.touches[0].clientX;
     const diff = x - startX;
-
-    // RTL Logic:
-    // If msg is Incoming (Right aligned in RTL? No, Incoming is usually Right in visual, Left in DOM if LTR. Wait.)
-    // In dir="rtl":
-    // Incoming (Left side visual) -> Pull Right (Positive X) to reply.
-    // Outgoing (Right side visual) -> Pull Left (Negative X) to reply.
-    
-    // Let's simplify: Allow pulling "inwards" towards center usually.
-    // Actually standard behavior: Pull towards the center of screen.
-    
-    // Determine allowed direction based on message type
     const isMe = msg.senderId === myId;
     let allowed = false;
     
-    // In RTL:
-    // Incoming is on Right? No, standard chat: Incoming Left, Outgoing Right.
-    // CSS says: Incoming flex-start (Right in RTL), Outgoing flex-end (Left in RTL).
-    // Wait, createMsgElement: incoming-container { justify-content: flex-start } -> In RTL this is RIGHT side.
-    // outgoing-container { justify-content: flex-end } -> In RTL this is LEFT side.
-    
-    // So Incoming (Right): Pull Left (Negative)
-    // Outgoing (Left): Pull Right (Positive)
-    
-    if (!isMe && diff < 0) allowed = true; // Incoming (Right), Pull Left
-    if (isMe && diff > 0) allowed = true;  // Outgoing (Left), Pull Right
+    // سحب للرد (اتجاه معاكس لمكان الرسالة)
+    if (!isMe && diff < 0) allowed = true; // واردة (يمين) -> اسحب يسار
+    if (isMe && diff > 0) allowed = true;  // صادرة (يسار) -> اسحب يمين
 
-    // Limit drag
     if (allowed && Math.abs(diff) < 150) {
       currentX = diff;
       contentEl.style.transform = `translateX(${diff}px)`;
-      
-      // Icon Scale Animation
       const progress = Math.min(Math.abs(diff) / threshold, 1);
       iconEl.style.transform = `translateY(-50%) scale(${progress})`;
       iconEl.style.opacity = progress;
@@ -732,25 +734,20 @@ function enableSwipeToReply(container, contentEl, iconEl, msg) {
     isDragging = false;
     contentEl.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
     contentEl.style.transform = 'translateX(0)';
-    
-    // Reset Icon
     iconEl.style.transform = 'translateY(-50%) scale(0)';
     
     if (Math.abs(currentX) > threshold) {
       triggerReply(msg);
-      // Haptic feedback
       if(navigator.vibrate) navigator.vibrate(10);
     }
     currentX = 0;
   });
 }
 
-// --- Reply Functions ---
 function triggerReply(msg) {
   const isMe = msg.senderId === myId;
   const senderName = isMe ? 'أنت' : document.getElementById('header-name').textContent;
   
-  // Determine Content Type for Preview
   let previewText = msg.content;
   if (!previewText && msg.media) {
     if (msg.media.type.startsWith('image')) previewText = '📷 صورة';
@@ -767,7 +764,6 @@ function triggerReply(msg) {
 
   document.getElementById('reply-to-name').textContent = senderName;
   document.getElementById('reply-to-text').textContent = previewText;
-  
   replyContainer.style.display = 'flex';
   msgInput.focus();
 }
@@ -777,11 +773,10 @@ document.getElementById('cancel-reply').onclick = () => {
   replyContainer.style.display = 'none';
 };
 
-// --- Helper: Localized Text ---
+// --- Helper Functions ---
 function getLocalizedType(content) {
   if (!content) return '';
-  if (content === '📷 صورة' || content === '🎥 فيديو' || content === '🎤 تسجيل صوتي') return content;
-  // If it's a raw URL or old data, try to detect (simplified)
+  if (['📷 صورة', '🎥 فيديو', '🎤 تسجيل صوتي'].includes(content)) return content;
   if (content.match(/cloudinary.*image/)) return '📷 صورة';
   return content;
 }
@@ -791,12 +786,9 @@ function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
-// --- Audio Waveform ---
 function initWaveform(containerId, url, isMe) {
   const container = document.getElementById(containerId);
-  if (!container) return;
-  // If exists destroy
-  if (audioWaveSurfers[containerId]) return;
+  if (!container || audioWaveSurfers[containerId]) return;
 
   const ws = WaveSurfer.create({
     container: container,
@@ -809,12 +801,9 @@ function initWaveform(containerId, url, isMe) {
   });
   
   ws.on('ready', () => {
-    const parent = container.parentElement;
-    const timeEl = parent.querySelector('.audio-time');
-    const dur = ws.getDuration();
-    timeEl.textContent = fmtTime(dur);
+    const timeEl = container.parentElement.querySelector('.audio-time');
+    timeEl.textContent = fmtTime(ws.getDuration());
   });
-  
   audioWaveSurfers[containerId] = ws;
 }
 
@@ -833,19 +822,16 @@ function fmtTime(s) {
   return `${m}:${sc<10?'0':''}${sc}`;
 }
 
-// --- Attachment & Recording Logic ---
+// --- Inputs & Recording ---
 attachBtn.onclick = () => mediaInput.click();
 mediaInput.onchange = (e) => {
   const file = e.target.files[0];
   if (file) {
     uploadedFile = file;
-    // Show Preview
     let html = '';
     if(file.type.startsWith('image')) html = `<img src="${URL.createObjectURL(file)}" class="file-thumb">`;
-    else if(file.type.startsWith('video')) html = `<i class="fas fa-video fa-lg text-blue-400"></i>`;
     else html = `<i class="fas fa-file fa-lg text-gray-400"></i>`;
-    
-    html += `<span style="font-size:12px;color:#fff">${file.name}</span>`;
+    html += `<span>${file.name}</span>`;
     document.getElementById('file-preview-content').innerHTML = html;
     filePreviewArea.style.display = 'flex';
     toggleSendButton();
@@ -858,10 +844,7 @@ document.getElementById('cancel-file').onclick = () => {
   toggleSendButton();
 };
 
-// Mic Logic
-micBtn.onclick = () => {
-  if (isRecording) stopRecording(); else startRecording();
-};
+micBtn.onclick = () => { if (isRecording) stopRecording(); else startRecording(); };
 document.getElementById('cancel-rec-btn').onclick = cancelRecording;
 
 function startRecording() {
@@ -872,7 +855,7 @@ function startRecording() {
     isRecording = true;
     
     msgInput.style.display = 'none';
-    micBtn.style.display = 'none'; // Hide mic, show cancel inside UI
+    micBtn.style.display = 'none';
     attachBtn.style.display = 'none';
     recordingUi.style.display = 'flex';
     
@@ -884,12 +867,10 @@ function startRecording() {
 
     mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
     mediaRecorder.onstop = () => {
-       // Create File
        const blob = new Blob(audioChunks, { type: 'audio/webm' });
        uploadedFile = new File([blob], "voice.webm", { type: 'audio/webm' });
-       // Show in file preview as audio
        document.getElementById('file-preview-content').innerHTML = 
-         `<i class="fas fa-microphone fa-lg text-red-400"></i> <span style="font-size:12px;color:#fff">تسجيل صوتي (${document.getElementById('rec-timer').textContent})</span>`;
+         `<i class="fas fa-microphone fa-lg" style="color:#fca5a5"></i> <span>تسجيل صوتي (${document.getElementById('rec-timer').textContent})</span>`;
        filePreviewArea.style.display = 'flex';
        resetRecordingUI();
        toggleSendButton();
@@ -897,19 +878,11 @@ function startRecording() {
   }).catch(e => alert('Mic error'));
 }
 
-function stopRecording() {
-  if(mediaRecorder) mediaRecorder.stop();
-}
-
+function stopRecording() { if(mediaRecorder) mediaRecorder.stop(); }
 function cancelRecording() {
-  if(mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-    uploadedFile = null; // discard
-    audioChunks = [];
-  }
+  if(mediaRecorder) { mediaRecorder.stop(); uploadedFile = null; audioChunks = []; }
   resetRecordingUI();
 }
-
 function resetRecordingUI() {
   clearInterval(recTimerInterval);
   isRecording = false;
@@ -921,16 +894,9 @@ function resetRecordingUI() {
 }
 
 function toggleSendButton() {
-  const hasText = msgInput.value.trim().length > 0;
-  const hasFile = !!uploadedFile;
-  
-  if (hasText || hasFile) {
-    sendBtn.style.display = 'flex';
-    micBtn.style.display = 'none';
-  } else {
-    sendBtn.style.display = 'none';
-    micBtn.style.display = 'flex';
-  }
+  const hasContent = msgInput.value.trim().length > 0 || uploadedFile;
+  sendBtn.style.display = hasContent ? 'flex' : 'none';
+  micBtn.style.display = hasContent ? 'none' : 'flex';
 }
 
 // --- Sending ---
@@ -940,7 +906,6 @@ sendBtn.onclick = async () => {
   if(!content && !uploadedFile) return;
 
   sendBtn.disabled = true;
-  
   const fd = new FormData();
   fd.append('other_id', otherId);
   if(content) fd.append('content', content);
@@ -955,13 +920,10 @@ sendBtn.onclick = async () => {
     const res = await fetch('/api/messages/send', { method:'POST', body:fd });
     const d = await res.json();
     if(d.ok) {
-      // Add local optimistic update or wait for poll
       messagesEl.appendChild(createMsgElement(d.messageData));
       scrollToBottom();
-      
-      // Reset
       msgInput.value = '';
-      msgInput.style.height = 'auto';
+      msgInput.style.height = '36px';
       uploadedFile = null;
       filePreviewArea.style.display = 'none';
       replyData = null;
@@ -972,9 +934,7 @@ sendBtn.onclick = async () => {
   sendBtn.disabled = false;
 };
 
-// --- Init ---
 init();
-
 </script>
 </body>
 </html>
