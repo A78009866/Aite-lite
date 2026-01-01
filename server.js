@@ -3726,6 +3726,43 @@ app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ ok: false, error: 'Server error' });
 });
+// ---------------- API: Message Reactions (جديد) ----------------
+
+// إضافة تفاعل (reaction) على رسالة معينة
+app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { otherId, messageId } = req.params;
+  const { reaction } = req.body; // الإيموجي مثل ❤️ 😢 إلخ
+
+  if (!reaction) {
+    return res.status(400).json({ ok: false, error: 'reaction required' });
+  }
+
+  const chatId = [userId, otherId].sort().join('_');
+
+  try {
+    // التحقق من وجود الرسالة
+    const messageSnap = await db.ref(`messages/${chatId}/${messageId}`).once('value');
+    
+    // ملاحظة: في بعض هياكل البيانات قد تكون الرسائل داخل قائمة، تأكد من المسار الصحيح لديك
+    // إذا كنت تخزن الرسائل بـ push() مباشرة تحت messages/chatId/ فالمسار أعلاه صحيح
+    
+    // حفظ التفاعل (نستخدم reaction كقيمة مباشرة لأن كل مستخدم يمكنه تفاعل واحد فقط)
+    // لتخزين من قام بالتفاعل:
+    await db.ref(`messages/${chatId}/${messageId}/reaction_from/${userId}`).set(reaction);
+
+    // تحديث حقل reaction في الرسالة (للعرض السريع - يظهر آخر تفاعل)
+    await db.ref(`messages/${chatId}/${messageId}`).update({
+      reaction: reaction, 
+      reacted_at: admin.database.ServerValue.TIMESTAMP
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Add message reaction error:', error);
+    res.status(500).json({ ok: false });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
