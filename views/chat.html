@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>المحادثة</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 :root {
 --bg: #000;
@@ -26,6 +27,7 @@ color: var(--muted);
 -webkit-font-smoothing: antialiased;
 direction: rtl;
 touch-action: pan-x pan-y;
+overflow: hidden; /* منع التمرير العام */
 }
 .wrap {
 height: 100dvh;
@@ -115,35 +117,86 @@ flex-direction: column;
 gap: 8px;
 padding: 12px;
 padding-bottom: 80px;
-scroll-behavior: smooth;
+scroll-behavior: auto; /* نلغي التمرير السلس افتراضياً للتحكم به يدوياً */
+opacity: 0; /* نخفي الرسائل حتى يتم تحميلها وتمريرها للأسفل */
+transition: opacity 0.3s ease-in;
 }
+/* Message Container for Swipe */
+.msg-container {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    /* مساحة للأيقونة */
+    overflow: visible; 
+}
+.msg-wrapper {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); /* حركة عودة سلسة */
+    will-change: transform;
+    z-index: 2;
+}
+
+/* Reply Icon behind the message */
+.swipe-reply-icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%) scale(0.5);
+    right: -35px; /* تظهر من اليمين عند سحب الرسالة لليسار */
+    color: var(--accent);
+    font-size: 18px;
+    opacity: 0;
+    transition: all 0.2s;
+    z-index: 1;
+}
+.incoming .swipe-reply-icon {
+    /* للرسائل الواردة، السحب قد يكون في الاتجاه المعاكس أو نفسه حسب التصميم */
+    right: auto;
+    left: -35px;
+}
+
 .msg {
-max-width: 80%;
-padding: 8px 10px;
-border-radius: 10px;
-font-size: 13px;
-line-height: 1.3;
-word-break: break-word;
-cursor: pointer;
+    max-width: 80%;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.3;
+    word-break: break-word;
+    position: relative;
+    user-select: none; /* منع تحديد النص أثناء السحب */
 }
-.incoming {
+
+.incoming .msg {
 align-self: flex-start;
 background: rgba(255, 255, 255, 0.05);
 border: 1px solid rgba(255, 255, 255, 0.08);
 color: var(--muted);
+margin-left: 0;
+margin-right: auto;
 }
-.outgoing {
+.outgoing .msg {
 align-self: flex-end;
 background: rgba(10, 100, 150, 0.3);
 color: #e6f7ff;
 border: 1px solid rgba(255, 255, 255, 0.03);
+margin-right: 0;
+margin-left: auto;
 }
+
+/* Wrapper alignment classes */
+.msg-container.incoming { align-items: flex-start; }
+.msg-container.outgoing { align-items: flex-end; }
+
 .msg-image, .msg-video {
 max-width: 100%;
 height: auto;
 display: block;
 border-radius: 6px;
 margin-top: 6px;
+pointer-events: none; /* منع النقر على الصورة لتعارض السحب */
 }
 .msg-audio-player {
 display: flex;
@@ -171,6 +224,7 @@ align-items: center;
 justify-content: center;
 cursor: pointer;
 flex-shrink: 0;
+z-index: 5; /* لضمان عمل الزر فوق السحب */
 }
 .incoming .audio-play-btn {
 background: var(--muted);
@@ -571,16 +625,94 @@ function createAudioPlayer(src, isIncoming) {
         </div>
     `;
 }
-function createMessageElement(msg, myId) {
-    // NOTE: Verified badge is intentionally NOT shown inside messages.
-    // Verified badges appear next to the profile/name at the top of the chat only.
-    const isIncoming = (msg.senderId !== myId);
-    const el = document.createElement('div');
-    el.className = 'msg ' + (isIncoming ? 'incoming' : 'outgoing');
-    el.dataset.messageId = msg.messageId;
-    el.title = 'انقر للرد';
-    el.addEventListener('click', () => { setReplyTo(msg); });
 
+// دالة إنشاء الرسالة مع دعم السحب
+function createMessageElement(msg, myId) {
+    const isIncoming = (msg.senderId !== myId);
+    
+    // الحاوية الخارجية
+    const container = document.createElement('div');
+    container.className = 'msg-container ' + (isIncoming ? 'incoming' : 'outgoing');
+    container.dataset.messageId = msg.messageId;
+
+    // الغلاف القابل للسحب (Wrapper)
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-wrapper';
+    
+    // محتوى الرسالة (Bubble)
+    const bubble = document.createElement('div');
+    bubble.className = 'msg';
+    
+    // أيقونة الرد الخلفية (تظهر عند السحب)
+    const replyIcon = document.createElement('i');
+    replyIcon.className = 'fas fa-reply swipe-reply-icon';
+    // تحديد مكان الأيقونة بناء على المرسل (في RTL قد نحتاج لضبط الاتجاه)
+    if(isIncoming) {
+       // الرسالة على اليمين، السحب لليسار
+       replyIcon.style.left = '-35px';
+       replyIcon.style.right = 'auto';
+    } else {
+       // الرسالة على اليسار، السحب لليمين
+       replyIcon.style.right = '-35px';
+       replyIcon.style.left = 'auto';
+    }
+    
+    // إضافة منطق السحب (Touch Logic)
+    let startX = 0;
+    let currentX = 0;
+    let isDragging = false;
+    const threshold = 60; // المسافة المطلوبة لتفعيل الرد
+
+    wrapper.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        isDragging = true;
+        wrapper.style.transition = 'none'; // إلغاء الحركة السلسة لتتبع الإصبع
+    }, {passive: true});
+
+    wrapper.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const x = e.touches[0].clientX;
+        const diff = x - startX;
+        
+        // في RTL: السحب لليسار يعني قيم سالبة، ولليمين موجبة.
+        // نريد السماح بالسحب "للداخل" من اتجاه الرسالة.
+        // إذا كانت واردة (يمين الشاشة): نسحبها لليسار (سالب)
+        // إذا كانت صادرة (يسار الشاشة): نسحبها لليمين (موجب)
+        
+        let validDrag = false;
+        if(isIncoming && diff < 0 && diff > -100) validDrag = true; // سحب لليسار
+        if(!isIncoming && diff > 0 && diff < 100) validDrag = true; // سحب لليمين
+
+        if (validDrag) {
+            currentX = diff;
+            wrapper.style.transform = `translateX(${diff}px)`;
+            
+            // إظهار/تكبير الأيقونة
+            const progress = Math.min(Math.abs(diff) / threshold, 1);
+            replyIcon.style.opacity = progress;
+            replyIcon.style.transform = `translateY(-50%) scale(${0.5 + (0.5 * progress)})`;
+        }
+    }, {passive: true});
+
+    wrapper.addEventListener('touchend', (e) => {
+        isDragging = false;
+        wrapper.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        wrapper.style.transform = 'translateX(0)';
+        
+        // إعادة الأيقونة
+        replyIcon.style.opacity = '0';
+        replyIcon.style.transform = 'translateY(-50%) scale(0.5)';
+
+        if (Math.abs(currentX) > threshold) {
+            // تفعيل الرد
+            if(navigator.vibrate) navigator.vibrate(50);
+            setReplyTo(msg);
+        }
+        currentX = 0;
+    }, {passive: true});
+
+
+    // بناء محتوى الرسالة الداخلي
     let contentHtml = '';
     
     if (msg.replied_to_id) {
@@ -599,11 +731,11 @@ function createMessageElement(msg, myId) {
         const mediaType = msg.media.type || 'raw';
 
         if (mediaType.startsWith('image')) {
-            contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة" onload="scrollToBottom()">`;
+            contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة" onload="scrollToBottom(false)">`;
         } else if (mediaType.startsWith('audio') || mediaUrl.endsWith('.webm') || mediaUrl.endsWith('.mp3')) {
             contentHtml += createAudioPlayer(mediaUrl, isIncoming);
         } else if (mediaType.startsWith('video')) {
-            contentHtml += `<video src="${escapeAttr(mediaUrl)}" controls class="msg-video" onload="scrollToBottom()"></video>`;
+            contentHtml += `<video src="${escapeAttr(mediaUrl)}" controls class="msg-video" onload="scrollToBottom(false)"></video>`;
         } else {
             contentHtml += `<div style="padding:4px;border:1px solid rgba(255,255,255,0.2);border-radius:4px;margin-top:5px;"><a href="${escapeAttr(mediaUrl)}" target="_blank" style="color:var(--accent);text-decoration:none;">📎 ملف مرفق</a></div>`;
         }
@@ -616,14 +748,30 @@ function createMessageElement(msg, myId) {
     const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
     contentHtml += `<div class="meta-time">${formatTime(msg.timestamp)}${readStatus}</div>`;
 
-    el.innerHTML = contentHtml;
-    return el;
+    bubble.innerHTML = contentHtml;
+    
+    // تجميع العناصر: Bubble + Icon داخل Wrapper داخل Container
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(replyIcon); // الأيقونة توضع داخل الغلاف المتحرك أو خارجه حسب الرغبة، هنا داخل الغلاف ولكن بـ absolute ستتحرك معه، الأفضل وضعها داخل الـ wrapper ليتم تغطيتها أو جعلها خلف الـ bubble
+    
+    container.appendChild(wrapper);
+    return container;
 }
-function scrollToBottom() {
+
+// تعديل دالة التمرير لتدعم الوضع "الفوري"
+function scrollToBottom(instant = false) {
     requestAnimationFrame(() => {
-        messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+        if(instant) {
+            messagesEl.style.scrollBehavior = 'auto';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            messagesEl.style.opacity = 1; // إظهار الرسائل بعد القفز
+        } else {
+            messagesEl.style.scrollBehavior = 'smooth';
+            messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+        }
     });
 }
+
 function setReplyTo(msg) {
     if (msg.messageId === replyToMessage?.id) {
         clearReplyTo();
@@ -632,9 +780,20 @@ function setReplyTo(msg) {
     
     const isIncoming = (msg.senderId !== myId);
     
+    // تعريب نوع المحتوى في الرد
+    let previewContent = msg.content;
+    if (!previewContent && msg.media) {
+        const type = msg.media.type || 'file';
+        if (type.startsWith('image')) previewContent = '📷 صورة';
+        else if (type.startsWith('video')) previewContent = '🎥 فيديو';
+        else if (type.startsWith('audio')) previewContent = '🎤 تسجيل صوتي';
+        else previewContent = '📎 ملف مرفق';
+    }
+
     replyToMessage = {
         id: msg.messageId,
-        content: msg.content || (msg.media?.type ? `[${msg.media.type}]` : 'ملف مرفق'),
+        content: previewContent, // النص المعرب
+        rawContent: previewContent, // لتخزينه كما هو
         senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت',
         senderId: msg.senderId
     };
@@ -642,7 +801,9 @@ function setReplyTo(msg) {
     document.getElementById('reply-sender').textContent = replyToMessage.senderName + ': ';
     document.getElementById('reply-text').textContent = replyToMessage.content;
     replyContainer.style.display = 'flex';
+    msgInput.focus();
 }
+
 function clearReplyTo() {
     replyToMessage = null;
     replyContainer.style.display = 'none';
@@ -716,7 +877,6 @@ function startRecording() {
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
             audioStream = stream;
-            // استخدام "audio/webm" مع "codecs=opus" هو الخيار الأفضل
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
             mediaRecorder.start();
             mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
@@ -729,7 +889,6 @@ function startRecording() {
                 recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`;
             }, 1000);
             
-            // عند إيقاف التسجيل
             mediaRecorder.onstop = stopRecording;
 
         }).catch(err => { 
@@ -753,12 +912,9 @@ function stopRecording() {
     }
     
     if (audioChunks.length > 0) {
-        // إصلاح مشكلة الإرسال: إنشاء الملف الصوتي وتعيينه لـ uploadedFile
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        // استخدام اسم ملف ينتهي بـ .webm لضمان التعرف عليه كملف صوتي
         uploadedFile = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
         
-        // إعداد المعاينة
         const audioURL = URL.createObjectURL(audioBlob);
         
         if (inputWaveSurfer) inputWaveSurfer.destroy();
@@ -781,7 +937,6 @@ function stopRecording() {
 
         recordingState = RECORDING_STATE.READY_TO_SEND;
     } else {
-        // لم يتم التسجيل
         recordingState = RECORDING_STATE.IDLE;
     }
     
@@ -804,20 +959,18 @@ function removeFile() {
     uploadedFile = null; 
     audioChunks = [];
     recordingState = RECORDING_STATE.IDLE;
-    fileUpload.value = ''; // مسح اختيار الملف العادي أيضًا
+    fileUpload.value = ''; 
     filePreview.innerHTML = '';
     updateComposerUI();
 }
 
 
-// ---------------- Main Logic Functions (Added/Restored) ----------------
+// ---------------- Main Logic Functions ----------------
 
-let otherProfileUsername = null; // store other user's username for reply matching
+let otherProfileUsername = null; 
 
-// Update header name to include verified badge (if verified)
 function renderHeaderName(name, isVerified) {
     const nameEl = document.getElementById('other-name');
-    // escape
     const escaped = escapeHtml(name);
     if (isVerified) {
         nameEl.innerHTML = `${escaped} <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">`;
@@ -831,23 +984,19 @@ async function fetchOtherProfile() {
         const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
         const profile = await res.json();
         
-        // الحصول على ID المستخدم الحالي (مهم لـ createMessageElement)
         const myProfileRes = await fetch('/api/profile', { credentials: 'same-origin' });
         const myProfile = await myProfileRes.json();
         myId = myProfile.id; 
         
         if (res.ok && profile) {
-            // show name + verified badge via helper
             renderHeaderName(profile.full_name || profile.username, !!profile.is_verified);
 
-            // username + online indicator text
             let usernameText = `@${profile.username || ''}`;
             if (profile.is_online) usernameText += ' · متصل الآن';
             document.getElementById('other-username').textContent = usernameText;
             document.getElementById('other-avatar').src = profile.profile_picture_url;
             document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
             
-            // show/hide online dot next to avatar
             const dot = document.getElementById('other-online-dot');
             if (dot) dot.style.display = profile.is_online ? 'inline-block' : 'none';
 
@@ -856,7 +1005,6 @@ async function fetchOtherProfile() {
         }
     } catch (error) {
         console.error('Error fetching other profile:', error);
-        // عرض رسالة خطأ واضحة
         document.getElementById('other-name').textContent = 'خطأ في التحميل';
     }
 }
@@ -875,6 +1023,8 @@ async function markRead() {
 }
 
 let isFetchingMessages = false;
+let isFirstLoad = true; // متغير للتحقق من أول تحميل
+
 async function fetchMessages() {
     if (isFetchingMessages) return; 
     isFetchingMessages = true;
@@ -889,8 +1039,8 @@ async function fetchMessages() {
             
             if (result.messages.length === 0) {
                  messagesEl.innerHTML = '<div class="small" style="text-align:center">ابدأ محادثة بإرسال أول رسالة!</div>';
+                 messagesEl.style.opacity = 1; // إظهار الحاوية إذا كانت فارغة
             } else {
-                // gather unique senderIds to fetch verification state if unknown
                 const senderIds = [...new Set(result.messages.map(m => m.senderId).filter(Boolean))];
                 const toFetch = senderIds.filter(id => typeof verifiedMap[id] === 'undefined');
                 if (toFetch.length > 0) {
@@ -912,17 +1062,23 @@ async function fetchMessages() {
                 }
             }
 
-            // تهيئة مشغلات الصوت للرسائل الجديدة/المحدثة
             initializeAudioPlayers();
-            scrollToBottom();
             
-            // يجب وضع markRead هنا لضمان وجود الرسائل قبل محاولة قراءتها
+            // إذا كان أول تحميل، ننتقل للأسفل فوراً بدون أنيميشن
+            if (isFirstLoad) {
+                scrollToBottom(true); // true = instant
+                isFirstLoad = false;
+            } else {
+                scrollToBottom(false); // false = smooth for updates
+            }
+            
             await markRead(); 
         }
     } catch (error) {
         console.error('Error fetching messages:', error);
-        if (messagesEl.children.length < 2) { // إذا لم يتم تحميل أي شيء بعد
+        if (messagesEl.children.length < 2) { 
              messagesEl.innerHTML = '<div class="small" style="text-align:center; color: #ef4444;">حدث خطأ في الاتصال. حاول تحديث الصفحة.</div>';
+             messagesEl.style.opacity = 1;
         }
     } finally {
         isFetchingMessages = false;
@@ -930,7 +1086,6 @@ async function fetchMessages() {
 }
 
 function initializeAudioPlayers() {
-    // تدمير أي WaveSurfers سابقة لتجنب تداخل الذاكرة
     Object.values(audioWaveSurfers).forEach(ws => ws.destroy());
     audioWaveSurfers = {};
 
@@ -938,7 +1093,6 @@ function initializeAudioPlayers() {
         const src = container.dataset.src;
         const isIncoming = container.dataset.isIncoming === 'true';
         
-        // إنشاء Wavesurfer واحد لكل مصدر صوت فريد
         if (!audioWaveSurfers[src]) { 
             const wavesurfer = WaveSurfer.create({
                 container: container,
@@ -978,7 +1132,7 @@ function initializeAudioPlayers() {
     });
 }
 
-// ---------------- Event Handlers (Restored/Modified) ----------------
+// ---------------- Event Handlers ----------------
 
 audioPreviewCancelBtn.onclick = removeFile;
 voiceBtn.addEventListener('click', handleVoiceButton);
@@ -987,7 +1141,6 @@ voiceBtn.addEventListener('click', handleVoiceButton);
 async function sendMessage() {
     let content = msgInput.value.trim();
     
-    // إذا كان هناك تسجيل صوتي أو ملف مرفق، لا يلزم وجود محتوى نصي
     if (!content && !uploadedFile) return;
     
     sendBtn.disabled = true;
@@ -998,15 +1151,14 @@ async function sendMessage() {
     formData.append('other_id', otherId); 
     if (content) formData.append('content', content);
     
-    // إرسال uploadedFile الذي قد يكون ملف وسائط عادي أو تسجيل صوتي (Blob)
     if (uploadedFile) {
-        // نستخدم uploadedFile.name و uploadedFile.type للتأكد من إرسال البيانات الصحيحة للخادم
         formData.append('media', uploadedFile, uploadedFile.name);
     }
     
     if (replyToMessage) {
         formData.append('replied_to_id', replyToMessage.id);
-        formData.append('replied_to_content', replyToMessage.content);
+        // نرسل النص المعرب أو الأصلي
+        formData.append('replied_to_content', replyToMessage.rawContent || replyToMessage.content); 
         formData.append('replied_to_sender', replyToMessage.senderName);
     }
     
@@ -1022,18 +1174,17 @@ async function sendMessage() {
 
             msgInput.value = '';
             
-            // تنظيف بعد الإرسال
             removeFile(); 
             clearReplyTo();
             
-            scrollToBottom();
+            scrollToBottom(false); // نمرر بسلاسة عند الإرسال
             lastMessages = null; 
-            await fetchMessages(); // جلب الرسائل للتأكد من التحديث في الوقت الفعلي
+            await fetchMessages(); 
         } else {
             alert('فشل الإرسال: ' + (result.error || 'خطأ غير معروف'));
         }
     } catch (err) {
-        alert('خطأ في الاتصال بالخادم. تأكد من أن الخادم يعمل.');
+        alert('خطأ في الاتصال بالخادم.');
     } finally {
         sendBtn.disabled = false;
         sendBtn.innerHTML = originalIcon;
@@ -1050,7 +1201,6 @@ removeFileBtn.addEventListener('click', () => {
 fileUpload.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
-        // إلغاء أي تسجيل صوتي سابق
         removeFile(); 
         
         uploadedFile = file;
@@ -1062,14 +1212,14 @@ fileUpload.addEventListener('change', (e) => {
             else if (file.type.startsWith('audio/')) { previewElement = document.createElement('audio'); previewElement.src = e.target.result; previewElement.controls = true; }
             else { previewElement = document.createElement('span'); previewElement.textContent = file.name; }
             
-            filePreview.innerHTML = ''; // تنظيف المحتوى السابق
+            filePreview.innerHTML = ''; 
             filePreview.appendChild(previewElement);
             
             const removeBtn = document.createElement('button');
             removeBtn.className = 'composer-btn btn';
             removeBtn.style.cssText = 'width:24px;height:24px;background:#ef4444;margin-right:auto;';
             removeBtn.innerHTML = '×';
-            removeBtn.onclick = removeFileBtn.onclick; // استخدام نفس دالة الإزالة
+            removeBtn.onclick = removeFileBtn.onclick;
             filePreview.appendChild(removeBtn);
             
             updateComposerUI();
@@ -1088,20 +1238,16 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
 (async function init() {
     if(!otherId) { window.location.href = '/chat_list'; return; }
     
-    // التأكد من جلب ID المستخدم الحالي والملف الشخصي للطرف الآخر أولاً
     await fetchOtherProfile();
-    
-    // جلب الرسائل بعد التأكد من وجود myId
     await fetchMessages(); 
     
-    setTimeout(scrollToBottom, 100); 
     updateComposerUI(); 
     
-    // تحديث الرسائل بشكل دوري
     setInterval(async () => { if (document.visibilityState === 'visible') await fetchMessages(); }, 3000); 
     window.addEventListener('focus', fetchMessages);
     window.addEventListener('focus', markRead);
 })();
+
 /* Notifications SSE badge */
 (function setupNotifSSEChat(){
   if(!window.EventSource) return;
