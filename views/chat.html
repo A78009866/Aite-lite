@@ -125,6 +125,7 @@ font-size: 13px;
 line-height: 1.3;
 word-break: break-word;
 cursor: pointer;
+transition: transform 0.3s ease;
 }
 .incoming {
 align-self: flex-start;
@@ -335,7 +336,7 @@ margin-top: -4px;
   text-overflow: ellipsis;
 }
 
-/* Voice Preview */
+/* New/Modified styles for Voice Preview */
 #audio-preview-container {
     display: none;
     flex: 1;
@@ -364,22 +365,30 @@ margin-top: -4px;
     flex-shrink: 0;
 }
 
-/* Online Dot */
+/* --- تعديل نقطة النشاط (Online Dot) --- */
 .avatar-with-dot { position: relative; display: inline-block; }
 .online-dot {
   position: absolute;
-  bottom: -2px;
-  left: -2px;
+  bottom: -2px;   /* في الأسفل */
+  left: -2px;     /* في الزاوية اليسرى */
   width: 12px;
   height: 12px;
   background: #22c55e;
-  border: 2px solid #000;
+  border: 2px solid #000; /* حدود بنفس لون الهيدر لتبدو بارزة */
   border-radius: 999px;
   display: inline-block;
   z-index: 10;
 }
 
-/* Verified Badge */
+/* small online next to name */
+.online-text {
+  color: #22c55e;
+  font-weight: 700;
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+/* VERIFIED BADGE IMAGE */
 .verified-badge-img {
   display: inline-block;
   width: 14px;
@@ -392,21 +401,23 @@ margin-top: -4px;
   vertical-align: middle;
 }
 
-/* Reactions Popup */
+/* Reactions styles */
 .reactions-popup {
-  position: absolute;
-  display: none;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
-  padding: 8px;
-  z-index: 300;
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
   backdrop-filter: blur(10px);
-  flex-wrap: wrap;
-  gap: 8px;
+  border-radius: 20px;
+  padding: 8px 16px;
+  display: flex;
+  gap: 12px;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
   animation: fadeIn 0.2s ease;
 }
-@keyframes fadeIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .reaction-btn {
   font-size: 24px;
   cursor: pointer;
@@ -415,16 +426,28 @@ margin-top: -4px;
 .reaction-btn:hover {
   transform: scale(1.2);
 }
-.reactions-display {
+.msg-reactions {
   display: flex;
   gap: 4px;
-  font-size: 16px;
+  font-size: 12px;
   margin-top: 4px;
   justify-content: flex-end;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  padding: 2px 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Nice cancel reply button */
+#cancel-reply-btn {
+  background: #ef4444;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 </style>
 <script src="https://unpkg.com/wavesurfer.js"></script>
@@ -436,7 +459,7 @@ margin-top: -4px;
 <a class="btn" href="/users_list" style="text-decoration:none;color:var(--muted);">◀</a>
 
 <a id="other-profile-link" href="#" class="avatar avatar-with-dot" style="display:inline-flex;align-items:center;justify-content:center; overflow: visible;">
-  <img id="other-avatar" src="" alt="avatar" style="border-radius: 8px;">
+  <img id="other-avatar" src="https://via.placeholder.com/40/000000/FFFFFF?text=U" alt="avatar" style="border-radius: 8px;">
   <span id="other-online-dot" class="online-dot" style="display:none;"></span>
 </a>
 
@@ -459,9 +482,7 @@ margin-top: -4px;
 <span id="reply-sender"></span>
 <span id="reply-text"></span>
 </div>
-<button id="cancel-reply-btn" type="button" title="إلغاء الرد">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-</button>
+<button id="cancel-reply-btn" type="button" title="إلغاء الرد">×</button>
 </div>
 
 <div id="file-preview" style="display:none;">
@@ -553,7 +574,9 @@ let recordingTimer = null;
 let recordingSeconds = 0;
 let inputWaveSurfer = null;
 let audioWaveSurfers = {}; 
-let playingAudioStates = {}; 
+let reactionsPopup = null;
+let longPressTimer = null;
+const validEmojis = ['❤️', '😢', '😡', '😂', '👍'];
 
 const RECORDING_STATE = {
     IDLE: 'idle',
@@ -561,14 +584,6 @@ const RECORDING_STATE = {
     READY_TO_SEND: 'ready'
 };
 let recordingState = RECORDING_STATE.IDLE;
-
-// Reactions
-const reactions = ['❤️', '😢', '😡', '😂', '👍'];
-let reactionsMap = {}; // {messageId: reactionEmoji}
-
-// Verified badge assets & map
-const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-let verifiedMap = {}; // { userId: true/false }
 
 // Helper Functions
 function formatTime(dateString) {
@@ -608,6 +623,7 @@ function createMessageElement(msg, myId) {
     const el = document.createElement('div');
     el.className = 'msg ' + (isIncoming ? 'incoming' : 'outgoing');
     el.dataset.messageId = msg.messageId;
+    el.dataset.senderId = msg.senderId;
 
     let contentHtml = '';
     
@@ -644,28 +660,44 @@ function createMessageElement(msg, myId) {
     const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
     contentHtml += `<div class="meta-time">${formatTime(msg.timestamp)}${readStatus}</div>`;
 
-    // Reactions display
-    if (msg.reaction) {
-        contentHtml += `<div class="reactions-display">${msg.reaction}</div>`;
-    }
+    contentHtml += `<div class="msg-reactions"></div>`;
 
     el.innerHTML = contentHtml;
-    setupTouchEvents(el, msg);
-    setupLongPress(el, msg);
+
+    // Add touch events for swipe and long press
+    let touchStartX = 0;
+    let touchStartTime = 0;
+    el.addEventListener('touchstart', e => {
+        touchStartX = e.touches[0].clientX;
+        touchStartTime = Date.now();
+        longPressTimer = setTimeout(() => showReactions(el, msg), 500);
+    });
+    el.addEventListener('touchmove', e => {
+        const deltaX = e.touches[0].clientX - touchStartX;
+        if (Math.abs(deltaX) > 20) {
+            clearTimeout(longPressTimer);
+            el.style.transform = `translateX(${deltaX}px)`;
+        }
+    });
+    el.addEventListener('touchend', e => {
+        clearTimeout(longPressTimer);
+        const touchEndX = e.changedTouches[0].clientX;
+        const deltaX = touchEndX - touchStartX;
+        const duration = Date.now() - touchStartTime;
+        if (Math.abs(deltaX) > 50 && duration < 500) {
+            setReplyTo(msg);
+        }
+        el.style.transition = 'transform 0.3s ease';
+        el.style.transform = 'translateX(0)';
+        setTimeout(() => el.style.transition = '', 300);
+    });
+
     return el;
 }
 function scrollToBottom() {
     requestAnimationFrame(() => {
         messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
     });
-}
-function getMessageType(msg) {
-    if (msg.media && msg.media.type) {
-        if (msg.media.type.startsWith('image')) return 'صورة';
-        if (msg.media.type.startsWith('video')) return 'فيديو';
-        if (msg.media.type.startsWith('audio')) return 'صوت';
-    }
-    return 'نص الرسالة';
 }
 function setReplyTo(msg) {
     if (msg.messageId === replyToMessage?.id) {
@@ -675,9 +707,19 @@ function setReplyTo(msg) {
     
     const isIncoming = (msg.senderId !== myId);
     
+    let previewContent = msg.content || '';
+    if (msg.media) {
+        let mediaTypeAr = '';
+        if (msg.media.type.startsWith('image')) mediaTypeAr = 'صورة';
+        else if (msg.media.type.startsWith('video')) mediaTypeAr = 'فيديو';
+        else if (msg.media.type.startsWith('audio')) mediaTypeAr = 'صوت';
+        else mediaTypeAr = 'ملف';
+        previewContent = mediaTypeAr + (previewContent ? ' - ' + previewContent : '');
+    }
+
     replyToMessage = {
         id: msg.messageId,
-        content: msg.content || `[${getMessageType(msg)}]`,
+        content: previewContent,
         senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت',
         senderId: msg.senderId
     };
@@ -692,103 +734,60 @@ function clearReplyTo() {
 }
 cancelReplyBtn.onclick = clearReplyTo;
 
-// ---------------- Touch Events for Swipe to Reply ----------------
-function setupTouchEvents(el, msg) {
-    let startX = 0;
-    let currentX = 0;
-    let isSwiping = false;
-
-    el.addEventListener('touchstart', (e) => {
-        startX = e.touches[0].clientX;
-        isSwiping = true;
-    });
-
-    el.addEventListener('touchmove', (e) => {
-        if (!isSwiping) return;
-        currentX = e.touches[0].clientX;
-        const diff = startX - currentX; // rtl: swipe left to reply
-        if (diff > 50) {
-            el.classList.add('swiping');
-        }
-    });
-
-    el.addEventListener('touchend', (e) => {
-        if (!isSwiping) return;
-        isSwiping = false;
-        const diff = startX - currentX;
-        if (diff > 50) {
-            setReplyTo(msg);
-        }
-        el.classList.remove('swiping');
-    });
-}
-
-// ---------------- Long Press for Reactions ----------------
-let longPressTimer;
-function setupLongPress(el, msg) {
-    el.addEventListener('touchstart', (e) => {
-        longPressTimer = setTimeout(() => showReactionsPopup(el, msg), 500);
-    });
-    el.addEventListener('touchend', () => clearTimeout(longPressTimer));
-    el.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-}
-
-function showReactionsPopup(el, msg) {
-    let popup = document.querySelector('.reactions-popup');
-    if (popup) popup.remove();
-
-    popup = document.createElement('div');
-    popup.className = 'reactions-popup';
-    reactions.forEach(emoji => {
-        const btn = document.createElement('span');
+// Reactions
+function showReactions(el, msg) {
+    if (reactionsPopup) reactionsPopup.remove();
+    reactionsPopup = document.createElement('div');
+    reactionsPopup.className = 'reactions-popup';
+    validEmojis.forEach(emoji => {
+        const btn = document.createElement('button');
         btn.className = 'reaction-btn';
         btn.textContent = emoji;
-        btn.onclick = () => addReaction(msg.messageId, emoji);
-        popup.appendChild(btn);
+        btn.onclick = () => reactToMessage(msg.messageId, emoji);
+        reactionsPopup.appendChild(btn);
     });
-
-    const rect = el.getBoundingClientRect();
-    popup.style.top = `${rect.top - 50}px`; // above message
-    popup.style.left = `${rect.left}px`;
-    document.body.appendChild(popup);
-    popup.style.display = 'flex';
-
-    // Auto hide after 5s or on click outside
-    setTimeout(() => popup.remove(), 5000);
-    document.addEventListener('click', hidePopup, { once: true });
-    function hidePopup(e) {
-        if (!popup.contains(e.target)) popup.remove();
+    document.body.appendChild(reactionsPopup);
+    setTimeout(() => document.addEventListener('click', hideReactions, {once: true}), 100);
+}
+function hideReactions() {
+    if (reactionsPopup) {
+        reactionsPopup.remove();
+        reactionsPopup = null;
     }
 }
-
-async function addReaction(messageId, emoji) {
-    reactionsMap[messageId] = emoji;
-    // Save to server (new endpoint needed in server.js)
+async function reactToMessage(messageId, emoji) {
     try {
-        const res = await fetch(`/api/messages/${otherId}/reactions/${messageId}`, {
+        const res = await fetch(`/api/messages/${messageId}/react`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reaction: emoji })
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({emoji}),
+            credentials: 'same-origin'
         });
         if (res.ok) {
-            await fetchMessages();
-        } else {
-            console.error('Failed to save reaction');
+            hideReactions();
+            fetchMessages(); // Refresh to show updated reactions
         }
-    } catch (err) {
-        console.error('Error adding reaction:', err);
+    } catch (e) {
+        console.error('Reaction error:', e);
     }
-    // Refresh messages to show reaction
-    await fetchMessages();
 }
-
-// Load saved reactions (assume from localStorage for persistence after refresh)
-function loadReactions() {
-    const saved = localStorage.getItem(`reactions_${otherId}`);
-    if (saved) reactionsMap = JSON.parse(saved);
+async function fetchMessageReactions(messageId) {
+    try {
+        const res = await fetch(`/api/messages/${messageId}/reactions`, {credentials: 'same-origin'});
+        const data = await res.json();
+        return data.reactions || [];
+    } catch (e) {
+        return [];
+    }
 }
-function saveReactions() {
-    localStorage.setItem(`reactions_${otherId}`, JSON.stringify(reactionsMap));
+function renderReactions(el, reactions) {
+    const reactionsEl = el.querySelector('.msg-reactions');
+    if (!reactionsEl) return;
+    const grouped = {};
+    reactions.forEach(r => {
+        grouped[r.emoji] = (grouped[r.emoji] || 0) + 1;
+    });
+    reactionsEl.innerHTML = Object.entries(grouped).map(([emoji, count]) => `${emoji} ${count > 1 ? count : ''}`).join(' ');
 }
 
 // ---------------- UI/Composer Logic ----------------
@@ -1021,21 +1020,13 @@ async function fetchMessages() {
     if (isFetchingMessages) return; 
     isFetchingMessages = true;
 
-    // Save playing states before update
-    Object.entries(audioWaveSurfers).forEach(([src, ws]) => {
-        if (ws.isPlaying()) {
-            playingAudioStates[src] = { isPlaying: true, currentTime: ws.getCurrentTime() };
-        } else {
-            playingAudioStates[src] = { isPlaying: false, currentTime: 0 };
-        }
-    });
-
     try {
         const res = await fetch(`/api/messages/${otherId}`, { credentials: 'same-origin' });
         const result = await res.json();
 
         if (res.ok && result.ok && JSON.stringify(result.messages) !== JSON.stringify(lastMessages)) {
             lastMessages = result.messages;
+            const existingMsgs = Array.from(messagesEl.querySelectorAll('.msg')).map(m => m.dataset.messageId);
             messagesEl.innerHTML = ''; 
             
             if (result.messages.length === 0) {
@@ -1060,6 +1051,9 @@ async function fetchMessages() {
                 for (const msg of result.messages) {
                     const el = createMessageElement(msg, myId);
                     messagesEl.appendChild(el);
+                    // Fetch and render reactions
+                    const reactions = await fetchMessageReactions(msg.messageId);
+                    renderReactions(el, reactions);
                 }
             }
 
@@ -1081,16 +1075,11 @@ async function fetchMessages() {
 }
 
 function initializeAudioPlayers() {
-    // تدمير أي WaveSurfers سابقة لتجنب تداخل الذاكرة
-    Object.values(audioWaveSurfers).forEach(ws => ws.destroy());
-    audioWaveSurfers = {};
-
     document.querySelectorAll('.audio-waveform-container').forEach(container => {
         const src = container.dataset.src;
         const isIncoming = container.dataset.isIncoming === 'true';
         
-        // إنشاء Wavesurfer واحد لكل مصدر صوت فريد
-        if (!audioWaveSurfers[src]) { 
+        if (container.childNodes.length === 0 && !audioWaveSurfers[src]) { 
             const wavesurfer = WaveSurfer.create({
                 container: container,
                 waveColor: isIncoming ? '#94a3b8' : '#7dd3fc', 
@@ -1106,14 +1095,6 @@ function initializeAudioPlayers() {
             
             wavesurfer.on('ready', () => {
                 timeEl.textContent = formatAudioTime(wavesurfer.getDuration());
-                // Restore state
-                if (playingAudioStates[src]) {
-                    wavesurfer.seekTo(playingAudioStates[src].currentTime / wavesurfer.getDuration());
-                    if (playingAudioStates[src].isPlaying) {
-                        wavesurfer.play();
-                        playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; 
-                    }
-                }
             });
             
             playerBtn.onclick = (e) => {
@@ -1251,13 +1232,11 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
     await fetchOtherProfile();
     
     // جلب الرسائل بعد التأكد من وجود myId
-    loadReactions();
     await fetchMessages(); 
     
     setTimeout(scrollToBottom, 100); 
     updateComposerUI(); 
     
-    // تحديث الرسائل بشكل دوري
     setInterval(async () => { if (document.visibilityState === 'visible') await fetchMessages(); }, 3000); 
     window.addEventListener('focus', fetchMessages);
     window.addEventListener('focus', markRead);
@@ -1279,7 +1258,7 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
   });
   es.addEventListener('error', (err)=>{ console.warn('Notifications SSE error', err); });
 })();
-(function initUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
+(function initUnreadUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
 </script>
 </body>
 </html>
