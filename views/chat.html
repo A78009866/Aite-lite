@@ -4,1208 +4,765 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>المحادثة</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
---bg: #000;
---glass-bg: rgba(255, 255, 255, 0.05);
---glass-border: rgba(255, 255, 255, 0.1);
---accent: #7dd3fc;
---muted: #cbd5e1;
---reply-bg: rgba(255, 255, 255, 0.08);
---reply-border: rgba(255, 255, 255, 0.15);
---reply-block-bg: rgba(255, 255, 255, 0.08);
---reply-block-border: rgba(255, 255, 255, 0.15);
+  --bg: #0f172a; /* خلفية داكنة أكثر جاذبية */
+  --glass-bg: rgba(30, 41, 59, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --accent: #38bdf8;
+  --muted: #94a3b8;
+  --my-msg-bg: #0ea5e9;
+  --other-msg-bg: #334155;
+  --danger: #ef4444;
 }
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
 html, body {
-height: 100%;
-margin: 0;
-font-family: 'Inter', system-ui;
-background-color: var(--bg);
-color: var(--muted);
--webkit-font-smoothing: antialiased;
-direction: rtl;
-touch-action: pan-x pan-y;
-}
-.wrap {
-height: 100dvh;
-display: flex;
-flex-direction: column;
-max-width: 980px;
-margin: 0 auto;
-padding: 0;
-position: relative;
-}
-.top {
-display: flex;
-align-items: center;
-gap: 6px;
-justify-content: space-between;
-padding: 6px 10px;
-background: var(--bg);
-z-index: 200;
-border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-flex-shrink: 0;
-height: 50px; 
-}
-.user-row {
-display: flex;
-align-items: center;
-gap: 6px;
-flex: 1;
-min-width: 0;
-}
-.avatar {
-width: 36px;
-height: 36px;
-border-radius: 8px;
-overflow: hidden;
-border: 1px solid rgba(255, 255, 255, 0.06);
-background: linear-gradient(135deg, #0b3146, #063048);
-display: flex;
-align-items: center;
-justify-content: center;
-flex-shrink: 0;
-position: relative;
-}
-.avatar img {
-width: 100%;
-height: 100%;
-object-fit: cover;
-display: block;
-}
-.meta {
-display: flex;
-flex-direction: column;
-gap: 2px;
-min-width: 0;
-}
-.meta .name {
-font-weight: 700;
-color: #e6f0fb;
-font-size: 13px;
-white-space: nowrap;
-overflow: hidden;
-text-overflow: ellipsis;
-display:flex;
-align-items:center;
-gap:6px;
-}
-.meta .sub {
-font-size: 10px;
-color: #8aa5bd;
-white-space: nowrap;
-overflow: hidden;
-text-overflow: ellipsis;
-}
-.glass {
-flex: 1;
-display: flex;
-flex-direction: column;
-background: transparent;
-border: none;
-overflow: hidden;
-position: relative;
-}
-.messages {
-flex: 1;
-overflow-y: auto;
-display: flex;
-flex-direction: column;
-gap: 8px;
-padding: 12px;
-padding-bottom: 120px;
-scroll-behavior: smooth;
-}
-.msg {
-max-width: 80%;
-padding: 8px 10px;
-border-radius: 10px;
-font-size: 13px;
-line-height: 1.3;
-word-break: break-word;
-cursor: pointer;
-touch-action: pan-y;
-transition: transform 200ms ease, box-shadow 200ms ease;
-will-change: transform;
-position: relative;
-}
-.msg.incoming { box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset; }
-.msg:active { transform: translateY(1px); }
-
-.incoming {
-align-self: flex-start;
-background: rgba(255, 255, 255, 0.05);
-border: 1px solid rgba(255, 255, 255, 0.08);
-color: var(--muted);
-}
-.outgoing {
-align-self: flex-end;
-background: rgba(10, 100, 150, 0.3);
-color: #e6f7ff;
-border: 1px solid rgba(255, 255, 255, 0.03);
+  height: 100%;
+  margin: 0;
+  font-family: 'Cairo', 'Inter', system-ui;
+  background-color: var(--bg);
+  color: #e2e8f0;
+  overflow: hidden; /* منع التمرير العام للصفحة */
 }
 
-.msg-image, .msg-video {
-max-width: 100%;
-height: auto;
-display: block;
-border-radius: 6px;
-margin-top: 6px;
-}
-.msg-audio-player {
-display: flex;
-align-items: center;
-gap: 8px;
-width: 220px;
-background: rgba(255, 255, 255, 0.1);
-border-radius: 10px;
-padding: 6px;
-margin-top: 4px;
-}
-.incoming .msg-audio-player {
-background: rgba(255, 255, 255, 0.05);
-border: 1px solid rgba(255, 255, 255, 0.08);
-}
-.audio-play-btn {
-background: #e6f7ff;
-color: #0369a1;
-border: none;
-border-radius: 50%;
-width: 32px;
-height: 32px;
-display: flex;
-align-items: center;
-justify-content: center;
-cursor: pointer;
-flex-shrink: 0;
-}
-.incoming .audio-play-btn {
-background: var(--muted);
-color: var(--bg);
-}
-.audio-waveform-container {
-flex: 1;
-min-height: 40px;
-}
-.audio-time {
-font-size: 11px;
-color: #e6f7ffcc;
-}
-.incoming .audio-time {
-color: #cbd5e1cc;
-}
-.meta-time {
-font-size: 10px;
-color: #9fb3c8;
-margin-top: 4px;
-text-align: left;
-display: flex;
-align-items: center;
-justify-content: flex-end;
-gap: 4px;
-}
-.composer {
-display: flex;
-flex-direction: column;
-gap: 8px;
-padding: 6px 10px;
-border-top: 1px solid rgba(255, 255, 255, 0.1);
-position: fixed;
-bottom: 0;
-left: 0;
-right: 0;
-background-color: var(--bg);
-z-index: 100;
-box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.5);
-}
-.composer-input-row {
-display: flex;
-gap: 6px;
-align-items: flex-end;
-}
-.composer textarea {
-flex: 1;
-min-height: 32px;
-max-height: 100px;
-resize: none;
-padding: 8px 12px;
-border-radius: 18px;
-border: 1px solid rgba(255, 255, 255, 0.1);
-background: transparent;
-color: var(--muted);
-transition: all 0.2s ease;
-direction: rtl;
-font-size: 16px;
-}
-.composer textarea:focus {
-outline: none;
-border-color: var(--accent);
-}
-.composer-btn {
-width: 32px;
-height: 32px;
-background: linear-gradient(180deg, #06b6d4, #0891b2);
-color: #012;
-border: none;
-border-radius: 50%;
-cursor: pointer;
-display: flex;
-align-items: center;
-justify-content: center;
-flex-shrink: 0;
-}
-.composer-btn:disabled {
-background: #444;
-cursor: not-allowed;
-}
-.file-input-btn, .voice-btn {
-background: rgba(255, 255, 255, 0.05);
-border: 1px solid rgba(255, 255, 255, 0.1);
-color: var(--muted);
-padding: 6px;
-border-radius: 50%;
-cursor: pointer;
-width: 32px;
-height: 32px;
-display: flex;
-align-items: center;
-justify-content: center;
-flex-shrink: 0;
-}
-#file-preview {
-display: flex;
-align-items: center;
-gap: 6px;
-padding: 6px;
-background: rgba(255, 255, 255, 0.05);
-border-radius: 6px;
-border: 1px solid rgba(255, 255, 255, 0.1);
-font-size: 12px;
-}
-.small { font-size: 11px; color: #8aa5bd; }
-.recording-indicator {
-    display: none;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
-    border-radius: 18px;
-    background: rgba(185, 28, 28, 0.4); 
-    font-size: 12px;
-    color: #fca5a5;
-    flex: 1;
-}
-.recording-dot {
-width: 8px;
-height: 8px;
-background-color: #ff6b6b;
-border-radius: 50%;
-animation: pulse 1.5s infinite;
-}
-@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin { 100% { transform: rotate(360deg); } }
-.btn { padding: 6px; font-size: 12px; }
-#reply-container {
-display: none;
-align-items: center;
-gap: 8px;
-padding: 8px;
-border-radius: 12px;
-background: var(--reply-bg);
-border: 1px solid var(--reply-border);
-margin-top: -4px;
-box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-transition: transform 180ms ease, opacity 180ms ease;
-}
-.reply-block {
-  padding: 6px 10px;
-  margin-bottom: 6px;
-  border-radius: 8px;
-  background: var(--reply-block-bg);
-  border-right: 3px solid var(--accent);
+/* تخطيط الصفحة */
+.chat-container {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-}
-.incoming .reply-block {
-  background: rgba(255, 255, 255, 0.05);
-  border-right: 3px solid #cbd5e1;
-}
-.reply-block-sender {
-  font-weight: 600;
-  color: var(--accent);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.incoming .reply-block-sender { color: #cbd5e1; }
-.reply-block-text {
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  height: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  background: #1e293b;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0,0,0,0.5);
 }
 
-/* New/Modified styles for Voice Preview */
-#audio-preview-container {
-    display: none;
-    flex: 1;
-    align-items: center;
-    gap: 10px;
-    padding: 0 12px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.08);
-}
-#audio-waveform-input {
-    flex: 1;
-    min-height: 30px;
-    margin: 5px 0;
-}
-.audio-preview-time {
-    font-size: 12px;
-    color: var(--accent);
-    flex-shrink: 0;
-}
-.audio-preview-cancel-btn {
-    background: none;
-    border: none;
-    color: #ef4444;
-    cursor: pointer;
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-/* --- تعديل نقطة النشاط (Online Dot) --- */
-.avatar-with-dot { position: relative; display: inline-block; }
-.online-dot {
-  position: absolute;
-  bottom: -2px;   /* في الأسفل */
-  left: -2px;     /* في الزاوية اليسرى */
-  width: 12px;
-  height: 12px;
-  background: #22c55e;
-  border: 2px solid #000; /* حدود بنفس لون الهيدر لتبدو بارزة */
-  border-radius: 999px;
-  display: inline-block;
-  z-index: 10;
-}
-
-/* small online next to name */
-.online-text {
-  color: #22c55e;
-  font-weight: 700;
-  font-size: 11px;
-  margin-left: 6px;
-}
-
-/* VERIFIED BADGE IMAGE */
-.verified-badge-img {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  margin-left: 6px;
-  object-fit: cover;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-  border: 1px solid rgba(255,255,255,0.06);
-  vertical-align: middle;
-}
-
-/* Reactions popup */
-.reactions-popup {
-  position: absolute;
-  z-index: 400;
+/* الرأس */
+header {
+  flex: 0 0 auto;
+  padding: 15px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 24px;
-  background: rgba(20,20,20,0.95);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-  transform: translateY(-8px);
-  opacity: 0;
-  transition: opacity 140ms ease, transform 160ms ease;
-  pointer-events: auto;
-}
-.reactions-popup.show { opacity: 1; transform: translateY(0); }
-.reaction-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  border: 1px solid rgba(255,255,255,0.06);
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  justify-content: space-between;
+  z-index: 20;
 }
-.reaction-btn:hover { transform: translateY(-4px); transition: transform 120ms ease; }
+header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #fff; }
+.back-btn {
+  background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer;
+  padding: 8px; border-radius: 50%; transition: 0.2s;
+}
+.back-btn:active { background: rgba(255,255,255,0.1); }
 
-/* Reaction badge on message */
-.msg-reaction-badge {
-  position: absolute;
-  bottom: -8px;
-  left: -8px;
-  background: rgba(0,0,0,0.6);
+/* منطقة الرسائل */
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  padding-bottom: 100px; /* مساحة للكتابة */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-behavior: smooth;
+}
+
+/* شكل الرسالة */
+.message {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  position: relative;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  word-wrap: break-word;
+  animation: fadeIn 0.3s ease;
+  user-select: none; /* لمنع تحديد النص عند السحب */
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes fadeIn { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+.message.mine {
+  align-self: flex-end;
+  background: var(--my-msg-bg);
   color: #fff;
-  font-size: 14px;
-  padding: 4px 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.06);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  border-bottom-left-radius: 4px;
+}
+.message.theirs {
+  align-self: flex-start;
+  background: var(--other-msg-bg);
+  color: #e2e8f0;
+  border-bottom-right-radius: 4px;
 }
 
-/* Nice cancel X on reply */
-#cancel-reply-btn {
-  background: transparent;
-  border: none;
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: var(--muted);
+/* الوسائط داخل الرسالة */
+.msg-img, .msg-video {
+  max-width: 100%; border-radius: 12px; margin-top: 5px; display: block;
+}
+audio {
+  max-width: 240px; height: 36px; margin-top: 5px; border-radius: 18px;
+}
+
+/* التوقيت */
+.msg-time {
+  font-size: 0.7rem; opacity: 0.7; margin-top: 4px; text-align: left; display: block;
+}
+.message.mine .msg-time { color: rgba(255,255,255,0.8); text-align: right; }
+
+/* الرد المقتبس */
+.reply-preview-block {
+  background: rgba(0,0,0,0.2);
+  border-right: 3px solid rgba(255,255,255,0.5);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
   cursor: pointer;
-  transition: background 120ms ease, transform 120ms ease;
+  display: flex; flex-direction: column;
 }
-#cancel-reply-btn:hover { background: rgba(255,255,255,0.03); transform: rotate(10deg); color: #fff; }
+.reply-preview-block strong { color: var(--accent); margin-bottom: 2px; }
 
-/* Message swipe hint */
-.msg.swipe-active { box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-
-/* small helper for reply label */
-.reply-label {
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
+/* منطقة الكتابة والإرسال */
+.composer-area {
+  flex: 0 0 auto;
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--glass-border);
+  padding: 10px;
+  position: relative;
+  z-index: 30;
 }
 
-/* responsive tweaks */
-@media (max-width: 480px) {
-  .msg-audio-player { width: 180px; }
-  .reactions-popup { gap: 6px; padding: 6px; }
-  .reaction-btn { width: 36px; height: 36px; font-size: 16px; }
+/* معاينة الرد فوق مربع الكتابة */
+#replyPreview {
+  display: none;
+  background: rgba(15, 23, 42, 0.9);
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--glass-border);
+  position: relative;
+  animation: slideUp 0.2s ease;
 }
+@keyframes slideUp { from{transform:translateY(10px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+
+#replyContent { font-size: 0.9rem; color: #cbd5e1; margin-right: 10px; }
+#closeReply {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  background: rgba(255,255,255,0.1); border: none; color: #fff;
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#closeReply:hover { background: var(--danger); }
+
+/* أدوات الكتابة */
+.input-row { display: flex; align-items: flex-end; gap: 8px; }
+
+#msgInput {
+  flex: 1;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 12px 16px;
+  color: #fff;
+  font-family: inherit;
+  resize: none;
+  max-height: 100px;
+  outline: none;
+}
+#msgInput:focus { border-color: var(--accent); }
+
+.action-btn {
+  background: transparent; border: none; color: var(--accent);
+  padding: 10px; cursor: pointer; border-radius: 50%;
+  transition: 0.2s; display: flex; align-items: center; justify-content: center;
+}
+.action-btn:active { background: rgba(255,255,255,0.1); transform: scale(0.9); }
+.send-btn { background: var(--accent); color: #000; }
+
+/* القائمة المنبثقة للوسائط */
+.attach-menu {
+  position: absolute; bottom: 70px; right: 10px;
+  background: #334155; border: 1px solid var(--glass-border);
+  border-radius: 12px; padding: 10px;
+  display: none; flex-direction: column; gap: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  z-index: 40;
+}
+.attach-menu.show { display: flex; animation: fadeIn 0.2s; }
+.attach-btn-item {
+  background: none; border: none; color: #fff; padding: 8px 12px;
+  text-align: right; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  border-radius: 6px; font-family: inherit;
+}
+.attach-btn-item:hover { background: rgba(255,255,255,0.05); }
+
+/* --- تفاعلات الرسائل (Reactions) --- */
+.reaction-menu {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(5px);
+  border-radius: 30px;
+  padding: 6px;
+  display: none;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 100;
+  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes popIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.reaction-item {
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+  user-select: none;
+}
+.reaction-item:hover { transform: scale(1.3); }
+
+.msg-reactions {
+  position: absolute;
+  bottom: -10px;
+  left: 10px; /* للرسائل الخاصة بي */
+  background: #334155;
+  border: 2px solid var(--bg);
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  display: flex;
+  gap: 2px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+.message.theirs .msg-reactions { left: auto; right: 10px; }
+
+/* مؤشر التسجيل */
+#recordingIndicator {
+  position: absolute; top: -40px; left: 0; right: 0;
+  background: var(--danger); color: white;
+  text-align: center; padding: 5px; font-size: 0.8rem;
+  display: none; align-items: center; justify-content: center; gap: 8px;
+}
+.pulse { width: 10px; height: 10px; background: #fff; border-radius: 50%; animation: pulse 1s infinite; }
+@keyframes pulse { 0%{opacity:1;} 50%{opacity:0.4;} 100%{opacity:1;} }
+
 </style>
-<script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
 <body>
-<div class="wrap">
-<div class="top">
-<div class="user-row">
-<a class="btn" href="/users_list" style="text-decoration:none;color:var(--muted);">◀</a>
 
-<a id="other-profile-link" href="#" class="avatar avatar-with-dot" style="display:inline-flex;align-items:center;justify-content:center; overflow: visible;">
-  <img id="other-avatar" src="https://via.placeholder.com/40/000000/FFFFFF?text=U" alt="avatar" style="border-radius: 8px;">
-  <span id="other-online-dot" class="online-dot" style="display:none;"></span>
-</a>
+<div class="chat-container">
+  <header>
+    <button class="back-btn" onclick="location.href='/'">➜</button>
+    <h2>المحادثة</h2>
+    <div id="notifBadgeChat" style="display:none; background:red; color:#fff; border-radius:10px; padding:2px 6px; font-size:0.7rem;">0</div>
+  </header>
 
-<div class="meta">
-<div id="other-name" class="name">جارٍ التحميل...</div>
-<div id="other-username" class="sub small"></div>
-</div>
-</div>
-<div>
-</div>
-</div>
-<div class="glass">
-<div id="messages" class="messages">
-<div class="small" style="text-align:center">جاري تحميل الرسائل...</div>
-</div>
-</div>
-<form id="sendForm" class="composer" onsubmit="return false;">
-<div id="reply-container">
-<div id="reply-content" style="display:flex;align-items:center;gap:8px;">
-  <div class="reply-block" style="min-width:0;">
-    <div id="reply-sender" class="reply-block-sender">...</div>
-    <div id="reply-text" class="reply-block-text reply-label">...</div>
-  </div>
-  <button id="cancel-reply-btn" type="button" title="إلغاء الرد" aria-label="إلغاء الرد">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-    </svg>
-  </button>
-</div>
-</div>
+  <div id="messages">
+    </div>
 
-<div id="file-preview" style="display:none;">
-    <span class="small" style="flex:1;">تم اختيار ملف</span>
-    <button type="button" class="composer-btn btn" id="remove-file-btn" style="width:24px;height:24px;background:red;">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-        </svg>
-    </button>
-</div>
+  <div class="composer-area">
+    <div id="recordingIndicator">
+      <div class="pulse"></div> <span>جاري تسجيل صوت...</span>
+    </div>
 
-<div class="composer-input-row">
-
-<label for="media-upload" class="file-input-btn" id="attachFileBtn" title="إرفاق ملف">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7v-2h4V7h2v4h4v2h-4v4h-2z"/>
-</svg>
-</label>
-<input type="file" id="media-upload" style="display:none;" accept="image/*,video/*,audio/*">
-
-<textarea id="msgInput" placeholder="اكتب رسالة..." aria-label="اكتب رسالة"></textarea>
-
-<div id="recording-indicator" class="recording-indicator">
-    <div class="recording-dot"></div>
-    <span>جاري التسجيل... 0:00</span>
-</div>
-
-<div id="audio-preview-container">
-    <div id="audio-waveform-input"></div>
-    <span id="audio-preview-time" class="audio-preview-time">0:00</span>
-    <button type="button" class="audio-preview-cancel-btn" title="إلغاء التسجيل">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-    </button>
-</div>
-
-
-<button id="voiceBtn" class="voice-btn" type="button" title="تسجيل صوت">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-<path id="voiceIcon" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
-</svg>
-</button>
-
-<button id="sendBtn" class="composer-btn" type="submit" title="إرسال" style="display:none;">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-</svg>
-</button>
-</div>
-</form>
-
-<!-- reactions popup element (single shared) -->
-<div id="reactionsPopup" class="reactions-popup" style="display:none; position:absolute; pointer-events:none;">
-  <button class="reaction-btn" data-reaction="❤" title="قلب">❤</button>
-  <button class="reaction-btn" data-reaction="😢" title="حزن">😢</button>
-  <button class="reaction-btn" data-reaction="😡" title="غضب">😡</button>
-  <button class="reaction-btn" data-reaction="😂" title="ضحك">😂</button>
-  <button class="reaction-btn" data-reaction="👍" title="لايك">👍</button>
-</div>
-
-</div>
-<script>
-/*
-  Fixes applied:
-  - Avatar fallback when external placeholder DNS fails (use inline SVG data URI).
-  - Robust SSE connect: test endpoint quickly, if SSE unsupported/404 or connection fails, fallback to polling (fetchMessages) with exponential backoff.
-  - Better EventSource error handling and retries.
-  - Keeps audio playing when new messages arrive by avoiding full list reload; SSE incremental events are used and polling fallback updates only new messages.
-*/
-
-function getQuery(name) { const params = new URLSearchParams(window.location.search); return params.get(name); }
-
-const otherId = getQuery('contactId');
-const messagesEl = document.getElementById('messages');
-const msgInput = document.getElementById('msgInput');
-const sendBtn = document.getElementById('sendBtn');
-const fileUpload = document.getElementById('media-upload');
-const filePreview = document.getElementById('file-preview');
-const removeFileBtn = document.getElementById('remove-file-btn');
-const sendForm = document.getElementById('sendForm');
-const voiceBtn = document.getElementById('voiceBtn');
-const voiceIcon = document.getElementById('voiceIcon');
-const attachFileBtn = document.getElementById('attachFileBtn');
-const recordingIndicator = document.getElementById('recording-indicator');
-const recordingTimeEl = recordingIndicator.querySelector('span');
-const replyContainer = document.getElementById('reply-container');
-const cancelReplyBtn = document.getElementById('cancel-reply-btn');
-
-const audioPreviewContainer = document.getElementById('audio-preview-container');
-const audioWaveformInput = document.getElementById('audio-waveform-input');
-const audioPreviewTime = document.getElementById('audio-preview-time');
-const audioPreviewCancelBtn = audioPreviewContainer.querySelector('.audio-preview-cancel-btn');
-
-const reactionsPopup = document.getElementById('reactionsPopup');
-
-let uploadedFile = null;
-let myId = null;
-let lastMessages = null;
-let replyToMessage = null;
-let mediaRecorder = null;
-let audioChunks = [];
-let audioStream = null;
-let recordingTimer = null;
-let recordingSeconds = 0;
-let inputWaveSurfer = null;
-let audioWaveSurfers = {}; // { src: instance }
-
-const RECORDING_STATE = { IDLE:'idle', RECORDING:'recording', READY_TO_SEND:'ready' };
-let recordingState = RECORDING_STATE.IDLE;
-
-const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-const LOCAL_REACTIONS_KEY = 'chat_local_reactions_v1';
-function loadLocalReactions(){ try{ return JSON.parse(localStorage.getItem(LOCAL_REACTIONS_KEY)||'{}'); }catch(e){ return {}; } }
-function saveLocalReactions(m){ try{ localStorage.setItem(LOCAL_REACTIONS_KEY, JSON.stringify(m)); }catch(e){} }
-let localReactions = loadLocalReactions();
-
-let messagesEventSource = null;
-let sseRetryCount = 0;
-let pollingIntervalId = null;
-let pollingBackoff = 3000; // initial
-
-// small defaults / fallbacks
-const DEFAULT_AVATAR_DATA = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="100%" height="100%" fill="#0b3146"/><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="Arial" font-size="18" fill="#fff">U</text></svg>'
-);
-
-// Helper funcs
-function formatTime(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleDateString('ar-EG', { month: 'numeric', day: 'numeric' });
-}
-function formatAudioTime(seconds) {
-    if (isNaN(seconds)) return '0:00';
-    const min = Math.floor(seconds / 60);
-    const sec = Math.floor(seconds % 60);
-    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
-}
-function escapeHtml(s) { if (!s && s !== 0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-function escapeAttr(s) { if (!s && s !== 0) return ''; return String(s).replace(/"/g,'&quot;'); }
-
-// Media type label
-function mediaTypeLabel(media) {
-    if (!media) return 'ملف مرفق';
-    const t = (media.type || '').toLowerCase();
-    const url = (media.url || '').toLowerCase();
-    if (t.includes('audio') || url.match(/\.(webm|mp3|ogg|wav|m4a)$/i)) return 'صوت';
-    if (t.includes('image') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return 'صورة';
-    if (t.includes('video') || url.match(/\.(mp4|webm|mov|mkv)$/i)) return 'فيديو';
-    return 'ملف مرفق';
-}
-
-// Reaction badge creation
-function createReactionBadge(emoji, count) {
-    const el = document.createElement('div');
-    el.className = 'msg-reaction-badge';
-    el.innerHTML = `<span class="emoji">${escapeHtml(emoji)}</span>${count && count>1 ? `<span class="cnt" style="margin-inline-start:6px;font-size:12px;opacity:0.9">${count}</span>` : ''}`;
-    return el;
-}
-
-// Audio player creation helper (HTML)
-function createAudioPlayerHtml(src, isIncoming) {
-    return `
-        <div class="msg-audio-player" onclick="event.stopPropagation()">
-            <button class="audio-play-btn" type="button" data-src="${escapeAttr(src)}" data-is-incoming="${isIncoming}" data-player>
-                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
-            </button>
-            <div class="audio-waveform-container" data-src="${escapeAttr(src)}" data-is-incoming="${isIncoming}"></div>
-            <span class="audio-time">0:00</span>
+    <div id="replyPreview">
+      <div style="display:flex; align-items:center;">
+        <div style="width: 3px; height: 30px; background: var(--accent); border-radius: 2px; margin-left: 8px;"></div>
+        <div style="flex:1;">
+          <div style="font-size: 0.75rem; color: var(--accent); margin-bottom: 2px;">الرد على:</div>
+          <div id="replyContent">نص الرسالة...</div>
         </div>
-    `;
-}
+        <button id="closeReply">✕</button>
+      </div>
+    </div>
 
-// Initialize WaveSurfer for a container (if not already)
-function initWaveSurferForContainer(containerEl, src, isIncoming, resumeState) {
-    if (!src) return;
-    if (audioWaveSurfers[src]) return audioWaveSurfers[src];
+    <div class="input-row">
+      <button class="action-btn" id="attachBtn">➕</button>
+      
+      <div class="attach-menu" id="attachMenu">
+        <button class="attach-btn-item" onclick="triggerFile('image')">📷 صورة</button>
+        <button class="attach-btn-item" onclick="triggerFile('video')">🎥 فيديو</button>
+      </div>
 
-    try {
-        const ws = WaveSurfer.create({
-            container: containerEl,
-            waveColor: isIncoming ? '#94a3b8' : '#7dd3fc',
-            progressColor: isIncoming ? '#475569' : '#0891b2',
-            cursorColor: 'transparent',
-            barWidth: 2, height: 30, barGap: 2, barRadius: 2,
-        });
-        audioWaveSurfers[src] = ws;
-        ws.load(src);
+      <textarea id="msgInput" rows="1" placeholder="اكتب رسالة..."></textarea>
+      
+      <button class="action-btn" id="micBtn">🎙️</button>
+      <button class="action-btn send-btn" id="sendBtn">➤</button>
+    </div>
+  </div>
+</div>
 
-        const parent = containerEl.closest('.msg-audio-player');
-        const playerBtn = parent ? parent.querySelector('.audio-play-btn') : null;
-        const timeEl = parent ? parent.querySelector('.audio-time') : null;
+<input type="file" id="fileInput" style="display:none" />
 
-        ws.on('ready', () => {
-            if (timeEl) timeEl.textContent = formatAudioTime(ws.getDuration());
-            if (resumeState) {
-                try { if (resumeState.time) ws.setTime(resumeState.time); if (resumeState.playing) ws.play(); } catch(e){}
-            }
-        });
+<div class="reaction-menu" id="reactionMenu">
+  <div class="reaction-item" data-reaction="❤️">❤️</div>
+  <div class="reaction-item" data-reaction="😂">😂</div>
+  <div class="reaction-item" data-reaction="😮">😮</div>
+  <div class="reaction-item" data-reaction="😢">😢</div>
+  <div class="reaction-item" data-reaction="😡">😡</div>
+  <div class="reaction-item" data-reaction="👍">👍</div>
+</div>
 
-        if (playerBtn) {
-            playerBtn.onclick = (e) => {
-                e.stopPropagation();
-                // pause others
-                Object.keys(audioWaveSurfers).forEach(k => {
-                    if (k !== src && audioWaveSurfers[k] && typeof audioWaveSurfers[k].isPlaying === 'function' && audioWaveSurfers[k].isPlaying()) {
-                        try { audioWaveSurfers[k].pause(); } catch(e){}
-                    }
-                });
-                ws.playPause();
-            };
-        }
+<script>
+// === المتغيرات العامة ===
+const myId = document.cookie.replace(/(?:(?:^|.*;\s*)uid\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+let replyToId = null;
+let isRecording = false;
+let mediaRecorder;
+let audioChunks = [];
+let longPressTimer;
+let currentLongPressMsg = null;
 
-        ws.on('play', () => { if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; });
-        ws.on('pause', () => { if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>`; });
-        ws.on('audioprocess', (time) => { if (timeEl) timeEl.textContent = formatAudioTime(time); });
-        ws.on('finish', () => { ws.setTime(0); if (timeEl) timeEl.textContent = formatAudioTime(0); });
+// === تهيئة الصفحة ===
+(async function init() {
+  await fetchMessages(); // الجلب الأولي
+  
+  // تحديث ذكي كل 3 ثواني (بدون قطع الصوت)
+  setInterval(async () => {
+    if (document.visibilityState === 'visible') await fetchMessages(true);
+  }, 3000);
 
-        return ws;
-    } catch (e) {
-        console.error('WaveSurfer create error', e);
-        return null;
-    }
-}
-
-// Create message DOM element
-function createMessageElement(msg, myId) {
-    const isIncoming = (msg.senderId !== myId);
-    const el = document.createElement('div');
-    el.className = 'msg ' + (isIncoming ? 'incoming' : 'outgoing');
-    el.dataset.messageId = msg.messageId;
-    el.dataset.myReaction = msg.my_reaction || '';
-    el.title = 'انقر للرد';
-    el.setAttribute('role','button');
-    el.setAttribute('tabindex','0');
-
-    let contentHtml = '';
-
-    if (msg.replied_to_id) {
-        const repliedSender = msg.replied_to_sender || 'مستخدم';
-        const repliedContent = msg.replied_to_content || 'رسالة محذوفة';
-        contentHtml += `
-            <div class="reply-block">
-                <span class="reply-block-sender">${escapeHtml(repliedSender)}</span>
-                <span class="reply-block-text">${escapeHtml(repliedContent)}</span>
-            </div>
-        `;
-    }
-
-    if (msg.media && msg.media.url) {
-        const mediaUrl = msg.media.url;
-        const mediaType = msg.media.type || 'raw';
-        if (mediaType.startsWith('image') || mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-            contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة" onload="scrollToBottom()">`;
-        } else if (mediaType.startsWith('audio') || mediaUrl.match(/\.(webm|mp3|ogg|wav|m4a)$/i)) {
-            contentHtml += createAudioPlayerHtml(mediaUrl, isIncoming);
-        } else if (mediaType.startsWith('video') || mediaUrl.match(/\.(mp4|webm|mov|mkv)$/i)) {
-            contentHtml += `<video src="${escapeAttr(mediaUrl)}" controls class="msg-video" onloadeddata="scrollToBottom()"></video>`;
-        } else {
-            contentHtml += `<div style="padding:4px;border:1px solid rgba(255,255,255,0.2);border-radius:4px;margin-top:5px;"><a href="${escapeAttr(mediaUrl)}" target="_blank" style="color:var(--accent);text-decoration:none;">📎 ملف مرفق</a></div>`;
-        }
-    }
-
-    if (msg.content) contentHtml += `<p style="margin:${msg.media ? '6px 0 0 0' : '0'}">${escapeHtml(msg.content)}</p>`;
-
-    const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
-    contentHtml += `<div class="meta-time">${formatTime(msg.timestamp)}${readStatus}</div>`;
-
-    el.innerHTML = contentHtml;
-
-    // reaction badge
-    const reactionCounts = msg.reaction_counts || null;
-    const topEmoji = msg.my_reaction || (reactionCounts ? Object.keys(reactionCounts).sort((a,b)=>reactionCounts[b]-reactionCounts[a])[0] : null);
-    const topCount = topEmoji && reactionCounts ? reactionCounts[topEmoji] : (msg.my_reaction ? 1 : 0);
-    if (topEmoji) el.appendChild(createReactionBadge(topEmoji, topCount));
-
-    // swipe-to-reply & long-press reactions
-    let startX=0, startY=0, moved=false, active=false;
-    const threshold = 60;
-    function onPointerDown(e){ const p=(e.touches&&e.touches[0])||e; startX=p.clientX; startY=p.clientY; moved=false; active=true; el.classList.add('swipe-active'); }
-    function onPointerMove(e){ if(!active) return; const p=(e.touches&&e.touches[0])||e; const dx=p.clientX-startX; const dy=p.clientY-startY; if(Math.abs(dy)>30 && Math.abs(dx)<Math.abs(dy)) return; moved=true; const translate = Math.max(Math.min(dx,150),-150); el.style.transform = `translateX(${translate}px)`; }
-    function onPointerUp(e){ if(!active) return; active=false; el.classList.remove('swipe-active'); el.style.transition='transform 180ms ease'; const p=(e.changedTouches&&e.changedTouches[0])||e; const dx=p.clientX-startX; if(dx< -threshold) setReplyTo(msg); requestAnimationFrame(()=> el.style.transform='translateX(0)'); setTimeout(()=> el.style.transition='',200); }
-
-    let longPressTimer=null;
-    function startLongPress(ev){ ev.preventDefault && ev.preventDefault(); longPressTimer = setTimeout(()=> showReactionsForMessage(el, msg), 600); }
-    function cancelLongPress(){ if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; } }
-
-    el.addEventListener('touchstart', (ev)=>{ onPointerDown(ev); startLongPress(ev); }, { passive:false });
-    el.addEventListener('touchmove', (ev)=>{ onPointerMove(ev); cancelLongPress(); }, { passive:true });
-    el.addEventListener('touchend', (ev)=>{ onPointerUp(ev); cancelLongPress(); }, { passive:true });
-    el.addEventListener('mousedown', (ev)=>{ onPointerDown(ev); startLongPress(ev); });
-    el.addEventListener('mousemove', (ev)=>{ onPointerMove(ev); cancelLongPress(); });
-    el.addEventListener('mouseup', (ev)=>{ onPointerUp(ev); cancelLongPress(); });
-    el.addEventListener('mouseleave', (ev)=>{ onPointerUp(ev); cancelLongPress(); });
-
-    el.addEventListener('click', (ev)=>{ if(moved){ moved=false; return; } setReplyTo(msg); });
-
-    return el;
-}
-
-function scrollToBottom(){ requestAnimationFrame(()=> messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' })); }
-
-// Reply handling
-function setReplyTo(msg){
-    if (msg.messageId === replyToMessage?.id) { clearReplyTo(); return; }
-    const isIncoming = (msg.senderId !== myId);
-    replyToMessage = { id: msg.messageId, content: msg.content ? `نص الرسالة: ${msg.content}` : (msg.media ? mediaTypeLabel(msg.media) : 'ملف مرفق'), senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت', senderId: msg.senderId };
-    document.getElementById('reply-sender').textContent = replyToMessage.senderName;
-    document.getElementById('reply-text').textContent = replyToMessage.content;
-    replyContainer.style.display = 'flex';
-}
-function clearReplyTo(){ replyToMessage = null; replyContainer.style.display = 'none'; }
-cancelReplyBtn.onclick = clearReplyTo;
-
-// Composer UI
-function updateComposerUI(){
-    msgInput.style.display='none';
-    recordingIndicator.style.display='none';
-    audioPreviewContainer.style.display='none';
-    attachFileBtn.style.display='none';
-    voiceBtn.style.display='flex';
-    sendBtn.style.display='none';
-    if (uploadedFile && recordingState !== RECORDING_STATE.READY_TO_SEND) {
-        msgInput.style.display='block'; filePreview.style.display='flex'; voiceBtn.style.display='none'; sendBtn.style.display='flex'; attachFileBtn.style.display='flex'; return;
-    }
-    filePreview.style.display='none';
-    if (msgInput.value.trim().length > 0 && recordingState === RECORDING_STATE.IDLE) {
-        msgInput.style.display='block'; attachFileBtn.style.display='flex'; voiceBtn.style.display='none'; sendBtn.style.display='flex'; return;
-    }
-    switch(recordingState){
-        case RECORDING_STATE.IDLE:
-            msgInput.style.display='block'; attachFileBtn.style.display='flex'; voiceIcon.innerHTML = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>`; voiceBtn.classList.remove('recording-active'); break;
-        case RECORDING_STATE.RECORDING:
-            recordingIndicator.style.display='flex'; voiceIcon.innerHTML = `<path d="M6 19h12v-6H6v6z"/>`; voiceBtn.classList.add('recording-active'); attachFileBtn.style.display='none'; break;
-        case RECORDING_STATE.READY_TO_SEND:
-            audioPreviewContainer.style.display='flex'; voiceBtn.style.display='none'; sendBtn.style.display='flex'; attachFileBtn.style.display='flex'; break;
-    }
-}
-msgInput.addEventListener('input', updateComposerUI);
-
-// Voice recording (kept as before)
-function startRecording(){ if (recordingState !== RECORDING_STATE.IDLE) return; audioChunks=[]; recordingSeconds=0; navigator.mediaDevices.getUserMedia({ audio: true }).then(stream=>{ audioStream=stream; mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' }); mediaRecorder.start(); mediaRecorder.ondataavailable = (e)=> audioChunks.push(e.data); recordingState = RECORDING_STATE.RECORDING; updateComposerUI(); recordingTimer = setInterval(()=>{ recordingSeconds++; recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`; },1000); mediaRecorder.onstop = stopRecording; }).catch(err=>{ alert('تعذر الوصول إلى الميكروفون. تأكد من منح الإذن.'); recordingState = RECORDING_STATE.IDLE; updateComposerUI(); }); }
-function stopRecording(){ clearInterval(recordingTimer); recordingTimeEl.textContent = `جاري التسجيل... 0:00`; if (mediaRecorder && mediaRecorder.state==='recording') mediaRecorder.stop(); if (audioStream) { audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; } if (audioChunks.length>0){ const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); uploadedFile = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' }); const audioURL = URL.createObjectURL(audioBlob); if (inputWaveSurfer){ try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; } inputWaveSurfer = WaveSurfer.create({ container: audioWaveformInput, waveColor:'#7dd3fc', progressColor:'#06b6d4', cursorColor:'transparent', barWidth:2, height:30, barGap:2, barRadius:2 }); inputWaveSurfer.load(audioURL); inputWaveSurfer.on('ready', ()=> audioPreviewTime.textContent = formatAudioTime(inputWaveSurfer.getDuration())); inputWaveSurfer.on('click', ()=> inputWaveSurfer.playPause()); recordingState = RECORDING_STATE.READY_TO_SEND; } else recordingState = RECORDING_STATE.IDLE; updateComposerUI(); }
-function handleVoiceButton(){ if (recordingState === RECORDING_STATE.IDLE) startRecording(); else if (recordingState === RECORDING_STATE.RECORDING) stopRecording(); }
-function removeFile(){ if (inputWaveSurfer){ try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; } uploadedFile=null; audioChunks=[]; recordingState = RECORDING_STATE.IDLE; fileUpload.value=''; filePreview.innerHTML=''; updateComposerUI(); }
-audioPreviewCancelBtn.onclick = removeFile;
-voiceBtn.addEventListener('click', handleVoiceButton);
-
-// File attach handlers
-removeFileBtn.addEventListener('click', ()=>{ uploadedFile=null; fileUpload.value=''; updateComposerUI(); });
-fileUpload.addEventListener('change', (e)=>{ const file = e.target.files[0]; if (file){ removeFile(); uploadedFile = file; const reader = new FileReader(); reader.onload = (ev)=>{ let preview; if (file.type.startsWith('image/')){ preview = document.createElement('img'); preview.src = ev.target.result; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; } else if (file.type.startsWith('video/')){ preview = document.createElement('video'); preview.src = ev.target.result; preview.controls=true; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; } else if (file.type.startsWith('audio/')){ preview = document.createElement('audio'); preview.src = ev.target.result; preview.controls=true; } else { preview = document.createElement('span'); preview.textContent = file.name; } filePreview.innerHTML=''; filePreview.appendChild(preview); const rm = document.createElement('button'); rm.className='composer-btn btn'; rm.style.cssText='width:24px;height:24px;background:#ef4444;margin-right:auto;'; rm.innerHTML='×'; rm.onclick = ()=>{ removeFile(); updateComposerUI(); }; filePreview.appendChild(rm); updateComposerUI(); }; reader.readAsDataURL(file); } else removeFileBtn.onclick(); });
-
-// Send message
-async function sendMessage(){ let content = msgInput.value.trim(); if (!content && !uploadedFile) return; sendBtn.disabled = true; const orig = sendBtn.innerHTML; sendBtn.innerHTML = '<div class="spin" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;"></div>'; const form = new FormData(); form.append('other_id', otherId); if (content) form.append('content', content); if (uploadedFile) form.append('media', uploadedFile, uploadedFile.name); if (replyToMessage){ form.append('replied_to_id', replyToMessage.id); form.append('replied_to_content', replyToMessage.content); form.append('replied_to_sender', replyToMessage.senderName); } try { const res = await fetch('/api/messages/send', { method:'POST', credentials:'same-origin', body: form }); const data = await res.json(); if (res.ok && data.ok && data.messageData) { const el = createMessageElement(data.messageData, myId); messagesEl.appendChild(el); // initialize audio inside new element if any const container = el.querySelector('.audio-waveform-container'); if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true'); msgInput.value=''; removeFile(); clearReplyTo(); scrollToBottom(); } else { alert('فشل الإرسال: ' + (data.error || 'خطأ غير معروف')); } } catch (err){ alert('خطأ في الاتصال بالخادم. تأكد من أن الخادم يعمل.'); } finally { sendBtn.disabled = false; sendBtn.innerHTML = orig; updateComposerUI(); } }
-
-sendForm.addEventListener('submit', (e)=>{ e.preventDefault(); sendMessage(); });
-msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
-
-// Fetch messages (polling fallback)
-let isFetchingMessages = false;
-async function fetchMessages() {
-    if (isFetchingMessages) return;
-    isFetchingMessages = true;
-    try {
-        const res = await fetch(`/api/messages/${otherId}?include_reactions=1`, { credentials: 'same-origin' });
-        const result = await res.json();
-        if (res.ok && result.ok) {
-            // build minimal update: append new messages only (preserve audio instances)
-            const incoming = result.messages || [];
-            // simple approach: if different length or content, rebuild only if SSE not used
-            messagesEl.innerHTML = '';
-            for (const msg of incoming) {
-                const el = createMessageElement(msg, myId);
-                messagesEl.appendChild(el);
-            }
-            // init audio players
-            document.querySelectorAll('.audio-waveform-container').forEach(container => {
-                const src = container.dataset.src;
-                if (src && !audioWaveSurfers[src]) initWaveSurferForContainer(container, src, container.dataset.isIncoming === 'true');
-            });
-            scrollToBottom();
-            lastMessages = incoming;
-        } else {
-            console.warn('fetchMessages failed', result);
-        }
-    } catch (err) {
-        console.error('fetchMessages error', err);
-    } finally {
-        isFetchingMessages = false;
-    }
-}
-
-// SSE availability test (tries to fetch and checks status quickly)
-async function testSSEAvailable(url, timeout = 3000) {
-    const controller = new AbortController();
-    const sig = controller.signal;
-    const t = setTimeout(()=> controller.abort(), timeout);
-    try {
-        const r = await fetch(url, { method:'GET', credentials:'same-origin', headers:{ 'Accept':'text/event-stream' }, signal: sig });
-        clearTimeout(t);
-        return r.status === 200;
-    } catch (err) {
-        clearTimeout(t);
-        return false;
-    }
-}
-
-// Connect to SSE with fallback to polling
-async function connectMessagesSSEWithFallback() {
-    if (!otherId) return;
-
-    // stop existing SSE or polling
-    if (messagesEventSource) { try{ messagesEventSource.close(); }catch(e){} messagesEventSource = null; }
-    if (pollingIntervalId) { clearInterval(pollingIntervalId); pollingIntervalId = null; }
-
-    const sseUrl = `/api/messages/stream/${encodeURIComponent(otherId)}`;
-
-    let canUseSSE = false;
-    try {
-        canUseSSE = await testSSEAvailable(sseUrl, 2500);
-    } catch (e) {
-        canUseSSE = false;
-    }
-
-    if (!canUseSSE) {
-        console.warn('SSE not available for messages; falling back to polling.');
-        // start polling
-        pollingBackoff = 3000;
-        await fetchMessages();
-        pollingIntervalId = setInterval(fetchMessages, pollingBackoff);
-        return;
-    }
-
-    // Connect EventSource
-    messagesEventSource = new EventSource(sseUrl, { withCredentials: true });
-
-    messagesEventSource.addEventListener('messages_snapshot', (e)=>{
-        try {
-            const payload = JSON.parse(e.data);
-            // replace contents but preserve playing audio states
-            const preserve = {};
-            Object.keys(audioWaveSurfers).forEach(src => {
-                try { preserve[src] = { time: audioWaveSurfers[src].getCurrentTime?audioWaveSurfers[src].getCurrentTime():0, playing: audioWaveSurfers[src].isPlaying?audioWaveSurfers[src].isPlaying():false }; } catch(e){ preserve[src] = { time:0, playing:false }; }
-            });
-            messagesEl.innerHTML = '';
-            for (const m of payload) {
-                const el = createMessageElement(m, myId);
-                messagesEl.appendChild(el);
-            }
-            // init audio for present containers and resume state
-            document.querySelectorAll('.audio-waveform-container').forEach(container => {
-                const src = container.dataset.src;
-                if (src) initWaveSurferForContainer(container, src, container.dataset.isIncoming === 'true', preserve[src]);
-            });
-            scrollToBottom();
-        } catch (err) { console.error('messages_snapshot parse', err); }
-    });
-
-    messagesEventSource.addEventListener('message_added', (e)=>{
-        try {
-            const m = JSON.parse(e.data);
-            if (document.querySelector(`.msg[data-message-id="${m.messageId}"]`)) return;
-            const el = createMessageElement(m, myId);
-            messagesEl.appendChild(el);
-            const container = el.querySelector('.audio-waveform-container');
-            if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true');
-            scrollToBottom();
-        } catch (err) { console.error('message_added parse', err); }
-    });
-
-    messagesEventSource.addEventListener('message_changed', (e)=>{
-        try {
-            const m = JSON.parse(e.data);
-            const existing = document.querySelector(`.msg[data-message-id="${m.messageId}"]`);
-            if (existing) {
-                // preserve audio state for message
-                const audioContainer = existing.querySelector('.audio-waveform-container');
-                let resume = null;
-                if (audioContainer) {
-                    const src = audioContainer.dataset.src;
-                    if (src && audioWaveSurfers[src]) {
-                        try { resume = { time: audioWaveSurfers[src].getCurrentTime?audioWaveSurfers[src].getCurrentTime():0, playing: audioWaveSurfers[src].isPlaying?audioWaveSurfers[src].isPlaying():false }; } catch(e){}
-                        try { audioWaveSurfers[src].destroy(); delete audioWaveSurfers[src]; } catch(e){}
-                    }
-                }
-                const newEl = createMessageElement(m, myId);
-                existing.replaceWith(newEl);
-                const container = newEl.querySelector('.audio-waveform-container');
-                if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true', resume);
-            } else {
-                const el = createMessageElement(m, myId);
-                messagesEl.appendChild(el);
-                const container = el.querySelector('.audio-waveform-container');
-                if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true');
-            }
-        } catch (err) { console.error('message_changed parse', err); }
-    });
-
-    messagesEventSource.addEventListener('message_removed', (e)=>{
-        try {
-            const payload = JSON.parse(e.data);
-            const existing = document.querySelector(`.msg[data-message-id="${payload.messageId}"]`);
-            if (existing) existing.remove();
-        } catch (err) { console.error('message_removed parse', err); }
-    });
-
-    messagesEventSource.addEventListener('reaction_updated', (e)=>{
-        try {
-            const payload = JSON.parse(e.data);
-            const existing = document.querySelector(`.msg[data-message-id="${payload.messageId}"]`);
-            if (!existing) return;
-            existing.dataset.myReaction = payload.my_reaction || '';
-            const prevBadge = existing.querySelector('.msg-reaction-badge');
-            if (payload.reaction_counts && Object.keys(payload.reaction_counts).length>0) {
-                const topEmoji = Object.keys(payload.reaction_counts).sort((a,b)=>payload.reaction_counts[b]-payload.reaction_counts[a])[0];
-                const topCount = payload.reaction_counts[topEmoji];
-                if (prevBadge) prevBadge.remove();
-                existing.appendChild(createReactionBadge(topEmoji, topCount));
-            } else {
-                if (prevBadge) prevBadge.remove();
-            }
-        } catch (err) { console.error('reaction_updated parse', err); }
-    });
-
-    messagesEventSource.onerror = (err) => {
-        console.warn('Messages SSE error', err);
-        // close and fall back to polling with backoff
-        try { messagesEventSource.close(); } catch(e){}
-        messagesEventSource = null;
-        sseRetryCount++;
-        const backoff = Math.min(30000, 2000 * Math.pow(2, sseRetryCount)); // exponential
-        console.info('Falling back to polling for messages. Polling interval:', backoff);
-        pollingBackoff = backoff;
-        fetchMessages();
-        pollingIntervalId = setInterval(fetchMessages, pollingBackoff);
-    };
-}
-
-// Reactions popup handling (toggle)
-function showReactionsForMessage(msgEl, msg) {
-    const rect = msgEl.getBoundingClientRect();
-    const popup = reactionsPopup;
-    popup.style.display = 'flex';
-    popup.classList.add('show');
-    popup.style.pointerEvents = 'auto';
-    const popupWidth = (popup.offsetWidth || 220);
-    const top = window.scrollY + rect.top - (popup.offsetHeight || 48) - 10;
-    const left = window.scrollX + rect.left + (rect.width/2) - (popupWidth/2);
-    popup.style.top = `${top}px`;
-    popup.style.left = `${left}px`;
-
-    const buttons = popup.querySelectorAll('.reaction-btn');
-    const currentMyReaction = msgEl.dataset.myReaction || '';
-
-    buttons.forEach(b=>{
-        b.onclick = async (ev)=>{
-            ev.stopPropagation();
-            const emoji = b.dataset.reaction || b.textContent;
-            const wasSame = currentMyReaction === emoji;
-            try {
-                if (wasSame) {
-                    await fetch(`/api/messages/${encodeURIComponent(msg.messageId)}/reaction`, {
-                        method: 'DELETE', credentials: 'same-origin',
-                        headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({ contactId: otherId })
-                    });
-                    msgEl.dataset.myReaction = '';
-                    const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove();
-                } else {
-                    await fetch(`/api/messages/${encodeURIComponent(msg.messageId)}/reaction`, {
-                        method: 'POST', credentials: 'same-origin',
-                        headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({ contactId: otherId, reaction: emoji })
-                    });
-                    msgEl.dataset.myReaction = emoji;
-                    const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove();
-                    msgEl.appendChild(createReactionBadge(emoji, 1));
-                }
-            } catch (err) {
-                // fallback local
-                if (wasSame) { delete localReactions[msg.messageId]; saveLocalReactions(localReactions); const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove(); }
-                else { localReactions[msg.messageId] = emoji; saveLocalReactions(localReactions); const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove(); msgEl.appendChild(createReactionBadge(emoji,1)); }
-            } finally {
-                hideReactionsPopup();
-            }
-        };
-    });
-
-    setTimeout(()=> {
-        window.addEventListener('scroll', hideReactionsPopupOnce, { passive:true });
-        document.addEventListener('click', hideReactionsPopupOnce);
-        document.addEventListener('touchstart', hideReactionsPopupOnce, { passive:true });
-    },50);
-}
-function hideReactionsPopup(){ const p = reactionsPopup; p.classList.remove('show'); p.style.display='none'; p.style.pointerEvents='none'; window.removeEventListener('scroll', hideReactionsPopupOnce); document.removeEventListener('click', hideReactionsPopupOnce); document.removeEventListener('touchstart', hideReactionsPopupOnce); }
-function hideReactionsPopupOnce(){ hideReactionsPopup(); }
-
-// fetchOtherProfile + init
-async function fetchOtherProfile(){
-    try {
-        const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
-        const profile = await res.json();
-        const myProfileRes = await fetch('/api/profile', { credentials: 'same-origin' });
-        const myProfile = await myProfileRes.json();
-        myId = myProfile.id;
-
-        if (res.ok && profile) {
-            const nameEl = document.getElementById('other-name');
-            if (profile.is_verified) nameEl.innerHTML = `${escapeHtml(profile.full_name||profile.username)} <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">`;
-            else nameEl.textContent = profile.full_name || profile.username;
-            let usernameText = `@${profile.username||''}`; if (profile.is_online) usernameText += ' · متصل الآن';
-            document.getElementById('other-username').textContent = usernameText;
-            const otherAvatarImg = document.getElementById('other-avatar');
-            otherAvatarImg.src = profile.profile_picture_url || DEFAULT_AVATAR_DATA;
-            otherAvatarImg.onerror = () => { otherAvatarImg.src = DEFAULT_AVATAR_DATA; };
-            document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
-        } else {
-            document.getElementById('other-name').textContent = 'خطأ في التحميل';
-            const otherAvatarImg = document.getElementById('other-avatar'); otherAvatarImg.src = DEFAULT_AVATAR_DATA;
-        }
-    } catch (err) {
-        console.error('Error fetching other profile:', err);
-        document.getElementById('other-name').textContent = 'خطأ في التحميل';
-        const otherAvatarImg = document.getElementById('other-avatar'); otherAvatarImg.src = DEFAULT_AVATAR_DATA;
-    }
-}
-
-// mark read
-async function markRead(){
-    if (!myId || !otherId) return;
-    try {
-        await fetch('/api/mark_read', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ other_id: otherId }) });
-    } catch (e) { console.warn('Could not mark messages as read:', e); }
-}
-
-// Initialization
-(async function init(){
-    if (!otherId) { window.location.href = '/chat_list'; return; }
-    await fetchOtherProfile();
-    // connect SSE with fallback
-    await connectMessagesSSEWithFallback();
-
-    updateComposerUI();
-    // mark read on focus/visible
-    setInterval(()=>{ if (document.visibilityState === 'visible') markRead(); }, 3000);
-    window.addEventListener('focus', markRead);
+  setupUI();
+  setupSwipe(); // تفعيل السحب للرد
 })();
 
-// Notifications SSE badge (kept)
-(function setupNotifSSEChat(){
-  if(!window.EventSource) return;
+// === واجهة المستخدم والأحداث ===
+function setupUI() {
+  const msgInput = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const attachBtn = document.getElementById('attachBtn');
+  const attachMenu = document.getElementById('attachMenu');
+  const closeReplyBtn = document.getElementById('closeReply');
+
+  // إرسال نص
+  sendBtn.onclick = sendMessage;
+  
+  // زر المرفقات
+  attachBtn.onclick = (e) => {
+    e.stopPropagation();
+    attachMenu.classList.toggle('show');
+  };
+  document.addEventListener('click', () => attachMenu.classList.remove('show'));
+
+  // إلغاء الرد
+  closeReplyBtn.onclick = cancelReply;
+
+  // الضغط على Enter للإرسال
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // تكبير مربع النص تلقائياً
+  msgInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+    if(this.value === '') this.style.height = 'auto';
+  });
+
+  // إعداد التفاعلات
+  document.querySelectorAll('.reaction-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const reaction = item.getAttribute('data-reaction');
+      if (currentLongPressMsg) {
+        addReaction(currentLongPressMsg, reaction);
+        hideReactionMenu();
+      }
+    });
+  });
+  
+  // إخفاء قائمة التفاعلات عند النقر في أي مكان
+  document.addEventListener('click', hideReactionMenu);
+
+  // إعداد التسجيل الصوتي
+  document.getElementById('micBtn').onmousedown = startRecording;
+  document.getElementById('micBtn').onmouseup = stopRecording;
+  document.getElementById('micBtn').ontouchstart = (e) => { e.preventDefault(); startRecording(); };
+  document.getElementById('micBtn').ontouchend = (e) => { e.preventDefault(); stopRecording(); };
+}
+
+// === المنطق الأساسي للرسائل (Smart Rendering) ===
+async function fetchMessages(isUpdate = false) {
   try {
-    const es = new EventSource('/api/notifications/stream', { withCredentials: true });
-    es.addEventListener('notifications',(e)=>{
-      try{
-        const payload = JSON.parse(e.data);
-        const unread = payload.unread_count||0;
-        const badge = document.getElementById('notifBadgeChat');
-        if(badge){
-          if(unread>0){ badge.style.display='inline-flex'; badge.textContent = unread>99 ? '99+' : String(unread); }
-          else badge.style.display='none';
-        }
-      } catch(err){ console.error('SSE parse error', err); }
-    });
-    es.addEventListener('error', (err)=>{ console.warn('Notifications SSE error', err); });
-  } catch(e){}
-})();
-(function initUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
+    const res = await fetch('/api/chat/messages?limit=50');
+    const data = await res.json();
+    
+    if (data.ok) {
+      renderMessagesSmart(data.messages, isUpdate);
+    }
+  } catch (err) {
+    console.error('Failed to fetch messages', err);
+  }
+}
 
+// دالة العرض الذكية (تحل مشكلة انقطاع الصوت)
+function renderMessagesSmart(messages, isUpdate) {
+  const container = document.getElementById('messages');
+  const currentScroll = container.scrollTop;
+  const isNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 100;
+
+  // مجموعة لمعرفة الرسائل الموجودة حالياً
+  const existingIds = new Set();
+  container.querySelectorAll('.message').forEach(el => existingIds.add(el.dataset.id));
+
+  messages.forEach(msg => {
+    const msgElement = document.querySelector(`.message[data-id="${msg.id}"]`);
+
+    if (msgElement) {
+      // الرسالة موجودة: تحديث التفاعلات أو الحالة فقط إذا لزم الأمر
+      // لا نلمس المحتوى الداخلي إذا كان صوتاً ويعمل حالياً
+      const audioEl = msgElement.querySelector('audio');
+      const isPlaying = audioEl && !audioEl.paused;
+      
+      if (!isPlaying) {
+        // يمكن تحديث المحتوى بأمان إذا لم يكن هناك صوت يعمل
+        // لكن للتبسيط، سنحدث التفاعلات فقط هنا ديناميكياً
+        updateReactionsUI(msgElement, msg.reactions);
+      }
+    } else {
+      // رسالة جديدة: إنشاؤها وإضافتها
+      const el = createMessageElement(msg);
+      container.appendChild(el);
+      setupMessageEvents(el); // تفعيل أحداث اللمس والسحب للرسالة الجديدة
+    }
+  });
+
+  // التمرير للأسفل إذا وصلت رسالة جديدة وكنا في الأسفل
+  if (!isUpdate || isNearBottom) {
+    setTimeout(() => {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }, 100);
+  }
+}
+
+function createMessageElement(msg) {
+  const div = document.createElement('div');
+  div.className = `message ${msg.senderId === myId ? 'mine' : 'theirs'}`;
+  div.dataset.id = msg.id;
+  div.dataset.raw = JSON.stringify(msg); // تخزين البيانات الخام للرد
+
+  // محتوى الرد المقتبس
+  let replyHtml = '';
+  if (msg.replyTo) {
+    const rType = msg.replyTo.type === 'audio' ? 'رسالة صوتية 🎤' : 
+                  msg.replyTo.type === 'image' ? 'صورة 📷' : 
+                  msg.replyTo.type === 'video' ? 'فيديو 🎥' : msg.replyTo.text;
+    replyHtml = `
+      <div class="reply-preview-block">
+        <strong>${msg.replyTo.senderName || 'مستخدم'}</strong>
+        <span>${truncate(rType, 30)}</span>
+      </div>
+    `;
+  }
+
+  // محتوى الرسالة
+  let contentHtml = '';
+  if (msg.type === 'text') {
+    contentHtml = `<div>${escapeHtml(msg.text)}</div>`;
+  } else if (msg.type === 'image') {
+    contentHtml = `<img src="${msg.url}" class="msg-img" loading="lazy" onclick="window.open(this.src)">`;
+  } else if (msg.type === 'video') {
+    contentHtml = `<video src="${msg.url}" class="msg-video" controls></video>`;
+  } else if (msg.type === 'audio') {
+    contentHtml = `<audio src="${msg.url}" controls controlsList="nodownload"></audio>`;
+  }
+
+  // التفاعلات
+  const reactionsHtml = `<div class="msg-reactions" style="display:none"></div>`;
+
+  div.innerHTML = `
+    ${replyHtml}
+    ${contentHtml}
+    <span class="msg-time">${formatTime(msg.timestamp)}</span>
+    ${reactionsHtml}
+  `;
+  
+  // تهيئة التفاعلات الأولية
+  if(msg.reactions) updateReactionsUI(div, msg.reactions);
+
+  return div;
+}
+
+function setupMessageEvents(el) {
+    // 1. Long Press for Reactions
+    el.addEventListener('mousedown', handleLongPressStart);
+    el.addEventListener('touchstart', handleLongPressStart, {passive: true});
+    
+    el.addEventListener('mouseup', handleLongPressEnd);
+    el.addEventListener('touchend', handleLongPressEnd);
+    el.addEventListener('mousemove', handleLongPressCancel);
+    el.addEventListener('touchmove', (e) => {
+        handleLongPressCancel();
+        handleSwipeMove(e, el); // Swipe Logic integrated
+    });
+
+    // 2. Swipe Start
+    el.addEventListener('touchstart', (e) => handleSwipeStart(e, el), {passive: true});
+}
+
+// === منطق السحب (Swipe to Reply) ===
+let touchStartX = 0;
+let swipeThreshold = 80; // المسافة اللازمة لتفعيل الرد
+let activeSwipeMsg = null;
+
+function handleSwipeStart(e, el) {
+    touchStartX = e.touches[0].clientX;
+    activeSwipeMsg = el;
+    el.style.transition = 'none'; // تعطيل الانتقال أثناء السحب
+}
+
+function handleSwipeMove(e, el) {
+    if (!activeSwipeMsg || activeSwipeMsg !== el) return;
+    
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - touchStartX;
+
+    // السماح بالسحب لليمين فقط (للرد)
+    if (diff > 0) { 
+        // مقاومة السحب (Damping)
+        const translate = Math.min(diff, 120); 
+        el.style.transform = `translateX(${-translate}px)`; // سالب لأننا في RTL
+    }
+}
+
+function handleLongPressEnd(e) {
+    // جزء من منطق السحب: عند رفع الإصبع
+    if (activeSwipeMsg) {
+        const currentX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
+        const diff = currentX - touchStartX;
+
+        activeSwipeMsg.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        activeSwipeMsg.style.transform = 'translateX(0)';
+
+        if (diff > swipeThreshold) {
+            // تفعيل الرد
+            // استخدام اهتزاز خفيف (Haptic Feedback) إذا كان مدعوماً
+            if (navigator.vibrate) navigator.vibrate(50);
+            
+            const raw = JSON.parse(activeSwipeMsg.dataset.raw);
+            prepareReply(raw);
+        }
+        activeSwipeMsg = null;
+    }
+    clearTimeout(longPressTimer);
+}
+
+// === منطق الضغط المطول (Reactions) ===
+function handleLongPressStart(e) {
+    // إعادة تعيين المؤقت
+    handleLongPressCancel();
+    
+    currentLongPressMsg = e.currentTarget;
+    
+    longPressTimer = setTimeout(() => {
+        showReactionMenu(e, currentLongPressMsg);
+        if (navigator.vibrate) navigator.vibrate(50);
+    }, 500); // 500ms للضغط المطول
+}
+
+function handleLongPressCancel() {
+    clearTimeout(longPressTimer);
+}
+
+function showReactionMenu(e, msgEl) {
+    const menu = document.getElementById('reactionMenu');
+    const rect = msgEl.getBoundingClientRect();
+    
+    // حساب الموضع (فوق الرسالة)
+    let top = rect.top - 60;
+    let left = rect.left + (rect.width / 2) - 100;
+    
+    // تصحيح الحدود
+    if (left < 10) left = 10;
+    if (left + 200 > window.innerWidth) left = window.innerWidth - 210;
+
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.style.display = 'flex';
+}
+
+function hideReactionMenu() {
+    document.getElementById('reactionMenu').style.display = 'none';
+}
+
+function addReaction(msgEl, reaction) {
+    const msgId = msgEl.dataset.id;
+    
+    // 1. تحديث الواجهة فوراً (Optimistic UI)
+    // نحصل على التفاعلات الحالية من السمة إذا وجدت
+    let currentReactions = {}; 
+    // هنا نفترض أننا نرسل التفاعل للخادم والخادم يرد بالتحديث،
+    // ولكن للمظهر الفوري سنضيفه للواجهة
+    const reactionsDiv = msgEl.querySelector('.msg-reactions');
+    reactionsDiv.style.display = 'flex';
+    reactionsDiv.textContent = reaction; // عرض مبسط لأحدث تفاعل
+    
+    // 2. إرسال للخادم
+    fetch('/api/chat/react', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ messageId: msgId, reaction: reaction })
+    }).then(res => res.json())
+      .then(data => {
+          if(!data.ok) console.warn('Failed to save reaction');
+      })
+      .catch(err => console.error(err));
+
+    // 3. حفظ محلي مؤقت (Fallback)
+    let localReactions = JSON.parse(localStorage.getItem('chat_reactions') || '{}');
+    localReactions[msgId] = reaction;
+    localStorage.setItem('chat_reactions', JSON.stringify(localReactions));
+}
+
+function updateReactionsUI(msgEl, reactionsData) {
+    const div = msgEl.querySelector('.msg-reactions');
+    
+    // دمج البيانات من الخادم مع التخزين المحلي (للحصول على أحدث حالة)
+    const msgId = msgEl.dataset.id;
+    const local = JSON.parse(localStorage.getItem('chat_reactions') || '{}')[msgId];
+    
+    let displayReaction = local || (reactionsData ? reactionsData.last : null);
+    
+    if (displayReaction) {
+        div.style.display = 'flex';
+        div.textContent = displayReaction;
+    } else {
+        div.style.display = 'none';
+    }
+}
+
+
+// === وظائف الرد (Reply) ===
+function prepareReply(msgData) {
+    replyToId = msgData.id;
+    const preview = document.getElementById('replyPreview');
+    const content = document.getElementById('replyContent');
+    const input = document.getElementById('msgInput');
+
+    let typeText = 'نص';
+    if(msgData.type === 'audio') typeText = 'رسالة صوتية 🎤';
+    else if(msgData.type === 'image') typeText = 'صورة 📷';
+    else if(msgData.type === 'video') typeText = 'فيديو 🎥';
+    else typeText = msgData.text;
+
+    content.innerHTML = `<strong>${msgData.senderName || 'مستخدم'}</strong><br>${truncate(typeText, 40)}`;
+    preview.style.display = 'block';
+    
+    input.focus();
+}
+
+function cancelReply() {
+    replyToId = null;
+    document.getElementById('replyPreview').style.display = 'none';
+}
+
+// === الإرسال ===
+async function sendMessage() {
+    const input = document.getElementById('msgInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    input.style.height = 'auto'; // إعادة تعيين الارتفاع
+    cancelReply(); // إخفاء الرد بعد الإرسال
+
+    try {
+        await fetch('/api/chat/send', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                text, 
+                type: 'text',
+                replyToId: replyToId
+            })
+        });
+        fetchMessages(true);
+    } catch (e) { console.error(e); }
+}
+
+// === رفع الملفات ===
+function triggerFile(type) {
+    const fileInput = document.getElementById('fileInput');
+    fileInput.accept = type === 'image' ? 'image/*' : 'video/*';
+    fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('type', type);
+        if(replyToId) formData.append('replyToId', replyToId);
+
+        // إظهار حالة التحميل (اختياري)
+        const sendBtn = document.getElementById('sendBtn');
+        sendBtn.textContent = '...'; 
+
+        try {
+            await fetch('/api/chat/upload', { method: 'POST', body: formData });
+            fetchMessages(true);
+            cancelReply();
+        } catch(err) { alert('فشل الرفع'); }
+        
+        sendBtn.textContent = '➤';
+    };
+    fileInput.click();
+}
+
+// === التسجيل الصوتي ===
+function startRecording() {
+    if (isRecording) return;
+    navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.start();
+        isRecording = true;
+        document.getElementById('recordingIndicator').style.display = 'flex';
+        
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const formData = new FormData();
+            formData.append('file', blob, 'voice.webm');
+            formData.append('type', 'audio');
+            if(replyToId) formData.append('replyToId', replyToId);
+            
+            await fetch('/api/chat/upload', { method: 'POST', body: formData });
+            fetchMessages(true);
+            cancelReply();
+        };
+    })
+    .catch(e => alert('المايكروفون غير متاح'));
+}
+
+function stopRecording() {
+    if (isRecording && mediaRecorder) {
+        mediaRecorder.stop();
+        isRecording = false;
+        document.getElementById('recordingIndicator').style.display = 'none';
+    }
+}
+
+// === أدوات مساعدة ===
+function escapeHtml(text) {
+    if(!text) return '';
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+function formatTime(ts) {
+    return new Date(ts).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+}
+function truncate(str, n) {
+    return (str && str.length > n) ? str.substr(0, n-1) + '...' : str;
+}
 </script>
 </body>
 </html>
