@@ -6,6 +6,9 @@
     <title>Aite - المحادثات</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- HTMX for smooth in-page navigation -->
+    <script src="https://unpkg.com/htmx.org@1.9.5"></script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
@@ -123,6 +126,12 @@
 
         a.chat-link { text-decoration:none; color:inherit; display:block; }
 
+        /* HTMX swap transitions for #mainContent */
+        #mainContent {
+            transition: opacity 220ms cubic-bezier(.2,.9,.2,1), transform 220ms cubic-bezier(.2,.9,.2,1);
+        }
+        .hx-fade-out { opacity: 0; transform: translateY(6px) scale(.995); }
+        .hx-fade-in { opacity: 1; transform: translateY(0) scale(1); }
     </style>
 </head>
 <body class="min-h-screen">
@@ -136,7 +145,8 @@
             </button>
             
             <div id="profileDropdown" class="absolute top-12 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
-                <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
+                <!-- Use HTMX to load profile into mainContent for smooth navigation -->
+                <a hx-get="/profile" hx-target="#mainContent" hx-push-url="true" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200" href="/profile">
                     <i class="fas fa-user-circle text-xl ml-3"></i>
                     الملف الشخصي
                 </a>
@@ -154,7 +164,7 @@
         </div>
 
         <div class="flex items-center">
-            <a href="/chat_list" class="text-gray-400 hover:text-white p-2 transition-colors">
+            <a hx-get="/chat_list" hx-target="#mainContent" hx-push-url="true" class="text-gray-400 hover:text-white p-2 transition-colors" href="/chat_list">
                 <i class="fas fa-arrow-left text-2xl"></i>
             </a>
         </div>
@@ -162,7 +172,7 @@
     </nav>
 </header>
 
-    <main class="max-w-6xl mx-auto p-4">
+<main id="mainContent" class="max-w-6xl mx-auto p-4 hx-fade-in">
         
         <div id="usersListContainer" class="max-w-xl mx-auto mt-4 space-y-3">
             <div class="text-center text-gray-500 p-4" id="loadingMessage">
@@ -170,10 +180,8 @@
             </div>
         </div>
 
-    </main>
+</main>
     
-
-
     <script>
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const usersListContainer = document.getElementById('usersListContainer');
@@ -197,19 +205,17 @@
         // ******************** وظائف عرض قائمة المحادثات ********************
 
         function createUserCard(user, currentUserId) {
-            const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
+            // Use HTMX for chat navigation (smooth in-page)
+            const chatLink = `/chat?contactId=${encodeURIComponent(user.id)}&contactName=${encodeURIComponent(user.username)}`;
             const unreadCount = user.unread_count || 0;
             const isUnread = unreadCount > 0;
             let lastMessageText = '<p class="text-gray-400 text-sm">ابدأ المحادثة...</p>';
 
-            // بناء محتوى الرسالة الأخيرة
             if (user.last_message) {
                 let content = user.last_message.content 
                             ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
                             : '[ملف مرفق]';
-                            
                 const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
-                
                 lastMessageText = `
                     <p class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
                         ${senderPrefix}${content}
@@ -222,8 +228,9 @@
             // placeholder for verified badge — will be filled later by updateVerifiedBadges()
             const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${user.id}"></span>`;
 
+            // hx-get attributes added for HTMX navigation into #mainContent
             return `
-                <a href="${chatLink}" class="chat-link">
+                <a hx-get="${chatLink}" hx-target="#mainContent" hx-push-url="true" class="chat-link">
                     <div class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
                         <div style="margin-left:12px; position:relative;" class="avatar-with-dot">
                             <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
@@ -293,6 +300,41 @@
             }
         }
         
+        // HTMX lifecycle: smooth transitions + re-init when content swapped into #mainContent
+        document.body.addEventListener('htmx:beforeRequest', function (evt) {
+            const el = document.querySelector('#mainContent');
+            if (el) {
+                el.classList.remove('hx-fade-in');
+                el.classList.add('hx-fade-out');
+            }
+        });
+
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+            const el = document.querySelector('#mainContent');
+            if (el) {
+                el.classList.remove('hx-fade-out');
+                void el.offsetWidth; // reflow
+                el.classList.add('hx-fade-in');
+            }
+            // re-run init logic if users list is present
+            try {
+                if (document.getElementById('usersListContainer')) {
+                    fetchAndDisplayFriends();
+                }
+                // If profile content was loaded, call its init if present
+                if (typeof initializeAfterLoad === 'function') initializeAfterLoad();
+            } catch (e) { console.warn('afterSwap init error', e); }
+        });
+
+        document.body.addEventListener('htmx:responseError', function (evt) {
+            const el = document.querySelector('#mainContent');
+            if (el) {
+                el.classList.remove('hx-fade-out');
+                el.classList.add('hx-fade-in');
+            }
+            console.error('HTMX response error', evt.detail.xhr && evt.detail.xhr.status);
+        });
+
         // جلب صورة الملف الشخصي للمستخدم الحالي في النافبار
         document.addEventListener('DOMContentLoaded', () => {
             fetch('/api/profile')
@@ -309,7 +351,10 @@
             fetchAndDisplayFriends();
             
             // تحديث قائمة المحادثات كل 10 ثواني (أثناء التواجد في الصفحة)
-            setInterval(fetchAndDisplayFriends, 10000);
+            setInterval(() => {
+                // only refresh if we're currently viewing the users list in mainContent
+                if (document.getElementById('usersListContainer')) fetchAndDisplayFriends();
+            }, 10000);
 
             // initial friend-requests badge fetch
             updateFriendReqBadge();
@@ -369,7 +414,10 @@
             if (!uid) return;
             try {
               const res = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' });
-              if (!res.ok) return;
+              if (!res.ok) {
+                ph.remove();
+                return;
+              }
               const data = await res.json();
               if (data && data.ok && data.is_verified) {
                 const img = document.createElement('img');
@@ -386,7 +434,6 @@
             }
           }));
         }
-
       </script>
 </body>
 </html>
