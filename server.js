@@ -1481,15 +1481,22 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
 
     const messages = [];
     messagesSnap.forEach(childSnap => {
-      messages.push(childSnap.val());
+      const val = childSnap.val();
+      messages.push({
+        ...val, // جلب كل البيانات
+        messageId: childSnap.key, // التأكد من أن الـ ID موجود
+        reaction: val.reaction || null // [مهم] قراءة التفاعل المحفوظ
+      });
     });
 
     res.json({ ok: true, messages: messages });
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ ok: false, error: 'Error fetching messages.' });
   }
 });
+
 
 // استبدل مسار إرسال الرسالة بهذا الكود المعدل
 app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, res) => {
@@ -1615,7 +1622,7 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
 app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { otherId, messageId } = req.params;
-  const { reaction } = req.body; // الإيموجي مثل ❤️ 😢 إلخ
+  const { reaction } = req.body;
 
   if (!reaction) {
     return res.status(400).json({ ok: false, error: 'reaction required' });
@@ -1624,17 +1631,18 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
   const chatId = [userId, otherId].sort().join('_');
 
   try {
-    // التحقق من وجود الرسالة
-    const messageSnap = await db.ref(`messages/${chatId}/messages/${messageId}`).once('value');
+    // تصحيح المسار: الوصول المباشر للرسالة
+    const messageRef = db.ref(`messages/${chatId}/${messageId}`);
+    const messageSnap = await messageRef.once('value');
+
     if (!messageSnap.exists()) {
       return res.status(404).json({ ok: false, error: 'Message not found' });
     }
 
     const message = messageSnap.val();
 
-    // إذا كان المستخدم هو مرسل الرسالة، لا نرسل إشعارًا له
-    if (message.senderId !== userId) {
-      // إضافة إشعار لمرسل الرسالة
+    // إرسال إشعار لصاحب الرسالة إذا لم يكن هو من قام بالتفاعل
+    if (message.senderId && message.senderId !== userId) {
       await db.ref(`notifications/${message.senderId}`).push({
         type: 'message_reaction',
         from_user_id: userId,
@@ -1646,14 +1654,9 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
       });
     }
 
-    // حفظ التفاعل (نستخدم reaction كقيمة مباشرة لأن كل مستخدم يمكنه تفاعل واحد فقط)
-    await db.ref(`messages/${chatId}/messages/${messageId}/reaction_from/${userId}`).set(reaction);
-
-    // تحديث حقل reaction في الرسالة (آخر تفاعل أو نجمعها إذا أردت، هنا نأخذ آخر واحد كمثال بسيط)
-    // لجعلها فعلية: نحدث الرسالة بحقل reaction يحتوي على آخر إيموجي
-    await db.ref(`messages/${chatId}/messages/${messageId}`).update({
-      reaction: reaction, // يظهر للجميع آخر تفاعل (يمكن توسيعه لقائمة)
-      reacted_at: admin.database.ServerValue.TIMESTAMP
+    // [مهم] حفظ التفاعل داخل كائن الرسالة مباشرة باستخدام update
+    await messageRef.update({
+      reaction: reaction
     });
 
     res.json({ ok: true });
@@ -1662,6 +1665,7 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
     res.status(500).json({ ok: false });
   }
 });
+
 
 // حذف تفاعل (إذا أردت دعم إزالته لاحقًا)
 app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
@@ -3725,43 +3729,6 @@ app.get('/partials/chat_content', requireAuth, async (req, res) => {
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ ok: false, error: 'Server error' });
-});
-// ---------------- API: Message Reactions (جديد) ----------------
-
-// إضافة تفاعل (reaction) على رسالة معينة
-app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const { otherId, messageId } = req.params;
-  const { reaction } = req.body; // الإيموجي مثل ❤️ 😢 إلخ
-
-  if (!reaction) {
-    return res.status(400).json({ ok: false, error: 'reaction required' });
-  }
-
-  const chatId = [userId, otherId].sort().join('_');
-
-  try {
-    // التحقق من وجود الرسالة
-    const messageSnap = await db.ref(`messages/${chatId}/${messageId}`).once('value');
-    
-    // ملاحظة: في بعض هياكل البيانات قد تكون الرسائل داخل قائمة، تأكد من المسار الصحيح لديك
-    // إذا كنت تخزن الرسائل بـ push() مباشرة تحت messages/chatId/ فالمسار أعلاه صحيح
-    
-    // حفظ التفاعل (نستخدم reaction كقيمة مباشرة لأن كل مستخدم يمكنه تفاعل واحد فقط)
-    // لتخزين من قام بالتفاعل:
-    await db.ref(`messages/${chatId}/${messageId}/reaction_from/${userId}`).set(reaction);
-
-    // تحديث حقل reaction في الرسالة (للعرض السريع - يظهر آخر تفاعل)
-    await db.ref(`messages/${chatId}/${messageId}`).update({
-      reaction: reaction, 
-      reacted_at: admin.database.ServerValue.TIMESTAMP
-    });
-
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Add message reaction error:', error);
-    res.status(500).json({ ok: false });
-  }
 });
 
 app.listen(port, () => {
