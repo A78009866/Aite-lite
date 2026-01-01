@@ -7,624 +7,631 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
+/* إعدادات الألوان الأساسية */
 :root {
-  --bg: #000;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --accent: #7dd3fc;
-  --muted: #cbd5e1;
-  --reply-bg: rgba(255, 255, 255, 0.08);
-  --reply-border: rgba(255, 255, 255, 0.15);
-  
-  /* ألوان الرسائل */
-  --msg-incoming-bg: rgba(255, 255, 255, 0.08);
-  --msg-outgoing-bg: rgba(14, 165, 233, 0.25);
+  --bg: #0f172a; /* خلفية داكنة */
+  --header-bg: rgba(30, 41, 59, 0.8);
+  --msg-incoming: #334155;
+  --msg-outgoing: #0ea5e9;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent: #38bdf8;
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body {
-  margin: 0; padding: 0;
-  background-color: var(--bg);
-  color: #fff;
+  margin: 0;
+  padding: 0;
   font-family: 'Inter', sans-serif;
+  background-color: var(--bg);
+  color: var(--text-primary);
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Header */
+/* الرأس */
 header {
-  height: 60px;
   display: flex;
   align-items: center;
-  padding: 0 15px;
-  background: rgba(0,0,0,0.8);
+  padding: 10px 15px;
+  background: var(--header-bg);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--glass-border);
-  z-index: 50;
-  position: relative;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  z-index: 10;
+  height: 60px;
+  box-sizing: border-box;
 }
+
 .back-btn {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 1.2rem;
   margin-left: 15px;
-  cursor: pointer;
+  text-decoration: none;
 }
+
 .user-info {
   display: flex;
   align-items: center;
-  flex: 1;
-}
-.user-avatar {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid var(--glass-border);
-  margin-left: 10px;
-}
-.user-details h3 {
-  margin: 0; font-size: 1rem; font-weight: 600;
-}
-.user-status {
-  font-size: 0.75rem; color: #10b981; /* green for online */
+  flex-grow: 1;
 }
 
-/* Chat Area */
-#chat-container {
-  flex: 1;
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-left: 10px;
+  border: 2px solid var(--accent);
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+/* منطقة الرسائل */
+#messages-container {
+  flex-grow: 1;
   overflow-y: auto;
   padding: 15px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  scroll-behavior: smooth; 
+  gap: 10px;
+  scroll-behavior: smooth;
 }
-/* إزالة الـ smooth scroll برمجياً عند تحميل الرسائل القديمة لمنع القفز */
-.no-smooth { scroll-behavior: auto !important; }
 
-.message-group {
+.message-wrapper {
   display: flex;
-  flex-direction: column;
-  max-width: 80%;
-  position: relative;
+  width: 100%;
+  margin-bottom: 5px;
 }
-.message-group.me {
-  align-self: flex-end;
-  align-items: flex-end;
+
+.message-wrapper.me {
+  justify-content: flex-start; /* لأن الاتجاه RTL، البداية هي اليمين */
 }
-.message-group.other {
-  align-self: flex-start;
-  align-items: flex-start;
+
+.message-wrapper.other {
+  justify-content: flex-end; /* النهاية هي اليسار */
+  flex-direction: row-reverse;
 }
 
 .message-bubble {
+  max-width: 75%;
   padding: 10px 14px;
-  border-radius: 18px;
+  border-radius: 16px;
   position: relative;
-  word-wrap: break-word;
   font-size: 0.95rem;
   line-height: 1.5;
-  color: #fff;
-  transition: transform 0.2s;
-  min-width: 80px;
+  word-wrap: break-word;
 }
-.me .message-bubble {
-  background: var(--msg-outgoing-bg);
-  border-bottom-left-radius: 4px;
-}
-.other .message-bubble {
-  background: var(--msg-incoming-bg);
+
+.message-wrapper.me .message-bubble {
+  background-color: var(--msg-outgoing);
+  color: white;
   border-bottom-right-radius: 4px;
 }
 
-/* Reply Context Inside Bubble */
-.reply-preview {
-  background: rgba(0,0,0,0.2);
-  border-left: 3px solid var(--accent);
-  padding: 6px 10px;
-  border-radius: 6px;
-  margin-bottom: 6px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  display: flex; 
-  flex-direction: column;
+.message-wrapper.other .message-bubble {
+  background-color: var(--msg-incoming);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
 }
-.reply-sender { font-weight: bold; color: var(--accent); margin-bottom: 2px;}
-.reply-text { color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Media */
-.msg-img, .msg-video {
+/* تنسيق الصور والفيديو */
+.media-content {
   max-width: 100%;
-  border-radius: 12px;
+  border-radius: 10px;
   margin-top: 5px;
   display: block;
 }
 
-/* Audio Player Styles - FIXED */
-.audio-player {
+/* =========================================
+   تنسيق مشغل الصوت المخصص (الحل للمؤشر)
+   ========================================= */
+.custom-audio-player {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
   padding: 8px 12px;
-  border-radius: 25px;
-  width: 240px;
-  margin-top: 5px;
+  border-radius: 20px;
+  width: 220px;
+  direction: ltr; /* لضمان عمل الشريط بشكل صحيح */
 }
+
 .play-btn {
-  background: none; border: none; color: #fff;
-  cursor: pointer; font-size: 1.2rem;
-  width: 30px; display: flex; justify-content: center;
-}
-/* المؤشر الأبيض */
-.audio-slider {
-  flex: 1;
-  -webkit-appearance: none;
-  background: rgba(255,255,255,0.2);
-  height: 4px;
-  border-radius: 2px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
   cursor: pointer;
-  position: relative;
+  width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+/* شريط التمرير الأبيض الواضح */
+.audio-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* مقبض الشريط (الدوائر) لمتصفحات كروم وسفاري */
 .audio-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px; height: 12px;
-  background: #ffffff; /* أبيض ناصع */
+  appearance: none;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
+  background: #ffffff; /* أبيض ناصع */
   cursor: pointer;
-  box-shadow: 0 0 5px rgba(0,0,0,0.3);
-  margin-top: -4px; /* توسيط النقطة */
+  box-shadow: 0 0 5px rgba(0,0,0,0.5);
+  transition: transform 0.1s;
 }
+.audio-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* مقبض الشريط لمتصفحات فايرفوكس */
 .audio-slider::-moz-range-thumb {
-  width: 12px; height: 12px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
   background: #ffffff;
   border: none;
-  border-radius: 50%;
   cursor: pointer;
-}
-.audio-time {
-  font-size: 0.7rem; color: #ddd;
-  min-width: 35px; text-align: center;
+  box-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
 
-/* Footer (Input) */
+.audio-time {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.9);
+  min-width: 35px;
+  text-align: center;
+}
+
+/* منطقة الإدخال */
 footer {
   padding: 10px;
-  background: rgba(0,0,0,0.9);
-  border-top: 1px solid var(--glass-border);
+  background: var(--header-bg);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255,255,255,0.1);
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 10px;
-  z-index: 50;
-}
-/* Reply UI above input */
-#reply-bar {
-  display: none;
-  background: var(--reply-bg);
-  border: 1px solid var(--reply-border);
-  border-radius: 12px;
-  padding: 8px 12px;
-  position: relative;
-  animation: slideUp 0.2s ease;
-}
-@keyframes slideUp { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
-.close-reply {
-  position: absolute; top: 5px; left: 10px;
-  color: #aaa; cursor: pointer;
 }
 
-.input-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-.attach-btn {
-  color: var(--accent);
-  padding: 10px;
-  cursor: pointer;
-}
-#msg-input {
-  flex: 1;
-  background: rgba(255,255,255,0.1);
+#message-input {
+  flex-grow: 1;
+  background: rgba(255, 255, 255, 0.1);
   border: none;
-  border-radius: 20px;
-  padding: 10px 15px;
-  color: #fff;
+  padding: 12px 15px;
+  border-radius: 25px;
+  color: white;
   font-size: 1rem;
-  max-height: 100px;
-  overflow-y: auto;
-  resize: none;
+  outline: none;
 }
-#msg-input:focus { outline: none; background: rgba(255,255,255,0.15); }
+
+.action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.action-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .send-btn {
   background: var(--accent);
-  color: #000;
-  border: none;
-  width: 40px; height: 40px;
+  color: white;
+}
+
+/* تسجيل الصوت */
+#recording-ui {
+  display: none;
+  flex-grow: 1;
+  align-items: center;
+  color: #ef4444;
+  font-weight: bold;
+  padding: 0 15px;
+}
+
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
   border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-.send-btn:active { transform: scale(0.9); }
-
-/* Swipe Interaction */
-.swipe-overlay {
-  position: absolute;
-  top: 0; bottom: 0; right: -50px;
-  width: 50px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--accent);
-  opacity: 0;
-  transition: opacity 0.2s;
+  margin-right: 10px;
+  animation: pulse 1.5s infinite;
 }
 
-/* Spinner for loading old messages */
-#loading-spinner {
-  text-align: center; padding: 10px; color: var(--muted); font-size: 0.8rem; display: none;
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 
+.hidden { display: none !important; }
 </style>
 </head>
 <body>
 
 <header>
-  <i class="fas fa-arrow-right back-btn" onclick="history.back()"></i>
-  <div class="user-info" id="header-info">
-    <img src="" id="header-avatar" class="user-avatar" style="display:none">
-    <div class="user-details" style="margin-right:10px;">
-      <h3 id="header-name">جاري التحميل...</h3>
-      <span class="user-status" id="header-status"></span>
-    </div>
+  <a href="/" class="back-btn"><i class="fas fa-arrow-right"></i></a>
+  <div class="user-info">
+    <img src="" id="header-avatar" class="user-avatar" alt="Avatar">
+    <span id="header-name" class="user-name">جاري التحميل...</span>
   </div>
+  <button class="action-btn" style="background:transparent;"><i class="fas fa-phone"></i></button>
 </header>
 
-<div id="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري تحميل المحادثة...</div>
-<div id="chat-container">
+<div id="messages-container">
   </div>
 
 <footer>
-  <div id="reply-bar">
-    <div style="border-left:3px solid var(--accent); padding-left:8px;">
-      <div style="color:var(--accent); font-weight:bold; font-size:0.8rem;" id="reply-to-name"></div>
-      <div style="color:#ccc; font-size:0.8rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="reply-to-text"></div>
-    </div>
-    <i class="fas fa-times close-reply" onclick="cancelReply()"></i>
+  <input type="file" id="file-input" style="display: none;" onchange="handleFileUpload(this)">
+  <button class="action-btn" onclick="document.getElementById('file-input').click()">
+    <i class="fas fa-paperclip"></i>
+  </button>
+
+  <input type="text" id="message-input" placeholder="اكتب رسالة..." autocomplete="off">
+  
+  <div id="recording-ui">
+    <div class="recording-dot"></div>
+    <span id="record-timer">00:00</span>
   </div>
 
-  <div class="input-row">
-    <label class="attach-btn">
-      <i class="fas fa-paperclip"></i>
-      <input type="file" id="file-input" hidden multiple onchange="handleFileUpload(this)">
-    </label>
-    <textarea id="msg-input" rows="1" placeholder="اكتب رسالة..."></textarea>
-    <button class="send-btn" id="send-btn"><i class="fas fa-paper-plane"></i></button>
-  </div>
+  <button class="action-btn" id="mic-btn">
+    <i class="fas fa-microphone"></i>
+  </button>
+  <button class="action-btn send-btn hidden" id="send-btn">
+    <i class="fas fa-paper-plane"></i>
+  </button>
 </footer>
 
 <script src="/socket.io/socket.io.js"></script>
+
 <script>
-// --- تهيئة المتغيرات ---
-const socket = io();
-const urlParams = new URLSearchParams(window.location.search);
-const chatId = urlParams.get('chatId'); 
-const otherUserId = urlParams.get('userId'); // لو كنا نبدأ محادثة جديدة
-const myId = document.cookie.replace(/(?:(?:^|.*;\s*)userId\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-
-let messagesContainer = document.getElementById('chat-container');
-let replyData = null;
-let currentPlayingAudio = null; // لتتبع الصوت المشغل حالياً
-let isLoadingHistory = false;
-let allMessagesLoaded = false;
-let oldestMessageId = null; // لأجل الـ Pagination
-
-// --- تشغيل الصفحة ---
-document.addEventListener('DOMContentLoaded', () => {
-  initChat();
+  // استخراج معرف المحادثة والمستخدم من الرابط أو الجلسة
+  // نفترض أن الخادم يمرر userId في قالب أو نجلبه من API
+  // هنا سنعتمد على استخراج chatId من الـ URL (مثال: /chat/123_456)
+  const pathParts = window.location.pathname.split('/');
+  const chatId = pathParts[pathParts.length - 1]; // أو استخرجه حسب طريقة التوجيه لديك
   
-  // إرسال الرسالة
-  document.getElementById('send-btn').addEventListener('click', sendMessage);
-  
-  // Scroll Listener for History
-  messagesContainer.addEventListener('scroll', () => {
-    if (messagesContainer.scrollTop === 0 && !isLoadingHistory && !allMessagesLoaded) {
-      loadMoreMessages();
-    }
-  });
-});
+  let myId = null; 
+  let currentAudio = null;
+  let currentPlayBtn = null;
+  const socket = io();
 
-// --- دوال الاتصال والبيانات ---
-function initChat() {
-  // طلب معلومات المستخدم الآخر
-  fetch(`/api/chat/info?chatId=${chatId}&userId=${otherUserId}`)
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById('header-name').textContent = data.name;
-      const avatar = document.getElementById('header-avatar');
-      avatar.src = data.avatar || '/default-avatar.png';
-      avatar.style.display = 'block';
-      if(data.isOnline) document.getElementById('header-status').textContent = 'متصل الآن';
+  const messagesContainer = document.getElementById('messages-container');
+  const messageInput = document.getElementById('message-input');
+  const sendBtn = document.getElementById('send-btn');
+  const micBtn = document.getElementById('mic-btn');
+  const recordingUi = document.getElementById('recording-ui');
+  const recordTimer = document.getElementById('record-timer');
+
+  // ==========================================
+  // 1. التهيئة وجلب الرسائل
+  // ==========================================
+  async function initChat() {
+    try {
+      // طلب الرسائل من الـ API الجديد الذي أنشأناه في server.js
+      const res = await fetch(`/api/messages/${chatId}`);
+      if(!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
       
-      // الانضمام للغرفة
-      socket.emit('join chat', { chatId: data.chatId });
-      loadInitialMessages(data.chatId);
-    });
-}
-
-// تحميل الرسائل الأولية
-function loadInitialMessages(cId) {
-  fetch(`/api/messages?chatId=${cId}&limit=50`)
-    .then(r => r.json())
-    .then(msgs => {
-      // msgs يجب أن تأتي مرتبة زمنياً من الأقدم للأحدث من السيرفر، أو نقوم بقلبها
-      // سنفترض أن السيرفر يرسل الأحدث أولاً، لذا نقلب المصفوفة للعرض
-      const sortedMsgs = msgs.reverse(); 
+      myId = data.currentUserId;
       
-      if (sortedMsgs.length > 0) {
-        oldestMessageId = sortedMsgs[0]._id || sortedMsgs[0].id;
-        sortedMsgs.forEach(msg => appendMessage(msg, false)); // false = append at bottom
-        scrollToBottom();
-      }
-    });
-}
+      // تحديث الرأس
+      document.getElementById('header-name').textContent = data.otherUser.username;
+      document.getElementById('header-avatar').src = data.otherUser.avatar;
 
-// تحميل الرسائل القديمة (History)
-function loadMoreMessages() {
-  if(!oldestMessageId) return;
-  isLoadingHistory = true;
-  document.getElementById('loading-spinner').style.display = 'block';
-  
-  // حفظ موقع السكرول الحالي
-  const scrollHeightBefore = messagesContainer.scrollHeight;
-
-  fetch(`/api/messages?chatId=${chatId}&beforeId=${oldestMessageId}&limit=30`)
-    .then(r => r.json())
-    .then(msgs => {
-      document.getElementById('loading-spinner').style.display = 'none';
-      if(msgs.length === 0) {
-        allMessagesLoaded = true;
-        return;
-      }
-      
-      // msgs تأتي الأحدث أولاً (قبل oldestMessageId)
-      // نحتاج لقلبها لترتيبها زمنياً ثم إضافتها للأعلى
-      const sortedMsgs = msgs.reverse(); 
-      oldestMessageId = sortedMsgs[0]._id || sortedMsgs[0].id;
-
-      sortedMsgs.reverse().forEach(msg => { 
-        // نعكس اللوب لنضيفهم للأعلى بالترتيب الصحيح (الأحدث مما جلبنا يكون في الأسفل بالنسبة للمجموعة الجديدة)
-        // لكن appendMessage مع prepend=true يضيف في قمة القائمة
-        // لذا نمرر الرسالة الأحدث زمنياً في المجموعة أولاً لتكون أسفل المجموعة الجديدة
-        // انتظر: prepend يضيف كـ First Child. 
-        // الحل الأسهل: نجهز HTML كامل ونضعه مرة واحدة أو نستخدم insertAdjacentHTML
+      // بناء الرسائل
+      messagesContainer.innerHTML = '';
+      data.messages.forEach(msg => {
+        appendMessage(msg, false); // false = لا تقم بالتمرير للأسفل مع كل رسالة أثناء التحميل الأولي
       });
 
-      // تصحيح منطق prepend:
-      // المصفوفة sortedMsgs: [الأقدم ..... الأحدث]
-      // نريد وضع الأحدث في أسفل المنطقة العلوية.
-      // لذا نبدأ من آخر عنصر في المصفوفة ونعمل prepend
-      for (let i = sortedMsgs.length - 1; i >= 0; i--) {
-        appendMessage(sortedMsgs[i], true);
-      }
+      // تمرير لآخر رسالة
+      scrollToBottom();
 
-      // استعادة موقع السكرول
-      const scrollHeightAfter = messagesContainer.scrollHeight;
-      messagesContainer.scrollTop = scrollHeightAfter - scrollHeightBefore;
-      isLoadingHistory = false;
-    });
-}
+      // إعداد اتصال Socket
+      socket.emit('joinChat', chatId);
 
-// --- التعامل مع الصوتيات (Audio Logic) ---
-// تم إصلاح المشكلة: استخدام متغير global لتخزين الصوت المشغل
-function playAudio(btn, url) {
-  const container = btn.closest('.audio-player');
-  const slider = container.querySelector('.audio-slider');
-  const timeDisplay = container.querySelector('.audio-time');
-  const icon = btn.querySelector('i');
-
-  // إذا كان هناك صوت آخر يعمل، أوقفه
-  if (currentPlayingAudio && currentPlayingAudio.url !== url) {
-    currentPlayingAudio.audio.pause();
-    const oldBtn = currentPlayingAudio.btn;
-    if(oldBtn) oldBtn.querySelector('i').className = 'fas fa-play';
-    currentPlayingAudio = null;
-  }
-
-  // إذا كان هذا الصوت يعمل حالياً، أوقفه مؤقتاً
-  if (currentPlayingAudio && currentPlayingAudio.url === url) {
-    if (currentPlayingAudio.audio.paused) {
-        currentPlayingAudio.audio.play();
-        icon.className = 'fas fa-pause';
-    } else {
-        currentPlayingAudio.audio.pause();
-        icon.className = 'fas fa-play';
+    } catch (err) {
+      console.error(err);
+      messagesContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ef4444;">حدث خطأ في تحميل المحادثة</div>';
     }
-    return;
   }
 
-  // إنشاء كائن صوت جديد
-  const audio = new Audio(url);
-  currentPlayingAudio = { audio, url, btn };
-  
-  audio.addEventListener('loadedmetadata', () => {
-    slider.max = Math.floor(audio.duration);
-    timeDisplay.textContent = formatTime(audio.duration);
-  });
+  // ==========================================
+  // 2. دالة بناء الرسالة (بدون إعادة تحميل الصفحة)
+  // ==========================================
+  function appendMessage(msg, shouldScroll = true) {
+    const isMe = msg.senderId === myId;
+    const dirClass = isMe ? 'me' : 'other';
+    
+    // تحديد المحتوى (نص، صورة، صوت)
+    let contentHtml = '';
+    
+    if (msg.type === 'text' || !msg.media) {
+      contentHtml = `<div class="text-content">${escapeHtml(msg.content)}</div>`;
+    } 
+    else if (msg.media.type.startsWith('image')) {
+      contentHtml = `<img src="${msg.media.url}" class="media-content" onclick="window.open(this.src)">`;
+      if(msg.content) contentHtml += `<div class="mt-2">${escapeHtml(msg.content)}</div>`;
+    }
+    else if (msg.media.type.startsWith('video')) {
+      contentHtml = `<video src="${msg.media.url}" controls class="media-content"></video>`;
+    }
+    else if (msg.media.type.startsWith('audio') || msg.media.url.endsWith('.webm') || msg.media.url.endsWith('.mp3')) {
+      // هنا نستخدم المشغل المخصص لحل مشكلة اللون الأبيض
+      const uniqueId = 'audio-' + msg.messageId;
+      contentHtml = `
+        <div class="custom-audio-player">
+          <button class="play-btn" onclick="toggleAudio('${uniqueId}', '${msg.media.url}')">
+            <i class="fas fa-play"></i>
+          </button>
+          <input type="range" class="audio-slider" id="${uniqueId}-slider" value="0" min="0" step="0.1" oninput="seekAudio('${uniqueId}', this.value)">
+          <span class="audio-time" id="${uniqueId}-time">0:00</span>
+          <audio id="${uniqueId}" src="${msg.media.url}" preload="metadata" ontimeupdate="updateSlider('${uniqueId}')" onended="resetPlayer('${uniqueId}')"></audio>
+        </div>
+      `;
+    }
 
-  audio.addEventListener('timeupdate', () => {
-    slider.value = Math.floor(audio.currentTime);
-    timeDisplay.textContent = formatTime(audio.currentTime);
-    // تحديث بصري للمتصفحات القديمة إذا لزم الأمر، لكن الـ slider thumb الأبيض كافي
-    // (اختياري) تلوين الجزء المقطوع:
-    const percent = (audio.currentTime / audio.duration) * 100;
-    slider.style.background = `linear-gradient(to right, #fff ${percent}%, rgba(255,255,255,0.2) ${percent}%)`;
-  });
-
-  audio.addEventListener('ended', () => {
-    icon.className = 'fas fa-play';
-    slider.value = 0;
-    slider.style.background = 'rgba(255,255,255,0.2)';
-    currentPlayingAudio = null;
-  });
-
-  // السحب على الشريط
-  slider.addEventListener('input', () => {
-    audio.currentTime = slider.value;
-  });
-
-  audio.play().then(() => {
-    icon.className = 'fas fa-pause';
-  }).catch(e => console.error("Audio play error", e));
-}
-
-function formatTime(sec) {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s < 10 ? '0'+s : s}`;
-}
-
-
-// --- عرض الرسائل ---
-function appendMessage(msg, prepend = false) {
-  const isMe = (msg.senderId === myId);
-  const alignClass = isMe ? 'me' : 'other';
-  
-  // بناء محتوى الرد (Reply)
-  let replyHTML = '';
-  if (msg.replyTo) {
-    replyHTML = `
-      <div class="reply-preview" onclick="scrollToMessage('${msg.replyTo.id}')">
-        <div class="reply-sender">${msg.replyTo.sender}</div>
-        <div class="reply-text">${msg.replyTo.content || (msg.replyTo.type === 'audio' ? 'تسجيل صوتي' : 'ملف')}</div>
-      </div>
-    `;
-  }
-
-  // بناء محتوى الرسالة حسب النوع
-  let contentHTML = '';
-  if (msg.type === 'text') {
-    contentHTML = `<div class="text-content">${msg.content}</div>`;
-  } else if (msg.type === 'image') {
-    contentHTML = `<img src="${msg.mediaUrl}" class="msg-img" onclick="viewMedia('${msg.mediaUrl}')">`;
-    if(msg.content) contentHTML += `<div class="caption">${msg.content}</div>`;
-  } else if (msg.type === 'video') {
-    contentHTML = `<video src="${msg.mediaUrl}" class="msg-video" controls></video>`;
-  } else if (msg.type === 'audio') {
-    // هنا المؤشر الأبيض المهيأ
-    contentHTML = `
-      <div class="audio-player">
-        <button class="play-btn" onclick="playAudio(this, '${msg.mediaUrl}')">
-          <i class="fas fa-play"></i>
-        </button>
-        <input type="range" class="audio-slider" min="0" value="0" step="0.1">
-        <span class="audio-time">0:00</span>
-      </div>
-    `;
-  }
-
-  const msgHTML = `
-    <div class="message-group ${alignClass}" id="msg-${msg.messageId || msg._id}" data-id="${msg.messageId || msg._id}">
-      <div class="message-bubble">
-        ${replyHTML}
-        ${contentHTML}
-        <div style="font-size:0.65rem; color:rgba(255,255,255,0.5); text-align:left; margin-top:4px;">
-          ${new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+    const html = `
+      <div class="message-wrapper ${dirClass}" id="msg-${msg.messageId}">
+        <div class="message-bubble">
+          ${contentHtml}
+          <div style="font-size:0.7rem; color:rgba(255,255,255,0.5); text-align:left; margin-top:4px;">
+            ${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          </div>
         </div>
       </div>
-      <div class="swipe-overlay"><i class="fas fa-reply"></i></div>
-    </div>
-  `;
+    `;
 
-  // الحل الجذري لمشكلة توقف الصوت: استخدام insertAdjacentHTML بدلاً من innerHTML
-  if (prepend) {
-    messagesContainer.insertAdjacentHTML('afterbegin', msgHTML);
-  } else {
-    messagesContainer.insertAdjacentHTML('beforeend', msgHTML);
-    // تفعيل خاصية السحب للرد (Swipe to reply) للعنصر الجديد
-    const newMsgEl = document.getElementById(`msg-${msg.messageId || msg._id}`);
-    enableSwipeToReply(newMsgEl, msg);
+    // إضافة الرسالة دون المساس بالعناصر الأخرى (الحفاظ على الصوت شغالاً)
+    messagesContainer.insertAdjacentHTML('beforeend', html);
+
+    if (shouldScroll) scrollToBottom();
   }
-}
 
-// Socket: استقبال رسالة جديدة
-socket.on('chat message', (msg) => {
-  // إذا كنت أنا المرسل، لا تضفها مرة أخرى إذا كنت قد أضفتها وهمياً (Optimistic UI)
-  // لكن هنا سنفترض البساطة: نضيفها عند وصولها من السيرفر
-  appendMessage(msg);
-  scrollToBottom();
-  // ملاحظة: بما أننا استخدمنا insertAdjacentHTML، لن يتوقف الصوت المشغل في رسالة سابقة
-});
+  // ==========================================
+  // 3. منطق مشغل الصوت المخصص (إصلاح المؤشر)
+  // ==========================================
+  function toggleAudio(id, url) {
+    const audio = document.getElementById(id);
+    const btnIcon = document.querySelector(`button[onclick="toggleAudio('${id}', '${url}')"] i`);
 
-
-// --- إرسال الرسالة ---
-function sendMessage() {
-  const input = document.getElementById('msg-input');
-  const text = input.value.trim();
-  
-  if (!text) return; // Add file logic separate
-
-  const msgData = {
-    chatId: chatId,
-    senderId: myId,
-    content: text,
-    type: 'text',
-    timestamp: new Date().toISOString(),
-    replyTo: replyData
-  };
-
-  socket.emit('chat message', msgData);
-  input.value = '';
-  cancelReply();
-}
-
-// --- أدوات مساعدة ---
-function scrollToBottom() {
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-function cancelReply() {
-  replyData = null;
-  document.getElementById('reply-bar').style.display = 'none';
-}
-
-function enableSwipeToReply(el, msgData) {
-  // كود السحب (تم اختصاره للتركيز على طلبك الأساسي، يمكنك نسخه من ملفك الأصلي)
-  // الفكرة: عند touchend وإزاحة > 50px، قم بتعيين replyData واظهر الشريط
-  let startX = 0;
-  el.addEventListener('touchstart', e => startX = e.touches[0].clientX);
-  el.addEventListener('touchmove', e => {
-     let diff = e.touches[0].clientX - startX;
-     if(Math.abs(diff) > 50) {
-        // Trigger visual feedback
-     }
-  });
-  el.addEventListener('touchend', e => {
-     let diff = e.changedTouches[0].clientX - startX;
-     if(Math.abs(diff) > 80) { // Swipe threshold
-         triggerReply(msgData);
-     }
-  });
-}
-
-function triggerReply(msg) {
-    replyData = { id: msg.messageId || msg._id, sender: msg.senderId === myId ? 'أنت' : document.getElementById('header-name').textContent, content: msg.content || 'ملف وسائط' };
-    document.getElementById('reply-to-name').textContent = replyData.sender;
-    document.getElementById('reply-to-text').textContent = replyData.content;
-    document.getElementById('reply-bar').style.display = 'block';
-    document.getElementById('msg-input').focus();
-}
-
-function scrollToMessage(id) {
-    const el = document.getElementById('msg-' + id);
-    if(el) {
-        el.scrollIntoView({behavior: 'smooth', block: 'center'});
-        el.style.animation = 'highlight 1s';
-    } else {
-        // يمكن إضافة منطق لتحميل الرسالة إذا لم تكن موجودة
-        alert('الرسالة غير موجودة في العرض الحالي');
+    // إيقاف الصوت السابق إذا كان مختلفاً
+    if (currentAudio && currentAudio !== audio) {
+      currentAudio.pause();
+      if(currentPlayBtn) currentPlayBtn.className = 'fas fa-play';
     }
-}
+
+    if (audio.paused) {
+      audio.play();
+      btnIcon.className = 'fas fa-pause';
+      currentAudio = audio;
+      currentPlayBtn = btnIcon;
+    } else {
+      audio.pause();
+      btnIcon.className = 'fas fa-play';
+    }
+  }
+
+  function updateSlider(id) {
+    const audio = document.getElementById(id);
+    const slider = document.getElementById(id + '-slider');
+    const timeDisplay = document.getElementById(id + '-time');
+    
+    if (!isNaN(audio.duration)) {
+      slider.max = audio.duration;
+      slider.value = audio.currentTime;
+      timeDisplay.textContent = formatTime(audio.currentTime);
+    }
+  }
+
+  function seekAudio(id, value) {
+    const audio = document.getElementById(id);
+    audio.currentTime = value;
+  }
+
+  function resetPlayer(id) {
+    const btnIcon = document.querySelector(`button[onclick*="'${id}'"] i`);
+    if(btnIcon) btnIcon.className = 'fas fa-play';
+    document.getElementById(id + '-slider').value = 0;
+    document.getElementById(id + '-time').textContent = "0:00";
+  }
+
+  function formatTime(seconds) {
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  }
+
+  // ==========================================
+  // 4. معالجة الأحداث وال Socket (إصلاح التوقف)
+  // ==========================================
+  
+  // استقبال رسالة جديدة
+  socket.on('receiveMessage', (msg) => {
+    // التحقق مما إذا كانت الرسالة لهذه المحادثة
+    // (يمكن تحسين ذلك بالتحقق من chatId في الرسالة إذا كان الخادم يرسله)
+    appendMessage(msg, true);
+    // ملاحظة: لم نقم باستدعاء initChat()، لذلك لن يتوقف الصوت
+  });
+
+  // التمرير للأسفل
+  function scrollToBottom() {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  // الهروب من HTML (حماية)
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, "&amp;")
+               .replace(/</g, "&lt;")
+               .replace(/>/g, "&gt;")
+               .replace(/"/g, "&quot;")
+               .replace(/'/g, "&#039;");
+  }
+
+  // ==========================================
+  // 5. إرسال الرسائل والتسجيل (مبسط)
+  // ==========================================
+  
+  // تبديل الأزرار عند الكتابة
+  messageInput.addEventListener('input', () => {
+    if (messageInput.value.trim().length > 0) {
+      micBtn.classList.add('hidden');
+      sendBtn.classList.remove('hidden');
+    } else {
+      micBtn.classList.remove('hidden');
+      sendBtn.classList.add('hidden');
+    }
+  });
+
+  // إرسال رسالة نصية
+  sendBtn.addEventListener('click', sendMessage);
+  messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendMessage();
+  });
+
+  async function sendMessage() {
+    const content = messageInput.value.trim();
+    if (!content) return;
+
+    try {
+      const response = await fetch('/chat/send', { // تأكد من المسار في server.js
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ chatId, content, type: 'text' })
+      });
+      
+      if(response.ok) {
+        messageInput.value = '';
+        micBtn.classList.remove('hidden');
+        sendBtn.classList.add('hidden');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // منطق التسجيل الصوتي (JavaScript)
+  let mediaRecorder;
+  let audioChunks = [];
+  let startTime;
+  let timerInterval;
+
+  micBtn.addEventListener('click', async () => {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+      startRecording();
+    } else {
+      stopRecording();
+    }
+  });
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      
+      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+      
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        uploadFile(audioBlob, 'audio');
+        resetRecordingUI();
+      };
+
+      mediaRecorder.start();
+      
+      // UI Updates
+      messageInput.classList.add('hidden');
+      micBtn.innerHTML = '<i class="fas fa-stop"></i>';
+      recordingUi.style.display = 'flex';
+      
+      startTime = Date.now();
+      timerInterval = setInterval(() => {
+        const diff = Math.floor((Date.now() - startTime) / 1000);
+        const m = Math.floor(diff / 60);
+        const s = diff % 60;
+        recordTimer.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+      }, 1000);
+
+    } catch (err) {
+      console.error('Mic access error', err);
+      alert('لا يمكن الوصول للميكروفون');
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder) mediaRecorder.stop();
+  }
+
+  function resetRecordingUI() {
+    clearInterval(timerInterval);
+    recordingUi.style.display = 'none';
+    messageInput.classList.remove('hidden');
+    micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+    recordTimer.textContent = "00:00";
+    // إيقاف المسار
+    if(mediaRecorder && mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+  }
+
+  // رفع الملفات (صوت أو صور)
+  async function uploadFile(file, type) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('chatId', chatId);
+    formData.append('type', type);
+
+    // إضافة رسالة وهمية فورية للسرعة (اختياري)
+    
+    try {
+      await fetch('/chat/upload', { // تأكد من المسار في server.js
+        method: 'POST',
+        body: formData
+      });
+    } catch (e) {
+      console.error(e);
+      alert('فشل الرفع');
+    }
+  }
+
+  function handleFileUpload(input) {
+    if(input.files && input.files[0]) {
+      const file = input.files[0];
+      const type = file.type.startsWith('image') ? 'image' : (file.type.startsWith('video') ? 'video' : 'file');
+      uploadFile(file, type);
+    }
+  }
+
+  // تشغيل عند التحميل
+  initChat();
+
 </script>
 </body>
 </html>
