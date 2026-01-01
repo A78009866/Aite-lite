@@ -6,762 +6,643 @@
 <title>المحادثة</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
+/* --- المتغيرات الأصلية مع تحسينات طفيفة --- */
 :root {
-  --bg: #0f172a; /* خلفية داكنة أكثر جاذبية */
-  --glass-bg: rgba(30, 41, 59, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --accent: #38bdf8;
-  --muted: #94a3b8;
-  --my-msg-bg: #0ea5e9;
-  --other-msg-bg: #334155;
-  --danger: #ef4444;
+  --bg: #000;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --accent: #7dd3fc;
+  --muted: #cbd5e1;
+  --reply-bg: rgba(255, 255, 255, 0.08);
+  --reply-border: rgba(255, 255, 255, 0.15);
+  --danger: #ef4444; /* لون زر الإلغاء */
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
+/* تنسيقات أساسية */
 html, body {
-  height: 100%;
-  margin: 0;
-  font-family: 'Cairo', 'Inter', system-ui;
+  height: 100%; margin: 0;
+  font-family: 'Cairo', 'Inter', system-ui; /* إضافة خط عربي */
   background-color: var(--bg);
-  color: #e2e8f0;
-  overflow: hidden; /* منع التمرير العام للصفحة */
+  color: var(--muted);
+  overflow: hidden; /* منع سحب الصفحة بالكامل */
 }
 
-/* تخطيط الصفحة */
-.chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-width: 800px;
-  margin: 0 auto;
-  background: #1e293b;
+.chat-wrapper {
+  display: flex; flex-direction: column; height: 100%;
+  max-width: 600px; margin: 0 auto; background: #0f0f0f;
   position: relative;
-  box-shadow: 0 0 20px rgba(0,0,0,0.5);
 }
 
-/* الرأس */
+/* الهيدر */
 header {
-  flex: 0 0 auto;
-  padding: 15px;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--glass-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  z-index: 20;
+  padding: 15px; border-bottom: 1px solid var(--glass-border);
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 10;
 }
-header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #fff; }
-.back-btn {
-  background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer;
-  padding: 8px; border-radius: 50%; transition: 0.2s;
-}
-.back-btn:active { background: rgba(255,255,255,0.1); }
+header h2 { margin: 0; font-size: 1.1rem; color: #fff; }
+.back-btn { background: none; border: none; color: #fff; font-size: 1.2rem; cursor: pointer; }
 
 /* منطقة الرسائل */
 #messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 15px;
-  padding-bottom: 100px; /* مساحة للكتابة */
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex: 1; overflow-y: auto; padding: 15px;
+  display: flex; flex-direction: column; gap: 12px;
   scroll-behavior: smooth;
+  padding-bottom: 80px; /* مساحة للكتابة */
 }
 
-/* شكل الرسالة */
+/* تصميم الرسالة */
 .message {
-  max-width: 75%;
+  max-width: 80%;
   padding: 10px 14px;
-  border-radius: 18px;
+  border-radius: 16px;
   position: relative;
   font-size: 0.95rem;
   line-height: 1.5;
   word-wrap: break-word;
-  animation: fadeIn 0.3s ease;
-  user-select: none; /* لمنع تحديد النص عند السحب */
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  user-select: none; /* مهم للسحب */
+  transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* انيميشن السحب */
 }
-
-@keyframes fadeIn { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
 
 .message.mine {
   align-self: flex-end;
-  background: var(--my-msg-bg);
+  background: #0284c7; /* لون أزرق مميز */
   color: #fff;
   border-bottom-left-radius: 4px;
 }
+
 .message.theirs {
   align-self: flex-start;
-  background: var(--other-msg-bg);
+  background: #27272a;
   color: #e2e8f0;
   border-bottom-right-radius: 4px;
 }
 
-/* الوسائط داخل الرسالة */
+/* الوسائط */
 .msg-img, .msg-video {
-  max-width: 100%; border-radius: 12px; margin-top: 5px; display: block;
+  max-width: 100%; border-radius: 8px; margin-top: 5px; display: block;
 }
-audio {
-  max-width: 240px; height: 36px; margin-top: 5px; border-radius: 18px;
-}
+audio { max-width: 220px; height: 40px; margin-top: 5px; border-radius: 20px; }
 
-/* التوقيت */
+/* وقت الرسالة */
 .msg-time {
-  font-size: 0.7rem; opacity: 0.7; margin-top: 4px; text-align: left; display: block;
+  font-size: 0.65rem; opacity: 0.7; margin-top: 4px; display: block; text-align: left;
 }
-.message.mine .msg-time { color: rgba(255,255,255,0.8); text-align: right; }
+.message.mine .msg-time { text-align: right; color: rgba(255,255,255,0.8); }
 
-/* الرد المقتبس */
-.reply-preview-block {
+/* الرد المقتبس داخل الرسالة */
+.reply-block {
   background: rgba(0,0,0,0.2);
-  border-right: 3px solid rgba(255,255,255,0.5);
-  padding: 6px 10px;
-  border-radius: 6px;
+  border-right: 3px solid var(--accent);
+  padding: 4px 8px;
+  border-radius: 4px;
   margin-bottom: 6px;
   font-size: 0.8rem;
-  cursor: pointer;
-  display: flex; flex-direction: column;
+  opacity: 0.9;
 }
-.reply-preview-block strong { color: var(--accent); margin-bottom: 2px; }
 
-/* منطقة الكتابة والإرسال */
-.composer-area {
-  flex: 0 0 auto;
-  background: rgba(30, 41, 59, 0.95);
+/* --- التفاعلات (Reactions) --- */
+/* القائمة العائمة */
+.reaction-menu {
+  position: absolute;
+  background: rgba(255,255,255,0.95);
+  padding: 8px;
+  border-radius: 50px;
+  display: flex; gap: 10px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  z-index: 1000;
+  transform: scale(0);
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  pointer-events: none; opacity: 0;
+}
+.reaction-menu.active { transform: scale(1); pointer-events: auto; opacity: 1; }
+
+.reaction-btn {
+  font-size: 1.5rem; cursor: pointer; transition: transform 0.2s;
+}
+.reaction-btn:hover { transform: scale(1.3); }
+
+/* التفاعل الظاهر أسفل الرسالة */
+.msg-reaction-badge {
+  position: absolute;
+  bottom: -12px;
+  left: 10px; /* للرسائل الخاصة بي */
+  background: #3f3f46;
+  border: 2px solid var(--bg);
+  border-radius: 10px;
+  padding: 2px 5px;
+  font-size: 0.8rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  display: none; /* مخفي افتراضياً */
+  z-index: 2;
+}
+.message.theirs .msg-reaction-badge { left: auto; right: 10px; }
+
+
+/* منطقة الإدخال */
+.composer {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(20, 20, 20, 0.95);
   backdrop-filter: blur(10px);
-  border-top: 1px solid var(--glass-border);
   padding: 10px;
-  position: relative;
-  z-index: 30;
+  border-top: 1px solid var(--glass-border);
+  z-index: 20;
 }
 
-/* معاينة الرد فوق مربع الكتابة */
+/* معاينة الرد فوق مربع النص */
 #replyPreview {
   display: none;
-  background: rgba(15, 23, 42, 0.9);
-  padding: 10px;
+  background: #1e1e1e;
+  padding: 8px 12px;
   border-radius: 12px;
-  margin-bottom: 10px;
-  border: 1px solid var(--glass-border);
+  margin-bottom: 8px;
+  border-right: 4px solid var(--accent);
   position: relative;
   animation: slideUp 0.2s ease;
 }
 @keyframes slideUp { from{transform:translateY(10px);opacity:0;} to{transform:translateY(0);opacity:1;} }
 
-#replyContent { font-size: 0.9rem; color: #cbd5e1; margin-right: 10px; }
-#closeReply {
+#replyContent { font-size: 0.85rem; color: #fff; margin-right: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.reply-label { color: var(--accent); font-size: 0.75rem; font-weight: bold; margin-bottom: 2px; }
+
+/* زر إغلاق الرد الجميل */
+#cancelReplyBtn {
   position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
   background: rgba(255,255,255,0.1); border: none; color: #fff;
   width: 24px; height: 24px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: 0.2s;
 }
-#closeReply:hover { background: var(--danger); }
+#cancelReplyBtn:hover { background: var(--danger); }
 
 /* أدوات الكتابة */
 .input-row { display: flex; align-items: flex-end; gap: 8px; }
-
-#msgInput {
-  flex: 1;
-  background: rgba(0,0,0,0.2);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  padding: 12px 16px;
-  color: #fff;
-  font-family: inherit;
-  resize: none;
-  max-height: 100px;
-  outline: none;
+textarea {
+  flex: 1; background: #27272a; border: none; outline: none;
+  color: #fff; border-radius: 20px; padding: 10px 15px;
+  resize: none; font-family: inherit; max-height: 100px;
 }
-#msgInput:focus { border-color: var(--accent); }
-
 .action-btn {
-  background: transparent; border: none; color: var(--accent);
-  padding: 10px; cursor: pointer; border-radius: 50%;
-  transition: 0.2s; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--accent);
+  font-size: 1.3rem; padding: 8px; cursor: pointer;
+  border-radius: 50%; transition: background 0.2s;
 }
-.action-btn:active { background: rgba(255,255,255,0.1); transform: scale(0.9); }
-.send-btn { background: var(--accent); color: #000; }
-
-/* القائمة المنبثقة للوسائط */
-.attach-menu {
-  position: absolute; bottom: 70px; right: 10px;
-  background: #334155; border: 1px solid var(--glass-border);
-  border-radius: 12px; padding: 10px;
-  display: none; flex-direction: column; gap: 8px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-  z-index: 40;
-}
-.attach-menu.show { display: flex; animation: fadeIn 0.2s; }
-.attach-btn-item {
-  background: none; border: none; color: #fff; padding: 8px 12px;
-  text-align: right; cursor: pointer; display: flex; align-items: center; gap: 8px;
-  border-radius: 6px; font-family: inherit;
-}
-.attach-btn-item:hover { background: rgba(255,255,255,0.05); }
-
-/* --- تفاعلات الرسائل (Reactions) --- */
-.reaction-menu {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(5px);
-  border-radius: 30px;
-  padding: 6px;
-  display: none;
-  gap: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  z-index: 100;
-  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-@keyframes popIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-.reaction-item {
-  font-size: 1.5rem;
-  cursor: pointer;
-  transition: transform 0.2s;
-  user-select: none;
-}
-.reaction-item:hover { transform: scale(1.3); }
-
-.msg-reactions {
-  position: absolute;
-  bottom: -10px;
-  left: 10px; /* للرسائل الخاصة بي */
-  background: #334155;
-  border: 2px solid var(--bg);
-  border-radius: 12px;
-  padding: 2px 6px;
-  font-size: 0.75rem;
-  display: flex;
-  gap: 2px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  z-index: 2;
-}
-.message.theirs .msg-reactions { left: auto; right: 10px; }
+.action-btn:active { background: rgba(255,255,255,0.1); }
+.send-btn { color: #fff; background: var(--accent); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1rem; }
 
 /* مؤشر التسجيل */
-#recordingIndicator {
-  position: absolute; top: -40px; left: 0; right: 0;
-  background: var(--danger); color: white;
-  text-align: center; padding: 5px; font-size: 0.8rem;
-  display: none; align-items: center; justify-content: center; gap: 8px;
+#recordingUI {
+  display: none; position: absolute; top: -40px; left: 0; right: 0;
+  background: var(--danger); color: white; padding: 5px; text-align: center; font-size: 0.8rem;
+  align-items: center; justify-content: center; gap: 5px;
 }
-.pulse { width: 10px; height: 10px; background: #fff; border-radius: 50%; animation: pulse 1s infinite; }
-@keyframes pulse { 0%{opacity:1;} 50%{opacity:0.4;} 100%{opacity:1;} }
+.rec-dot { width: 8px; height: 8px; background: #fff; border-radius: 50%; animation: pulse 1s infinite; }
+@keyframes pulse { 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} }
 
 </style>
 </head>
 <body>
 
-<div class="chat-container">
+<div class="chat-wrapper">
   <header>
     <button class="back-btn" onclick="location.href='/'">➜</button>
     <h2>المحادثة</h2>
     <div id="notifBadgeChat" style="display:none; background:red; color:#fff; border-radius:10px; padding:2px 6px; font-size:0.7rem;">0</div>
   </header>
 
-  <div id="messages">
-    </div>
+  <div id="messages"></div>
 
-  <div class="composer-area">
-    <div id="recordingIndicator">
-      <div class="pulse"></div> <span>جاري تسجيل صوت...</span>
-    </div>
+  <div class="reaction-menu" id="reactionMenu">
+    <div class="reaction-btn" onclick="selectReaction('❤️')">❤️</div>
+    <div class="reaction-btn" onclick="selectReaction('😂')">😂</div>
+    <div class="reaction-btn" onclick="selectReaction('😮')">😮</div>
+    <div class="reaction-btn" onclick="selectReaction('😢')">😢</div>
+    <div class="reaction-btn" onclick="selectReaction('😡')">😡</div>
+    <div class="reaction-btn" onclick="selectReaction('👍')">👍</div>
+  </div>
 
+  <div class="composer">
+    <div id="recordingUI"><div class="rec-dot"></div> جاري التسجيل...</div>
+    
     <div id="replyPreview">
-      <div style="display:flex; align-items:center;">
-        <div style="width: 3px; height: 30px; background: var(--accent); border-radius: 2px; margin-left: 8px;"></div>
-        <div style="flex:1;">
-          <div style="font-size: 0.75rem; color: var(--accent); margin-bottom: 2px;">الرد على:</div>
-          <div id="replyContent">نص الرسالة...</div>
-        </div>
-        <button id="closeReply">✕</button>
-      </div>
+      <div class="reply-label">الرد على:</div>
+      <div id="replyContent">...</div>
+      <button id="cancelReplyBtn">✕</button>
     </div>
 
     <div class="input-row">
-      <button class="action-btn" id="attachBtn">➕</button>
-      
-      <div class="attach-menu" id="attachMenu">
-        <button class="attach-btn-item" onclick="triggerFile('image')">📷 صورة</button>
-        <button class="attach-btn-item" onclick="triggerFile('video')">🎥 فيديو</button>
-      </div>
-
-      <textarea id="msgInput" rows="1" placeholder="اكتب رسالة..."></textarea>
-      
+      <input type="file" id="mediaInput" style="display:none" />
+      <button class="action-btn" onclick="document.getElementById('mediaInput').click()">📎</button>
+      <textarea id="msgText" rows="1" placeholder="اكتب رسالة..."></textarea>
       <button class="action-btn" id="micBtn">🎙️</button>
       <button class="action-btn send-btn" id="sendBtn">➤</button>
     </div>
   </div>
 </div>
 
-<input type="file" id="fileInput" style="display:none" />
-
-<div class="reaction-menu" id="reactionMenu">
-  <div class="reaction-item" data-reaction="❤️">❤️</div>
-  <div class="reaction-item" data-reaction="😂">😂</div>
-  <div class="reaction-item" data-reaction="😮">😮</div>
-  <div class="reaction-item" data-reaction="😢">😢</div>
-  <div class="reaction-item" data-reaction="😡">😡</div>
-  <div class="reaction-item" data-reaction="👍">👍</div>
-</div>
-
 <script>
-// === المتغيرات العامة ===
+// === المتغيرات ===
 const myId = document.cookie.replace(/(?:(?:^|.*;\s*)uid\s*\=\s*([^;]*).*$)|^.*$/, "$1");
 let replyToId = null;
-let isRecording = false;
+let replyToMsg = null; // لتخزين كائن الرسالة المردود عليها
 let mediaRecorder;
 let audioChunks = [];
+let isRecording = false;
+
+// متغيرات التفاعل واللمس
 let longPressTimer;
-let currentLongPressMsg = null;
+let currentReactionMsgId = null;
+let touchStartX = 0;
+let swipeActiveMsg = null;
 
-// === تهيئة الصفحة ===
+// === التهيئة ===
 (async function init() {
-  await fetchMessages(); // الجلب الأولي
-  
-  // تحديث ذكي كل 3 ثواني (بدون قطع الصوت)
-  setInterval(async () => {
-    if (document.visibilityState === 'visible') await fetchMessages(true);
-  }, 3000);
-
-  setupUI();
-  setupSwipe(); // تفعيل السحب للرد
+    setupEventListeners();
+    await fetchMessages();
+    
+    // التحديث الدوري (Polling)
+    setInterval(async () => {
+        if (document.visibilityState === 'visible') await fetchMessages(true);
+    }, 3000);
 })();
 
-// === واجهة المستخدم والأحداث ===
-function setupUI() {
-  const msgInput = document.getElementById('msgInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const attachBtn = document.getElementById('attachBtn');
-  const attachMenu = document.getElementById('attachMenu');
-  const closeReplyBtn = document.getElementById('closeReply');
+function setupEventListeners() {
+    const textInput = document.getElementById('msgText');
+    const sendBtn = document.getElementById('sendBtn');
+    const mediaInput = document.getElementById('mediaInput');
+    const micBtn = document.getElementById('micBtn');
+    const cancelReplyBtn = document.getElementById('cancelReplyBtn');
 
-  // إرسال نص
-  sendBtn.onclick = sendMessage;
-  
-  // زر المرفقات
-  attachBtn.onclick = (e) => {
-    e.stopPropagation();
-    attachMenu.classList.toggle('show');
-  };
-  document.addEventListener('click', () => attachMenu.classList.remove('show'));
-
-  // إلغاء الرد
-  closeReplyBtn.onclick = cancelReply;
-
-  // الضغط على Enter للإرسال
-  msgInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  // تكبير مربع النص تلقائياً
-  msgInput.addEventListener('input', function() {
-    this.style.height = 'auto';
-    this.style.height = (this.scrollHeight) + 'px';
-    if(this.value === '') this.style.height = 'auto';
-  });
-
-  // إعداد التفاعلات
-  document.querySelectorAll('.reaction-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const reaction = item.getAttribute('data-reaction');
-      if (currentLongPressMsg) {
-        addReaction(currentLongPressMsg, reaction);
-        hideReactionMenu();
-      }
+    // تكبير النص تلقائياً
+    textInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+        if(this.value === '') this.style.height = 'auto';
     });
-  });
-  
-  // إخفاء قائمة التفاعلات عند النقر في أي مكان
-  document.addEventListener('click', hideReactionMenu);
 
-  // إعداد التسجيل الصوتي
-  document.getElementById('micBtn').onmousedown = startRecording;
-  document.getElementById('micBtn').onmouseup = stopRecording;
-  document.getElementById('micBtn').ontouchstart = (e) => { e.preventDefault(); startRecording(); };
-  document.getElementById('micBtn').ontouchend = (e) => { e.preventDefault(); stopRecording(); };
+    sendBtn.onclick = sendText;
+    
+    // التعامل مع المرفقات
+    mediaInput.onchange = handleFileUpload;
+
+    // التسجيل الصوتي
+    micBtn.onmousedown = startRec;
+    micBtn.onmouseup = stopRec;
+    micBtn.ontouchstart = (e) => { e.preventDefault(); startRec(); };
+    micBtn.ontouchend = (e) => { e.preventDefault(); stopRec(); };
+
+    // إلغاء الرد
+    cancelReplyBtn.onclick = closeReply;
+
+    // إخفاء قائمة التفاعلات عند النقر خارجها
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('reactionMenu');
+        if (!menu.contains(e.target) && !e.target.classList.contains('message')) {
+            menu.classList.remove('active');
+        }
+    });
 }
 
-// === المنطق الأساسي للرسائل (Smart Rendering) ===
+// === جلب الرسائل وعرضها (Smart Update) ===
 async function fetchMessages(isUpdate = false) {
-  try {
-    const res = await fetch('/api/chat/messages?limit=50');
-    const data = await res.json();
-    
-    if (data.ok) {
-      renderMessagesSmart(data.messages, isUpdate);
-    }
-  } catch (err) {
-    console.error('Failed to fetch messages', err);
-  }
+    try {
+        const res = await fetch('/api/chat/messages?limit=50');
+        const data = await res.json();
+        if (data.ok) {
+            renderSmart(data.messages, isUpdate);
+        }
+    } catch (e) { console.error(e); }
 }
 
-// دالة العرض الذكية (تحل مشكلة انقطاع الصوت)
-function renderMessagesSmart(messages, isUpdate) {
-  const container = document.getElementById('messages');
-  const currentScroll = container.scrollTop;
-  const isNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 100;
+// دالة التحديث الذكي - لا تعيد بناء الـ HTML بالكامل
+function renderSmart(messages, isUpdate) {
+    const container = document.getElementById('messages');
+    const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 100;
 
-  // مجموعة لمعرفة الرسائل الموجودة حالياً
-  const existingIds = new Set();
-  container.querySelectorAll('.message').forEach(el => existingIds.add(el.dataset.id));
+    // تحويل المصفوفة إلى Map لسهولة الوصول
+    const newMsgsMap = new Map(messages.map(m => [m.id, m]));
 
-  messages.forEach(msg => {
-    const msgElement = document.querySelector(`.message[data-id="${msg.id}"]`);
-
-    if (msgElement) {
-      // الرسالة موجودة: تحديث التفاعلات أو الحالة فقط إذا لزم الأمر
-      // لا نلمس المحتوى الداخلي إذا كان صوتاً ويعمل حالياً
-      const audioEl = msgElement.querySelector('audio');
-      const isPlaying = audioEl && !audioEl.paused;
-      
-      if (!isPlaying) {
-        // يمكن تحديث المحتوى بأمان إذا لم يكن هناك صوت يعمل
-        // لكن للتبسيط، سنحدث التفاعلات فقط هنا ديناميكياً
-        updateReactionsUI(msgElement, msg.reactions);
-      }
-    } else {
-      // رسالة جديدة: إنشاؤها وإضافتها
-      const el = createMessageElement(msg);
-      container.appendChild(el);
-      setupMessageEvents(el); // تفعيل أحداث اللمس والسحب للرسالة الجديدة
-    }
-  });
-
-  // التمرير للأسفل إذا وصلت رسالة جديدة وكنا في الأسفل
-  if (!isUpdate || isNearBottom) {
-    setTimeout(() => {
-        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-    }, 100);
-  }
-}
-
-function createMessageElement(msg) {
-  const div = document.createElement('div');
-  div.className = `message ${msg.senderId === myId ? 'mine' : 'theirs'}`;
-  div.dataset.id = msg.id;
-  div.dataset.raw = JSON.stringify(msg); // تخزين البيانات الخام للرد
-
-  // محتوى الرد المقتبس
-  let replyHtml = '';
-  if (msg.replyTo) {
-    const rType = msg.replyTo.type === 'audio' ? 'رسالة صوتية 🎤' : 
-                  msg.replyTo.type === 'image' ? 'صورة 📷' : 
-                  msg.replyTo.type === 'video' ? 'فيديو 🎥' : msg.replyTo.text;
-    replyHtml = `
-      <div class="reply-preview-block">
-        <strong>${msg.replyTo.senderName || 'مستخدم'}</strong>
-        <span>${truncate(rType, 30)}</span>
-      </div>
-    `;
-  }
-
-  // محتوى الرسالة
-  let contentHtml = '';
-  if (msg.type === 'text') {
-    contentHtml = `<div>${escapeHtml(msg.text)}</div>`;
-  } else if (msg.type === 'image') {
-    contentHtml = `<img src="${msg.url}" class="msg-img" loading="lazy" onclick="window.open(this.src)">`;
-  } else if (msg.type === 'video') {
-    contentHtml = `<video src="${msg.url}" class="msg-video" controls></video>`;
-  } else if (msg.type === 'audio') {
-    contentHtml = `<audio src="${msg.url}" controls controlsList="nodownload"></audio>`;
-  }
-
-  // التفاعلات
-  const reactionsHtml = `<div class="msg-reactions" style="display:none"></div>`;
-
-  div.innerHTML = `
-    ${replyHtml}
-    ${contentHtml}
-    <span class="msg-time">${formatTime(msg.timestamp)}</span>
-    ${reactionsHtml}
-  `;
-  
-  // تهيئة التفاعلات الأولية
-  if(msg.reactions) updateReactionsUI(div, msg.reactions);
-
-  return div;
-}
-
-function setupMessageEvents(el) {
-    // 1. Long Press for Reactions
-    el.addEventListener('mousedown', handleLongPressStart);
-    el.addEventListener('touchstart', handleLongPressStart, {passive: true});
-    
-    el.addEventListener('mouseup', handleLongPressEnd);
-    el.addEventListener('touchend', handleLongPressEnd);
-    el.addEventListener('mousemove', handleLongPressCancel);
-    el.addEventListener('touchmove', (e) => {
-        handleLongPressCancel();
-        handleSwipeMove(e, el); // Swipe Logic integrated
+    // 1. تحديث الرسائل الموجودة (للتفاعلات فقط)
+    const existingElements = container.querySelectorAll('.message');
+    existingElements.forEach(el => {
+        const id = el.dataset.id;
+        const newMsgData = newMsgsMap.get(id);
+        
+        if (newMsgData) {
+            // تحديث التفاعل إذا تغير
+            updateReactionUI(el, newMsgData.reactions);
+            newMsgsMap.delete(id); // إزالة من القائمة لنعرف المتبقي (الجديد)
+        }
     });
 
-    // 2. Swipe Start
-    el.addEventListener('touchstart', (e) => handleSwipeStart(e, el), {passive: true});
+    // 2. إضافة الرسائل الجديدة
+    // ملاحظة: newMsgsMap يحتوي الآن فقط على الرسائل الجديدة لأننا حذفنا القديمة في اللوب السابق
+    // لكن الترتيب مهم، لذا سنعيد التكرار على القائمة الأصلية
+    messages.forEach(msg => {
+        if (!document.querySelector(`.message[data-id="${msg.id}"]`)) {
+            const el = createMessageHTML(msg);
+            container.appendChild(el);
+            addTouchEvents(el, msg); // إضافة أحداث اللمس والسحب
+        }
+    });
+
+    // سكرول للأسفل
+    if (!isUpdate || isAtBottom) {
+        setTimeout(() => container.scrollTo(0, container.scrollHeight), 50);
+    }
 }
 
-// === منطق السحب (Swipe to Reply) ===
-let touchStartX = 0;
-let swipeThreshold = 80; // المسافة اللازمة لتفعيل الرد
-let activeSwipeMsg = null;
+function createMessageHTML(msg) {
+    const div = document.createElement('div');
+    div.className = `message ${msg.senderId === myId ? 'mine' : 'theirs'}`;
+    div.dataset.id = msg.id;
 
-function handleSwipeStart(e, el) {
-    touchStartX = e.touches[0].clientX;
-    activeSwipeMsg = el;
-    el.style.transition = 'none'; // تعطيل الانتقال أثناء السحب
-}
+    // الرد المقتبس
+    let replyHtml = '';
+    if (msg.replyTo) {
+        const rType = getArabicType(msg.replyTo.type, msg.replyTo.text);
+        replyHtml = `<div class="reply-block"><strong>${msg.replyTo.senderName || 'مستخدم'}</strong><br>${rType}</div>`;
+    }
 
-function handleSwipeMove(e, el) {
-    if (!activeSwipeMsg || activeSwipeMsg !== el) return;
+    // المحتوى
+    let content = '';
+    if (msg.type === 'text') content = `<div>${escapeHtml(msg.text)}</div>`;
+    else if (msg.type === 'image') content = `<img src="${msg.url}" class="msg-img" onclick="window.open(this.src)">`;
+    else if (msg.type === 'video') content = `<video src="${msg.url}" class="msg-video" controls></video>`;
+    else if (msg.type === 'audio') content = `<audio src="${msg.url}" controls controlsList="nodownload"></audio>`;
+
+    // التفاعل
+    const reactionBadge = `<div class="msg-reaction-badge"></div>`;
+
+    div.innerHTML = `${replyHtml}${content}<span class="msg-time">${formatTime(msg.timestamp)}</span>${reactionBadge}`;
     
+    // عرض التفاعل المخزن محلياً فوراً
+    const savedReact = getSavedReaction(msg.id);
+    if(savedReact) {
+        const badge = div.querySelector('.msg-reaction-badge');
+        badge.textContent = savedReact;
+        badge.style.display = 'flex';
+    } else if (msg.reactions && msg.reactions.last) {
+        // أو من السيرفر
+        const badge = div.querySelector('.msg-reaction-badge');
+        badge.textContent = msg.reactions.last;
+        badge.style.display = 'flex';
+    }
+
+    return div;
+}
+
+// === منطق السحب والتفاعل (Core Interactions) ===
+
+function addTouchEvents(el, msgData) {
+    // 1. الضغط المطول (Long Press)
+    el.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        swipeActiveMsg = el;
+        el.style.transition = 'none'; // إيقاف الانيميشن أثناء السحب اليدوي
+
+        longPressTimer = setTimeout(() => {
+            showReactionMenu(el, e);
+            swipeActiveMsg = null; // إلغاء السحب إذا دخلنا وضع التفاعل
+        }, 500);
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+        clearTimeout(longPressTimer); // إلغاء الضغط المطول عند التحرك
+        handleSwipeMove(e, el);
+    }, { passive: true });
+
+    el.addEventListener('touchend', (e) => {
+        clearTimeout(longPressTimer);
+        handleSwipeEnd(e, el, msgData);
+    });
+
+    // دعم الماوس للديسكتوب (للضغط المطول)
+    el.addEventListener('mousedown', (e) => {
+        longPressTimer = setTimeout(() => showReactionMenu(el, e, true), 500);
+    });
+    el.addEventListener('mouseup', () => clearTimeout(longPressTimer));
+}
+
+// منطق السحب (Swipe Logic)
+function handleSwipeMove(e, el) {
+    if (!swipeActiveMsg) return;
     const currentX = e.touches[0].clientX;
     const diff = currentX - touchStartX;
 
-    // السماح بالسحب لليمين فقط (للرد)
-    if (diff > 0) { 
-        // مقاومة السحب (Damping)
-        const translate = Math.min(diff, 120); 
-        el.style.transform = `translateX(${-translate}px)`; // سالب لأننا في RTL
+    // السحب لليمين فقط (للرد)
+    if (diff > 0 && diff < 150) {
+        el.style.transform = `translateX(${-diff}px)`; // سالب لأننا RTL
     }
 }
 
-function handleLongPressEnd(e) {
-    // جزء من منطق السحب: عند رفع الإصبع
-    if (activeSwipeMsg) {
-        const currentX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
-        const diff = currentX - touchStartX;
-
-        activeSwipeMsg.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-        activeSwipeMsg.style.transform = 'translateX(0)';
-
-        if (diff > swipeThreshold) {
-            // تفعيل الرد
-            // استخدام اهتزاز خفيف (Haptic Feedback) إذا كان مدعوماً
-            if (navigator.vibrate) navigator.vibrate(50);
-            
-            const raw = JSON.parse(activeSwipeMsg.dataset.raw);
-            prepareReply(raw);
-        }
-        activeSwipeMsg = null;
+function handleSwipeEnd(e, el, msgData) {
+    if (!swipeActiveMsg) return;
+    
+    // استرجاع الإزاحة
+    const currentX = e.changedTouches[0].clientX;
+    const diff = currentX - touchStartX;
+    
+    // إعادة الانيميشن للعودة
+    el.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+    el.style.transform = 'translateX(0)';
+    
+    // شرط تفعيل الرد (مسافة كافية)
+    if (diff > 80) {
+        if (navigator.vibrate) navigator.vibrate(50); // اهتزاز
+        startReply(msgData);
     }
-    clearTimeout(longPressTimer);
-}
-
-// === منطق الضغط المطول (Reactions) ===
-function handleLongPressStart(e) {
-    // إعادة تعيين المؤقت
-    handleLongPressCancel();
     
-    currentLongPressMsg = e.currentTarget;
+    swipeActiveMsg = null;
+}
+
+// === منطق التفاعلات (Reactions) ===
+
+function showReactionMenu(msgEl, e, isMouse = false) {
+    if (navigator.vibrate) navigator.vibrate(50);
     
-    longPressTimer = setTimeout(() => {
-        showReactionMenu(e, currentLongPressMsg);
-        if (navigator.vibrate) navigator.vibrate(50);
-    }, 500); // 500ms للضغط المطول
-}
-
-function handleLongPressCancel() {
-    clearTimeout(longPressTimer);
-}
-
-function showReactionMenu(e, msgEl) {
+    currentReactionMsgId = msgEl.dataset.id;
     const menu = document.getElementById('reactionMenu');
     const rect = msgEl.getBoundingClientRect();
     
-    // حساب الموضع (فوق الرسالة)
+    // تموضع القائمة فوق الرسالة
     let top = rect.top - 60;
-    let left = rect.left + (rect.width / 2) - 100;
+    let left = rect.left + (rect.width/2) - 100;
     
     // تصحيح الحدود
     if (left < 10) left = 10;
     if (left + 200 > window.innerWidth) left = window.innerWidth - 210;
 
-    menu.style.top = `${top}px`;
-    menu.style.left = `${left}px`;
-    menu.style.display = 'flex';
+    menu.style.top = top + 'px';
+    menu.style.left = left + 'px';
+    menu.classList.add('active');
 }
 
-function hideReactionMenu() {
-    document.getElementById('reactionMenu').style.display = 'none';
-}
+function selectReaction(emoji) {
+    if (!currentReactionMsgId) return;
 
-function addReaction(msgEl, reaction) {
-    const msgId = msgEl.dataset.id;
-    
-    // 1. تحديث الواجهة فوراً (Optimistic UI)
-    // نحصل على التفاعلات الحالية من السمة إذا وجدت
-    let currentReactions = {}; 
-    // هنا نفترض أننا نرسل التفاعل للخادم والخادم يرد بالتحديث،
-    // ولكن للمظهر الفوري سنضيفه للواجهة
-    const reactionsDiv = msgEl.querySelector('.msg-reactions');
-    reactionsDiv.style.display = 'flex';
-    reactionsDiv.textContent = reaction; // عرض مبسط لأحدث تفاعل
-    
-    // 2. إرسال للخادم
+    // 1. حفظ محلي (Persistence Logic)
+    saveReactionLocally(currentReactionMsgId, emoji);
+
+    // 2. تحديث الواجهة فوراً
+    const msgEl = document.querySelector(`.message[data-id="${currentReactionMsgId}"]`);
+    if (msgEl) {
+        const badge = msgEl.querySelector('.msg-reaction-badge');
+        badge.textContent = emoji;
+        badge.style.display = 'flex';
+        // انيميشن صغير للبادج
+        badge.animate([{transform: 'scale(0)'}, {transform: 'scale(1)'}], {duration: 200});
+    }
+
+    // 3. إرسال للسيرفر (يجب إضافة هذا المسار في server.js)
     fetch('/api/chat/react', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ messageId: msgId, reaction: reaction })
-    }).then(res => res.json())
-      .then(data => {
-          if(!data.ok) console.warn('Failed to save reaction');
-      })
-      .catch(err => console.error(err));
+        body: JSON.stringify({ messageId: currentReactionMsgId, reaction: emoji })
+    }).catch(e => console.warn('React API fail', e));
 
-    // 3. حفظ محلي مؤقت (Fallback)
-    let localReactions = JSON.parse(localStorage.getItem('chat_reactions') || '{}');
-    localReactions[msgId] = reaction;
-    localStorage.setItem('chat_reactions', JSON.stringify(localReactions));
+    // إخفاء القائمة
+    document.getElementById('reactionMenu').classList.remove('active');
+    currentReactionMsgId = null;
 }
 
-function updateReactionsUI(msgEl, reactionsData) {
-    const div = msgEl.querySelector('.msg-reactions');
+// دوال مساعدة للتخزين المحلي
+function saveReactionLocally(id, emoji) {
+    let store = JSON.parse(localStorage.getItem('chat_reactions') || '{}');
+    store[id] = emoji;
+    localStorage.setItem('chat_reactions', JSON.stringify(store));
+}
+function getSavedReaction(id) {
+    let store = JSON.parse(localStorage.getItem('chat_reactions') || '{}');
+    return store[id];
+}
+function updateReactionUI(msgEl, reactions) {
+    // الأولوية للمحفوظ محلياً لمنع الومضات، ثم السيرفر
+    const saved = getSavedReaction(msgEl.dataset.id);
+    const badge = msgEl.querySelector('.msg-reaction-badge');
     
-    // دمج البيانات من الخادم مع التخزين المحلي (للحصول على أحدث حالة)
-    const msgId = msgEl.dataset.id;
-    const local = JSON.parse(localStorage.getItem('chat_reactions') || '{}')[msgId];
-    
-    let displayReaction = local || (reactionsData ? reactionsData.last : null);
-    
-    if (displayReaction) {
-        div.style.display = 'flex';
-        div.textContent = displayReaction;
-    } else {
-        div.style.display = 'none';
+    if (saved) {
+        if(badge.textContent !== saved) badge.textContent = saved;
+        badge.style.display = 'flex';
+    } else if (reactions && reactions.last) {
+        if(badge.textContent !== reactions.last) badge.textContent = reactions.last;
+        badge.style.display = 'flex';
     }
 }
 
 
-// === وظائف الرد (Reply) ===
-function prepareReply(msgData) {
+// === منطق الرد (Reply) ===
+function startReply(msgData) {
     replyToId = msgData.id;
+    replyToMsg = msgData;
+    
     const preview = document.getElementById('replyPreview');
     const content = document.getElementById('replyContent');
-    const input = document.getElementById('msgInput');
-
-    let typeText = 'نص';
-    if(msgData.type === 'audio') typeText = 'رسالة صوتية 🎤';
-    else if(msgData.type === 'image') typeText = 'صورة 📷';
-    else if(msgData.type === 'video') typeText = 'فيديو 🎥';
-    else typeText = msgData.text;
-
-    content.innerHTML = `<strong>${msgData.senderName || 'مستخدم'}</strong><br>${truncate(typeText, 40)}`;
+    
+    const arabicType = getArabicType(msgData.type, msgData.text);
+    const sender = msgData.senderName || 'مستخدم';
+    
+    content.innerHTML = `<strong>${sender}</strong>: ${arabicType}`;
     preview.style.display = 'block';
     
-    input.focus();
+    document.getElementById('msgText').focus();
 }
 
-function cancelReply() {
+function closeReply() {
     replyToId = null;
+    replyToMsg = null;
     document.getElementById('replyPreview').style.display = 'none';
 }
 
-// === الإرسال ===
-async function sendMessage() {
-    const input = document.getElementById('msgInput');
-    const text = input.value.trim();
-    if (!text) return;
-
-    input.value = '';
-    input.style.height = 'auto'; // إعادة تعيين الارتفاع
-    cancelReply(); // إخفاء الرد بعد الإرسال
-
-    try {
-        await fetch('/api/chat/send', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                text, 
-                type: 'text',
-                replyToId: replyToId
-            })
-        });
-        fetchMessages(true);
-    } catch (e) { console.error(e); }
+function getArabicType(type, text) {
+    if (type === 'image') return 'صورة 📷';
+    if (type === 'video') return 'فيديو 🎥';
+    if (type === 'audio') return 'رسالة صوتية 🎤';
+    return text || 'نص';
 }
 
-// === رفع الملفات ===
-function triggerFile(type) {
-    const fileInput = document.getElementById('fileInput');
-    fileInput.accept = type === 'image' ? 'image/*' : 'video/*';
-    fileInput.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('type', type);
-        if(replyToId) formData.append('replyToId', replyToId);
 
-        // إظهار حالة التحميل (اختياري)
-        const sendBtn = document.getElementById('sendBtn');
-        sendBtn.textContent = '...'; 
+// === الإرسال والرفع ===
+async function sendText() {
+    const input = document.getElementById('msgText');
+    const text = input.value.trim();
+    if (!text) return;
+    
+    const payload = { text, type: 'text', replyToId };
+    
+    // UI Reset
+    input.value = '';
+    input.style.height = 'auto';
+    closeReply();
 
-        try {
-            await fetch('/api/chat/upload', { method: 'POST', body: formData });
-            fetchMessages(true);
-            cancelReply();
-        } catch(err) { alert('فشل الرفع'); }
-        
-        sendBtn.textContent = '➤';
-    };
-    fileInput.click();
+    await fetch('/api/chat/send', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+    });
+    fetchMessages(true);
+}
+
+async function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const type = file.type.startsWith('image') ? 'image' : 'video';
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    if(replyToId) formData.append('replyToId', replyToId);
+
+    // إشارة تحميل بسيطة
+    const btn = document.querySelector('.action-btn'); // المشبك
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⌛';
+
+    await fetch('/api/chat/upload', { method:'POST', body: formData });
+    
+    btn.innerHTML = originalText;
+    closeReply();
+    fetchMessages(true);
 }
 
 // === التسجيل الصوتي ===
-function startRecording() {
-    if (isRecording) return;
-    navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
+function startRec() {
+    if(isRecording) return;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         mediaRecorder = new MediaRecorder(stream);
         mediaRecorder.start();
         isRecording = true;
-        document.getElementById('recordingIndicator').style.display = 'flex';
-        
+        document.getElementById('recordingUI').style.display = 'flex';
         audioChunks = [];
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
         
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
         mediaRecorder.onstop = async () => {
             const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const formData = new FormData();
-            formData.append('file', blob, 'voice.webm');
-            formData.append('type', 'audio');
-            if(replyToId) formData.append('replyToId', replyToId);
+            const fd = new FormData();
+            fd.append('file', blob, 'voice.webm');
+            fd.append('type', 'audio');
+            if(replyToId) fd.append('replyToId', replyToId);
             
-            await fetch('/api/chat/upload', { method: 'POST', body: formData });
+            await fetch('/api/chat/upload', { method:'POST', body: fd });
             fetchMessages(true);
-            cancelReply();
+            closeReply();
         };
-    })
-    .catch(e => alert('المايكروفون غير متاح'));
+    }).catch(e => alert('المايكروفون غير متاح'));
 }
 
-function stopRecording() {
-    if (isRecording && mediaRecorder) {
+function stopRec() {
+    if(isRecording && mediaRecorder) {
         mediaRecorder.stop();
         isRecording = false;
-        document.getElementById('recordingIndicator').style.display = 'none';
+        document.getElementById('recordingUI').style.display = 'none';
     }
 }
 
-// === أدوات مساعدة ===
+// === أدوات ===
 function escapeHtml(text) {
     if(!text) return '';
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 function formatTime(ts) {
-    return new Date(ts).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-}
-function truncate(str, n) {
-    return (str && str.length > n) ? str.substr(0, n-1) + '...' : str;
+    return new Date(ts).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
 }
 </script>
 </body>
