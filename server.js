@@ -118,7 +118,7 @@ function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
     return next();
   }
-  if (req.path.startsWith('/api/')) {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/partials/')) {
     return res.status(401).json({ error: 'Unauthorized', message: 'User session not found or expired.' });
   }
   return res.redirect('/login');
@@ -1568,63 +1568,6 @@ app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, 
 
   } catch (error) {
     res.status(500).json({ ok: false, error: 'Failed to send.' });
-  }
-});
-
-// New endpoint: save/clear reaction on a message (persist reactions server-side)
-app.post('/api/messages/react', requireAuth, async (req, res) => {
-  // Body: { messageId: string, reaction: string|null } reaction allowed: laugh,sad,heart,angry,like OR null to remove
-  const userId = req.session.userId;
-  const { messageId, reaction } = req.body;
-  if (!messageId) return res.status(400).json({ ok: false, error: 'messageId required' });
-
-  const allowed = ['laugh', 'sad', 'heart', 'angry', 'like', null];
-  if (typeof reaction !== 'string' && reaction !== null) {
-    return res.status(400).json({ ok: false, error: 'reaction must be string or null' });
-  }
-  if (reaction !== null && !allowed.includes(reaction)) {
-    return res.status(400).json({ ok: false, error: 'invalid reaction' });
-  }
-
-  try {
-    const userReactionRef = db.ref(`message_reactions/${messageId}/${userId}`);
-    const prevSnap = await userReactionRef.once('value');
-    const prev = prevSnap.exists() ? prevSnap.val() : null;
-
-    // If prev === reaction -> remove (toggle off)
-    if (prev && prev === reaction) {
-      // remove
-      await userReactionRef.remove();
-      // decrement count
-      await db.ref(`message_reaction_counts/${messageId}/${prev}`).transaction(c => (c || 1) - 1);
-      const countsSnap = await db.ref(`message_reaction_counts/${messageId}`).once('value');
-      const counts = countsSnap.val() || {};
-      return res.json({ ok: true, counts, userReaction: null });
-    }
-
-    // Otherwise set new reaction (could be null for explicit remove)
-    if (reaction === null) {
-      // remove only
-      if (prev) {
-        await userReactionRef.remove();
-        await db.ref(`message_reaction_counts/${messageId}/${prev}`).transaction(c => (c || 1) - 1);
-      }
-    } else {
-      // set new
-      await userReactionRef.set(reaction);
-      // adjust counts
-      if (prev) {
-        await db.ref(`message_reaction_counts/${messageId}/${prev}`).transaction(c => (c || 1) - 1);
-      }
-      await db.ref(`message_reaction_counts/${messageId}/${reaction}`).transaction(c => (c || 0) + 1);
-    }
-
-    const countsSnap = await db.ref(`message_reaction_counts/${messageId}`).once('value');
-    const counts = countsSnap.val() || {};
-    res.json({ ok: true, counts, userReaction: reaction === prev ? null : reaction });
-  } catch (err) {
-    console.error('Error persisting reaction:', err);
-    res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
 
@@ -3518,6 +3461,179 @@ app.post('/api/account/delete', requireAuth, async (req, res) => {
     console.error('Account delete error:', err);
     return res.status(500).json({ ok: false, error: 'Server error' });
   }
+});
+
+
+// ---------------- HTMX partials (used by client-side navigation) ----------------
+// These endpoints return HTML fragments (partials) consumed by HTMX on the client.
+// They are lightweight representations of families and posts used for fast in-page navigation.
+
+// helper server-side escaper
+function escapeHtml(s) {
+  if (!s && s !== 0) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/**
+ * Partial: families list (HTML)
+ */
+app.get('/partials/families', requireAuth, async (req, res) => {
+  try {
+    const familiesSnap = await db.ref('families').once('value');
+    const familiesObj = familiesSnap.val() || {};
+    const families = Object.keys(familiesObj).map(fid => {
+      const f = familiesObj[fid] || {};
+      return {
+        familyId: fid,
+        name: f.name || '',
+        imageUrl: f.imageUrl || '',
+        membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+        is_member: !!(f.members && f.members[req.session.userId])
+      };
+    });
+
+    let html = `
+      <div id="familiesWrapper" class="max-w-xl mx-auto mt-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-white font-bold">العائلات</h2>
+          <button id="viewAllFamiliesBtn" class="px-3 py-1 border rounded" onclick="htmx.ajax('GET','/partials/families',{target:'#mainContent', pushUrl:true})">عرض كل العائلات</button>
+        </div>
+        <div id="familiesRow" class="families-row">
+    `;
+    html += families.map(f => {
+      const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : '';
+      const badge = f.is_member ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
+      return `
+        <div class="family-card" data-family-id="${f.familyId}" onclick="window.location.href='/family/${f.familyId}'">
+          <img src="${img || 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'}" alt="${escapeHtml(f.name)}" onerror="this.onerror=null;this.src='https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'">
+          <div class="meta">
+            <div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+            <div class="count">${f.membersCount} عضو • ${badge}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    html += `</div></div>`;
+    res.send(html);
+  } catch (err) {
+    console.error('partials/families error', err);
+    res.status(500).send('<div class="text-red-400 p-4">فشل في تحميل العائلات.</div>');
+  }
+});
+
+/**
+ * Partial: posts feed (HTML)
+ */
+app.get('/partials/posts', requireAuth, async (req, res) => {
+  try {
+    const postsSnap = await db.ref('posts').orderByChild('timestamp').limitToLast(50).once('value');
+    const postsArr = [];
+    postsSnap.forEach(child => postsArr.push(child.val()));
+    postsArr.reverse();
+
+    const profilesSnap = await db.ref('profiles').once('value');
+    const profiles = profilesSnap.val() || {};
+
+    let html = `<div id="postsFeed" class="max-w-xl mx-auto mt-6 space-y-4">`;
+    postsArr.forEach(post => {
+      const user = profiles[post.userId] || {};
+      const username = user.username || 'مستخدم';
+      const avatar = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+      html += `
+        <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center">
+              <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
+                <img src="${avatar}" alt="${escapeHtml(username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
+              </a>
+              <div>
+                <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(username)}</a>
+                <p class="text-gray-400 text-xs">${new Date(post.timestamp || Date.now()).toLocaleString('ar-EG')}</p>
+              </div>
+            </div>
+            <div>
+              <button class="text-gray-400 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button>
+            </div>
+          </div>
+          <p class="text-gray-200 whitespace-pre-wrap">${escapeHtml(post.content || '')}</p>
+        </div>
+      `;
+    });
+    html += `</div>`;
+    res.send(html);
+  } catch (err) {
+    console.error('partials/posts error', err);
+    res.status(500).send('<div class="text-red-400 p-4">فشل في تحميل المنشورات.</div>');
+  }
+});
+
+/**
+ * Partial: combined chat content (families + posts)
+ */
+app.get('/partials/chat_content', requireAuth, async (req, res) => {
+  try {
+    const familiesPromise = db.ref('families').once('value');
+    const postsPromise = db.ref('posts').orderByChild('timestamp').limitToLast(50).once('value');
+    const profilesPromise = db.ref('profiles').once('value');
+
+    const [familiesSnap, postsSnap, profilesSnap] = await Promise.all([familiesPromise, postsPromise, profilesPromise]);
+
+    const familiesObj = familiesSnap.val() || {};
+    const families = Object.keys(familiesObj).map(fid => {
+      const f = familiesObj[fid] || {};
+      return {
+        familyId: fid,
+        name: f.name || '',
+        imageUrl: f.imageUrl || '',
+        membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+        is_member: !!(f.members && f.members[req.session.userId])
+      };
+    });
+
+    const postsArr = [];
+    postsSnap.forEach(child => postsArr.push(child.val()));
+    postsArr.reverse();
+
+    const profiles = profilesSnap.val() || {};
+
+    let html = '';
+
+    // Families block
+    html += `<div id="familiesWrapper" class="max-w-xl mx-auto mt-4"><div class="flex items-center justify-between mb-2"><h2 class="text-white font-bold">العائلات</h2><button id="viewAllFamiliesBtn" class="px-3 py-1 border rounded" onclick="htmx.ajax('GET','/partials/families',{target:'#mainContent', pushUrl:true})">عرض كل العائلات</button></div><div id="familiesRow" class="families-row">`;
+    html += families.map(f => {
+      const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : '';
+      const badge = f.is_member ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
+      return `<div class="family-card" data-family-id="${f.familyId}" onclick="window.location.href='/family/${f.familyId}'"><img src="${img || 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'}" alt="${escapeHtml(f.name)}" onerror="this.onerror=null;this.src='https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'"><div class="meta"><div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div><div class="count">${f.membersCount} عضو • ${badge}</div></div></div>` ;
+    }).join('');
+    html += `</div></div>`;
+
+    // Posts block
+    html += `<div id="postsFeed" class="max-w-xl mx-auto mt-6 space-y-4">`;
+    postsArr.forEach(post => {
+      const user = profiles[post.userId] || {};
+      const username = user.username || 'مستخدم';
+      const avatar = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+      html += `<div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}"><div class="flex items-start justify-between mb-3"><div class="flex items-center"><a href="/profile?userId=${post.userId}" class="avatar-with-dot"><img src="${avatar}" alt="${escapeHtml(username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600"></a><div><a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(username)}</a><p class="text-gray-400 text-xs">${new Date(post.timestamp || Date.now()).toLocaleString('ar-EG')}</p></div></div><div><button class="text-gray-400 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button></div></div><p class="text-gray-200 whitespace-pre-wrap">${escapeHtml(post.content || '')}</p></div>`;
+    });
+    html += `</div>`;
+
+    res.send(html);
+  } catch (err) {
+    console.error('partials/chat_content error', err);
+    res.status(500).send('<div class="text-red-400 p-4">فشل في تحميل المحتوى.</div>');
+  }
+});
+
+// ---------------- New: Family post like/comment endpoints continued (remainder) ----------------
+// (Remaining family endpoints already implemented earlier)
+
+// ---------------- API: Reels Implementation continued ----------------
+// (Already added above)
+
+// ---------------- Error handling & final listen ----------------
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ ok: false, error: 'Server error' });
 });
 
 app.listen(port, () => {
