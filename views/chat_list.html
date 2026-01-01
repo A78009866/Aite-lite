@@ -2641,7 +2641,79 @@ async function fetchAndDisplayFamilies() {
                 t.classList.remove('show');
             }, timeout);
         }
+// 2. دالة تهيئة الصفحة (تعمل عند التحميل الأول وعند تنقل HTMX)
+    function initPage() {
+        const path = window.location.pathname;
 
+        // تحديث النافبار (جعل الأيقونة زرقاء)
+        updateNavbarActiveState(path);
+
+        // تشغيل دوال الصفحة الحالية
+        if (path === '/chat_list' || path === '/') {
+            // نحن في الرئيسية
+            if (typeof fetchAndDisplayFamilies === 'function') fetchAndDisplayFamilies();
+            if (typeof fetchAndDisplayPosts === 'function') fetchAndDisplayPosts();
+            
+            // تحديث صورة الهيدر
+            fetch('/api/profile').then(r=>r.json()).then(d=>{
+                 const el = document.getElementById('userProfilePic');
+                 if(el && d.profile_picture_url) el.src = d.profile_picture_url;
+            }).catch(()=>{});
+
+        } else if (path === '/users_list') {
+            // نحن في المحادثات (هذا الكود سيعمل عندما نكون في ملف users_list.html)
+            if (typeof fetchAndDisplayFriends === 'function') fetchAndDisplayFriends();
+        }
+        
+        // إعادة تهيئة المودالات والأزرار
+        setupGlobalListeners();
+    }
+
+    // 3. دالة تحديث ألوان النافبار يدوياً
+    function updateNavbarActiveState(currentPath) {
+        // قائمة الروابط في النافبار
+        const navLinks = [
+            { path: '/chat_list', id: 'nav-home', icon: 'fa-home' },
+            { path: '/users_list', id: 'messagesBtn', icon: 'fa-comment-dots' },
+            { path: '/reels', id: 'nav-reels', icon: 'fa-clapperboard' },
+            { path: '/notifications', id: 'notifBtn', icon: 'fa-bell' },
+            { path: '/all_users', id: 'usersBtn', icon: 'fa-users' }
+        ];
+
+        navLinks.forEach(link => {
+            // البحث عن العنصر (سواء كان بـ ID أو عبر البحث في الروابط)
+            let el = document.getElementById(link.id);
+            if (!el) {
+                // محاولة إيجاد العنصر عبر الرابط إذا لم يكن له ID
+                el = document.querySelector(`a[hx-get="${link.path}"]`) || document.querySelector(`a[href="${link.path}"]`);
+            }
+
+            if (el) {
+                // إعادة التعيين للون الرمادي
+                el.className = el.className.replace('text-blue-400', 'text-gray-400 hover:text-white');
+                
+                // إذا كان هذا هو المسار الحالي، لونه بالأزرق
+                if (currentPath.includes(link.path) || (currentPath === '/' && link.path === '/chat_list')) {
+                    el.classList.remove('text-gray-400', 'hover:text-white');
+                    el.classList.add('text-blue-400');
+                }
+            }
+        });
+    }
+
+    function setupGlobalListeners() {
+       // أي مستمعات أحداث عامة توضع هنا
+    }
+
+    // 4. تشغيل الدوال عند التحميل الأول
+    document.addEventListener('DOMContentLoaded', () => {
+        initPage();
+    });
+
+    // 5. تشغيل الدوال بعد كل عملية تبديل لـ HTMX (الحل السحري)
+    document.body.addEventListener('htmx:afterOnLoad', () => {
+        initPage();
+    });
     </script>
 <script>
 (function saveCurrentAccountLocally() {
