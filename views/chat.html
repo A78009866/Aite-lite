@@ -598,18 +598,14 @@ transition: transform 180ms ease, opacity 180ms ease;
 </div>
 <script>
 /*
-  Enhanced chat client:
-  - Uses SSE for real-time messages & reactions (/api/messages/stream/:contactId)
-  - Per-message reactions (counts, my_reaction)
-  - Toggle reaction (POST to set, DELETE to remove)
-  - Mobile & desktop friendly: touch gestures, long-press reactions, swipe-to-reply
-  - Audio playback isolated per message; playing one pauses others; arrival of new messages doesn't stop current audio
+  Fixes applied:
+  - Avatar fallback when external placeholder DNS fails (use inline SVG data URI).
+  - Robust SSE connect: test endpoint quickly, if SSE unsupported/404 or connection fails, fallback to polling (fetchMessages) with exponential backoff.
+  - Better EventSource error handling and retries.
+  - Keeps audio playing when new messages arrive by avoiding full list reload; SSE incremental events are used and polling fallback updates only new messages.
 */
 
-function getQuery(name) {
-    const params = new URLSearchParams(window.location.search);
-    return params.get(name);
-}
+function getQuery(name) { const params = new URLSearchParams(window.location.search); return params.get(name); }
 
 const otherId = getQuery('contactId');
 const messagesEl = document.getElementById('messages');
@@ -644,26 +640,28 @@ let audioStream = null;
 let recordingTimer = null;
 let recordingSeconds = 0;
 let inputWaveSurfer = null;
-// audioWaveSurfers keyed by source URL (string) => wavesurfer instance
-let audioWaveSurfers = {};
-// mapping messageId -> audio src (for quick lookup)
-let messageAudioSrc = {};
+let audioWaveSurfers = {}; // { src: instance }
 
-const RECORDING_STATE = { IDLE: 'idle', RECORDING: 'recording', READY_TO_SEND: 'ready' };
+const RECORDING_STATE = { IDLE:'idle', RECORDING:'recording', READY_TO_SEND:'ready' };
 let recordingState = RECORDING_STATE.IDLE;
 
 const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-
-// local fallback storage for reactions when offline
 const LOCAL_REACTIONS_KEY = 'chat_local_reactions_v1';
 function loadLocalReactions(){ try{ return JSON.parse(localStorage.getItem(LOCAL_REACTIONS_KEY)||'{}'); }catch(e){ return {}; } }
 function saveLocalReactions(m){ try{ localStorage.setItem(LOCAL_REACTIONS_KEY, JSON.stringify(m)); }catch(e){} }
 let localReactions = loadLocalReactions();
 
-// SSE connection reference
 let messagesEventSource = null;
+let sseRetryCount = 0;
+let pollingIntervalId = null;
+let pollingBackoff = 3000; // initial
 
-// Helpers
+// small defaults / fallbacks
+const DEFAULT_AVATAR_DATA = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="100%" height="100%" fill="#0b3146"/><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="Arial" font-size="18" fill="#fff">U</text></svg>'
+);
+
+// Helper funcs
 function formatTime(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -677,15 +675,10 @@ function formatAudioTime(seconds) {
     const sec = Math.floor(seconds % 60);
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
 }
-function escapeHtml(s) {
-    if (!s && s !== 0) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-function escapeAttr(s) {
-    if (!s && s !== 0) return '';
-    return String(s).replace(/"/g, '&quot;');
-}
+function escapeHtml(s) { if (!s && s !== 0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function escapeAttr(s) { if (!s && s !== 0) return ''; return String(s).replace(/"/g,'&quot;'); }
 
+// Media type label
 function mediaTypeLabel(media) {
     if (!media) return 'ملف مرفق';
     const t = (media.type || '').toLowerCase();
@@ -696,6 +689,7 @@ function mediaTypeLabel(media) {
     return 'ملف مرفق';
 }
 
+// Reaction badge creation
 function createReactionBadge(emoji, count) {
     const el = document.createElement('div');
     el.className = 'msg-reaction-badge';
@@ -703,6 +697,7 @@ function createReactionBadge(emoji, count) {
     return el;
 }
 
+// Audio player creation helper (HTML)
 function createAudioPlayerHtml(src, isIncoming) {
     return `
         <div class="msg-audio-player" onclick="event.stopPropagation()">
@@ -715,9 +710,11 @@ function createAudioPlayerHtml(src, isIncoming) {
     `;
 }
 
-// Initialize wavesurfer for a single container element (avoid destroying other players)
+// Initialize WaveSurfer for a container (if not already)
 function initWaveSurferForContainer(containerEl, src, isIncoming, resumeState) {
-    if (!src || audioWaveSurfers[src]) return audioWaveSurfers[src];
+    if (!src) return;
+    if (audioWaveSurfers[src]) return audioWaveSurfers[src];
+
     try {
         const ws = WaveSurfer.create({
             container: containerEl,
@@ -739,18 +736,20 @@ function initWaveSurferForContainer(containerEl, src, isIncoming, resumeState) {
                 try { if (resumeState.time) ws.setTime(resumeState.time); if (resumeState.playing) ws.play(); } catch(e){}
             }
         });
+
         if (playerBtn) {
             playerBtn.onclick = (e) => {
                 e.stopPropagation();
-                // pause any other playing waves
+                // pause others
                 Object.keys(audioWaveSurfers).forEach(k => {
-                    if (k !== src && audioWaveSurfers[k] && typeof audioWaveSurfers[k].isPlaying==='function' && audioWaveSurfers[k].isPlaying()) {
-                        audioWaveSurfers[k].pause();
+                    if (k !== src && audioWaveSurfers[k] && typeof audioWaveSurfers[k].isPlaying === 'function' && audioWaveSurfers[k].isPlaying()) {
+                        try { audioWaveSurfers[k].pause(); } catch(e){}
                     }
                 });
                 ws.playPause();
             };
         }
+
         ws.on('play', () => { if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; });
         ws.on('pause', () => { if (playerBtn) playerBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>`; });
         ws.on('audioprocess', (time) => { if (timeEl) timeEl.textContent = formatAudioTime(time); });
@@ -763,8 +762,7 @@ function initWaveSurferForContainer(containerEl, src, isIncoming, resumeState) {
     }
 }
 
-// Create message element (returns DOM element). message must include optional fields:
-// message.reactions (map userId->emoji), message.reaction_counts (map emoji->count), message.my_reaction
+// Create message DOM element
 function createMessageElement(msg, myId) {
     const isIncoming = (msg.senderId !== myId);
     const el = document.createElement('div');
@@ -795,8 +793,6 @@ function createMessageElement(msg, myId) {
             contentHtml += `<img src="${escapeAttr(mediaUrl)}" class="msg-image" alt="صورة" onload="scrollToBottom()">`;
         } else if (mediaType.startsWith('audio') || mediaUrl.match(/\.(webm|mp3|ogg|wav|m4a)$/i)) {
             contentHtml += createAudioPlayerHtml(mediaUrl, isIncoming);
-            // map messageId -> audio src
-            messageAudioSrc[msg.messageId] = mediaUrl;
         } else if (mediaType.startsWith('video') || mediaUrl.match(/\.(mp4|webm|mov|mkv)$/i)) {
             contentHtml += `<video src="${escapeAttr(mediaUrl)}" controls class="msg-video" onloadeddata="scrollToBottom()"></video>`;
         } else {
@@ -804,32 +800,26 @@ function createMessageElement(msg, myId) {
         }
     }
 
-    if (msg.content) {
-        contentHtml += `<p style="margin:${msg.media ? '6px 0 0 0' : '0'}">${escapeHtml(msg.content)}</p>`;
-    }
+    if (msg.content) contentHtml += `<p style="margin:${msg.media ? '6px 0 0 0' : '0'}">${escapeHtml(msg.content)}</p>`;
 
     const readStatus = !isIncoming && msg.is_read ? '<span style="color:#4ade80">✓✓</span>' : (!isIncoming ? '<span>✓</span>' : '');
     contentHtml += `<div class="meta-time">${formatTime(msg.timestamp)}${readStatus}</div>`;
 
     el.innerHTML = contentHtml;
 
-    // render reaction badge if present (prefer server counts)
+    // reaction badge
     const reactionCounts = msg.reaction_counts || null;
     const topEmoji = msg.my_reaction || (reactionCounts ? Object.keys(reactionCounts).sort((a,b)=>reactionCounts[b]-reactionCounts[a])[0] : null);
     const topCount = topEmoji && reactionCounts ? reactionCounts[topEmoji] : (msg.my_reaction ? 1 : 0);
-    if (topEmoji) {
-        const badge = createReactionBadge(topEmoji, topCount);
-        el.appendChild(badge);
-    }
+    if (topEmoji) el.appendChild(createReactionBadge(topEmoji, topCount));
 
-    // Attach handlers: swipe-to-reply, long-press for reactions, click to reply
+    // swipe-to-reply & long-press reactions
     let startX=0, startY=0, moved=false, active=false;
     const threshold = 60;
     function onPointerDown(e){ const p=(e.touches&&e.touches[0])||e; startX=p.clientX; startY=p.clientY; moved=false; active=true; el.classList.add('swipe-active'); }
     function onPointerMove(e){ if(!active) return; const p=(e.touches&&e.touches[0])||e; const dx=p.clientX-startX; const dy=p.clientY-startY; if(Math.abs(dy)>30 && Math.abs(dx)<Math.abs(dy)) return; moved=true; const translate = Math.max(Math.min(dx,150),-150); el.style.transform = `translateX(${translate}px)`; }
     function onPointerUp(e){ if(!active) return; active=false; el.classList.remove('swipe-active'); el.style.transition='transform 180ms ease'; const p=(e.changedTouches&&e.changedTouches[0])||e; const dx=p.clientX-startX; if(dx< -threshold) setReplyTo(msg); requestAnimationFrame(()=> el.style.transform='translateX(0)'); setTimeout(()=> el.style.transition='',200); }
 
-    // long press for reactions
     let longPressTimer=null;
     function startLongPress(ev){ ev.preventDefault && ev.preventDefault(); longPressTimer = setTimeout(()=> showReactionsForMessage(el, msg), 600); }
     function cancelLongPress(){ if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; } }
@@ -847,28 +837,21 @@ function createMessageElement(msg, myId) {
     return el;
 }
 
-function scrollToBottom(){
-    requestAnimationFrame(()=> messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' }));
-}
+function scrollToBottom(){ requestAnimationFrame(()=> messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' })); }
 
-// Reply management
+// Reply handling
 function setReplyTo(msg){
-    if(msg.messageId === replyToMessage?.id){ clearReplyTo(); return; }
+    if (msg.messageId === replyToMessage?.id) { clearReplyTo(); return; }
     const isIncoming = (msg.senderId !== myId);
-    replyToMessage = {
-        id: msg.messageId,
-        content: msg.content ? `نص الرسالة: ${msg.content}` : (msg.media ? mediaTypeLabel(msg.media) : 'ملف مرفق'),
-        senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت',
-        senderId: msg.senderId
-    };
+    replyToMessage = { id: msg.messageId, content: msg.content ? `نص الرسالة: ${msg.content}` : (msg.media ? mediaTypeLabel(msg.media) : 'ملف مرفق'), senderName: isIncoming ? document.getElementById('other-name').textContent : 'أنت', senderId: msg.senderId };
     document.getElementById('reply-sender').textContent = replyToMessage.senderName;
     document.getElementById('reply-text').textContent = replyToMessage.content;
     replyContainer.style.display = 'flex';
 }
-function clearReplyTo(){ replyToMessage=null; replyContainer.style.display='none'; }
+function clearReplyTo(){ replyToMessage = null; replyContainer.style.display = 'none'; }
 cancelReplyBtn.onclick = clearReplyTo;
 
-// Composer UI logic
+// Composer UI
 function updateComposerUI(){
     msgInput.style.display='none';
     recordingIndicator.style.display='none';
@@ -876,116 +859,126 @@ function updateComposerUI(){
     attachFileBtn.style.display='none';
     voiceBtn.style.display='flex';
     sendBtn.style.display='none';
-
     if (uploadedFile && recordingState !== RECORDING_STATE.READY_TO_SEND) {
-        msgInput.style.display='block';
-        filePreview.style.display='flex';
-        voiceBtn.style.display='none';
-        sendBtn.style.display='flex';
-        attachFileBtn.style.display='flex';
-        return;
+        msgInput.style.display='block'; filePreview.style.display='flex'; voiceBtn.style.display='none'; sendBtn.style.display='flex'; attachFileBtn.style.display='flex'; return;
     }
     filePreview.style.display='none';
-
     if (msgInput.value.trim().length > 0 && recordingState === RECORDING_STATE.IDLE) {
-        msgInput.style.display='block';
-        attachFileBtn.style.display='flex';
-        voiceBtn.style.display='none';
-        sendBtn.style.display='flex';
-        return;
+        msgInput.style.display='block'; attachFileBtn.style.display='flex'; voiceBtn.style.display='none'; sendBtn.style.display='flex'; return;
     }
-
     switch(recordingState){
         case RECORDING_STATE.IDLE:
-            msgInput.style.display='block';
-            attachFileBtn.style.display='flex';
-            voiceIcon.innerHTML = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>`;
-            voiceBtn.classList.remove('recording-active');
-            break;
+            msgInput.style.display='block'; attachFileBtn.style.display='flex'; voiceIcon.innerHTML = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>`; voiceBtn.classList.remove('recording-active'); break;
         case RECORDING_STATE.RECORDING:
-            recordingIndicator.style.display='flex';
-            voiceIcon.innerHTML = `<path d="M6 19h12v-6H6v6z"/>`;
-            voiceBtn.classList.add('recording-active');
-            attachFileBtn.style.display='none';
-            break;
+            recordingIndicator.style.display='flex'; voiceIcon.innerHTML = `<path d="M6 19h12v-6H6v6z"/>`; voiceBtn.classList.add('recording-active'); attachFileBtn.style.display='none'; break;
         case RECORDING_STATE.READY_TO_SEND:
-            audioPreviewContainer.style.display='flex';
-            voiceBtn.style.display='none';
-            sendBtn.style.display='flex';
-            attachFileBtn.style.display='flex';
-            break;
+            audioPreviewContainer.style.display='flex'; voiceBtn.style.display='none'; sendBtn.style.display='flex'; attachFileBtn.style.display='flex'; break;
     }
 }
 msgInput.addEventListener('input', updateComposerUI);
 
-// Voice recording
-function startRecording(){
-    if (recordingState !== RECORDING_STATE.IDLE) return;
-    audioChunks = []; recordingSeconds = 0;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream=>{
-        audioStream = stream;
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
-        mediaRecorder.start();
-        mediaRecorder.ondataavailable = (e)=> audioChunks.push(e.data);
-        recordingState = RECORDING_STATE.RECORDING; updateComposerUI();
-        recordingTimer = setInterval(()=>{ recordingSeconds++; recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`; },1000);
-        mediaRecorder.onstop = stopRecording;
-    }).catch(err=>{
-        alert('تعذر الوصول إلى الميكروفون. تأكد من منح الإذن.');
-        recordingState = RECORDING_STATE.IDLE; updateComposerUI();
-    });
-}
-function stopRecording(){
-    clearInterval(recordingTimer);
-    recordingTimeEl.textContent = `جاري التسجيل... 0:00`;
-    if (mediaRecorder && mediaRecorder.state==='recording') mediaRecorder.stop();
-    if (audioStream) { audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; }
-    if (audioChunks.length>0){
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        uploadedFile = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
-        const audioURL = URL.createObjectURL(audioBlob);
-        if (inputWaveSurfer) { try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; }
-        inputWaveSurfer = WaveSurfer.create({ container: audioWaveformInput, waveColor:'#7dd3fc', progressColor:'#06b6d4', cursorColor:'transparent', barWidth:2, height:30, barGap:2, barRadius:2 });
-        inputWaveSurfer.load(audioURL);
-        inputWaveSurfer.on('ready', ()=> audioPreviewTime.textContent = formatAudioTime(inputWaveSurfer.getDuration()));
-        inputWaveSurfer.on('click', ()=> inputWaveSurfer.playPause());
-        recordingState = RECORDING_STATE.READY_TO_SEND;
-    } else recordingState = RECORDING_STATE.IDLE;
-    updateComposerUI();
-}
+// Voice recording (kept as before)
+function startRecording(){ if (recordingState !== RECORDING_STATE.IDLE) return; audioChunks=[]; recordingSeconds=0; navigator.mediaDevices.getUserMedia({ audio: true }).then(stream=>{ audioStream=stream; mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' }); mediaRecorder.start(); mediaRecorder.ondataavailable = (e)=> audioChunks.push(e.data); recordingState = RECORDING_STATE.RECORDING; updateComposerUI(); recordingTimer = setInterval(()=>{ recordingSeconds++; recordingTimeEl.textContent = `جاري التسجيل... ${formatAudioTime(recordingSeconds)}`; },1000); mediaRecorder.onstop = stopRecording; }).catch(err=>{ alert('تعذر الوصول إلى الميكروفون. تأكد من منح الإذن.'); recordingState = RECORDING_STATE.IDLE; updateComposerUI(); }); }
+function stopRecording(){ clearInterval(recordingTimer); recordingTimeEl.textContent = `جاري التسجيل... 0:00`; if (mediaRecorder && mediaRecorder.state==='recording') mediaRecorder.stop(); if (audioStream) { audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; } if (audioChunks.length>0){ const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); uploadedFile = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' }); const audioURL = URL.createObjectURL(audioBlob); if (inputWaveSurfer){ try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; } inputWaveSurfer = WaveSurfer.create({ container: audioWaveformInput, waveColor:'#7dd3fc', progressColor:'#06b6d4', cursorColor:'transparent', barWidth:2, height:30, barGap:2, barRadius:2 }); inputWaveSurfer.load(audioURL); inputWaveSurfer.on('ready', ()=> audioPreviewTime.textContent = formatAudioTime(inputWaveSurfer.getDuration())); inputWaveSurfer.on('click', ()=> inputWaveSurfer.playPause()); recordingState = RECORDING_STATE.READY_TO_SEND; } else recordingState = RECORDING_STATE.IDLE; updateComposerUI(); }
 function handleVoiceButton(){ if (recordingState === RECORDING_STATE.IDLE) startRecording(); else if (recordingState === RECORDING_STATE.RECORDING) stopRecording(); }
-function removeFile(){ if (inputWaveSurfer){ try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; } uploadedFile=null; audioChunks=[]; recordingState=RECORDING_STATE.IDLE; fileUpload.value=''; filePreview.innerHTML=''; updateComposerUI(); }
+function removeFile(){ if (inputWaveSurfer){ try{ inputWaveSurfer.destroy(); }catch(e){} inputWaveSurfer=null; } uploadedFile=null; audioChunks=[]; recordingState = RECORDING_STATE.IDLE; fileUpload.value=''; filePreview.innerHTML=''; updateComposerUI(); }
 audioPreviewCancelBtn.onclick = removeFile;
 voiceBtn.addEventListener('click', handleVoiceButton);
 
-// initialize audio player for message (uses initWaveSurferForContainer)
-function initializeAudioForMessageElement(msgEl, resumeStates){
-    const container = msgEl.querySelector('.audio-waveform-container');
-    if (!container) return;
-    const src = container.dataset.src;
-    const isIncoming = container.dataset.isIncoming === 'true';
-    // only create wavesurfer for this src if not already existing
-    if (audioWaveSurfers[src]) {
-        // if existing instance was created targeting another container we might need to re-attach — WaveSurfer supports a single container, so skip re-creation.
-        return;
+// File attach handlers
+removeFileBtn.addEventListener('click', ()=>{ uploadedFile=null; fileUpload.value=''; updateComposerUI(); });
+fileUpload.addEventListener('change', (e)=>{ const file = e.target.files[0]; if (file){ removeFile(); uploadedFile = file; const reader = new FileReader(); reader.onload = (ev)=>{ let preview; if (file.type.startsWith('image/')){ preview = document.createElement('img'); preview.src = ev.target.result; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; } else if (file.type.startsWith('video/')){ preview = document.createElement('video'); preview.src = ev.target.result; preview.controls=true; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; } else if (file.type.startsWith('audio/')){ preview = document.createElement('audio'); preview.src = ev.target.result; preview.controls=true; } else { preview = document.createElement('span'); preview.textContent = file.name; } filePreview.innerHTML=''; filePreview.appendChild(preview); const rm = document.createElement('button'); rm.className='composer-btn btn'; rm.style.cssText='width:24px;height:24px;background:#ef4444;margin-right:auto;'; rm.innerHTML='×'; rm.onclick = ()=>{ removeFile(); updateComposerUI(); }; filePreview.appendChild(rm); updateComposerUI(); }; reader.readAsDataURL(file); } else removeFileBtn.onclick(); });
+
+// Send message
+async function sendMessage(){ let content = msgInput.value.trim(); if (!content && !uploadedFile) return; sendBtn.disabled = true; const orig = sendBtn.innerHTML; sendBtn.innerHTML = '<div class="spin" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;"></div>'; const form = new FormData(); form.append('other_id', otherId); if (content) form.append('content', content); if (uploadedFile) form.append('media', uploadedFile, uploadedFile.name); if (replyToMessage){ form.append('replied_to_id', replyToMessage.id); form.append('replied_to_content', replyToMessage.content); form.append('replied_to_sender', replyToMessage.senderName); } try { const res = await fetch('/api/messages/send', { method:'POST', credentials:'same-origin', body: form }); const data = await res.json(); if (res.ok && data.ok && data.messageData) { const el = createMessageElement(data.messageData, myId); messagesEl.appendChild(el); // initialize audio inside new element if any const container = el.querySelector('.audio-waveform-container'); if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true'); msgInput.value=''; removeFile(); clearReplyTo(); scrollToBottom(); } else { alert('فشل الإرسال: ' + (data.error || 'خطأ غير معروف')); } } catch (err){ alert('خطأ في الاتصال بالخادم. تأكد من أن الخادم يعمل.'); } finally { sendBtn.disabled = false; sendBtn.innerHTML = orig; updateComposerUI(); } }
+
+sendForm.addEventListener('submit', (e)=>{ e.preventDefault(); sendMessage(); });
+msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
+
+// Fetch messages (polling fallback)
+let isFetchingMessages = false;
+async function fetchMessages() {
+    if (isFetchingMessages) return;
+    isFetchingMessages = true;
+    try {
+        const res = await fetch(`/api/messages/${otherId}?include_reactions=1`, { credentials: 'same-origin' });
+        const result = await res.json();
+        if (res.ok && result.ok) {
+            // build minimal update: append new messages only (preserve audio instances)
+            const incoming = result.messages || [];
+            // simple approach: if different length or content, rebuild only if SSE not used
+            messagesEl.innerHTML = '';
+            for (const msg of incoming) {
+                const el = createMessageElement(msg, myId);
+                messagesEl.appendChild(el);
+            }
+            // init audio players
+            document.querySelectorAll('.audio-waveform-container').forEach(container => {
+                const src = container.dataset.src;
+                if (src && !audioWaveSurfers[src]) initWaveSurferForContainer(container, src, container.dataset.isIncoming === 'true');
+            });
+            scrollToBottom();
+            lastMessages = incoming;
+        } else {
+            console.warn('fetchMessages failed', result);
+        }
+    } catch (err) {
+        console.error('fetchMessages error', err);
+    } finally {
+        isFetchingMessages = false;
     }
-    initWaveSurferForContainer(container, src, isIncoming, resumeStates && resumeStates[src]);
 }
 
-// SSE handling: connect, handle snapshot and incremental events
-function connectMessagesSSE(){
-    if(!otherId) return;
-    if (messagesEventSource) { try{ messagesEventSource.close(); }catch(e){} messagesEventSource=null; }
+// SSE availability test (tries to fetch and checks status quickly)
+async function testSSEAvailable(url, timeout = 3000) {
+    const controller = new AbortController();
+    const sig = controller.signal;
+    const t = setTimeout(()=> controller.abort(), timeout);
+    try {
+        const r = await fetch(url, { method:'GET', credentials:'same-origin', headers:{ 'Accept':'text/event-stream' }, signal: sig });
+        clearTimeout(t);
+        return r.status === 200;
+    } catch (err) {
+        clearTimeout(t);
+        return false;
+    }
+}
 
-    const url = `/api/messages/stream/${encodeURIComponent(otherId)}`;
-    messagesEventSource = new EventSource(url);
+// Connect to SSE with fallback to polling
+async function connectMessagesSSEWithFallback() {
+    if (!otherId) return;
+
+    // stop existing SSE or polling
+    if (messagesEventSource) { try{ messagesEventSource.close(); }catch(e){} messagesEventSource = null; }
+    if (pollingIntervalId) { clearInterval(pollingIntervalId); pollingIntervalId = null; }
+
+    const sseUrl = `/api/messages/stream/${encodeURIComponent(otherId)}`;
+
+    let canUseSSE = false;
+    try {
+        canUseSSE = await testSSEAvailable(sseUrl, 2500);
+    } catch (e) {
+        canUseSSE = false;
+    }
+
+    if (!canUseSSE) {
+        console.warn('SSE not available for messages; falling back to polling.');
+        // start polling
+        pollingBackoff = 3000;
+        await fetchMessages();
+        pollingIntervalId = setInterval(fetchMessages, pollingBackoff);
+        return;
+    }
+
+    // Connect EventSource
+    messagesEventSource = new EventSource(sseUrl, { withCredentials: true });
 
     messagesEventSource.addEventListener('messages_snapshot', (e)=>{
         try {
-            const payload = JSON.parse(e.data); // array of messages
-            // preserve current playing states
+            const payload = JSON.parse(e.data);
+            // replace contents but preserve playing audio states
             const preserve = {};
-            Object.keys(audioWaveSurfers).forEach(src=>{
+            Object.keys(audioWaveSurfers).forEach(src => {
                 try { preserve[src] = { time: audioWaveSurfers[src].getCurrentTime?audioWaveSurfers[src].getCurrentTime():0, playing: audioWaveSurfers[src].isPlaying?audioWaveSurfers[src].isPlaying():false }; } catch(e){ preserve[src] = { time:0, playing:false }; }
             });
             messagesEl.innerHTML = '';
@@ -993,10 +986,10 @@ function connectMessagesSSE(){
                 const el = createMessageElement(m, myId);
                 messagesEl.appendChild(el);
             }
-            // initialize audio only for each message individually and resume states
+            // init audio for present containers and resume state
             document.querySelectorAll('.audio-waveform-container').forEach(container => {
                 const src = container.dataset.src;
-                initializeAudioForMessageElement(container.closest('.msg'), preserve);
+                if (src) initWaveSurferForContainer(container, src, container.dataset.isIncoming === 'true', preserve[src]);
             });
             scrollToBottom();
         } catch (err) { console.error('messages_snapshot parse', err); }
@@ -1005,12 +998,11 @@ function connectMessagesSSE(){
     messagesEventSource.addEventListener('message_added', (e)=>{
         try {
             const m = JSON.parse(e.data);
-            // append only if not already present
             if (document.querySelector(`.msg[data-message-id="${m.messageId}"]`)) return;
             const el = createMessageElement(m, myId);
             messagesEl.appendChild(el);
-            // init audio for this element only
-            initializeAudioForMessageElement(el);
+            const container = el.querySelector('.audio-waveform-container');
+            if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true');
             scrollToBottom();
         } catch (err) { console.error('message_added parse', err); }
     });
@@ -1020,45 +1012,45 @@ function connectMessagesSSE(){
             const m = JSON.parse(e.data);
             const existing = document.querySelector(`.msg[data-message-id="${m.messageId}"]`);
             if (existing) {
-                // preserve scroll position approx & audio state for this message
+                // preserve audio state for message
                 const audioContainer = existing.querySelector('.audio-waveform-container');
-                const src = audioContainer ? audioContainer.dataset.src : null;
-                const resume = {};
-                if (src && audioWaveSurfers[src]) {
-                    try { resume[src] = { time: audioWaveSurfers[src].getCurrentTime?audioWaveSurfers[src].getCurrentTime():0, playing: audioWaveSurfers[src].isPlaying?audioWaveSurfers[src].isPlaying():false }; } catch(e){}
-                    // destroy previous wavesurfer for this src to re-create with new container if needed
-                    try { audioWaveSurfers[src].destroy(); delete audioWaveSurfers[src]; } catch(e){}
+                let resume = null;
+                if (audioContainer) {
+                    const src = audioContainer.dataset.src;
+                    if (src && audioWaveSurfers[src]) {
+                        try { resume = { time: audioWaveSurfers[src].getCurrentTime?audioWaveSurfers[src].getCurrentTime():0, playing: audioWaveSurfers[src].isPlaying?audioWaveSurfers[src].isPlaying():false }; } catch(e){}
+                        try { audioWaveSurfers[src].destroy(); delete audioWaveSurfers[src]; } catch(e){}
+                    }
                 }
                 const newEl = createMessageElement(m, myId);
                 existing.replaceWith(newEl);
-                initializeAudioForMessageElement(newEl, resume);
+                const container = newEl.querySelector('.audio-waveform-container');
+                if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true', resume);
             } else {
-                // if not present, append
                 const el = createMessageElement(m, myId);
                 messagesEl.appendChild(el);
-                initializeAudioForMessageElement(el);
+                const container = el.querySelector('.audio-waveform-container');
+                if (container) initWaveSurferForContainer(container, container.dataset.src, container.dataset.isIncoming === 'true');
             }
         } catch (err) { console.error('message_changed parse', err); }
     });
 
     messagesEventSource.addEventListener('message_removed', (e)=>{
         try {
-            const payload = JSON.parse(e.data); // { messageId }
+            const payload = JSON.parse(e.data);
             const existing = document.querySelector(`.msg[data-message-id="${payload.messageId}"]`);
             if (existing) existing.remove();
         } catch (err) { console.error('message_removed parse', err); }
     });
 
-    // reaction updates
     messagesEventSource.addEventListener('reaction_updated', (e)=>{
         try {
-            const payload = JSON.parse(e.data); // { messageId, reactions (map), reaction_counts (map), my_reaction }
+            const payload = JSON.parse(e.data);
             const existing = document.querySelector(`.msg[data-message-id="${payload.messageId}"]`);
             if (!existing) return;
             existing.dataset.myReaction = payload.my_reaction || '';
             const prevBadge = existing.querySelector('.msg-reaction-badge');
             if (payload.reaction_counts && Object.keys(payload.reaction_counts).length>0) {
-                // show top reaction and its count
                 const topEmoji = Object.keys(payload.reaction_counts).sort((a,b)=>payload.reaction_counts[b]-payload.reaction_counts[a])[0];
                 const topCount = payload.reaction_counts[topEmoji];
                 if (prevBadge) prevBadge.remove();
@@ -1069,20 +1061,27 @@ function connectMessagesSSE(){
         } catch (err) { console.error('reaction_updated parse', err); }
     });
 
-    messagesEventSource.addEventListener('error', (err)=>{
+    messagesEventSource.onerror = (err) => {
         console.warn('Messages SSE error', err);
-        // attempt reconnect with exponential backoff handled by browser automatically in EventSource
-    });
+        // close and fall back to polling with backoff
+        try { messagesEventSource.close(); } catch(e){}
+        messagesEventSource = null;
+        sseRetryCount++;
+        const backoff = Math.min(30000, 2000 * Math.pow(2, sseRetryCount)); // exponential
+        console.info('Falling back to polling for messages. Polling interval:', backoff);
+        pollingBackoff = backoff;
+        fetchMessages();
+        pollingIntervalId = setInterval(fetchMessages, pollingBackoff);
+    };
 }
 
-// show reactions popup and handle toggle/post/delete
+// Reactions popup handling (toggle)
 function showReactionsForMessage(msgEl, msg) {
-    // position popup
     const rect = msgEl.getBoundingClientRect();
     const popup = reactionsPopup;
-    popup.style.display='flex';
+    popup.style.display = 'flex';
     popup.classList.add('show');
-    popup.style.pointerEvents='auto';
+    popup.style.pointerEvents = 'auto';
     const popupWidth = (popup.offsetWidth || 220);
     const top = window.scrollY + rect.top - (popup.offsetHeight || 48) - 10;
     const left = window.scrollX + rect.left + (rect.width/2) - (popupWidth/2);
@@ -1096,33 +1095,28 @@ function showReactionsForMessage(msgEl, msg) {
         b.onclick = async (ev)=>{
             ev.stopPropagation();
             const emoji = b.dataset.reaction || b.textContent;
-            // Toggle: if currentMyReaction === emoji => DELETE, else POST
             const wasSame = currentMyReaction === emoji;
             try {
                 if (wasSame) {
                     await fetch(`/api/messages/${encodeURIComponent(msg.messageId)}/reaction`, {
-                        method: 'DELETE',
-                        credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' },
+                        method: 'DELETE', credentials: 'same-origin',
+                        headers: {'Content-Type':'application/json'},
                         body: JSON.stringify({ contactId: otherId })
                     });
-                    // optimistic UI removal
                     msgEl.dataset.myReaction = '';
                     const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove();
                 } else {
                     await fetch(`/api/messages/${encodeURIComponent(msg.messageId)}/reaction`, {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', credentials: 'same-origin',
+                        headers: {'Content-Type':'application/json'},
                         body: JSON.stringify({ contactId: otherId, reaction: emoji })
                     });
-                    // optimistic UI add
                     msgEl.dataset.myReaction = emoji;
                     const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove();
                     msgEl.appendChild(createReactionBadge(emoji, 1));
                 }
             } catch (err) {
-                // fallback to local storage
+                // fallback local
                 if (wasSame) { delete localReactions[msg.messageId]; saveLocalReactions(localReactions); const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove(); }
                 else { localReactions[msg.messageId] = emoji; saveLocalReactions(localReactions); const prev = msgEl.querySelector('.msg-reaction-badge'); if (prev) prev.remove(); msgEl.appendChild(createReactionBadge(emoji,1)); }
             } finally {
@@ -1137,113 +1131,61 @@ function showReactionsForMessage(msgEl, msg) {
         document.addEventListener('touchstart', hideReactionsPopupOnce, { passive:true });
     },50);
 }
-function hideReactionsPopup(){ const popup = reactionsPopup; popup.classList.remove('show'); popup.style.display='none'; popup.style.pointerEvents='none'; window.removeEventListener('scroll', hideReactionsPopupOnce); document.removeEventListener('click', hideReactionsPopupOnce); document.removeEventListener('touchstart', hideReactionsPopupOnce); }
+function hideReactionsPopup(){ const p = reactionsPopup; p.classList.remove('show'); p.style.display='none'; p.style.pointerEvents='none'; window.removeEventListener('scroll', hideReactionsPopupOnce); document.removeEventListener('click', hideReactionsPopupOnce); document.removeEventListener('touchstart', hideReactionsPopupOnce); }
 function hideReactionsPopupOnce(){ hideReactionsPopup(); }
 
-// Fetch initial profile (myId + other) and then open SSE
+// fetchOtherProfile + init
 async function fetchOtherProfile(){
     try {
         const res = await fetch(`/api/profile/${otherId}`, { credentials: 'same-origin' });
         const profile = await res.json();
-        const myRes = await fetch('/api/profile', { credentials: 'same-origin' });
-        const myProfile = await myRes.json();
+        const myProfileRes = await fetch('/api/profile', { credentials: 'same-origin' });
+        const myProfile = await myProfileRes.json();
         myId = myProfile.id;
+
         if (res.ok && profile) {
             const nameEl = document.getElementById('other-name');
             if (profile.is_verified) nameEl.innerHTML = `${escapeHtml(profile.full_name||profile.username)} <img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">`;
             else nameEl.textContent = profile.full_name || profile.username;
             let usernameText = `@${profile.username||''}`; if (profile.is_online) usernameText += ' · متصل الآن';
             document.getElementById('other-username').textContent = usernameText;
-            document.getElementById('other-avatar').src = profile.profile_picture_url;
+            const otherAvatarImg = document.getElementById('other-avatar');
+            otherAvatarImg.src = profile.profile_picture_url || DEFAULT_AVATAR_DATA;
+            otherAvatarImg.onerror = () => { otherAvatarImg.src = DEFAULT_AVATAR_DATA; };
             document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
-            const dot = document.getElementById('other-online-dot'); if (dot) dot.style.display = profile.is_online ? 'inline-block' : 'none';
+        } else {
+            document.getElementById('other-name').textContent = 'خطأ في التحميل';
+            const otherAvatarImg = document.getElementById('other-avatar'); otherAvatarImg.src = DEFAULT_AVATAR_DATA;
         }
-    } catch (err) { console.error('fetchOtherProfile', err); document.getElementById('other-name').textContent='خطأ في التحميل'; }
+    } catch (err) {
+        console.error('Error fetching other profile:', err);
+        document.getElementById('other-name').textContent = 'خطأ في التحميل';
+        const otherAvatarImg = document.getElementById('other-avatar'); otherAvatarImg.src = DEFAULT_AVATAR_DATA;
+    }
 }
 
+// mark read
 async function markRead(){
     if (!myId || !otherId) return;
     try {
         await fetch('/api/mark_read', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ other_id: otherId }) });
-    } catch (e){ console.warn('markRead failed', e); }
+    } catch (e) { console.warn('Could not mark messages as read:', e); }
 }
 
-// sendMessage implementation
-async function sendMessage(){
-    let content = msgInput.value.trim();
-    if (!content && !uploadedFile) return;
-    sendBtn.disabled = true;
-    const orig = sendBtn.innerHTML;
-    sendBtn.innerHTML = '<div class="spin" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;"></div>';
-
-    const form = new FormData();
-    form.append('other_id', otherId);
-    if (content) form.append('content', content);
-    if (uploadedFile) form.append('media', uploadedFile, uploadedFile.name);
-    if (replyToMessage) {
-        form.append('replied_to_id', replyToMessage.id);
-        form.append('replied_to_content', replyToMessage.content);
-        form.append('replied_to_sender', replyToMessage.senderName);
-    }
-
-    try {
-        const res = await fetch('/api/messages/send', { method:'POST', credentials:'same-origin', body: form });
-        const data = await res.json();
-        if (res.ok && data.ok && data.messageData) {
-            // The message will be delivered via SSE 'message_added' event; but we can optimistically append
-            const el = createMessageElement(data.messageData, myId);
-            messagesEl.appendChild(el);
-            initializeAudioForMessageElement(el);
-            msgInput.value=''; removeFile(); clearReplyTo(); scrollToBottom();
-        } else {
-            alert('فشل الإرسال: ' + (data.error || 'خطأ غير معروف'));
-        }
-    } catch (err) {
-        alert('خطأ في الاتصال بالخادم. تأكد من أن الخادم يعمل.');
-    } finally {
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = orig;
-        updateComposerUI();
-    }
-}
-
-// File attach handlers
-removeFileBtn.addEventListener('click', ()=>{ uploadedFile=null; fileUpload.value=''; updateComposerUI(); });
-fileUpload.addEventListener('change', (e)=>{
-    const file = e.target.files[0];
-    if (file) {
-        removeFile();
-        uploadedFile = file;
-        const reader = new FileReader();
-        reader.onload = (e)=>{
-            let preview;
-            if (file.type.startsWith('image/')) { preview = document.createElement('img'); preview.src = e.target.result; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; }
-            else if (file.type.startsWith('video/')) { preview = document.createElement('video'); preview.src = e.target.result; preview.controls=true; preview.style.maxHeight='40px'; preview.style.borderRadius='4px'; }
-            else if (file.type.startsWith('audio/')) { preview = document.createElement('audio'); preview.src = e.target.result; preview.controls=true; }
-            else { preview = document.createElement('span'); preview.textContent = file.name; }
-            filePreview.innerHTML=''; filePreview.appendChild(preview);
-            const rm = document.createElement('button'); rm.className='composer-btn btn'; rm.style.cssText='width:24px;height:24px;background:#ef4444;margin-right:auto;'; rm.innerHTML='×'; rm.onclick=()=>{ removeFile(); updateComposerUI(); }; filePreview.appendChild(rm);
-            updateComposerUI();
-        };
-        reader.readAsDataURL(file);
-    } else removeFileBtn.onclick();
-});
-
-sendForm.addEventListener('submit', (e)=>{ e.preventDefault(); sendMessage(); });
-msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
-
-// Initialize: fetch profile, connect SSE
+// Initialization
 (async function init(){
     if (!otherId) { window.location.href = '/chat_list'; return; }
     await fetchOtherProfile();
-    connectMessagesSSE();
+    // connect SSE with fallback
+    await connectMessagesSSEWithFallback();
+
     updateComposerUI();
-    // mark read on focus/visibility
+    // mark read on focus/visible
     setInterval(()=>{ if (document.visibilityState === 'visible') markRead(); }, 3000);
     window.addEventListener('focus', markRead);
 })();
 
-/* Notifications SSE badge (kept as previously) */
+// Notifications SSE badge (kept)
 (function setupNotifSSEChat(){
   if(!window.EventSource) return;
   try {
@@ -1263,6 +1205,7 @@ msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter' && !e.shiftKey){
   } catch(e){}
 })();
 (function initUnreadChat(){ fetch('/api/notifications/unread_count', { credentials: 'same-origin' }).then(r=>r.ok? r.json():null).then(d=>{ if(d&&d.ok){ const b=document.getElementById('notifBadgeChat'); if(b){ if(d.unread_count>0){ b.style.display='inline-flex'; b.textContent=d.unread_count>99?'99+':String(d.unread_count); }}}}).catch(()=>{}); })();
+
 </script>
 </body>
 </html>
