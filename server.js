@@ -1596,7 +1596,85 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
+// ---------------- API: Message Reactions (جديد) ----------------
 
+// إضافة تفاعل (reaction) على رسالة معينة
+app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { otherId, messageId } = req.params;
+  const { reaction } = req.body; // الإيموجي مثل ❤️ 😢 إلخ
+
+  if (!reaction) {
+    return res.status(400).json({ ok: false, error: 'reaction required' });
+  }
+
+  const chatId = [userId, otherId].sort().join('_');
+
+  try {
+    // التحقق من وجود الرسالة
+    const messageSnap = await db.ref(`messages/${chatId}/messages/${messageId}`).once('value');
+    if (!messageSnap.exists()) {
+      return res.status(404).json({ ok: false, error: 'Message not found' });
+    }
+
+    const message = messageSnap.val();
+
+    // إذا كان المستخدم هو مرسل الرسالة، لا نرسل إشعارًا له
+    if (message.senderId !== userId) {
+      // إضافة إشعار لمرسل الرسالة
+      await db.ref(`notifications/${message.senderId}`).push({
+        type: 'message_reaction',
+        from_user_id: userId,
+        chat_with: userId,
+        message_id: messageId,
+        reaction: reaction,
+        timestamp: admin.database.ServerValue.TIMESTAMP,
+        is_read: false
+      });
+    }
+
+    // حفظ التفاعل (نستخدم reaction كقيمة مباشرة لأن كل مستخدم يمكنه تفاعل واحد فقط)
+    await db.ref(`messages/${chatId}/messages/${messageId}/reaction_from/${userId}`).set(reaction);
+
+    // تحديث حقل reaction في الرسالة (آخر تفاعل أو نجمعها إذا أردت، هنا نأخذ آخر واحد كمثال بسيط)
+    // لجعلها فعلية: نحدث الرسالة بحقل reaction يحتوي على آخر إيموجي
+    await db.ref(`messages/${chatId}/messages/${messageId}`).update({
+      reaction: reaction, // يظهر للجميع آخر تفاعل (يمكن توسيعه لقائمة)
+      reacted_at: admin.database.ServerValue.TIMESTAMP
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Add message reaction error:', error);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// حذف تفاعل (إذا أردت دعم إزالته لاحقًا)
+app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { otherId, messageId } = req.params;
+
+  const chatId = [userId, otherId].sort().join('_');
+
+  try {
+    const reactionRef = db.ref(`messages/${chatId}/messages/${messageId}/reaction_from/${userId}`);
+    const snap = await reactionRef.once('value');
+    if (!snap.exists()) {
+      return res.status(404).json({ ok: false, error: 'No reaction found' });
+    }
+
+    await reactionRef.remove();
+
+    // يمكنك تحديث حقل reaction إذا كنت تجمع التفاعلات
+    // هنا فقط نزيله من المستخدم
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Remove message reaction error:', error);
+    res.status(500).json({ ok: false });
+  }
+});
 // ---------------- API: Users & Profile ----------------
 // /api/users -> returns friends only
 app.get('/api/users', requireAuth, async (req, res) => {
