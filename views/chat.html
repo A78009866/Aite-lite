@@ -116,8 +116,6 @@ gap: 8px;
 padding: 12px;
 padding-bottom: 80px;
 scroll-behavior: smooth;
-touch-action: pan-y;
-overscroll-behavior: contain;
 }
 .msg {
 max-width: 80%;
@@ -126,12 +124,7 @@ border-radius: 10px;
 font-size: 13px;
 line-height: 1.3;
 word-break: break-word;
-position: relative;
-transition: transform 0.3s ease;
-user-select: none;
-}
-.msg.swiping {
-transform: translateX(-60px); /* سحب إلى اليسار للرد */
+cursor: pointer;
 }
 .incoming {
 align-self: flex-start;
@@ -315,22 +308,6 @@ background: var(--reply-bg);
 border: 1px solid var(--reply-border);
 margin-top: -4px;
 }
-#cancel-reply-btn {
-background: rgba(239, 68, 68, 0.3);
-border: none;
-border-radius: 50%;
-width: 24px;
-height: 24px;
-display: flex;
-align-items: center;
-justify-content: center;
-cursor: pointer;
-color: #ef4444;
-transition: background 0.2s;
-}
-#cancel-reply-btn:hover {
-background: rgba(239, 68, 68, 0.5);
-}
 .reply-block {
   padding: 6px 10px;
   margin-bottom: 6px;
@@ -358,7 +335,7 @@ background: rgba(239, 68, 68, 0.5);
   text-overflow: ellipsis;
 }
 
-/* New/Modified styles for Voice Preview */
+/* Voice Preview */
 #audio-preview-container {
     display: none;
     flex: 1;
@@ -387,30 +364,22 @@ background: rgba(239, 68, 68, 0.5);
     flex-shrink: 0;
 }
 
-/* --- تعديل نقطة النشاط (Online Dot) --- */
+/* Online Dot */
 .avatar-with-dot { position: relative; display: inline-block; }
 .online-dot {
   position: absolute;
-  bottom: -2px;   /* في الأسفل */
-  left: -2px;     /* في الزاوية اليسرى */
+  bottom: -2px;
+  left: -2px;
   width: 12px;
   height: 12px;
   background: #22c55e;
-  border: 2px solid #000; /* حدود بنفس لون الهيدر لتبدو بارزة */
+  border: 2px solid #000;
   border-radius: 999px;
   display: inline-block;
   z-index: 10;
 }
 
-/* small online next to name */
-.online-text {
-  color: #22c55e;
-  font-weight: 700;
-  font-size: 11px;
-  margin-left: 6px;
-}
-
-/* VERIFIED BADGE IMAGE */
+/* Verified Badge */
 .verified-badge-img {
   display: inline-block;
   width: 14px;
@@ -423,7 +392,7 @@ background: rgba(239, 68, 68, 0.5);
   vertical-align: middle;
 }
 
-/* Reactions popup */
+/* Reactions Popup */
 .reactions-popup {
   position: absolute;
   display: none;
@@ -447,19 +416,15 @@ background: rgba(239, 68, 68, 0.5);
   transform: scale(1.2);
 }
 .reactions-display {
-  position: absolute;
-  bottom: -12px;
-  right: 8px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  display: flex;
+  gap: 4px;
+  font-size: 16px;
+  margin-top: 4px;
+  justify-content: flex-end;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   padding: 2px 6px;
-  font-size: 14px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-.outgoing .reactions-display {
-  right: auto;
-  left: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 </style>
 <script src="https://unpkg.com/wavesurfer.js"></script>
@@ -569,6 +534,7 @@ const recordingTimeEl = recordingIndicator.querySelector('span');
 const replyContainer = document.getElementById('reply-container');
 const cancelReplyBtn = document.getElementById('cancel-reply-btn');
 
+
 const audioPreviewContainer = document.getElementById('audio-preview-container');
 const audioWaveformInput = document.getElementById('audio-waveform-input');
 const audioPreviewTime = document.getElementById('audio-preview-time');
@@ -642,8 +608,6 @@ function createMessageElement(msg, myId) {
     const el = document.createElement('div');
     el.className = 'msg ' + (isIncoming ? 'incoming' : 'outgoing');
     el.dataset.messageId = msg.messageId;
-    el.title = 'انقر للرد';
-    el.addEventListener('click', () => { setReplyTo(msg); });
 
     let contentHtml = '';
     
@@ -798,29 +762,33 @@ function showReactionsPopup(el, msg) {
 }
 
 async function addReaction(messageId, emoji) {
+    reactionsMap[messageId] = emoji;
+    // Save to server (new endpoint needed in server.js)
     try {
         const res = await fetch(`/api/messages/${otherId}/reactions/${messageId}`, {
             method: 'POST',
-            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reaction: emoji })
         });
         if (res.ok) {
             await fetchMessages();
         } else {
-            console.error('Failed to add reaction');
+            console.error('Failed to save reaction');
         }
     } catch (err) {
         console.error('Error adding reaction:', err);
     }
+    // Refresh messages to show reaction
+    await fetchMessages();
 }
 
-// ---------------- Load/Save Reactions (if local, but now server) ----------------
+// Load saved reactions (assume from localStorage for persistence after refresh)
 function loadReactions() {
-    // No need, since server handles
+    const saved = localStorage.getItem(`reactions_${otherId}`);
+    if (saved) reactionsMap = JSON.parse(saved);
 }
 function saveReactions() {
-    // No need
+    localStorage.setItem(`reactions_${otherId}`, JSON.stringify(reactionsMap));
 }
 
 // ---------------- UI/Composer Logic ----------------
@@ -890,6 +858,7 @@ function startRecording() {
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
             audioStream = stream;
+            // استخدام "audio/webm" مع "codecs=opus" هو الخيار الأفضل
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
             mediaRecorder.start();
             mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
@@ -1006,7 +975,7 @@ async function fetchOtherProfile() {
         
         // الحصول على ID المستخدم الحالي (مهم لـ createMessageElement)
         const myProfileRes = await fetch('/api/profile', { credentials: 'same-origin' });
-        const myProfile = myProfileRes.json();
+        const myProfile = await myProfileRes.json();
         myId = myProfile.id; 
         
         if (res.ok && profile) {
@@ -1017,7 +986,7 @@ async function fetchOtherProfile() {
             let usernameText = `@${profile.username || ''}`;
             if (profile.is_online) usernameText += ' · متصل الآن';
             document.getElementById('other-username').textContent = usernameText;
-            document.getElementById('other-avatar').src = profile.profile_picture_url || '';
+            document.getElementById('other-avatar').src = profile.profile_picture_url;
             document.getElementById('other-profile-link').href = `/profile?userId=${otherId}`;
             
             // show/hide online dot next to avatar
@@ -1282,6 +1251,7 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
     await fetchOtherProfile();
     
     // جلب الرسائل بعد التأكد من وجود myId
+    loadReactions();
     await fetchMessages(); 
     
     setTimeout(scrollToBottom, 100); 
