@@ -38,66 +38,82 @@
             z-index: 1000;
         }
 
+        /* تحسين تصميم بطاقة المستخدم */
         .glass-user-card {
-            background-color: rgba(0, 0, 0, 0.3);
+            background-color: rgba(20, 20, 20, 0.6);
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
 
         .glass-user-card:hover {
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
         }
 
+        /* تنسيق الرسائل غير المقروءة بشكل مميز */
         .glass-user-card.unread {
-            border-right: 4px solid #0d9488;
-            background-color: rgba(13, 148, 136, 0.1);
+            background-color: rgba(13, 148, 136, 0.15); /* لون خلفية خفيف */
+            border: 1px solid rgba(13, 148, 136, 0.3);
+            border-right: 4px solid #0d9488; /* شريط جانبي واضح */
         }
         
         .unread-badge {
             background-color: #0d9488;
             color: white;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: bold;
-            padding: 3px 8px;
-            border-radius: 9999px;
+            padding: 2px 8px;
+            border-radius: 12px;
             min-width: 24px;
             text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         .avatar-with-dot { 
             position: relative; 
             display: inline-block; 
+            flex-shrink: 0;
         }
         
         .online-dot {
             position: absolute;
-            bottom: 0px;
-            left: 0px;
+            bottom: 2px;
+            left: 2px;
             width: 12px;
             height: 12px;
             background: #22c55e;
-            border: 2px solid #000;
+            border: 2px solid #1a1a1a;
             border-radius: 50%;
+            z-index: 10;
         }
 
-        /* تنسيق شارة التوثيق مع مسافة */
+        /* تحسين صورة التوثيق */
         .verified-badge-img {
-            width: 16px;
-            height: 16px;
-            margin-right: 6px; /* مسافة بين الاسم والشارة */
-            object-fit: cover;
-            display: inline-block;
+            width: 18px;
+            height: 18px;
+            margin-right: 4px; /* مسافة صغيرة بين الاسم والشارة في RTL */
+            flex-shrink: 0; /* منع الصورة من الانكماش */
+            display: block;
         }
 
         .animate-enter {
-            animation: fadeIn 0.3s ease-out forwards;
+            animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
+            from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* جعل الاسم لا يخرج عن الإطار */
+        .name-container {
+            display: flex;
+            align-items: center;
+            min-width: 0; /* مهم جداً لعمل الـ truncate داخل flex */
         }
     </style>
 </head>
@@ -106,12 +122,16 @@
     <header class="sticky top-0 z-50 glass-navbar p-3">
         <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
             <div class="flex items-center">
-                <button id="profileMenuButton" class="relative" onclick="toggleProfileDropdown(event)">
-                    <img id="userProfilePic" src="https://via.placeholder.com/40" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover">
+                <button id="profileMenuButton" class="relative outline-none" onclick="toggleProfileDropdown(event)">
+                    <img id="userProfilePic" src="https://via.placeholder.com/40" class="w-10 h-10 rounded-full border-2 border-gray-700 object-cover hover:border-blue-500 transition-colors">
                 </button>
                 <div id="profileDropdown" class="absolute top-12 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
-                    <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10">الملف الشخصي</a>
-                    <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 border-t border-gray-700">خروج</a>
+                    <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 transition-colors">
+                        <i class="fas fa-user ml-2"></i> الملف الشخصي
+                    </a>
+                    <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 border-t border-gray-700 transition-colors">
+                        <i class="fas fa-sign-out-alt ml-2"></i> خروج
+                    </a>
                 </div>
             </div>
             
@@ -120,19 +140,24 @@
             </div>
 
             <div class="flex items-center">
-                <a href="/chat_list" class="text-gray-400 hover:text-white p-2">
-                    <i class="fas fa-arrow-left text-2xl"></i>
+                <a href="/chat_list" class="text-gray-400 hover:text-white p-2 transition-colors">
+                    <i class="fas fa-arrow-left text-xl"></i>
                 </a>
             </div>
         </nav>
     </header>
 
     <main class="max-w-6xl mx-auto p-4">
-        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 flex flex-col space-y-3">
-            <div id="loadingSpinner" class="text-center text-gray-500 p-4">
-                <i class="fas fa-spinner fa-spin ml-2"></i> جاري الاتصال...
+        <div id="usersListContainer" class="max-w-xl mx-auto mt-2 flex flex-col space-y-3 pb-20">
+            <div id="loadingSpinner" class="text-center text-gray-500 p-8">
+                <i class="fas fa-circle-notch fa-spin text-2xl mb-2 text-blue-500"></i>
+                <p>جاري تحديث القائمة...</p>
             </div>
-            <div id="emptyState" class="hidden text-center text-gray-500 p-4">ليس لديك محادثات بعد.</div>
+            <div id="emptyState" class="hidden text-center text-gray-400 p-10 flex flex-col items-center">
+                <i class="far fa-comments text-5xl mb-4 opacity-50"></i>
+                <p>لا توجد محادثات نشطة حالياً.</p>
+                <a href="/search" class="mt-4 px-6 py-2 bg-blue-600 rounded-full text-white text-sm hover:bg-blue-700 transition">ابحث عن أصدقاء</a>
+            </div>
         </div>
     </main>
 
@@ -143,59 +168,108 @@
         const emptyState = document.getElementById('emptyState');
         let currentUserId = null;
 
-        function toggleProfileDropdown(e) { e.stopPropagation(); document.getElementById('profileDropdown').classList.toggle('hidden'); }
+        // إعداد الحاوية لتعكس الترتيب (الأحدث في الأعلى بصرياً)
+        // column-reverse: يبدأ من الأسفل للأعلى.
+        // الخاصية order كلما زادت، اتجه العنصر للنهاية (وهي هنا الأعلى بصرياً).
+        // لذا: order = timestamp يضع الأحدث في الأعلى.
+        usersListContainer.style.display = 'flex';
+        usersListContainer.style.flexDirection = 'column-reverse';
+
+        function toggleProfileDropdown(e) { 
+            e.stopPropagation(); 
+            document.getElementById('profileDropdown').classList.toggle('hidden'); 
+        }
+
+        // إغلاق القائمة عند النقر خارجها
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('profileDropdown');
+            const btn = document.getElementById('profileMenuButton');
+            if (!dropdown.classList.contains('hidden') && !dropdown.contains(e.target) && !btn.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
 
         function buildCardHTML(user, isUnread, unreadCount, lastMessageText) {
             const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
-            const verifiedHtml = user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="verified">` : '';
+            // استخدام flex-shrink-0 للشارة لمنع انكماشها
+            const verifiedHtml = user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="verified" title="موثق">` : '';
+            
+            // تحديد فئة الخط واللون بناءً على حالة القراءة
+            const msgClass = isUnread ? 'text-white font-medium' : 'text-gray-400';
+            const timeAgo = user.last_message ? getTimeAgo(user.last_message.timestamp) : '';
 
             return `
-            <a href="${chatLink}" class="chat-link">
-                <div class="glass-user-card flex items-center p-3 rounded-xl ${isUnread ? 'unread' : ''}" id="card-inner-${user.id}">
+            <a href="${chatLink}" class="chat-link block w-full">
+                <div class="glass-user-card flex items-center p-3 rounded-xl mb-3 ${isUnread ? 'unread' : ''}" id="card-inner-${user.id}">
+                    
                     <div class="avatar-with-dot ml-3">
-                        <img src="${user.profile_picture_url}" id="img-${user.id}" class="w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
+                        <img src="${user.profile_picture_url}" id="img-${user.id}" class="w-14 h-14 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-700/50'}">
                         <span id="dot-${user.id}" class="online-dot ${user.is_online ? '' : 'hidden'}"></span>
                     </div>
-                    <div class="flex-grow min-w-0">
-                        <div class="flex items-center mb-0.5">
-                            <span id="username-${user.id}" class="text-white font-semibold text-lg truncate">${user.username}</span>
-                            <span id="verified-container-${user.id}">${verifiedHtml}</span>
+
+                    <div class="flex-grow min-w-0 flex flex-col justify-center">
+                        <div class="flex justify-between items-center mb-1 w-full">
+                            <div class="name-container">
+                                <span id="username-${user.id}" class="text-gray-100 font-bold text-lg truncate leading-tight">${user.username}</span>
+                                <span id="verified-container-${user.id}">${verifiedHtml}</span>
+                            </div>
+                            <span class="text-xs text-gray-500 mr-2 flex-shrink-0">${timeAgo}</span>
                         </div>
-                        <div id="last-msg-${user.id}" class="text-gray-400 text-sm truncate">${lastMessageText}</div>
-                    </div>
-                    <div class="flex flex-col items-end justify-center">
-                        <span id="badge-${user.id}" class="unread-badge mb-1 ${!isUnread ? 'hidden' : ''}">${unreadCount}</span>
-                        <i class="fas fa-chevron-left text-gray-400 text-xs"></i>
+
+                        <div class="flex justify-between items-center w-full">
+                            <div id="last-msg-${user.id}" class="text-sm truncate ${msgClass} max-w-[85%]">
+                                ${lastMessageText}
+                            </div>
+                            <span id="badge-${user.id}" class="unread-badge ${!isUnread ? 'hidden' : ''}">${unreadCount}</span>
+                        </div>
                     </div>
                 </div>
             </a>`;
         }
 
+        // دالة مساعدة لحساب الوقت المنقضي (اختياري لتحسين العرض)
+        function getTimeAgo(timestamp) {
+            if (!timestamp) return '';
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            if (seconds < 60) return 'الآن';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}د`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}س`;
+            return new Date(timestamp).toLocaleDateString('ar-EG');
+        }
+
         function updateOrAddUserCard(user) {
             const unreadCount = user.unread_count || 0;
             const isUnread = unreadCount > 0;
-            let lastMessageText = user.last_message ? 
-                (user.last_message.senderId === currentUserId ? 'أنت: ' : '') + (user.last_message.content || '[ملف]') : 'ابدأ المحادثة...';
+            
+            let lastMessageText = 'ابدأ المحادثة...';
+            let timestamp = 0;
 
-            // الترتيب: نستخدم التوقيت الزمني (timestamp) كقيمة order
-            // العناصر في flexbox ترتب تصاعدياً، لذا سنعطي الأحدث قيمة order أعلى
-            const orderVal = user.last_message ? new Date(user.last_message.timestamp).getTime() : 0;
+            if (user.last_message) {
+                const prefix = user.last_message.senderId === currentUserId ? '<i class="fas fa-check-double text-xs ml-1 opacity-70"></i> ' : '';
+                lastMessageText = prefix + (user.last_message.content || 'رسالة');
+                timestamp = new Date(user.last_message.timestamp).getTime();
+            }
+
+            // استخدام التوقيت كقيمة order للترتيب
+            const orderVal = timestamp;
 
             let wrapper = document.getElementById(`user-wrapper-${user.id}`);
+            
             if (wrapper) {
-                // تحديث الترتيب (الأحدث يأخذ order أعلى)
+                // تحديث البيانات لعنصر موجود
+                // 1. تحديث الترتيب
                 wrapper.style.order = orderVal; 
-                document.getElementById(`img-${user.id}`).className = `w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}`;
-                document.getElementById(`dot-${user.id}`).className = `online-dot ${user.is_online ? '' : 'hidden'}`;
-                document.getElementById(`last-msg-${user.id}`).innerText = lastMessageText;
-                const badge = document.getElementById(`badge-${user.id}`);
-                badge.innerText = unreadCount;
-                badge.classList.toggle('hidden', !isUnread);
-                document.getElementById(`card-inner-${user.id}`).classList.toggle('unread', isUnread);
+                
+                // 2. تحديث المحتوى الداخلي إذا لزم الأمر (بدلاً من إعادة البناء الكامل لمنع الوميض)
+                // لكن للأمان سنعيد بناء الـ HTML الداخلي لضمان تحديث كل الحقول
+                wrapper.innerHTML = buildCardHTML(user, isUnread, unreadCount, lastMessageText);
             } else {
+                // إنشاء عنصر جديد
                 wrapper = document.createElement('div');
                 wrapper.id = `user-wrapper-${user.id}`;
-                wrapper.className = 'animate-enter';
+                wrapper.className = 'animate-enter w-full';
                 wrapper.style.order = orderVal;
                 wrapper.innerHTML = buildCardHTML(user, isUnread, unreadCount, lastMessageText);
                 usersListContainer.appendChild(wrapper);
@@ -204,34 +278,45 @@
 
         function initSSE() {
             const es = new EventSource('/api/users/stream', { withCredentials: true });
+            
             es.onmessage = (e) => {
                 const data = JSON.parse(e.data);
+                
                 if (data.users) {
                     loadingSpinner.style.display = 'none';
-                    if (data.users.length === 0) emptyState.classList.remove('hidden');
-                    else {
+                    
+                    if (data.users.length === 0) {
+                        emptyState.classList.remove('hidden');
+                    } else {
                         emptyState.classList.add('hidden');
-                        data.users.forEach(updateOrAddUserCard);
+                        // تكرار البيانات وتحديث الواجهة
+                        data.users.forEach(user => {
+                            updateOrAddUserCard(user);
+                        });
                     }
                 }
             };
+
+            es.onerror = (err) => {
+                // في حالة انقطاع الاتصال، لا تفعل شيئاً مزعجاً، المتصفح سيعيد المحاولة
+                console.log('SSE connection issue', err);
+            };
         }
 
-        // ملاحظة هامة لجعل الأحدث أولاً:
-        // الحاوية usersListContainer لديها خاصية flex-col-reverse
-        // والعناصر تأخذ order = timestamp. 
-        // الأكبر (الأحدث) سيصبح في الأسفل برمجياً لكن بسبب reverse سيظهر في الأعلى للمستخدم.
-        usersListContainer.style.display = 'flex';
-        usersListContainer.style.flexDirection = 'column-reverse';
-
         document.addEventListener('DOMContentLoaded', () => {
-            fetch('/api/profile').then(r => r.json()).then(d => {
-                if(d && d.id) {
-                    currentUserId = d.id;
-                    document.getElementById('userProfilePic').src = d.profile_picture_url;
-                }
-                initSSE();
-            });
+            fetch('/api/profile')
+                .then(r => r.json())
+                .then(d => {
+                    if(d && d.id) {
+                        currentUserId = d.id;
+                        document.getElementById('userProfilePic').src = d.profile_picture_url || 'https://via.placeholder.com/40';
+                    }
+                    initSSE();
+                })
+                .catch(() => {
+                    // في حال فشل جلب البروفايل، ابدأ الـ SSE على أي حال
+                    initSSE();
+                });
         });
     </script>
 </body>
