@@ -230,6 +230,9 @@
         }
 
         function init() {
+            // إرسال إشارة النشاط عند تحميل الصفحة
+            fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
+
             fetch('/api/profile').then(r => r.json()).then(d => {
                 currentUserId = d.id;
                 document.getElementById('userProfilePic').src = d.profile_picture_url || '';
@@ -245,7 +248,14 @@
             };
         }
 
-        init();
+        // إرسال نبض نشاط عند دخول المستخدم للصفحة
+        window.addEventListener('load', init);
+
+        // (اختياري) إرسال نبض نشاط عند عودة المستخدم من الخلفية
+        window.addEventListener('focus', () => {
+            fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
+        });
+
     </script>
 </body>
 </html>
