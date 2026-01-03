@@ -3787,74 +3787,121 @@ app.get('/api/messages/:chatId', async (req, res) => {
   }
 });
 // ==========================================
-//  نظام الوقت الفعلي لقائمة المحادثات (SSE)
+//  نظام بث قائمة المحادثات (SSE) - الإصلاح
 // ==========================================
-app.get('/api/chats/live', async (req, res) => {
-    if (!req.session.user) return res.status(401).end();
-    const currentUserId = req.session.user.uid;
+app.get('/api/users/stream', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  console.log(`[SSE] New connection request from User: ${currentUserId}`);
 
-    // إعداد الهيدر للبث المستمر
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
+  // إعداد الهيدر للبث المستمر
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
+  });
+  res.write('\n');
 
-    const db = admin.database();
-    const chatsRef = db.ref('chats');
+  // المراجع
+  const friendsRef = db.ref(`friends/${currentUserId}`);
+  const myChatsRef = db.ref(`chats/${currentUserId}`);
+  const profilesRef = db.ref('profiles');
 
-    // دالة لجلب البيانات ومعالجتها
-    const sendUpdates = async (snapshot) => {
-        try {
-            const allChats = [];
-            snapshot.forEach(child => {
-                const val = child.val();
-                // نتحقق إذا كان المستخدم طرفاً في المحادثة
-                if (val.participants && val.participants[currentUserId]) {
-                    allChats.push({ ...val, chatId: child.key });
-                }
-            });
+  // دالة لجلب البيانات وإرسالها
+  const sendFullList = async () => {
+    try {
+      // 1. جلب قائمة الأصدقاء
+      const friendsSnap = await friendsRef.once('value');
+      const friendsObj = friendsSnap.val() || {};
+      const friendIds = Object.keys(friendsObj);
 
-            // جلب بيانات الطرف الآخر لكل محادثة
-            const enrichedChats = await Promise.all(allChats.map(async (chat) => {
-                const otherUserId = Object.keys(chat.participants).find(id => id !== currentUserId) || currentUserId;
-                
-                // نستخدم once لجلب بيانات المستخدم بسرعة
-                const userSnap = await db.ref(`users/${otherUserId}`).once('value');
-                const userData = userSnap.val() || {};
+      console.log(`[SSE] User ${currentUserId} has ${friendIds.length} friends.`);
 
-                return {
-                    chatId: chat.chatId,
-                    lastMessage: chat.lastMessage || '',
-                    timestamp: chat.timestamp || 0,
-                    unreadCount: chat.unreadCount && chat.unreadCount[currentUserId] ? chat.unreadCount[currentUserId] : 0,
-                    otherUser: {
-                        userId: otherUserId,
-                        username: userData.username || 'مستخدم',
-                        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-                        is_verified: userData.is_verified || false,
-                        is_online: userData.is_online || false
-                    }
+      if (friendIds.length === 0) {
+        // إرسال مصفوفة فارغة فوراً ليعرف العميل أنه لا يوجد بيانات
+        res.write(`data: ${JSON.stringify({ users: [] })}\n\n`);
+        return;
+      }
+
+      // 2. جلب المحادثات
+      const chatsSnap = await myChatsRef.once('value');
+      const allChats = chatsSnap.val() || {};
+
+      // 3. جلب البروفايلات (بشكل متوازي لتسريع العملية)
+      const profilePromises = friendIds.map(id => profilesRef.child(id).once('value'));
+      const profileSnapshots = await Promise.all(profilePromises);
+      
+      const usersList = [];
+      
+      profileSnapshots.forEach(snap => {
+        const user = snap.val();
+        if (user && user.id) {
+            const chatSummary = allChats[user.id] || {};
+            let lastMessage = null;
+            
+            if (chatSummary.last_message_content) {
+                lastMessage = {
+                    content: chatSummary.last_message_content,
+                    timestamp: chatSummary.last_message_timestamp,
+                    senderId: chatSummary.last_message_sender_id
                 };
-            }));
+            }
 
-            // ترتيب حسب الأحدث
-            enrichedChats.sort((a, b) => b.timestamp - a.timestamp);
-
-            // إرسال البيانات للعميل
-            res.write(`data: ${JSON.stringify(enrichedChats)}\n\n`);
-        } catch (err) {
-            console.error('Error in SSE:', err);
+            usersList.push({
+                id: user.id,
+                username: user.username,
+                full_name: user.full_name,
+                profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+                is_verified: !!user.is_verified,
+                last_message: lastMessage,
+                unread_count: chatSummary.unread_count || 0,
+                is_online: !!user.is_online
+            });
         }
-    };
+      });
 
-    // الاستماع للتغييرات في المحادثات
-    chatsRef.on('value', sendUpdates);
+      console.log(`[SSE] Sending ${usersList.length} users to client.`);
+      
+      // 4. الإرسال (تأكد من وجود \n\n في النهاية)
+      res.write(`data: ${JSON.stringify({ users: usersList })}\n\n`);
 
-    // عند إغلاق الاتصال، نوقف الاستماع لتوفير الموارد
-    req.on('close', () => {
-        chatsRef.off('value', sendUpdates);
-    });
+    } catch (error) {
+      console.error('[SSE] Error inside sendFullList:', error);
+      // إرسال حدث خطأ للعميل ليعرف أن هناك مشكلة
+      res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+    }
+  };
+
+  // إرسال البيانات فوراً
+  await sendFullList();
+
+  // إعداد المستمعين (Listeners)
+  const onDataChange = () => {
+      // console.log('[SSE] Database changed, updating client...');
+      sendFullList();
+  };
+
+  myChatsRef.on('value', onDataChange);
+  // تحديث عند تغير حالة الأصدقاء (إضافة/حذف)
+  friendsRef.on('child_added', onDataChange);
+  friendsRef.on('child_removed', onDataChange);
+
+  // تحديث دوري (Heartbeat) كل 60 ثانية للحفاظ على الاتصال وتحديث حالة الأونلاين
+  const keepAlive = setInterval(() => {
+    // console.log('[SSE] Keep-alive ping');
+    sendFullList(); 
+  }, 60000);
+
+  req.on('close', () => {
+    console.log(`[SSE] Connection closed for User: ${currentUserId}`);
+    myChatsRef.off('value', onDataChange);
+    friendsRef.off('child_added', onDataChange);
+    friendsRef.off('child_removed', onDataChange);
+    clearInterval(keepAlive);
+    res.end();
+  });
 });
+
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
