@@ -15,7 +15,7 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            padding-bottom: 60px; /* مساحة للشريط السفلي */
+            padding-bottom: 60px;
         }
 
         .glass-navbar {
@@ -38,20 +38,18 @@
             z-index: 1000;
         }
 
-        /* تصميم البطاقة */
         .glass-user-card {
             background-color: rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: background-color 0.3s ease, border-color 0.3s ease;
+            transition: all 0.3s ease;
         }
 
         .glass-user-card:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
 
-        /* نمط الرسائل غير المقروءة */
         .glass-user-card.unread {
             border-right: 4px solid #0d9488;
             background-color: rgba(13, 148, 136, 0.1);
@@ -66,414 +64,175 @@
             border-radius: 9999px;
             min-width: 24px;
             text-align: center;
-            line-height: 1;
-            flex-shrink: 0;
-            transition: transform 0.2s;
-        }
-
-        .friend-req-badge {
-          position: absolute;
-          top: -6px;
-          left: -6px;
-          min-width: 18px;
-          height: 18px;
-          padding: 0 6px;
-          background: #ef4444;
-          color: #fff;
-          font-size: 12px;
-          border-radius: 999px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
         }
 
         .avatar-with-dot { 
             position: relative; 
             display: inline-block; 
-            line-height: 0;
         }
         
         .online-dot {
-          position: absolute;
-          bottom: 0px;
-          left: 0px;
-          width: 13px;
-          height: 13px;
-          background: #22c55e;
-          border: 2px solid #202020;
-          border-radius: 50%;
-          display: inline-block;
-          z-index: 10;
-          transition: opacity 0.3s;
+            position: absolute;
+            bottom: 0px;
+            left: 0px;
+            width: 12px;
+            height: 12px;
+            background: #22c55e;
+            border: 2px solid #000;
+            border-radius: 50%;
         }
 
+        /* تنسيق شارة التوثيق مع مسافة */
         .verified-badge-img {
-          display: inline-block;
-          width: 18px;
-          height: 18px;
-          border-radius: 999px;
-          margin-left: 6px;
-          object-fit: cover;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-          border: 1px solid rgba(255,255,255,0.06);
-          vertical-align: middle;
+            width: 16px;
+            height: 16px;
+            margin-right: 6px; /* مسافة بين الاسم والشارة */
+            object-fit: cover;
+            display: inline-block;
         }
 
-        @media (max-width: 480px) {
-          .glass-user-card { padding: 10px; }
-          .unread-badge { min-width: 20px; padding: 2px 6px; font-size: 11px; }
-        }
-
-        a.chat-link { text-decoration:none; color:inherit; display:block; }
-        
-        /* حركة دخول العناصر الجديدة */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
         .animate-enter {
-            animation: fadeIn 0.4s ease-out forwards;
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body class="min-h-screen">
 
     <header class="sticky top-0 z-50 glass-navbar p-3">
-    <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
-        
-        <div class="flex items-center relative">
-            <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
-                <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
-            </button>
+        <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
+            <div class="flex items-center">
+                <button id="profileMenuButton" class="relative" onclick="toggleProfileDropdown(event)">
+                    <img id="userProfilePic" src="https://via.placeholder.com/40" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover">
+                </button>
+                <div id="profileDropdown" class="absolute top-12 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
+                    <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10">الملف الشخصي</a>
+                    <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 border-t border-gray-700">خروج</a>
+                </div>
+            </div>
             
-            <div id="profileDropdown" class="absolute top-12 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
-                <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
-                    <i class="fas fa-user-circle text-xl ml-3"></i>
-                    الملف الشخصي
-                </a>
-                <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 rounded-b-lg transition duration-200 border-t border-gray-700">
-                    <i class="fas fa-sign-out-alt text-xl ml-3"></i>
-                    تسجيل الخروج
+            <div class="absolute inset-0 flex justify-center items-center pointer-events-none">
+                <span class="text-2xl font-extrabold text-white tracking-widest app-logo">المحادثات</span>
+            </div>
+
+            <div class="flex items-center">
+                <a href="/chat_list" class="text-gray-400 hover:text-white p-2">
+                    <i class="fas fa-arrow-left text-2xl"></i>
                 </a>
             </div>
-        </div>
-        
-        <div class="absolute inset-0 flex justify-center items-center pointer-events-none">
-            <span class="text-2xl font-extrabold text-white tracking-widest app-logo">
-                المحادثات
-            </span>
-        </div>
-
-        <div class="flex items-center">
-            <a href="/chat_list" class="text-gray-400 hover:text-white p-2 transition-colors">
-                <i class="fas fa-arrow-left text-2xl"></i>
-            </a>
-        </div>
-
-    </nav>
+        </nav>
     </header>
 
     <main class="max-w-6xl mx-auto p-4">
-        
-        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 flex flex-col space-y-3 relative">
-            
-            <div id="loadingSpinner" class="text-center text-gray-500 p-4 order-last">
+        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 flex flex-col space-y-3">
+            <div id="loadingSpinner" class="text-center text-gray-500 p-4">
                 <i class="fas fa-spinner fa-spin ml-2"></i> جاري الاتصال...
             </div>
-            
-            <div id="emptyState" class="hidden text-center text-gray-500 p-4 order-last">
-                ليس لديك محادثات بعد.
-            </div>
-
+            <div id="emptyState" class="hidden text-center text-gray-500 p-4">ليس لديك محادثات بعد.</div>
         </div>
-
     </main>
-    
+
     <script>
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const usersListContainer = document.getElementById('usersListContainer');
         const loadingSpinner = document.getElementById('loadingSpinner');
         const emptyState = document.getElementById('emptyState');
-        const profileDropdown = document.getElementById('profileDropdown'); 
-        const profileMenuButton = document.getElementById('profileMenuButton'); 
         let currentUserId = null;
 
-        // إدارة القائمة المنسدلة
-        function toggleProfileDropdown(event) {
-            event.stopPropagation();
-            profileDropdown.classList.toggle('hidden');
-        }
+        function toggleProfileDropdown(e) { e.stopPropagation(); document.getElementById('profileDropdown').classList.toggle('hidden'); }
 
-        function closeProfileDropdownOnClickOutside(event) {
-            if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
-                profileDropdown.classList.add('hidden');
-            }
-        }
-        document.addEventListener('click', closeProfileDropdownOnClickOutside);
-        
-        // ******************** المنطق الأساسي (بدون وميض) ********************
-
-        /**
-         * بناء كود HTML للبطاقة (يستخدم فقط عند الإنشاء الأول)
-         */
         function buildCardHTML(user, isUnread, unreadCount, lastMessageText) {
             const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
-            
-            // شارة التوثيق
-            const verifiedHtml = user.is_verified 
-                ? `<img src="${VERIFIED_IMG_URL}" alt="موثق" class="verified-badge-img">` 
-                : '';
+            const verifiedHtml = user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="verified">` : '';
 
             return `
             <a href="${chatLink}" class="chat-link">
-                <div class="glass-user-card flex items-center p-3 rounded-xl cursor-pointer ${isUnread ? 'unread' : ''}" id="card-inner-${user.id}">
-                    <div style="margin-left:12px; position:relative;" class="avatar-with-dot">
+                <div class="glass-user-card flex items-center p-3 rounded-xl ${isUnread ? 'unread' : ''}" id="card-inner-${user.id}">
+                    <div class="avatar-with-dot ml-3">
                         <img src="${user.profile_picture_url}" id="img-${user.id}" class="w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
-                        <span id="dot-${user.id}" class="online-dot ${user.is_online ? '' : 'hidden'}" title="متصل الآن"></span>
+                        <span id="dot-${user.id}" class="online-dot ${user.is_online ? '' : 'hidden'}"></span>
                     </div>
                     <div class="flex-grow min-w-0">
-                        <p class="text-white font-semibold text-lg flex items-center">
-                            <span id="username-${user.id}">${user.username}</span> 
+                        <div class="flex items-center mb-0.5">
+                            <span id="username-${user.id}" class="text-white font-semibold text-lg truncate">${user.username}</span>
                             <span id="verified-container-${user.id}">${verifiedHtml}</span>
-                        </p>
-                        <div id="last-msg-${user.id}" class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
-                            ${lastMessageText}
                         </div>
+                        <div id="last-msg-${user.id}" class="text-gray-400 text-sm truncate">${lastMessageText}</div>
                     </div>
-                    <div class="flex flex-col items-end justify-center ml-2 h-12">
+                    <div class="flex flex-col items-end justify-center">
                         <span id="badge-${user.id}" class="unread-badge mb-1 ${!isUnread ? 'hidden' : ''}">${unreadCount}</span>
-                        <i class="fas fa-chevron-left text-gray-400 text-base"></i>
+                        <i class="fas fa-chevron-left text-gray-400 text-xs"></i>
                     </div>
                 </div>
-            </a>
-            `;
+            </a>`;
         }
 
-        /**
-         * تحديث البطاقة إذا كانت موجودة، أو إنشاؤها إذا كانت جديدة
-         */
         function updateOrAddUserCard(user) {
             const unreadCount = user.unread_count || 0;
             const isUnread = unreadCount > 0;
-            
-            // إعداد نص الرسالة
-            let lastMessageText = 'ابدأ المحادثة...';
-            if (user.last_message) {
-                let content = user.last_message.content 
-                            ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
-                            : '[ملف مرفق]';
-                // إذا كنت أنا المرسل
-                const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
-                lastMessageText = `${senderPrefix}${content}`;
-            }
+            let lastMessageText = user.last_message ? 
+                (user.last_message.senderId === currentUserId ? 'أنت: ' : '') + (user.last_message.content || '[ملف]') : 'ابدأ المحادثة...';
 
-            // حساب الترتيب (الأحدث في الأعلى)
-            // نستخدم Timestamp سالب لأن Flex order يرتب تصاعدياً
-            const timestamp = user.last_message ? new Date(user.last_message.timestamp).getTime() : 0;
-            // نعطي أولوية قصوى جداً لغير المقروء
-            const priority = isUnread ? 10000000000000 : 0;
-            const orderVal = -1 * (timestamp + priority);
+            // الترتيب: نستخدم التوقيت الزمني (timestamp) كقيمة order
+            // العناصر في flexbox ترتب تصاعدياً، لذا سنعطي الأحدث قيمة order أعلى
+            const orderVal = user.last_message ? new Date(user.last_message.timestamp).getTime() : 0;
 
-            // التحقق من وجود العنصر
-            const existingWrapper = document.getElementById(`user-wrapper-${user.id}`);
-
-            if (existingWrapper) {
-                // =============== تحديث العنصر الموجود (Patching) ===============
-                
-                // 1. تحديث الترتيب
-                if (existingWrapper.style.order != orderVal) {
-                    existingWrapper.style.order = orderVal;
-                }
-
-                // 2. تحديث الصورة والحدود
-                const img = document.getElementById(`img-${user.id}`);
-                if (img.src !== user.profile_picture_url) img.src = user.profile_picture_url;
-                img.className = `w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}`;
-
-                // 3. تحديث نقطة الأونلاين
-                const dot = document.getElementById(`dot-${user.id}`);
-                if (user.is_online) dot.classList.remove('hidden');
-                else dot.classList.add('hidden');
-
-                // 4. تحديث النص
-                const msgDiv = document.getElementById(`last-msg-${user.id}`);
-                if (msgDiv.innerText !== lastMessageText) msgDiv.innerText = lastMessageText;
-
-                // 5. تحديث الشارة
+            let wrapper = document.getElementById(`user-wrapper-${user.id}`);
+            if (wrapper) {
+                // تحديث الترتيب (الأحدث يأخذ order أعلى)
+                wrapper.style.order = orderVal; 
+                document.getElementById(`img-${user.id}`).className = `w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}`;
+                document.getElementById(`dot-${user.id}`).className = `online-dot ${user.is_online ? '' : 'hidden'}`;
+                document.getElementById(`last-msg-${user.id}`).innerText = lastMessageText;
                 const badge = document.getElementById(`badge-${user.id}`);
                 badge.innerText = unreadCount;
-                if (isUnread) badge.classList.remove('hidden');
-                else badge.classList.add('hidden');
-
-                // 6. تحديث الستايل العام (خلفية خضراء لغير المقروء)
-                const cardInner = document.getElementById(`card-inner-${user.id}`);
-                if (isUnread) cardInner.classList.add('unread');
-                else cardInner.classList.remove('unread');
-                
-                // 7. تحديث التوثيق (في حال تغيرت الحالة)
-                const verifiedContainer = document.getElementById(`verified-container-${user.id}`);
-                const shouldHaveBadge = !!user.is_verified;
-                const hasBadge = verifiedContainer.innerHTML.includes('<img');
-                
-                if (shouldHaveBadge && !hasBadge) {
-                    verifiedContainer.innerHTML = `<img src="${VERIFIED_IMG_URL}" alt="موثق" class="verified-badge-img">`;
-                } else if (!shouldHaveBadge && hasBadge) {
-                    verifiedContainer.innerHTML = '';
-                }
-
+                badge.classList.toggle('hidden', !isUnread);
+                document.getElementById(`card-inner-${user.id}`).classList.toggle('unread', isUnread);
             } else {
-                // =============== إنشاء عنصر جديد ===============
-                const wrapper = document.createElement('div');
+                wrapper = document.createElement('div');
                 wrapper.id = `user-wrapper-${user.id}`;
-                wrapper.className = 'animate-enter'; // حركة دخول
+                wrapper.className = 'animate-enter';
                 wrapper.style.order = orderVal;
-                
                 wrapper.innerHTML = buildCardHTML(user, isUnread, unreadCount, lastMessageText);
                 usersListContainer.appendChild(wrapper);
             }
         }
 
-        // إعداد الاتصال بالسيرفر
-        function initChatListStream() {
-            if (!window.EventSource) {
-                console.error("Browser does not support SSE");
-                loadingSpinner.innerHTML = "المتصفح لا يدعم التحديث المباشر";
-                return;
-            }
-
-            console.log("Connecting to SSE stream...");
-            // تأكد من أن المسار هذا تم إضافته في server.js كما في الخطوة السابقة
+        function initSSE() {
             const es = new EventSource('/api/users/stream', { withCredentials: true });
-            
-            es.onopen = () => {
-                console.log("SSE Connection Open");
-            };
-
-            es.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.users) {
-                        // إخفاء اللودينج بمجرد وصول أول بيانات
-                        loadingSpinner.style.display = 'none';
-
-                        if (data.users.length === 0) {
-                            emptyState.classList.remove('hidden');
-                            // تنظيف القائمة
-                            const allWrappers = document.querySelectorAll('[id^="user-wrapper-"]');
-                            allWrappers.forEach(w => w.remove());
-                        } else {
-                            emptyState.classList.add('hidden');
-                            
-                            // مجموعة لتتبع المستخدمين النشطين في هذا التحديث
-                            const activeIds = new Set();
-                            
-                            // تحديث أو إضافة
-                            data.users.forEach(user => {
-                                updateOrAddUserCard(user);
-                                activeIds.add(String(user.id));
-                            });
-
-                            // حذف المستخدمين الذين اختفوا (مثلاً تم إلغاء الصداقة)
-                            const allWrappers = document.querySelectorAll('[id^="user-wrapper-"]');
-                            allWrappers.forEach(div => {
-                                const id = div.id.replace('user-wrapper-', '');
-                                if (!activeIds.has(id)) {
-                                    div.remove();
-                                }
-                            });
-                        }
+            es.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.users) {
+                    loadingSpinner.style.display = 'none';
+                    if (data.users.length === 0) emptyState.classList.remove('hidden');
+                    else {
+                        emptyState.classList.add('hidden');
+                        data.users.forEach(updateOrAddUserCard);
                     }
-                } catch (e) {
-                    console.error('Error parsing SSE data', e);
                 }
             };
-
-            es.onerror = (err) => {
-                // في حال انقطاع الاتصال أو خطأ
-                console.warn('SSE Error/Reconnecting...', err);
-                if (es.readyState === EventSource.CLOSED) {
-                   // يمكن إعادة المحاولة يدوياً أو ترك المتصفح يعيدها
-                   // loadingSpinner.style.display = 'block'; 
-                }
-            };
-            
-            // الاستماع لأي أخطاء يرسلها السيرفر كحدث خاص
-            es.addEventListener('error', (e) => {
-                try {
-                    const errData = JSON.parse(e.data);
-                    console.error("Server Error:", errData);
-                } catch(x) {}
-            });
         }
 
-        // عند تحميل الصفحة
+        // ملاحظة هامة لجعل الأحدث أولاً:
+        // الحاوية usersListContainer لديها خاصية flex-col-reverse
+        // والعناصر تأخذ order = timestamp. 
+        // الأكبر (الأحدث) سيصبح في الأسفل برمجياً لكن بسبب reverse سيظهر في الأعلى للمستخدم.
+        usersListContainer.style.display = 'flex';
+        usersListContainer.style.flexDirection = 'column-reverse';
+
         document.addEventListener('DOMContentLoaded', () => {
-            // جلب معلوماتي أولاً
-            fetch('/api/profile')
-                .then(response => response.ok ? response.json() : null)
-                .then(data => {
-                    const profilePicElement = document.getElementById('userProfilePic');
-                    if (data && data.profile_picture_url) {
-                        profilePicElement.src = data.profile_picture_url;
-                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                        currentUserId = data.id;
-                    }
-                    // ثم بدء الاستماع للقائمة
-                    initChatListStream();
-                }).catch(err => {
-                    console.error(err);
-                    initChatListStream(); // المحاولة حتى لو فشل البروفايل
-                });
-
-            // تحديث شارة طلبات الصداقة (مرة واحدة عند التحميل)
-            updateFriendReqBadge();
-        });
-
-        // ------------------ Notification Badge Logic ------------------
-        async function updateFriendReqBadge() {
-            try {
-                const r = await fetch('/api/friends/requests_count', { credentials: 'same-origin' });
-                const j = await r.json();
-                if (r.ok && j.ok) {
-                    let badge = document.getElementById('friendReqBadgeHeader');
-                    if (!badge) {
-                        badge = document.createElement('span');
-                        badge.id = 'friendReqBadgeHeader';
-                        badge.className = 'friend-req-badge';
-                        badge.style.display = 'none';
-                        document.getElementById('profileMenuButton').appendChild(badge);
-                    }
-                    if (j.count > 0) {
-                        badge.style.display = 'inline-flex';
-                        badge.textContent = j.count > 99 ? '99+' : String(j.count);
-                    } else badge.style.display = 'none';
+            fetch('/api/profile').then(r => r.json()).then(d => {
+                if(d && d.id) {
+                    currentUserId = d.id;
+                    document.getElementById('userProfilePic').src = d.profile_picture_url;
                 }
-            } catch (e) { /* ignore */ }
-        }
-
-        // الاستماع للإشعارات لتحديث شارة الطلبات
-        (function setupNotifSSEUsers() {
-          if (!window.EventSource) return;
-          const es = new EventSource('/api/notifications/stream', { withCredentials: true });
-          es.addEventListener('notifications', (e) => {
-            try {
-              const payload = JSON.parse(e.data);
-              const pendingFR = payload.pending_friend_requests_count || 0;
-              let badge = document.getElementById('friendReqBadgeHeader');
-              if (!badge) {
-                badge = document.createElement('span');
-                badge.id = 'friendReqBadgeHeader';
-                badge.className = 'friend-req-badge';
-                badge.style.display = 'none';
-                document.getElementById('profileMenuButton').appendChild(badge);
-              }
-              if (pendingFR > 0) { badge.style.display = 'inline-flex'; badge.textContent = pendingFR > 99 ? '99+' : String(pendingFR); }
-              else badge.style.display = 'none';
-            } catch (err) { console.error('SSE parse error', err); }
-          });
-        })();
-
-      </script>
+                initSSE();
+            });
+        });
+    </script>
 </body>
 </html>
