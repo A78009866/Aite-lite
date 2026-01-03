@@ -15,378 +15,296 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            padding-bottom: 60px; /* مساحة للشريط السفلي */
+            padding-bottom: 70px;
         }
 
+        /* Glassmorphism Styles */
         .glass-navbar {
-            background-color: rgba(30, 30, 30, 0.5);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: rgba(30, 30, 30, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .chat-item {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
         }
         
-        .app-logo {
-            font-family: 'Montserrat', sans-serif; 
-            font-weight: 800;
+        .chat-item:active {
+            background-color: rgba(255, 255, 255, 0.08);
+            transform: scale(0.98);
         }
 
-        .glass-dropdown {
-            background-color: rgba(30, 30, 30, 0.9);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1000;
-        }
-
-        /* نمط بطاقة المستخدم الزجاجية */
-        .glass-user-card {
-            background-color: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        /* 🌟 نمط الرسائل غير المقروءة */
-        .glass-user-card.unread {
-            border-right: 4px solid #0d9488; /* شريط أخضر لتمييز الدردشة */
-            background-color: rgba(13, 148, 136, 0.1); /* خلفية خفيفة */
-        }
-        
-        /* 🌟 نمط بادج الرسائل غير المقروءة */
-        .unread-badge {
-            background-color: #0d9488; /* لون أخضر/فيروزي */
-            color: white;
-            font-size: 10px;
-            font-weight: bold;
-            padding: 3px 8px;
-            border-radius: 9999px; /* شكل حبة دواء */
-            min-width: 24px;
-            text-align: center;
-            line-height: 1;
-            flex-shrink: 0;
-        }
-
-        .friend-req-badge {
-          position: absolute;
-          top: -6px;
-          left: -6px;
-          min-width: 18px;
-          height: 18px;
-          padding: 0 6px;
-          background: #ef4444; /* موحّد بالأحمر */
-          color: #fff;
-          font-size: 12px;
-          border-radius: 999px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        /* --- تعديل نقطة النشاط (Online Dot) --- */
-        .avatar-with-dot { 
-            position: relative; 
-            display: inline-block; 
-            line-height: 0;
-        }
-        
-        .online-dot {
-          position: absolute;
-          bottom: 0px;    /* تم النقل للأسفل */
-          left: 0px;      /* في الزاوية اليسرى للصورة */
-          width: 13px;
-          height: 13px;
-          background: #22c55e;
-          border: 2px solid #202020; /* حدود داكنة لفصل النقطة عن الصورة */
-          border-radius: 50%;
-          display: inline-block;
-          z-index: 10;
-        }
-
-        /* VERIFIED BADGE IMAGE */
+        /* Verified Badge */
         .verified-badge-img {
-          display: inline-block;
-          width: 18px;
-          height: 18px;
-          border-radius: 999px;
-          margin-left: 6px;
-          object-fit: cover;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-          border: 1px solid rgba(255,255,255,0.06);
-          vertical-align: middle;
+            width: 14px;
+            height: 14px;
+            margin-right: 4px;
+            vertical-align: middle;
+            display: inline-block;
         }
 
-        /* تحسين عرض البطاقات على الهاتف */
-        @media (max-width: 480px) {
-          .glass-user-card { padding: 10px; }
-          .unread-badge { min-width: 20px; padding: 2px 6px; font-size: 11px; }
+        /* Online Status */
+        .online-dot {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 10px;
+            height: 10px;
+            background-color: #10b981;
+            border: 2px solid #000;
+            border-radius: 50%;
         }
 
-        a.chat-link { text-decoration:none; color:inherit; display:block; }
-
+        /* Loading */
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="min-h-screen">
+<body>
 
-    <header class="sticky top-0 z-50 glass-navbar p-3">
-    <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
-        
-        <div class="flex items-center relative">
-            <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
-                <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+    <header class="sticky top-0 z-50 glass-navbar p-4 flex justify-between items-center h-16">
+        <h1 class="text-xl font-bold text-white tracking-wide" style="font-family: 'Montserrat', sans-serif;">Chats</h1>
+        <div class="flex gap-4">
+            <button class="text-gray-300 hover:text-white transition">
+                <i class="fas fa-search text-lg"></i>
             </button>
-            
-            <div id="profileDropdown" class="absolute top-12 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
-                <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
-                    <i class="fas fa-user-circle text-xl ml-3"></i>
-                    الملف الشخصي
-                </a>
-                <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 rounded-b-lg transition duration-200 border-t border-gray-700">
-                    <i class="fas fa-sign-out-alt text-xl ml-3"></i>
-                    تسجيل الخروج
-                </a>
-            </div>
+            <button class="text-gray-300 hover:text-white transition relative">
+                <i class="fas fa-edit text-lg"></i>
+            </button>
         </div>
-        
-        <div class="absolute inset-0 flex justify-center items-center pointer-events-none">
-            <span class="text-2xl font-extrabold text-white tracking-widest app-logo">
-                المحادثات
-            </span>
-        </div>
+    </header>
 
-        <div class="flex items-center">
-            <a href="/chat_list" class="text-gray-400 hover:text-white p-2 transition-colors">
-                <i class="fas fa-arrow-left text-2xl"></i>
-            </a>
-        </div>
-
-    </nav>
-</header>
-
-    <main class="max-w-6xl mx-auto p-4">
-        
-        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 space-y-3">
-            <div class="text-center text-gray-500 p-4" id="loadingMessage">
-                <i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...
-            </div>
-        </div>
-
+    <main id="chatListContainer" class="p-2 space-y-2 mt-2">
+        <div class="loader" id="initialLoader"></div>
     </main>
-    
 
+    <nav class="fixed bottom-0 left-0 right-0 glass-navbar flex justify-around items-center py-3 z-50">
+        <a href="/" class="flex flex-col items-center text-gray-500 hover:text-white transition group">
+            <i class="fas fa-home text-xl mb-1 group-hover:scale-110 transition-transform"></i>
+        </a>
+        <a href="/explore" class="flex flex-col items-center text-gray-500 hover:text-white transition group">
+            <i class="fas fa-compass text-xl mb-1 group-hover:scale-110 transition-transform"></i>
+        </a>
+        <a href="/create" class="flex flex-col items-center text-white -mt-8">
+            <div class="bg-blue-600 w-12 h-12 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 hover:bg-blue-500 transition border border-white/20">
+                <i class="fas fa-plus text-lg"></i>
+            </div>
+        </a>
+        <a href="/chat_list" class="flex flex-col items-center text-white transition group">
+            <div class="relative">
+                <i class="fas fa-comment-alt text-xl mb-1 group-hover:scale-110 transition-transform"></i>
+                <span id="navUnreadBadge" class="absolute -top-1 -right-1 bg-red-500 text-[10px] w-4 h-4 flex items-center justify-center rounded-full hidden">0</span>
+            </div>
+        </a>
+        <a href="/profile" class="flex flex-col items-center text-gray-500 hover:text-white transition group">
+            <i class="fas fa-user text-xl mb-1 group-hover:scale-110 transition-transform"></i>
+        </a>
+    </nav>
 
     <script>
+        const chatListContainer = document.getElementById('chatListContainer');
+        const initialLoader = document.getElementById('initialLoader');
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-        const usersListContainer = document.getElementById('usersListContainer');
-        const profileDropdown = document.getElementById('profileDropdown'); 
-        const profileMenuButton = document.getElementById('profileMenuButton'); 
-        let currentUserId = null; // لتخزين ID المستخدم الحالي
-
-        function toggleProfileDropdown(event) {
-            event.stopPropagation();
-            profileDropdown.classList.toggle('hidden');
-        }
-
-        function closeProfileDropdownOnClickOutside(event) {
-            if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
-                profileDropdown.classList.add('hidden');
-            }
-        }
-
-        document.addEventListener('click', closeProfileDropdownOnClickOutside);
         
-        // ******************** وظائف عرض قائمة المحادثات ********************
+        let eventSource = null;
 
-        function createUserCard(user, currentUserId) {
-            const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
-            const unreadCount = user.unread_count || 0;
-            const isUnread = unreadCount > 0;
-            let lastMessageText = '<p class="text-gray-400 text-sm">ابدأ المحادثة...</p>';
+        // بدء الاتصال بالخادم (Real-time)
+        function initRealTimeChats() {
+            // نستخدم القناة الجديدة التي أنشأناها في السيرفر
+            eventSource = new EventSource('/api/chats/live');
 
-            // بناء محتوى الرسالة الأخيرة
-            if (user.last_message) {
-                let content = user.last_message.content 
-                            ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
-                            : '[ملف مرفق]';
-                            
-                const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
+            eventSource.onmessage = (event) => {
+                if(initialLoader) initialLoader.style.display = 'none';
                 
-                lastMessageText = `
-                    <p class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
-                        ${senderPrefix}${content}
-                    </p>
-                `;
-            }
+                const chats = JSON.parse(event.data);
+                updateChatListUI(chats);
+            };
 
-            const onlineDotHtml = user.is_online ? `<span class="online-dot" title="متصل الآن"></span>` : '';
-
-            // placeholder for verified badge — will be filled later by updateVerifiedBadges()
-            const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${user.id}"></span>`;
-
-            return `
-                <a href="${chatLink}" class="chat-link">
-                    <div class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
-                        <div style="margin-left:12px; position:relative;" class="avatar-with-dot">
-                            <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
-                            ${onlineDotHtml}
-                        </div>
-                        <div class="flex-grow min-w-0">
-                            <p class="text-white font-semibold text-lg">${user.username} ${verifiedPlaceholder}</p>
-                            ${lastMessageText}
-                        </div>
-                        <div class="flex flex-col items-end justify-center ml-2 h-12">
-                            ${isUnread ? `<span class="unread-badge mb-1">${unreadCount}</span>` : ''}
-                            <i class="fas fa-chevron-left text-gray-400 text-base ${isUnread ? 'mt-auto' : ''}"></i>
-                        </div>
-                    </div>
-                </a>
-            `;
+            eventSource.onerror = (err) => {
+                console.error("SSE Error:", err);
+                eventSource.close();
+                // إعادة المحاولة بعد 5 ثواني في حال انقطاع الاتصال
+                setTimeout(initRealTimeChats, 5000);
+            };
         }
 
-        async function fetchAndDisplayFriends() {
-            usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...</div>';
+        // تحديث الواجهة بذكاء (Smart Update) بدون حذف كل شيء
+        function updateChatListUI(chats) {
+            const container = document.getElementById('chatListContainer');
+            
+            if (chats.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 mt-10 text-sm">لا توجد محادثات. ابدأ محادثة جديدة!</div>';
+                return;
+            }
 
-            try {
-                // 1. جلب ID المستخدم الحالي
-                const myProfileResponse = await fetch('/api/profile');
-                if (myProfileResponse.ok) {
-                    const myProfile = await myProfileResponse.json();
-                    currentUserId = myProfile.id;
-                } 
+            // مصفوفة لتتبع المحادثات الحالية للترتيب
+            const currentIds = Array.from(container.children).map(el => el.id.replace('chat-', ''));
 
-                // 2. جلب قائمة الأصدقاء (المحادثات)
-                const response = await fetch('/api/users'); // now returns friends only with is_online
-                const result = await response.json();
-                
-                usersListContainer.innerHTML = ''; // مسح رسالة التحميل
-                
-                if (response.ok && result.ok) {
-                    let users = result.users || [];
+            chats.forEach((chat, index) => {
+                let chatEl = document.getElementById(`chat-${chat.chatId}`);
+
+                if (chatEl) {
+                    // --- تحديث عنصر موجود ---
+                    updateChatElementContent(chatEl, chat);
                     
-                    if (users.length === 0) {
-                        usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">ليس لديك محادثات بعد.</div>';
-                        return;
+                    // إعادة الترتيب إذا تغير مكانه (نستخدم order في flexbox أو النقل المباشر)
+                    // هنا سنقوم بنقله للمكان الصحيح إذا لم يكن في مكانه
+                    if (container.children[index] !== chatEl) {
+                       container.insertBefore(chatEl, container.children[index]);
                     }
-                    
-                    // ترتيب: غير المقروء أولاً ثم حسب آخر رسالة
-                    users.sort((a, b) => {
-                        const aUnread = a.unread_count || 0;
-                        const bUnread = b.unread_count || 0;
-                        if (aUnread !== bUnread) return bUnread - aUnread;
-                        const aTime = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
-                        const bTime = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
-                        return bTime - aTime;
-                    });
-
-                    users.forEach(user => {
-                        usersListContainer.innerHTML += createUserCard(user, currentUserId);
-                    });
-
-                    // بعد العرض، حدّث شعارات التوثيق
-                    updateVerifiedBadges();
 
                 } else {
-                    usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">فشل في جلب المحادثات.</div>';
-                }
-            } catch (error) {
-                console.error('Error fetching friends:', error);
-                usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في الاتصال بالخادم.</div>';
-            }
-        }
-        
-        // جلب صورة الملف الشخصي للمستخدم الحالي في النافبار
-        document.addEventListener('DOMContentLoaded', () => {
-            fetch('/api/profile')
-                .then(response => response.ok ? response.json() : null)
-                .then(data => {
-                    const profilePicElement = document.getElementById('userProfilePic');
-                    if (data && data.profile_picture_url) {
-                        profilePicElement.src = data.profile_picture_url;
-                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                        currentUserId = data.id;
+                    // --- إنشاء عنصر جديد ---
+                    chatEl = createChatElement(chat);
+                    // إضافته في المكان الصحيح (الترتيب يأتي جاهزاً من السيرفر)
+                    if (container.children[index]) {
+                        container.insertBefore(chatEl, container.children[index]);
+                    } else {
+                        container.appendChild(chatEl);
                     }
-                }).catch(console.error);
-                
-            fetchAndDisplayFriends();
+                }
+            });
+
+            // حذف المحادثات التي تم حذفها من السيرفر
+            const newIds = chats.map(c => c.chatId);
+            Array.from(container.children).forEach(child => {
+                if (child.id.startsWith('chat-') && !newIds.includes(child.id.replace('chat-', ''))) {
+                    child.remove();
+                }
+            });
+
+            // تحديث شارة الرسائل غير المقروءة في الأسفل
+            updateTotalUnread(chats);
+        }
+
+        // إنشاء كود HTML لعنصر المحادثة
+        function createChatElement(chat) {
+            const div = document.createElement('div');
+            div.id = `chat-${chat.chatId}`;
+            div.className = 'chat-item w-full p-3 rounded-xl flex items-center gap-3 cursor-pointer mb-1 relative';
+            div.onclick = () => window.location.href = `/chat?chatId=${chat.chatId}`;
             
-            // تحديث قائمة المحادثات كل 10 ثواني (أثناء التواجد في الصفحة)
-            setInterval(fetchAndDisplayFriends, 10000);
-
-            // initial friend-requests badge fetch
-            updateFriendReqBadge();
-        });
-
-        async function updateFriendReqBadge() {
-            try {
-                const r = await fetch('/api/friends/requests_count', { credentials: 'same-origin' });
-                const j = await r.json();
-                if (r.ok && j.ok) {
-                    let badge = document.getElementById('friendReqBadgeHeader');
-                    if (!badge) {
-                        badge = document.createElement('span');
-                        badge.id = 'friendReqBadgeHeader';
-                        badge.className = 'friend-req-badge';
-                        badge.style.display = 'none';
-                        document.getElementById('profileMenuButton').appendChild(badge);
-                    }
-                    if (j.count > 0) {
-                        badge.style.display = 'inline-flex';
-                        badge.textContent = j.count > 99 ? '99+' : String(j.count);
-                    } else badge.style.display = 'none';
-                }
-            } catch (e) { /* ignore */ }
+            // الهيكل الداخلي
+            div.innerHTML = `
+                <div class="relative">
+                    <img id="img-${chat.chatId}" src="${chat.otherUser.profile_picture_url}" class="w-12 h-12 rounded-full object-cover border border-gray-700">
+                    <span id="online-${chat.chatId}" class="online-dot ${chat.otherUser.is_online ? '' : 'hidden'}"></span>
+                </div>
+                <div class="flex-grow min-w-0">
+                    <div class="flex justify-between items-baseline mb-1">
+                        <h3 class="font-bold text-gray-100 text-sm truncate flex items-center gap-1">
+                            <span id="name-${chat.chatId}">${chat.otherUser.username}</span>
+                            <span id="verified-${chat.chatId}">${chat.otherUser.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : ''}</span>
+                        </h3>
+                        <span id="time-${chat.chatId}" class="text-[10px] text-gray-500 font-medium">${formatTime(chat.timestamp)}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <p id="msg-${chat.chatId}" class="text-xs text-gray-400 truncate max-w-[80%] ${chat.unreadCount > 0 ? 'font-bold text-gray-200' : ''}">
+                            ${chat.lastMessage || 'مرفق...'}
+                        </p>
+                        <div id="badge-${chat.chatId}" class="${chat.unreadCount > 0 ? 'flex' : 'hidden'} items-center justify-center bg-blue-600 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 rounded-full shadow-lg shadow-blue-500/20">
+                            ${chat.unreadCount}
+                        </div>
+                    </div>
+                </div>
+            `;
+            return div;
         }
 
-        // listen to SSE notifications to update badge live
-        (function setupNotifSSEUsers() {
-          if (!window.EventSource) return;
-          const es = new EventSource('/api/notifications/stream', { withCredentials: true });
-          es.addEventListener('notifications', (e) => {
-            try {
-              const payload = JSON.parse(e.data);
-              const pendingFR = payload.pending_friend_requests_count || 0;
-              let badge = document.getElementById('friendReqBadgeHeader');
-              if (!badge) {
-                badge = document.createElement('span');
-                badge.id = 'friendReqBadgeHeader';
-                badge.className = 'friend-req-badge';
-                badge.style.display = 'none';
-                document.getElementById('profileMenuButton').appendChild(badge);
-              }
-              if (pendingFR > 0) { badge.style.display = 'inline-flex'; badge.textContent = pendingFR > 99 ? '99+' : String(pendingFR); }
-              else badge.style.display = 'none';
-            } catch (err) { console.error('SSE parse error', err); }
-          });
-          es.addEventListener('error', (err) => { console.warn('Notifications SSE error', err); });
-        })();
+        // تحديث محتوى عنصر موجود فقط (يمنع الوميض)
+        function updateChatElementContent(el, chat) {
+            // تحديث الصورة
+            const img = el.querySelector(`#img-${chat.chatId}`);
+            if (img.src !== chat.otherUser.profile_picture_url) img.src = chat.otherUser.profile_picture_url;
 
-        // ----------------- VERIFIED BADGES HELPERS -----------------
-        // Fetch profile for each placeholder and insert badge if is_verified
-        async function updateVerifiedBadges() {
-          const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
-          if (placeholders.length === 0) return;
-          await Promise.all(placeholders.map(async ph => {
-            const uid = ph.dataset.userId;
-            if (!uid) return;
-            try {
-              const res = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' });
-              if (!res.ok) return;
-              const data = await res.json();
-              if (data && data.ok && data.is_verified) {
-                const img = document.createElement('img');
-                img.src = VERIFIED_IMG_URL;
-                img.alt = 'موثق';
-                img.title = 'موثق';
-                img.className = 'verified-badge-img';
-                ph.replaceWith(img);
-              } else {
-                ph.remove();
-              }
-            } catch (e) {
-              ph.remove();
+            // تحديث حالة الاتصال
+            const online = el.querySelector(`#online-${chat.chatId}`);
+            if (chat.otherUser.is_online) online.classList.remove('hidden');
+            else online.classList.add('hidden');
+
+            // تحديث الاسم
+            el.querySelector(`#name-${chat.chatId}`).innerText = chat.otherUser.username;
+
+            // تحديث التوثيق
+            const verEl = el.querySelector(`#verified-${chat.chatId}`);
+            verEl.innerHTML = chat.otherUser.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : '';
+
+            // تحديث الوقت
+            el.querySelector(`#time-${chat.chatId}`).innerText = formatTime(chat.timestamp);
+
+            // تحديث الرسالة
+            const msgEl = el.querySelector(`#msg-${chat.chatId}`);
+            if (msgEl.innerText !== chat.lastMessage) {
+                msgEl.innerText = chat.lastMessage || 'مرفق...';
+                // ومضة بسيطة عند وصول رسالة جديدة
+                msgEl.style.color = '#fff';
+                setTimeout(() => msgEl.style.color = '', 1000);
             }
-          }));
+            
+            // تحديث ستايل الرسالة (bold)
+            if(chat.unreadCount > 0) {
+                msgEl.classList.add('font-bold', 'text-gray-200');
+                msgEl.classList.remove('text-gray-400');
+            } else {
+                msgEl.classList.remove('font-bold', 'text-gray-200');
+                msgEl.classList.add('text-gray-400');
+            }
+
+            // تحديث شارة العدد
+            const badge = el.querySelector(`#badge-${chat.chatId}`);
+            if (chat.unreadCount > 0) {
+                badge.innerText = chat.unreadCount;
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
         }
 
-      </script>
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            // إذا كان اليوم
+            if (diff < 24 * 60 * 60 * 1000 && date.getDate() === now.getDate()) {
+                return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            }
+            // إذا كان أمس
+            if (diff < 48 * 60 * 60 * 1000) {
+                return 'أمس';
+            }
+            // غير ذلك تاريخ
+            return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' });
+        }
+
+        function updateTotalUnread(chats) {
+            const total = chats.reduce((acc, curr) => acc + (curr.unreadCount || 0), 0);
+            const badge = document.getElementById('navUnreadBadge');
+            if (total > 0) {
+                badge.innerText = total > 99 ? '99+' : total;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // تشغيل النظام
+        document.addEventListener('DOMContentLoaded', initRealTimeChats);
+
+    </script>
 </body>
 </html>
