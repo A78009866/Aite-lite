@@ -15,7 +15,7 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            padding-bottom: 60px;
+            padding-bottom: 60px; /* مساحة للشريط السفلي */
         }
 
         .glass-navbar {
@@ -38,18 +38,20 @@
             z-index: 1000;
         }
 
+        /* تصميم البطاقة */
         .glass-user-card {
             background-color: rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
         }
 
         .glass-user-card:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
 
+        /* نمط الرسائل غير المقروءة */
         .glass-user-card.unread {
             border-right: 4px solid #0d9488;
             background-color: rgba(13, 148, 136, 0.1);
@@ -102,12 +104,7 @@
           border-radius: 50%;
           display: inline-block;
           z-index: 10;
-          transition: background-color 0.3s;
-        }
-        
-        .online-dot.offline {
-            background: #555;
-            display: none; /* إخفاء النقطة عند عدم الاتصال */
+          transition: opacity 0.3s;
         }
 
         .verified-badge-img {
@@ -129,7 +126,7 @@
 
         a.chat-link { text-decoration:none; color:inherit; display:block; }
         
-        /* Animation for new items */
+        /* حركة دخول العناصر الجديدة */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -178,18 +175,20 @@
 
     <main class="max-w-6xl mx-auto p-4">
         
-        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 space-y-3 relative">
-            <div id="loadingSpinner" class="text-center text-gray-500 p-4">
+        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 flex flex-col space-y-3 relative">
+            
+            <div id="loadingSpinner" class="text-center text-gray-500 p-4 order-last">
                 <i class="fas fa-spinner fa-spin ml-2"></i> جاري الاتصال...
             </div>
-            <div id="emptyState" class="hidden text-center text-gray-500 p-4">
+            
+            <div id="emptyState" class="hidden text-center text-gray-500 p-4 order-last">
                 ليس لديك محادثات بعد.
             </div>
+
         </div>
 
     </main>
     
-
     <script>
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const usersListContainer = document.getElementById('usersListContainer');
@@ -199,6 +198,7 @@
         const profileMenuButton = document.getElementById('profileMenuButton'); 
         let currentUserId = null;
 
+        // إدارة القائمة المنسدلة
         function toggleProfileDropdown(event) {
             event.stopPropagation();
             profileDropdown.classList.toggle('hidden');
@@ -209,19 +209,20 @@
                 profileDropdown.classList.add('hidden');
             }
         }
-
         document.addEventListener('click', closeProfileDropdownOnClickOutside);
         
-        // ******************** المنطق الجديد: التحديث الذكي ********************
+        // ******************** المنطق الأساسي (بدون وميض) ********************
 
-        // دالة مساعدة لإنشاء HTML البطاقة لأول مرة
-        function buildCardHTML(user, isUnread, unreadCount, lastMessageText, onlineDotHtml) {
+        /**
+         * بناء كود HTML للبطاقة (يستخدم فقط عند الإنشاء الأول)
+         */
+        function buildCardHTML(user, isUnread, unreadCount, lastMessageText) {
             const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
-            // التحقق من التوثيق
-            let verifiedBadge = '';
-            if (user.is_verified) {
-                 verifiedBadge = `<img src="${VERIFIED_IMG_URL}" alt="موثق" class="verified-badge-img">`;
-            }
+            
+            // شارة التوثيق
+            const verifiedHtml = user.is_verified 
+                ? `<img src="${VERIFIED_IMG_URL}" alt="موثق" class="verified-badge-img">` 
+                : '';
 
             return `
             <a href="${chatLink}" class="chat-link">
@@ -233,7 +234,7 @@
                     <div class="flex-grow min-w-0">
                         <p class="text-white font-semibold text-lg flex items-center">
                             <span id="username-${user.id}">${user.username}</span> 
-                            <span id="verified-${user.id}">${verifiedBadge}</span>
+                            <span id="verified-container-${user.id}">${verifiedHtml}</span>
                         </p>
                         <div id="last-msg-${user.id}" class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
                             ${lastMessageText}
@@ -248,111 +249,132 @@
             `;
         }
 
-        // الدالة الأساسية لتحديث أو إضافة بطاقة
+        /**
+         * تحديث البطاقة إذا كانت موجودة، أو إنشاؤها إذا كانت جديدة
+         */
         function updateOrAddUserCard(user) {
-            // إعداد البيانات
             const unreadCount = user.unread_count || 0;
             const isUnread = unreadCount > 0;
+            
+            // إعداد نص الرسالة
             let lastMessageText = 'ابدأ المحادثة...';
-
             if (user.last_message) {
                 let content = user.last_message.content 
                             ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
                             : '[ملف مرفق]';
+                // إذا كنت أنا المرسل
                 const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
                 lastMessageText = `${senderPrefix}${content}`;
             }
 
-            // البحث عن العنصر الموجود
-            const existingCardWrapper = document.getElementById(`user-wrapper-${user.id}`);
+            // حساب الترتيب (الأحدث في الأعلى)
+            // نستخدم Timestamp سالب لأن Flex order يرتب تصاعدياً
+            const timestamp = user.last_message ? new Date(user.last_message.timestamp).getTime() : 0;
+            // نعطي أولوية قصوى جداً لغير المقروء
+            const priority = isUnread ? 10000000000000 : 0;
+            const orderVal = -1 * (timestamp + priority);
 
-            if (existingCardWrapper) {
-                // *** تحديث العنصر الموجود فقط (بدون وميض) ***
+            // التحقق من وجود العنصر
+            const existingWrapper = document.getElementById(`user-wrapper-${user.id}`);
+
+            if (existingWrapper) {
+                // =============== تحديث العنصر الموجود (Patching) ===============
                 
-                // تحديث الصورة
+                // 1. تحديث الترتيب
+                if (existingWrapper.style.order != orderVal) {
+                    existingWrapper.style.order = orderVal;
+                }
+
+                // 2. تحديث الصورة والحدود
                 const img = document.getElementById(`img-${user.id}`);
                 if (img.src !== user.profile_picture_url) img.src = user.profile_picture_url;
-                // تحديث حدود الصورة
                 img.className = `w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}`;
 
-                // تحديث حالة الاتصال
+                // 3. تحديث نقطة الأونلاين
                 const dot = document.getElementById(`dot-${user.id}`);
                 if (user.is_online) dot.classList.remove('hidden');
                 else dot.classList.add('hidden');
 
-                // تحديث الرسالة الأخيرة
+                // 4. تحديث النص
                 const msgDiv = document.getElementById(`last-msg-${user.id}`);
                 if (msgDiv.innerText !== lastMessageText) msgDiv.innerText = lastMessageText;
 
-                // تحديث شارة غير المقروء
+                // 5. تحديث الشارة
                 const badge = document.getElementById(`badge-${user.id}`);
                 badge.innerText = unreadCount;
                 if (isUnread) badge.classList.remove('hidden');
                 else badge.classList.add('hidden');
 
-                // تحديث الستايل العام للبطاقة
+                // 6. تحديث الستايل العام (خلفية خضراء لغير المقروء)
                 const cardInner = document.getElementById(`card-inner-${user.id}`);
                 if (isUnread) cardInner.classList.add('unread');
                 else cardInner.classList.remove('unread');
-
-                // تحديث الترتيب (Sort Order) باستخدام Flexbox order
-                // نستخدم Timestamp سالب ليكون الأحدث في الأعلى
-                const timestamp = user.last_message ? new Date(user.last_message.timestamp).getTime() : 0;
-                // نعطي أولوية قصوى لغير المقروء
-                const priority = isUnread ? 10000000000000 : 0;
-                const orderVal = -1 * (timestamp + priority);
-                existingCardWrapper.style.order = orderVal;
+                
+                // 7. تحديث التوثيق (في حال تغيرت الحالة)
+                const verifiedContainer = document.getElementById(`verified-container-${user.id}`);
+                const shouldHaveBadge = !!user.is_verified;
+                const hasBadge = verifiedContainer.innerHTML.includes('<img');
+                
+                if (shouldHaveBadge && !hasBadge) {
+                    verifiedContainer.innerHTML = `<img src="${VERIFIED_IMG_URL}" alt="موثق" class="verified-badge-img">`;
+                } else if (!shouldHaveBadge && hasBadge) {
+                    verifiedContainer.innerHTML = '';
+                }
 
             } else {
-                // *** إنشاء عنصر جديد ***
+                // =============== إنشاء عنصر جديد ===============
                 const wrapper = document.createElement('div');
                 wrapper.id = `user-wrapper-${user.id}`;
-                wrapper.className = 'animate-enter';
+                wrapper.className = 'animate-enter'; // حركة دخول
+                wrapper.style.order = orderVal;
                 
-                // حساب الترتيب
-                const timestamp = user.last_message ? new Date(user.last_message.timestamp).getTime() : 0;
-                const priority = isUnread ? 10000000000000 : 0;
-                wrapper.style.order = -1 * (timestamp + priority);
-
-                const onlineDotHtml = ''; // يتم التعامل معه عبر الكلاسات في buildCardHTML
-                wrapper.innerHTML = buildCardHTML(user, isUnread, unreadCount, lastMessageText, onlineDotHtml);
-                
+                wrapper.innerHTML = buildCardHTML(user, isUnread, unreadCount, lastMessageText);
                 usersListContainer.appendChild(wrapper);
             }
         }
 
+        // إعداد الاتصال بالسيرفر
         function initChatListStream() {
             if (!window.EventSource) {
-                console.error("SSE not supported");
-                return; // Fallback to polling if needed, but modern browsers support SSE
+                console.error("Browser does not support SSE");
+                loadingSpinner.innerHTML = "المتصفح لا يدعم التحديث المباشر";
+                return;
             }
 
-            // استخدام CSS Flexbox لترتيب العناصر بناءً على order style
-            usersListContainer.style.display = 'flex';
-            usersListContainer.style.flexDirection = 'column';
-
+            console.log("Connecting to SSE stream...");
+            // تأكد من أن المسار هذا تم إضافته في server.js كما في الخطوة السابقة
             const es = new EventSource('/api/users/stream', { withCredentials: true });
             
+            es.onopen = () => {
+                console.log("SSE Connection Open");
+            };
+
             es.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     
                     if (data.users) {
+                        // إخفاء اللودينج بمجرد وصول أول بيانات
                         loadingSpinner.style.display = 'none';
+
                         if (data.users.length === 0) {
                             emptyState.classList.remove('hidden');
+                            // تنظيف القائمة
+                            const allWrappers = document.querySelectorAll('[id^="user-wrapper-"]');
+                            allWrappers.forEach(w => w.remove());
                         } else {
                             emptyState.classList.add('hidden');
                             
-                            // قائمة المستخدمين النشطين حالياً في الرد
+                            // مجموعة لتتبع المستخدمين النشطين في هذا التحديث
                             const activeIds = new Set();
-
+                            
+                            // تحديث أو إضافة
                             data.users.forEach(user => {
                                 updateOrAddUserCard(user);
                                 activeIds.add(String(user.id));
                             });
 
-                            // إزالة المستخدمين الذين لم يعودوا في القائمة (اختياري)
+                            // حذف المستخدمين الذين اختفوا (مثلاً تم إلغاء الصداقة)
                             const allWrappers = document.querySelectorAll('[id^="user-wrapper-"]');
                             allWrappers.forEach(div => {
                                 const id = div.id.replace('user-wrapper-', '');
@@ -368,13 +390,26 @@
             };
 
             es.onerror = (err) => {
-                // console.warn('SSE Error/Reconnecting...', err);
-                // SSE automatically reconnects
+                // في حال انقطاع الاتصال أو خطأ
+                console.warn('SSE Error/Reconnecting...', err);
+                if (es.readyState === EventSource.CLOSED) {
+                   // يمكن إعادة المحاولة يدوياً أو ترك المتصفح يعيدها
+                   // loadingSpinner.style.display = 'block'; 
+                }
             };
+            
+            // الاستماع لأي أخطاء يرسلها السيرفر كحدث خاص
+            es.addEventListener('error', (e) => {
+                try {
+                    const errData = JSON.parse(e.data);
+                    console.error("Server Error:", errData);
+                } catch(x) {}
+            });
         }
 
-        // جلب البيانات الأولية للمستخدم الحالي + بدء الاستماع
+        // عند تحميل الصفحة
         document.addEventListener('DOMContentLoaded', () => {
+            // جلب معلوماتي أولاً
             fetch('/api/profile')
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
@@ -384,10 +419,14 @@
                         profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
                         currentUserId = data.id;
                     }
-                    // بمجرد معرفة من أنا، ابدأ الاستماع
+                    // ثم بدء الاستماع للقائمة
                     initChatListStream();
-                }).catch(console.error);
+                }).catch(err => {
+                    console.error(err);
+                    initChatListStream(); // المحاولة حتى لو فشل البروفايل
+                });
 
+            // تحديث شارة طلبات الصداقة (مرة واحدة عند التحميل)
             updateFriendReqBadge();
         });
 
@@ -413,6 +452,7 @@
             } catch (e) { /* ignore */ }
         }
 
+        // الاستماع للإشعارات لتحديث شارة الطلبات
         (function setupNotifSSEUsers() {
           if (!window.EventSource) return;
           const es = new EventSource('/api/notifications/stream', { withCredentials: true });
