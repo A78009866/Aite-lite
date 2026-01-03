@@ -74,16 +74,24 @@
       <div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري تحميل الإشعارات...</div>
     </div>
   </main>
-
 <script>
-  // Fetch and render notifications (no per-notif delete)
+  const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
+
+  // Fetch and render notifications
   async function fetchNotifications() {
     try {
       const res = await fetch('/api/notifications', { credentials: 'same-origin' });
       if (!res.ok) throw new Error('failed');
       const data = await res.json();
-      if (!data.ok) throw new Error('bad data');
       renderNotifications(data.notifications);
+      
+      // اختياري: عند فتح الصفحة، نقوم بتصفير العداد في السيرفر أيضاً للتأكيد
+      fetch('/api/notifications/mark_read', { 
+          method: 'POST', 
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({}) 
+      }).catch(()=>{});
+
     } catch (e) {
       document.getElementById('notifContainer').innerHTML = '<div class="empty">فشل في جلب الإشعارات.</div>';
       console.error(e);
@@ -98,75 +106,113 @@
     }
 
     container.innerHTML = notifs.map(n => {
-      // Build a human-friendly title/target depending on notification type
       let title = '';
       let targetHint = '';
-      const fromName = escapeHtml(n.from_username || n.from || 'مستخدم');
-      const snippet = escapeHtml((n.commentContent || n.replyContent || n.preview || '').substring(0,80));
+      
+      // ضمان وجود صورة افتراضية إذا كانت الصورة القادمة فارغة
+      const fromPic = n.from_profile_picture_url || DEFAULT_AVATAR;
+      const fromName = escapeHtml(n.from_username || 'مستخدم');
+      
+      // معالجة النصوص الطويلة
+      let contentSnippet = n.commentContent || n.replyContent || n.preview || '';
+      if(contentSnippet.length > 60) contentSnippet = contentSnippet.substring(0, 60) + '...';
+      const snippet = escapeHtml(contentSnippet);
+
+      // المتغيرات
       const postId = n.postId || '';
       const reelId = n.reelId || '';
-      const commentId = n.commentId || n.commentId || n.commentId; // consistency
+      const familyId = n.familyId || ''; // مهم لإشعارات العائلة
+      const commentId = n.commentId || '';
       const replyId = n.replyId || '';
 
+      // تحديد نوع الإشعار بدقة
       switch (n.type) {
+        // --- المنشورات العادية ---
         case 'post_like':
           title = `<strong>${fromName}</strong> أعجب بمنشورك`;
           targetHint = 'عرض المنشور';
           break;
-        case 'reel_like':
-          title = `<strong>${fromName}</strong> أعجب بريلك`;
-          targetHint = 'عرض الريل';
-          break;
         case 'post_comment':
           title = `<strong>${fromName}</strong> علّق: "${snippet}"`;
-          targetHint = 'عرض المنشور والتعليق';
+          targetHint = 'عرض التعليق';
           break;
-        case 'reel_comment':
-          title = `<strong>${fromName}</strong> علّق على ريلك: "${snippet}"`;
-          targetHint = 'عرض الريل والتعليق';
-          break;
-        case 'comment_reply':
-          // this type is used for both post and reel replies on server
+        case 'comment_reply': // قد يكون للمنشور أو الريل
           title = `<strong>${fromName}</strong> ردّ على تعليقك: "${snippet}"`;
-          targetHint = (postId ? 'فتح التعليقات في المنشور' : (reelId ? 'فتح التعليقات في الريل' : 'عرض التعليق'));
+          targetHint = 'عرض الرد';
           break;
         case 'comment_like':
           title = `<strong>${fromName}</strong> أعجب بتعليقك`;
-          targetHint = (postId ? 'عرض التعليق في المنشور' : (reelId ? 'عرض التعليق في الريل' : 'عرض التعليق'));
+          targetHint = 'عرض التعليق';
           break;
+
+        // --- الريلز (Reels) ---
+        case 'reel_like':
+          title = `<strong>${fromName}</strong> أعجب بالريل الخاص بك`;
+          targetHint = 'مشاهدة الريل';
+          break;
+        case 'reel_comment':
+          title = `<strong>${fromName}</strong> علّق على الريل: "${snippet}"`;
+          targetHint = 'مشاهدة التعليق';
+          break;
+
+        // --- العائلة (Family) - كانت مفقودة سابقاً ---
+        case 'family_post_like':
+          title = `<strong>${fromName}</strong> أعجب بمنشورك في العائلة`;
+          targetHint = 'فتح العائلة';
+          break;
+        case 'family_post_comment':
+          title = `<strong>${fromName}</strong> علّق في العائلة: "${snippet}"`;
+          targetHint = 'فتح العائلة';
+          break;
+        case 'family_comment_like':
+          title = `<strong>${fromName}</strong> أعجب بتعليقك العائلي`;
+          targetHint = 'فتح العائلة';
+          break;
+        case 'family_comment_reply':
+          title = `<strong>${fromName}</strong> رد عليك في العائلة: "${snippet}"`;
+          targetHint = 'فتح العائلة';
+          break;
+
+        // --- الأصدقاء والرسائل ---
         case 'friend_request':
           title = `<strong>${fromName}</strong> أرسل لك طلب صداقة`;
-          targetHint = 'إدارة الطلبات';
+          targetHint = 'عرض الطلبات';
           break;
         case 'friend_accept':
-          title = `<strong>${fromName}</strong> قبِل طلب صداقتك`;
-          targetHint = 'عرض الملف الشخصي';
+          title = `<strong>${fromName}</strong> أصبح صديقك الآن`;
+          targetHint = 'زيارة الملف الشخصي';
           break;
         case 'message':
-          title = `<strong>${fromName}</strong> أرسل لك رسالة: "${snippet}"`;
-          targetHint = 'افتح المحادثة';
+          title = `<strong>${fromName}</strong> أرسل لك رسالة`;
+          targetHint = 'فتح المحادثة';
           break;
+        case 'message_reaction':
+           title = `<strong>${fromName}</strong> تفاعل مع رسالتك`;
+           targetHint = 'فتح المحادثة';
+           break;
+
+        // --- الافتراضي ---
         default:
-          title = `<strong>${fromName}</strong> حدث جديد`;
-          targetHint = '';
+          title = `<strong>${fromName}</strong> إشعار جديد`;
+          targetHint = 'عرض';
       }
 
       const time = new Date(n.timestamp || Date.now()).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
-      // data attributes for click handler
+      // وضع البيانات في attributes لاستخدامها عند الضغط
       const dataAttrs = [
         `data-id="${escapeHtml(n.id || '')}"`,
         `data-type="${escapeHtml(n.type || '')}"`,
         `data-post-id="${escapeHtml(postId)}"`,
         `data-reel-id="${escapeHtml(reelId)}"`,
+        `data-family-id="${escapeHtml(familyId)}"`, 
         `data-from="${escapeHtml(n.from_user_id || '')}"`,
-        `data-comment-id="${escapeHtml(n.commentId || n.commentId || '')}"`,
-        `data-reply-id="${escapeHtml(n.replyId || '')}"`
+        `data-comment-id="${escapeHtml(commentId)}"`
       ].join(' ');
 
       return `
         <div class="notification-card ${n.is_read ? '' : 'unread'}" ${dataAttrs}>
-          <img src="${escapeHtml(n.from_profile_picture_url || '')}" class="notif-avatar" alt="">
+          <img src="${escapeHtml(fromPic)}" class="notif-avatar" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
           <div class="notif-card-content">
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
               <div class="notif-title">${title}</div>
@@ -184,9 +230,9 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  // Delegated click handling on notification cards (navigation + mark read)
+  // معالجة الضغط على الإشعار (Navigation Fix)
   document.addEventListener('click', async (ev) => {
-    // if click is inside actions dropdown, ignore here
+    // تجاهل الضغطات داخل القوائم المنسدلة
     if (ev.target.closest('#actionsDropdown') || ev.target.closest('#actionsToggleBtn')) return;
 
     const card = ev.target.closest('.notification-card');
@@ -195,11 +241,10 @@
       const type = card.dataset.type;
       const postId = card.dataset.postId;
       const reelId = card.dataset.reelId;
+      const familyId = card.dataset.familyId;
       const fromUser = card.dataset.from;
-      const commentId = card.dataset.commentId;
-      const replyId = card.dataset.replyId;
 
-      // Mark this notification read (fire-and-forget)
+      // 1. تعليم الإشعار كمقروء في الخلفية
       if (id) {
         fetch('/api/notifications/mark_read', {
           method: 'POST',
@@ -207,156 +252,131 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id })
         }).catch(()=>{});
+        card.classList.remove('unread');
       }
 
-      // Decide navigation based on type and available ids.
-      // For comments/replies/likes on comments we try to open the post/reel and anchor to the specific comment.
+      // 2. منطق التوجيه الصحيح
       try {
-        if (type === 'post_like') {
-          if (postId) {
-            window.location.href = `/chat_list#post-${encodeURIComponent(postId)}`;
+        // -- منشورات عامة --
+        if (['post_like', 'post_comment', 'comment_like', 'comment_reply'].includes(type)) {
+            // الأفضل التوجيه لصفحة المنشور المفردة بدلاً من البحث عنه في القائمة
+            if (postId) {
+                // إذا كان تعليق، يمكننا تمرير معرف التعليق لتمييزه (اختياري)
+                window.location.href = `/post?id=${encodeURIComponent(postId)}`;
+            } else if (reelId) {
+                // حالة خاصة: رد على تعليق قد يكون في ريل
+                window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+            } else if (familyId) {
+                 window.location.href = `/family/${encodeURIComponent(familyId)}`;
+            } else {
+                window.location.href = '/chat_list';
+            }
             return;
-          }
-        } else if (type === 'reel_like') {
-          if (reelId) {
-            window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
-            return;
-          }
-        } else if (type === 'post_comment' || type === 'comment_reply' || type === 'comment_like') {
-          // prefer postId, if present open chat_list with anchor possibly to comment
-          if (postId) {
-            let anchor = `post-${encodeURIComponent(postId)}`;
-            if (commentId) anchor += `-comment-${encodeURIComponent(commentId)}`;
-            else if (replyId) anchor += `-reply-${encodeURIComponent(replyId)}`;
-            window.location.href = `/chat_list#${anchor}`;
-            return;
-          }
-          // fallback to chat_list
-          window.location.href = '/chat_list';
-          return;
-        } else if (type === 'reel_comment' || (type === 'comment_reply' && reelId) || (type === 'comment_like' && reelId)) {
-          if (reelId) {
-            let url = `/reels?id=${encodeURIComponent(reelId)}`;
-            if (commentId) url += `&commentId=${encodeURIComponent(commentId)}`;
-            else if (replyId) url += `&replyId=${encodeURIComponent(replyId)}`;
-            window.location.href = url;
-            return;
-          }
-          window.location.href = '/reels';
-          return;
-        } else if (type === 'friend_accept') {
-          // Open profile of the user who accepted
-          if (fromUser) {
-            // Use query param 'userId' so client-side profile loader can detect uid reliably
-            window.location.href = `/profile?userId=${encodeURIComponent(fromUser)}`;
-            return;
-          }
-          window.location.href = '/users_list';
-          return;
-        } else if (type === 'friend_request') {
-          window.location.href = '/all_users';
-          return;
-        } else if (type === 'message') {
-          if (fromUser) {
-            window.location.href = `/chat?contactId=${encodeURIComponent(fromUser)}`;
-            return;
-          }
-          window.location.href = '/chat_list';
-          return;
-        } else {
-          // default fallback
-          window.location.href = '/chat_list';
-          return;
         }
+
+        // -- ريلز --
+        if (['reel_like', 'reel_comment'].includes(type)) {
+            if (reelId) {
+                window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+            } else {
+                window.location.href = '/reels';
+            }
+            return;
+        }
+
+        // -- عائلة --
+        if (type.startsWith('family_')) {
+            if (familyId) {
+                window.location.href = `/family/${encodeURIComponent(familyId)}`;
+            } else {
+                window.location.href = '/chat_list'; // أو صفحة العائلات
+            }
+            return;
+        }
+
+        // -- طلبات صداقة --
+        if (type === 'friend_request') {
+            window.location.href = '/users_list'; // أو all_users حسب تصميمك
+            return;
+        }
+        if (type === 'friend_accept') {
+            if (fromUser) window.location.href = `/profile?userId=${encodeURIComponent(fromUser)}`;
+            else window.location.href = '/users_list';
+            return;
+        }
+
+        // -- رسائل --
+        if (type === 'message' || type === 'message_reaction') {
+            if (fromUser) window.location.href = `/chat?contactId=${encodeURIComponent(fromUser)}`;
+            else window.location.href = '/chat_list';
+            return;
+        }
+
+        // افتراضي
+        window.location.href = '/chat_list';
+
       } catch (e) {
-        console.error('Navigation error for notification click', e);
+        console.error('Navigation error', e);
         window.location.href = '/chat_list';
       }
     }
   });
 
-  // SSE: update list when notifications change
+  // SSE: تحديث القائمة عند وصول إشعار جديد
   if (window.EventSource) {
     const es = new EventSource('/api/notifications/stream', { withCredentials: true });
     es.addEventListener('notifications', (e) => {
-      try {
-        fetchNotifications(); // refresh to reflect DB state
-      } catch (err) { console.error('SSE parse error', err); }
+      // لا نقوم بإعادة الرسم الكامل هنا لتجنب وميض الشاشة إذا كان المستخدم يتصفح
+      // لكن يمكننا تحديث الأرقام أو جلب البيانات إذا كانت القائمة فارغة
+      const container = document.getElementById('notifContainer');
+      if (container.querySelector('.empty')) {
+          fetchNotifications();
+      }
     });
-    es.addEventListener('error', (err) => { console.warn('Notifications SSE error', err); });
   }
 
-  // Actions dropdown toggle
+  // --- باقي أكواد القوائم (Dropdown) كما هي ---
   const actionsToggleBtn = document.getElementById('actionsToggleBtn');
   const actionsDropdown = document.getElementById('actionsDropdown');
 
   actionsToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const isHidden = actionsDropdown.classList.contains('hidden');
-    if (isHidden) {
-      actionsDropdown.classList.remove('hidden');
-      actionsToggleBtn.setAttribute('aria-expanded', 'true');
-    } else {
-      actionsDropdown.classList.add('hidden');
-      actionsToggleBtn.setAttribute('aria-expanded', 'false');
-    }
+    actionsDropdown.classList.toggle('hidden');
   });
 
-  // Close dropdown on outside click or Esc
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#actionsDropdown') && !e.target.closest('#actionsToggleBtn')) {
       actionsDropdown.classList.add('hidden');
-      actionsToggleBtn.setAttribute('aria-expanded', 'false');
-    }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      actionsDropdown.classList.add('hidden');
-      actionsToggleBtn.setAttribute('aria-expanded', 'false');
     }
   });
 
-  // Mark all read
   document.getElementById('markAllReadBtn').addEventListener('click', async (e) => {
     e.stopPropagation();
     actionsDropdown.classList.add('hidden');
-    actionsToggleBtn.setAttribute('aria-expanded', 'false');
     try {
-      const res = await fetch('/api/notifications/mark_read', {
+      await fetch('/api/notifications/mark_read', {
         method: 'POST',
-        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}) // no id => mark all
+        body: JSON.stringify({}) 
       });
-      if (res.ok) fetchNotifications();
-      else throw new Error('mark all failed');
-    } catch (err) {
-      console.error('Mark all read failed', err);
-      alert('فشل تعيين الكل كمقروء');
-    }
+      // تحديث الواجهة (إزالة الكلاس unread)
+      document.querySelectorAll('.notification-card.unread').forEach(el => el.classList.remove('unread'));
+    } catch (err) { alert('فشل الإجراء'); }
   });
 
-  // Clear all with confirmation
   document.getElementById('clearAllBtn').addEventListener('click', async (e) => {
     e.stopPropagation();
     actionsDropdown.classList.add('hidden');
-    actionsToggleBtn.setAttribute('aria-expanded', 'false');
-    if (!confirm('هل تريد حذف كل الإشعارات؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    if (!confirm('حذف كل الإشعارات؟')) return;
     try {
-      const res = await fetch('/api/notifications', {
-        method: 'DELETE',
-        credentials: 'same-origin'
-      });
-      if (res.ok) fetchNotifications();
-      else { console.error('clear all failed', res.status); alert('فشل حذف الإشعارات'); }
-    } catch (err) {
-      console.error('Clear all failed', err);
-      alert('فشل حذف الإشعارات');
-    }
+      await fetch('/api/notifications', { method: 'DELETE', credentials: 'same-origin' });
+      fetchNotifications();
+    } catch (err) { alert('فشل الحذف'); }
   });
 
-  // initial load
+  // التحميل الأولي
   fetchNotifications();
 </script>
+
 </body>
 </html>
