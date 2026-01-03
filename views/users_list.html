@@ -32,11 +32,6 @@
             transition: transform 0.3s ease, background-color 0.3s ease;
         }
 
-        .glass-user-card:hover {
-            background-color: rgba(255, 255, 255, 0.08);
-        }
-
-        /* تمييز الرسائل غير المقروءة */
         .glass-user-card.unread {
             background-color: rgba(13, 148, 136, 0.12);
             border-right: 4px solid #0d9488;
@@ -58,7 +53,6 @@
             flex-shrink: 0;
         }
 
-        /* حاوية الاسم تمنع التداخل */
         .name-wrapper {
             display: flex;
             align-items: center;
@@ -83,9 +77,16 @@
             border-radius: 50%;
         }
 
-        /* تحريك البطاقة عند التغيير */
-        .fade-move {
-            transition: all 0.5s ease;
+        /* تنسيق علامات الصح */
+        .status-icon {
+            font-size: 10px;
+            margin-left: 4px;
+        }
+        .status-read {
+            color: #22c55e; /* أخضر */
+        }
+        .status-sent {
+            color: #9ca3af; /* رمادي */
         }
     </style>
 </head>
@@ -126,14 +127,27 @@
             return date.toLocaleDateString('ar-EG');
         }
 
+        // دالة تحديد شكل علامة الصح
+        function getStatusHtml(msg) {
+            if (!msg || msg.senderId !== currentUserId) return '';
+            
+            // إذا كانت الرسالة مقروءة (status === 'read' أو حسب ما يرسله السيرفر)
+            if (msg.status === 'read' || msg.isRead) {
+                return '<i class="fas fa-check-double status-icon status-read"></i> ';
+            }
+            // إذا كانت مرسلة فقط
+            return '<i class="fas fa-check status-icon status-sent"></i> ';
+        }
+
         function createCard(user) {
             const lastMsg = user.last_message || {};
             const isUnread = (user.unread_count || 0) > 0;
             const timeLabel = getTimeLabel(lastMsg.timestamp);
+            const statusHtml = getStatusHtml(lastMsg);
             
             const card = document.createElement('div');
             card.id = `user-${user.id}`;
-            card.className = `glass-user-card p-3 rounded-2xl flex items-center cursor-pointer fade-move ${isUnread ? 'unread' : ''}`;
+            card.className = `glass-user-card p-3 rounded-2xl flex items-center cursor-pointer mb-1 ${isUnread ? 'unread' : ''}`;
             card.dataset.timestamp = lastMsg.timestamp || 0;
 
             card.onclick = () => window.location.href = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
@@ -152,9 +166,10 @@
                         <span class="text-xs text-gray-500">${timeLabel}</span>
                     </div>
                     <div class="flex justify-between items-center mt-1">
-                        <p class="text-sm truncate ${isUnread ? 'text-white font-semibold' : 'text-gray-400'}">
-                            ${lastMsg.senderId === currentUserId ? '✔ ' : ''}${lastMsg.content || 'لا توجد رسائل'}
-                        </p>
+                        <div class="flex items-center text-sm truncate flex-grow ${isUnread ? 'text-white font-semibold' : 'text-gray-400'}">
+                            ${statusHtml}
+                            <span class="truncate">${lastMsg.content || 'ابدأ المحادثة الآن...'}</span>
+                        </div>
                         ${isUnread ? `<span class="unread-badge mr-2">${user.unread_count}</span>` : ''}
                     </div>
                 </div>
@@ -165,21 +180,22 @@
         function updateList(users) {
             document.getElementById('loading')?.remove();
 
-            // 1. ترتيب المستخدمين برمجياً: الأحدث أولاً
+            // ترتيب المستخدمين (الأحدث أولاً)
             users.sort((a, b) => {
                 const timeA = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
                 const timeB = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
                 return timeB - timeA;
             });
 
-            // 2. تحديث العناصر في الـ DOM
             users.forEach((user) => {
                 const existingCard = document.getElementById(`user-${user.id}`);
                 const newCard = createCard(user);
 
                 if (existingCard) {
-                    // إذا تغيرت البيانات (آخر رسالة مثلاً)، نحدث البطاقة
-                    if (existingCard.dataset.timestamp !== String(user.last_message?.timestamp)) {
+                    // تحديث البطاقة فقط إذا تغير وقت الرسالة أو حالتها
+                    const currentTs = existingCard.dataset.timestamp;
+                    const newTs = String(user.last_message?.timestamp || 0);
+                    if (currentTs !== newTs) {
                         container.replaceChild(newCard, existingCard);
                     }
                 } else {
@@ -187,7 +203,7 @@
                 }
             });
 
-            // 3. إعادة ترتيب العناصر فعلياً في الصفحة بناءً على الـ timestamp
+            // إعادة الترتيب الفيزيائي في الواجهة
             const cards = Array.from(container.children);
             cards.sort((a, b) => (b.dataset.timestamp || 0) - (a.dataset.timestamp || 0));
             cards.forEach(card => container.appendChild(card));
