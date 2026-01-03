@@ -79,14 +79,14 @@
 
         /* تنسيق علامات الصح */
         .status-icon {
-            font-size: 10px;
-            margin-left: 4px;
+            font-size: 11px; /* تكبير بسيط */
+            margin-left: 6px;
         }
         .status-read {
-            color: #22c55e; /* أخضر */
+            color: #4ade80; /* أخضر ساطع */
         }
         .status-sent {
-            color: #9ca3af; /* رمادي */
+            color: #9ca3af; /* رمادي فاتح */
         }
     </style>
 </head>
@@ -127,15 +127,19 @@
             return date.toLocaleDateString('ar-EG');
         }
 
-        // دالة تحديد شكل علامة الصح
+        // --- دالة تحديد أيقونة الحالة (الجديدة) ---
         function getStatusHtml(msg) {
+            // تظهر الأيقونات فقط إذا كنت أنا مرسل آخر رسالة
             if (!msg || msg.senderId !== currentUserId) return '';
             
-            // إذا كانت الرسالة مقروءة (status === 'read' أو حسب ما يرسله السيرفر)
-            if (msg.status === 'read' || msg.isRead) {
+            // إذا كانت مقروءة (تأتي من الخادم كـ true)
+            if (msg.is_read === true) {
+                // صحين خضر
                 return '<i class="fas fa-check-double status-icon status-read"></i> ';
             }
-            // إذا كانت مرسلة فقط
+            
+            // إذا لم تقرأ بعد (مرسلة فقط)
+            // صح واحد رمادي
             return '<i class="fas fa-check status-icon status-sent"></i> ';
         }
 
@@ -143,12 +147,15 @@
             const lastMsg = user.last_message || {};
             const isUnread = (user.unread_count || 0) > 0;
             const timeLabel = getTimeLabel(lastMsg.timestamp);
+            // استدعاء الدالة الجديدة
             const statusHtml = getStatusHtml(lastMsg);
             
             const card = document.createElement('div');
             card.id = `user-${user.id}`;
             card.className = `glass-user-card p-3 rounded-2xl flex items-center cursor-pointer mb-1 ${isUnread ? 'unread' : ''}`;
+            // نخزن التايم ستامب وحالة القراءة لتجنب الوميض غير الضروري
             card.dataset.timestamp = lastMsg.timestamp || 0;
+            card.dataset.readstatus = lastMsg.is_read || 'false';
 
             card.onclick = () => window.location.href = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
 
@@ -180,7 +187,6 @@
         function updateList(users) {
             document.getElementById('loading')?.remove();
 
-            // ترتيب المستخدمين (الأحدث أولاً)
             users.sort((a, b) => {
                 const timeA = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
                 const timeB = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
@@ -192,27 +198,44 @@
                 const newCard = createCard(user);
 
                 if (existingCard) {
-                    // تحديث البطاقة فقط إذا تغير وقت الرسالة أو حالتها
                     const currentTs = existingCard.dataset.timestamp;
+                    const currentRead = existingCard.dataset.readstatus;
                     const newTs = String(user.last_message?.timestamp || 0);
-                    if (currentTs !== newTs) {
+                    const newRead = String(user.last_message?.is_read || 'false');
+
+                    // تحديث فقط إذا تغير الوقت أو حالة القراءة
+                    if (currentTs !== newTs || currentRead !== newRead) {
                         container.replaceChild(newCard, existingCard);
                     }
                 } else {
                     container.appendChild(newCard);
                 }
             });
-
-            // إعادة الترتيب الفيزيائي في الواجهة
+            
+            // إعادة الترتيب البصري إذا لزم الأمر
             const cards = Array.from(container.children);
             cards.sort((a, b) => (b.dataset.timestamp || 0) - (a.dataset.timestamp || 0));
             cards.forEach(card => container.appendChild(card));
+        }
+
+        // --- نظام إرسال نبضات النشاط (Heartbeat) ---
+        function startHeartbeat() {
+            // إرسال إشارة فورية
+            fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
+            
+            // تكرار الإشارة كل 45 ثانية
+            setInterval(() => {
+                fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
+            }, 45000);
         }
 
         function init() {
             fetch('/api/profile').then(r => r.json()).then(d => {
                 currentUserId = d.id;
                 document.getElementById('userProfilePic').src = d.profile_picture_url || '';
+                
+                // تشغيل نظام النشاط بمجرد معرفة المستخدم
+                startHeartbeat();
             });
 
             const es = new EventSource('/api/users/stream', { withCredentials: true });
