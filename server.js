@@ -3786,6 +3786,75 @@ app.get('/api/messages/:chatId', async (req, res) => {
     res.status(500).json({ error: 'حدث خطأ أثناء جلب الرسائل' });
   }
 });
+// ==========================================
+//  نظام الوقت الفعلي لقائمة المحادثات (SSE)
+// ==========================================
+app.get('/api/chats/live', async (req, res) => {
+    if (!req.session.user) return res.status(401).end();
+    const currentUserId = req.session.user.uid;
+
+    // إعداد الهيدر للبث المستمر
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const db = admin.database();
+    const chatsRef = db.ref('chats');
+
+    // دالة لجلب البيانات ومعالجتها
+    const sendUpdates = async (snapshot) => {
+        try {
+            const allChats = [];
+            snapshot.forEach(child => {
+                const val = child.val();
+                // نتحقق إذا كان المستخدم طرفاً في المحادثة
+                if (val.participants && val.participants[currentUserId]) {
+                    allChats.push({ ...val, chatId: child.key });
+                }
+            });
+
+            // جلب بيانات الطرف الآخر لكل محادثة
+            const enrichedChats = await Promise.all(allChats.map(async (chat) => {
+                const otherUserId = Object.keys(chat.participants).find(id => id !== currentUserId) || currentUserId;
+                
+                // نستخدم once لجلب بيانات المستخدم بسرعة
+                const userSnap = await db.ref(`users/${otherUserId}`).once('value');
+                const userData = userSnap.val() || {};
+
+                return {
+                    chatId: chat.chatId,
+                    lastMessage: chat.lastMessage || '',
+                    timestamp: chat.timestamp || 0,
+                    unreadCount: chat.unreadCount && chat.unreadCount[currentUserId] ? chat.unreadCount[currentUserId] : 0,
+                    otherUser: {
+                        userId: otherUserId,
+                        username: userData.username || 'مستخدم',
+                        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+                        is_verified: userData.is_verified || false,
+                        is_online: userData.is_online || false
+                    }
+                };
+            }));
+
+            // ترتيب حسب الأحدث
+            enrichedChats.sort((a, b) => b.timestamp - a.timestamp);
+
+            // إرسال البيانات للعميل
+            res.write(`data: ${JSON.stringify(enrichedChats)}\n\n`);
+        } catch (err) {
+            console.error('Error in SSE:', err);
+        }
+    };
+
+    // الاستماع للتغييرات في المحادثات
+    chatsRef.on('value', sendUpdates);
+
+    // عند إغلاق الاتصال، نوقف الاستماع لتوفير الموارد
+    req.on('close', () => {
+        chatsRef.off('value', sendUpdates);
+    });
+});
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
