@@ -1497,103 +1497,92 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   }
 });
 
-
-// استبدل مسار إرسال الرسالة بهذا الكود المعدل
-app.post('/api/messages/send', requireAuth, upload.single('media'), async (req, res) => {
+app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, res) => {
   const senderId = req.session.userId;
-  const contactId = req.body.other_id;
-  // نستقبل بيانات الرد (replied_to) من الـ Client
-  const { content, replied_to_id, replied_to_content, replied_to_sender } = req.body;
+  const { contact_id, content, reply_to_id } = req.body;
+  const files = req.files || [];
 
-  const timestamp = admin.database.ServerValue.TIMESTAMP;
-  let mediaUrl = null;
-  let mediaType = null;
+  if (!contact_id) return res.status(400).json({ error: 'Contact ID required' });
 
-  if (!contactId || (!content && !req.file)) {
-    return res.status(400).json({ ok: false, error: 'No content to send.' });
-  }
-
-  // التحقق من الصداقة (كما في الكود الأصلي)
   try {
-    const isFriend = await areFriends(senderId, contactId);
-    if (!isFriend) {
-      return res.status(403).json({ ok: false, error: 'You can only message friends.' });
+    const chatRoomId = [senderId, contact_id].sort().join('_');
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+    const messageId = db.ref(`messages/${chatRoomId}`).push().key;
+
+    // معالجة الملفات (رفعها وجلب الروابط)
+    let attachments = [];
+    if (files.length > 0) {
+      attachments = files.map(file => ({
+        url: file.path, 
+        type: file.mimetype.startsWith('image/') ? 'image' : 
+              file.mimetype.startsWith('video/') ? 'video' : 'file',
+        filename: file.originalname
+      }));
     }
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: 'Failed to verify friendship.' });
-  }
 
-  // معالجة الملف المرفق
-  if (req.file) {
-    mediaUrl = req.file.path;
-    if (req.file.mimetype && req.file.mimetype.startsWith('image/')) mediaType = 'image';
-    else if (req.file.mimetype && req.file.mimetype.startsWith('video/')) mediaType = 'video';
-    else if (req.file.mimetype && req.file.mimetype.startsWith('audio/') || req.file.originalname.endsWith('.webm')) mediaType = 'audio';
-    else mediaType = 'raw';
-  }
-
-  try {
-    const chatRoomId = [senderId, contactId].sort().join('_');
-    const messagesRef = db.ref(`messages/${chatRoomId}`).push();
-    const messageId = messagesRef.key;
-
-    const messageData = {
-      messageId: messageId,
+    // تجهيز كائن الرسالة
+    const newMessage = {
+      id: messageId,
       senderId: senderId,
-      content: content || null,
+      content: content || '',
+      attachments: attachments,
       timestamp: timestamp,
-      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
-      is_read: false,
-      // حفظ بيانات الرد كما وصلتنا من الـ Client (بالعربية)
-      replied_to_id: replied_to_id || null,
-      replied_to_content: replied_to_content || null,
-      replied_to_sender: replied_to_sender || null
+      is_read: false, // الرسالة غير مقروءة مبدئياً
+      reactions: {},
+      reply_to_id: reply_to_id || null
     };
 
-    await messagesRef.set(messageData);
+    // حفظ الرسالة في قاعدة البيانات
+    await db.ref(`messages/${chatRoomId}/${messageId}`).set(newMessage);
 
-    // --- بداية التعديل: تعريب معاينة الرسالة في قائمة المحادثات ---
-    let previewText = content;
-    if (!previewText) {
-        if (mediaType === 'image') previewText = '📷 صورة';
-        else if (mediaType === 'video') previewText = '🎥 فيديو';
-        else if (mediaType === 'audio') previewText = '🎤 تسجيل صوتي';
-        else previewText = '📎 ملف';
+    // تحديد نص المعاينة (Preview Text)
+    let previewText = content || 'ملف مرفق';
+    if (!content && attachments.length > 0) {
+      previewText = attachments[0].type === 'image' ? '📷 صورة' : '📎 ملف';
     }
-    // --- نهاية التعديل ---
 
-    // تحديث ملخص الدردشة للمرسل إليه (زيادة العداد)
-    await db.ref(`chats/${contactId}/${senderId}`).update({
+    // --- التحديثات لملخص المحادثة ---
+
+    // 1. تحديث عند المرسل إليه (الطرف الآخر)
+    await db.ref(`chats/${contact_id}/${senderId}`).update({
       last_message_content: previewText,
       last_message_timestamp: timestamp,
       contact_id: senderId,
       unread_count: admin.database.ServerValue.increment(1),
-      last_message_sender_id: senderId
+      last_message_sender_id: senderId,
+      last_message_is_read: false // <--- مهم: لم تقرأ بعد
     });
 
-    // تحديث ملخص الدردشة للمرسل (بدون زيادة العداد)
-    await db.ref(`chats/${senderId}/${contactId}`).update({
+    // 2. تحديث عند المرسل (أنا)
+    await db.ref(`chats/${senderId}/${contact_id}`).update({
       last_message_content: previewText,
       last_message_timestamp: timestamp,
-      contact_id: contactId,
+      contact_id: contact_id,
       unread_count: 0,
-      last_message_sender_id: senderId
+      last_message_sender_id: senderId,
+      last_message_is_read: false // <--- مهم: لم تقرأ بعد
     });
 
-    const now = Date.now();
-    messageData.timestamp = now;
-    res.json({ ok: true, message: 'Sent', messageData: messageData });
+    // إرسال إشعار للطرف الآخر (بدون تغيير هنا، فقط إشعار الرسالة الجديدة)
+    await db.ref(`notifications/${contact_id}`).push({
+      type: 'new_message',
+      from_user_id: senderId,
+      content: `رسالة جديدة: ${previewText}`,
+      timestamp: timestamp,
+      is_read: false,
+      link: `/chat?contactId=${senderId}`
+    });
 
+    res.json({ ok: true, messageId });
   } catch (error) {
-    console.error('Error sending message:', error);
-    res.status(500).json({ ok: false, error: 'Failed to send.' });
+    console.error('Send Error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
   }
 });
 
-
 app.post('/api/mark_read', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const { other_id } = req.body;
+  const userId = req.session.userId; // أنا (القارئ)
+  const { other_id } = req.body;     // المرسل (الطرف الآخر)
 
   if (!other_id) return res.status(400).json({ ok: false });
 
@@ -1601,21 +1590,39 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
   const messagesRef = db.ref(`messages/${chatRoomId}`);
 
   try {
+    // 1. تحديث كل رسائل المرسل لتصبح is_read: true في جدول الرسائل
     const messagesSnap = await messagesRef.orderByChild('senderId').equalTo(other_id).once('value');
     const updates = {};
+    let hasUpdates = false;
+    
     messagesSnap.forEach(childSnap => {
-      if (childSnap.val().is_read === false) updates[`${childSnap.key}/is_read`] = true;
+      if (childSnap.val().is_read === false) {
+        updates[`${childSnap.key}/is_read`] = true;
+        hasUpdates = true;
+      }
     });
+    
+    if (hasUpdates) {
+      await messagesRef.update(updates);
+    }
 
-    if (Object.keys(updates).length > 0) await messagesRef.update(updates);
-
+    // 2. تصفير العداد لدي (أنا القارئ)
     await db.ref(`chats/${userId}/${other_id}`).update({ unread_count: 0 });
+
+    // 3. (الجديد) تحديث ملخص الدردشة عند "الطرف الآخر" ليظهر له الصحين الخضر
+    // نذهب لملف الطرف الآخر -> المحادثة معي -> ونجعل آخر رسالة مقروءة
+    await db.ref(`chats/${other_id}/${userId}`).update({
+      last_message_is_read: true
+    });
 
     res.json({ ok: true });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ ok: false });
   }
 });
+
+
 // ---------------- API: Message Reactions (جديد) ----------------
 
 // إضافة تفاعل (reaction) على رسالة معينة
@@ -1641,18 +1648,7 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
 
     const message = messageSnap.val();
 
-    // إرسال إشعار لصاحب الرسالة إذا لم يكن هو من قام بالتفاعل
-    if (message.senderId && message.senderId !== userId) {
-      await db.ref(`notifications/${message.senderId}`).push({
-        type: 'message_reaction',
-        from_user_id: userId,
-        chat_with: userId,
-        message_id: messageId,
-        reaction: reaction,
-        timestamp: admin.database.ServerValue.TIMESTAMP,
-        is_read: false
-      });
-    }
+
 
     // [مهم] حفظ التفاعل داخل كائن الرسالة مباشرة باستخدام update
     await messageRef.update({
