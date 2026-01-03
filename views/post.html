@@ -7,368 +7,516 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://unpkg.com/wavesurfer.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
+    
     <style>
-        body { background-color: #000; color: #e4e6eb; font-family: 'Segoe UI', sans-serif; min-height: 100vh; padding-bottom: 80px; }
-        
-        .glass-navbar { background-color: rgba(30,30,30,0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .glass-post-card { background-color: rgba(20,20,20,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; margin-bottom: 20px; }
-        
-        /* Audio Player */
-        .audio-play-wrapper { background: #000; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); padding: 10px; display: flex; align-items: center; gap: 12px; }
-        .audio-play-button { width: 44px; height: 44px; border-radius: 10px; background: #fff; color: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; border:none;}
-        .waveform-post { height: 60px; flex-grow: 1; }
+        /* نفس ستايل الرئيسية لضمان التطابق */
+        body {
+            background-color: #000000;
+            color: #e4e6eb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding-bottom: 80px;
+            overflow-x: hidden;
+        }
 
-        /* Verified Badge */
-        .verified-badge-img { width: 14px; height: 14px; margin-right: 4px; vertical-align: middle; display: inline-block; }
+        /* تنسيقات الشريط العلوي */
+        .glass-navbar {
+            background-color: rgba(30, 30, 30, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+        }
 
-        /* Comments Styling */
-        .comment-section { background: #0b0b0c; border-top: 1px solid #222; padding: 16px; border-radius: 20px 20px 0 0; min-height: 300px; }
-        .comment-item { padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.03); margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05); }
-        .reply-item { margin-right: 36px; margin-top: 8px; background: rgba(255,255,255,0.015); padding: 8px; border-radius: 8px; border-right: 2px solid #333; }
-        .comment-actions button { font-size: 11px; margin-left: 10px; color: #888; transition: color 0.2s; }
-        .comment-actions button:hover { color: #fff; }
-        .comment-actions .active-like { color: #ef4444; }
+        /* تنسيق بطاقة المنشور */
+        .glass-post-card {
+            background-color: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s;
+        }
+
+        /* تنسيقات الصور والوسائط */
+        .media-grid {
+            display: grid;
+            gap: 2px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .media-grid.cols-1 { grid-template-columns: 1fr; }
+        .media-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .media-grid.cols-3 { grid-template-columns: 1fr 1fr; }
+        .media-grid.cols-3 img:first-child { grid-column: span 2; }
         
-        /* Input Area */
-        .comment-input-area { position: fixed; bottom: 0; left: 0; right: 0; background: #18191a; padding: 10px; border-top: 1px solid #333; display: flex; align-items: center; gap: 10px; z-index: 50; }
+        .post-img {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .post-img:hover { opacity: 0.9; }
+
+        /* نافذة التعليقات */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: flex-end; /* تظهر من الأسفل */
+        }
+        .modal-content {
+            background: #1a1a1a;
+            width: 100%;
+            max-width: 600px;
+            height: 85vh; /* تغطي 85% من الشاشة */
+            border-radius: 20px 20px 0 0;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.3s ease-out;
+            border-top: 1px solid #333;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* أزرار التفاعل */
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #b0b3b8;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            font-size: 14px;
+        }
+        .action-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+        .action-btn.liked { color: #e41e3f; }
+        .action-btn.liked i { font-weight: 900; animation: pop 0.3s; }
+
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+
+        /* مشغل الصوت */
+        .audio-player-container {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 10px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
 
-    <header class="sticky top-0 z-50 glass-navbar p-3 flex items-center gap-4">
-        <button onclick="window.history.back()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white">
-            <i class="fas fa-arrow-right text-xl"></i>
-        </button>
-        <h1 class="text-xl font-bold text-white">المنشور</h1>
-    </header>
+    <nav class="glass-navbar">
+        <div class="flex items-center gap-4">
+            <button onclick="window.history.back()" class="text-white text-xl p-2 hover:bg-white/10 rounded-full transition">
+                <i class="fas fa-arrow-right"></i>
+            </button>
+            <h1 class="text-lg font-bold">المنشور</h1>
+        </div>
+        <div class="text-xl font-bold font-['Vibes'] text-blue-500">Aite</div>
+    </nav>
 
-    <main id="postContainer" class="max-w-xl mx-auto p-4 mt-2">
-        <div class="text-center py-20 text-gray-500">
-            <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
+    <div class="container mx-auto max-w-2xl px-2 pt-20" id="singlePostContainer">
+        <div class="text-center py-10 text-gray-400">
+            <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
             <p>جاري تحميل المنشور...</p>
         </div>
-    </main>
+    </div>
 
-    <section class="max-w-xl mx-auto pb-20">
-        <div class="comment-section">
-            <h3 class="text-white font-bold mb-4 border-b border-gray-800 pb-2">التعليقات</h3>
-            <div id="commentsList" class="space-y-4">
+    <div id="commentsModal" class="modal-overlay" onclick="if(event.target===this) closeComments()">
+        <div class="modal-content">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-lg font-bold">التعليقات</h3>
+                <button onclick="closeComments()" class="text-gray-400 hover:text-white p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div id="commentsList" class="flex-1 overflow-y-auto p-4 space-y-4">
                 </div>
-        </div>
-    </section>
 
-    <div class="comment-input-area max-w-xl mx-auto md:relative md:rounded-b-xl md:border-t-0">
-        <img id="myAvatar" src="https://via.placeholder.com/40" class="w-8 h-8 rounded-full border border-gray-600">
-        <input type="text" id="mainCommentInput" placeholder="أضف تعليقاً..." class="flex-grow bg-[#242526] text-white text-sm px-4 py-2 rounded-full focus:outline-none border border-gray-700">
-        <button id="submitCommentBtn" class="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white hover:bg-blue-500 transition">
-            <i class="fas fa-arrow-up text-sm"></i>
-        </button>
+            <div class="p-3 border-t border-gray-700 bg-[#242526]">
+                <form id="commentForm" onsubmit="submitComment(event)" class="flex gap-2">
+                    <input type="text" id="commentInput" 
+                        class="flex-1 bg-[#3a3b3c] text-white rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="اكتب تعليقاً..." autocomplete="off">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded-full w-10 h-10 flex items-center justify-center transition">
+                        <i class="fas fa-paper-plane text-sm"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const postId = urlParams.get('id');
-        const postContainer = document.getElementById('postContainer');
-        const commentsList = document.getElementById('commentsList');
-        const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
-        
-        let currentUserId = null; // Set via profile fetch
+        let currentPostId = null;
         let activeWaveSurfer = null;
+        const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
 
-        // Fetch user info first
-        fetch('/api/profile').then(r=>r.json()).then(d=> { 
-            if(d.ok) { 
-                currentUserId = d.id; 
-                document.getElementById('myAvatar').src = d.profile_picture_url || 'https://via.placeholder.com/40';
+        // 1. جلب المنشور عند التحميل
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const postId = urlParams.get('id');
+
+            if (!postId) {
+                document.getElementById('singlePostContainer').innerHTML = `
+                    <div class="text-center py-10 text-red-400">
+                        <i class="fas fa-exclamation-circle text-3xl mb-2"></i>
+                        <p>رابط المنشور غير صحيح</p>
+                        <a href="/chat_list" class="text-blue-400 underline mt-2 block">عودة للرئيسية</a>
+                    </div>`;
+                return;
             }
+
+            fetchPostData(postId);
         });
 
-        if (postId) {
-            loadPostAndComments();
-        } else {
-            postContainer.innerHTML = '<p class="text-center text-red-500 mt-10">رابط غير صالح</p>';
-        }
-
-        async function loadPostAndComments() {
+        async function fetchPostData(id) {
             try {
-                // 1. Fetch Post (Assuming you have a single post endpoint, or we filter from list)
-                // Note: Standard server usually needs /api/posts/one/:id. I'll use the generic search as fallback or list.
-                // For this example, I will assume /api/posts/one/:id exists as per previous context or we fetch all.
-                // Let's try to fetch specifically:
-                const res = await fetch(`/api/posts/one/${postId}`); 
+                // ملاحظة: تأكد من أن السيرفر يدعم هذا المسار لجلب منشور واحد
+                // إذا لم يكن مدعوماً، قد تحتاج لتعديل الـ server.js لإضافة app.get('/api/posts/:id', ...)
+                const res = await fetch(`/api/posts/${id}`);
+                if (!res.ok) throw new Error('Post not found');
                 const data = await res.json();
                 
-                if (data.ok && data.post) {
-                    renderPost(data.post);
-                    fetchComments();
-                } else {
-                    postContainer.innerHTML = '<p class="text-center text-gray-400 mt-10">المنشور غير موجود أو تم حذفه.</p>';
-                }
-            } catch (e) {
-                console.error(e);
-                postContainer.innerHTML = '<p class="text-center text-red-500 mt-10">خطأ في الاتصال</p>';
+                // في بعض السيرفرات تأتي البيانات داخل كائن post أو مباشرة
+                const post = data.post || data; 
+                renderSinglePost(post);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('singlePostContainer').innerHTML = `
+                    <div class="text-center py-10 text-gray-400">
+                        <p>عذراً، لم يتم العثور على المنشور أو تم حذفه.</p>
+                        <button onclick="location.reload()" class="mt-4 bg-white/10 px-4 py-2 rounded-full">إعادة المحاولة</button>
+                    </div>`;
             }
         }
 
-        function renderPost(post) {
+        // 2. دالة رسم المنشور (مطابقة تماماً للرئيسية)
+        function renderSinglePost(p) {
+            const container = document.getElementById('singlePostContainer');
+            
+            // تحضير المتغيرات
+            const profilePic = p.profile_picture_url || DEFAULT_AVATAR;
+            const username = p.username || 'مستخدم';
+            const time = new Date(p.created_at).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+            const isLiked = p.is_liked ? 'liked' : '';
+            const heartIcon = p.is_liked ? 'fas' : 'far';
+            
+            // معالجة الوسائط
             let mediaHtml = '';
-            if (post.media) {
-                if (post.media.type === 'image') mediaHtml = `<img src="${post.media.url}" class="w-full rounded-lg mt-3 border border-gray-800">`;
-                else if (post.media.type === 'video') mediaHtml = `<video src="${post.media.url}" controls class="w-full rounded-lg mt-3 bg-black max-h-96"></video>`;
-                else if (post.media.type === 'audio') {
+            if (p.media_url) {
+                let mediaArray = [];
+                if (typeof p.media_url === 'string') {
+                    // إذا كان سترينج يحتوي على روابط مفصولة بفاصلة أو رابط واحد
+                    if(p.media_url.startsWith('[')) {
+                        try { mediaArray = JSON.parse(p.media_url); } catch(e) { mediaArray = [p.media_url]; }
+                    } else {
+                        mediaArray = [p.media_url];
+                    }
+                } else if (Array.isArray(p.media_url)) {
+                    mediaArray = p.media_url;
+                }
+
+                if (p.type === 'video') {
                     mediaHtml = `
-                        <div class="mt-3 audio-play-wrapper">
-                            <button id="btn-${post.postId}" class="audio-play-button" onclick="toggleAudio('${post.postId}', '${post.media.url}')">
+                        <div class="mt-3 rounded-xl overflow-hidden bg-black relative">
+                            <video src="${mediaArray[0]}" controls class="w-full max-h-[500px] object-contain"></video>
+                        </div>`;
+                } else if (p.type === 'audio') {
+                    mediaHtml = `
+                        <div class="audio-player-container" id="wave-container-${p.id}">
+                            <button id="btn-${p.id}" onclick="toggleAudio('${p.id}', '${mediaArray[0]}')" class="w-10 h-10 flex items-center justify-center bg-blue-600 rounded-full text-white hover:bg-blue-700">
                                 <i class="fas fa-play"></i>
                             </button>
-                            <div id="wave-${post.postId}" class="waveform-post"></div>
+                            <div id="wave-${p.id}" class="flex-1 h-12"></div>
                         </div>`;
-                }
-            }
-
-            const verifiedBadge = post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : '';
-            const likeClass = post.is_liked ? 'fas text-red-500' : 'far text-gray-400';
-            
-            postContainer.innerHTML = `
-                <div class="glass-post-card p-4">
-                    <div class="flex justify-between items-start">
-                        <div class="flex items-center gap-3 mb-3 cursor-pointer" onclick="window.location.href='/profile?userId=${post.userId}'">
-                            <img src="${post.user.profile_picture_url}" class="w-12 h-12 rounded-full border border-gray-600 object-cover">
-                            <div>
-                                <div class="text-white font-bold text-base flex items-center">${post.user.username} ${verifiedBadge}</div>
-                                <div class="text-gray-400 text-xs">${new Date(post.timestamp).toLocaleString('ar-EG')}</div>
-                            </div>
-                        </div>
-                        ${(currentUserId === post.userId) ? `<button onclick="deletePost('${post.postId}')" class="text-red-400 hover:bg-red-500/10 p-2 rounded-full"><i class="fas fa-trash"></i></button>` : ''}
-                    </div>
-                    <p class="text-gray-200 whitespace-pre-wrap leading-relaxed text-base">${post.content}</p>
-                    ${mediaHtml}
-                    <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-700">
-                        <button class="flex items-center gap-2 text-gray-300 hover:text-red-500 transition w-full justify-center" onclick="likePost(this)">
-                            <i class="${likeClass} fa-heart text-xl"></i> <span>إعجاب</span>
-                        </button>
-                        <div class="text-gray-500 text-sm">
-                            <span id="likesCount">${post.likes}</span> إعجاب • 
-                            <span id="commentsCount">${post.commentsCount}</span> تعليق
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- Comments Logic ---
-
-        async function fetchComments() {
-            const res = await fetch(`/api/posts/${postId}/comments`);
-            const data = await res.json();
-            if (data.ok) {
-                commentsList.innerHTML = data.comments.length ? data.comments.map(c => renderComment(c)).join('') : '<p class="text-center text-gray-600 py-4">لا توجد تعليقات بعد.</p>';
-            }
-        }
-
-        function renderComment(c) {
-            const badge = (c.user && c.user.is_verified) ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : ''; // يحتاج التحقق من الباك اند أو جلب البروفايل، هنا سنعتمد على البيانات القادمة
-            // ملاحظة: endpoint التعليقات في server.js قد لا يرجع is_verified للمستخدم مباشرة، لذا سنستخدم كود تحقق بسيط (أو يمكن تعديل السيرفر). 
-            // سأضيف منطق تحقق في الواجهة إذا كان متاحاً في الكائن.
-            
-            // تحقق من الاعجاب بالتعليق
-            const isLiked = c.is_liked ? 'active-like' : '';
-            const likeIcon = c.is_liked ? 'fas' : 'far';
-
-            // الردود
-            let repliesHtml = '';
-            if (c.recentReplies && c.recentReplies.length > 0) {
-                repliesHtml = c.recentReplies.map(r => `
-                    <div class="reply-item flex gap-2">
-                        <img src="${r.profile_picture_url || 'https://via.placeholder.com/30'}" class="w-6 h-6 rounded-full mt-1">
-                        <div>
-                            <div class="text-xs font-bold text-gray-300">${r.username}</div>
-                            <div class="text-xs text-gray-400">${r.content}</div>
-                        </div>
-                    </div>
-                `).join('');
-            }
-
-            // لضمان ظهور الشارة سنحتاج استدعاء بروفايل أو الاعتماد على أن السيرفر يرسلها. سأفترض أنها موجودة في c.user.is_verified أو يتم حقنها.
-            // لغرض العرض الصحيح:
-            let userBadge = '';
-            // هنا يمكنك إضافة منطق تحقق إضافي، حالياً سأعرضها إذا كانت true في البيانات
-            
-            return `
-                <div class="comment-item" id="comment-${c.commentId}">
-                    <div class="flex gap-3">
-                        <img src="${c.user.profile_picture_url}" class="w-9 h-9 rounded-full object-cover flex-shrink-0" onclick="window.location.href='/profile?userId=${c.user.userId}'">
-                        <div class="flex-grow">
-                            <div class="flex justify-between items-start">
-                                <div class="text-sm font-bold text-white mb-0.5">
-                                    ${c.user.username} 
-                                    <span class="badge-placeholder" data-uid="${c.user.userId}"></span>
-                                </div>
-                                <div class="text-[10px] text-gray-500">${new Date(c.timestamp).toLocaleDateString()}</div>
-                            </div>
-                            <div class="text-gray-300 text-sm leading-snug">${c.content}</div>
-                            
-                            <div class="comment-actions flex items-center gap-4 mt-2">
-                                <button class="${isLiked} flex items-center gap-1" onclick="toggleCommentLike('${c.commentId}', this)">
-                                    <i class="${likeIcon} fa-heart"></i> <span class="count">${c.likes || 0}</span>
-                                </button>
-                                <button onclick="showReplyInput('${c.commentId}')">
-                                    <i class="fas fa-reply"></i> رد
-                                </button>
-                            </div>
-
-                            <div id="reply-box-${c.commentId}" class="hidden mt-2 flex gap-2">
-                                <input type="text" id="reply-input-${c.commentId}" placeholder="اكتب رداً..." class="bg-[#222] text-xs text-white rounded p-2 flex-grow border border-gray-700 focus:outline-none">
-                                <button onclick="submitReply('${c.commentId}')" class="text-blue-400 text-xs px-2">إرسال</button>
-                            </div>
-
-                            <div class="mt-2">
-                                ${repliesHtml}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // تحديث الشارات بشكل منفصل (لضمان الدقة)
-        async function updateBadges() {
-           // هذا الجزء يعتمد على API الخاص بك، ولكن للعرض سأترك مكانها فارغاً إلا إذا توفرت البيانات
-           // يمكن تفعيلها ب fetch لبيانات المستخدمين
-        }
-
-        // --- Actions ---
-
-        // Like Post
-        async function likePost(btn) {
-            btn.disabled = true;
-            const res = await fetch(`/api/posts/${postId}/like`, { method: 'POST' });
-            const data = await res.json();
-            if (data.ok) {
-                const icon = btn.querySelector('i');
-                if (data.action === 'liked') {
-                    icon.classList.replace('far', 'fas');
-                    icon.classList.add('text-red-500');
                 } else {
-                    icon.classList.replace('fas', 'far');
-                    icon.classList.remove('text-red-500');
+                    // صور (Grid)
+                    const count = mediaArray.length;
+                    const gridClass = count === 1 ? 'cols-1' : (count === 2 ? 'cols-2' : 'cols-3');
+                    const imagesHtml = mediaArray.map(url => 
+                        `<img src="${url}" class="post-img" onclick="openImageModal('${url}')">`
+                    ).join('');
+                    
+                    if (count > 0) {
+                        mediaHtml = `<div class="media-grid ${gridClass}">${imagesHtml}</div>`;
+                    }
                 }
-                document.getElementById('likesCount').textContent = data.newLikes;
-            }
-            btn.disabled = false;
-        }
-
-        // Like Comment
-        async function toggleCommentLike(commentId, btn) {
-            const countSpan = btn.querySelector('.count');
-            const icon = btn.querySelector('i');
-            
-            // UI Optimistic update
-            const isLiked = btn.classList.contains('active-like');
-            let count = parseInt(countSpan.textContent) || 0;
-            
-            if (isLiked) {
-                btn.classList.remove('active-like');
-                icon.classList.replace('fas', 'far');
-                countSpan.textContent = Math.max(0, count - 1);
-            } else {
-                btn.classList.add('active-like');
-                icon.classList.replace('far', 'fas');
-                countSpan.textContent = count + 1;
             }
 
-            try {
-                await fetch(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST' });
-            } catch (e) { console.error(e); }
+            // HTML البطاقة
+            const html = `
+                <div class="glass-post-card fade-in" id="post-${p.id}">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='/profile?userId=${p.user_id}'">
+                            <img src="${profilePic}" class="w-10 h-10 rounded-full border border-gray-600 object-cover" onerror="this.src='${DEFAULT_AVATAR}'">
+                            <div>
+                                <h3 class="font-bold text-sm text-white">${username}</h3>
+                                <span class="text-xs text-gray-400">${time}</span>
+                            </div>
+                        </div>
+                        <button onclick="copyPostText(this)" data-text="${p.content || ''}" class="text-gray-400 hover:text-white">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap mb-2 dir-auto" style="direction: auto;">${linkify(p.content || '')}</div>
+
+                    ${mediaHtml}
+
+                    <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-700/50">
+                        <button class="action-btn ${isLiked}" onclick="toggleLike('${p.id}', this)">
+                            <i class="${heartIcon} fa-heart text-lg"></i>
+                            <span class="like-count font-medium">${p.likes_count || 0}</span>
+                        </button>
+                        
+                        <button class="action-btn" onclick="openComments('${p.id}')">
+                            <i class="far fa-comment text-lg"></i>
+                            <span class="font-medium">${p.comments_count || 0}</span>
+                        </button>
+                        
+                        <button class="action-btn" onclick="sharePost('${p.id}')">
+                            <i class="far fa-share-square text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
         }
 
-        // Reply System
-        function showReplyInput(commentId) {
-            const box = document.getElementById(`reply-box-${commentId}`);
-            box.classList.toggle('hidden');
+        // 3. الوظائف المساعدة (نسخ/لصق من chat_list.html)
+
+        // تحويل الروابط لنصوص قابلة للنقر
+        function linkify(text) {
+            if (!text) return '';
+            return text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-400 hover:underline">$1</a>');
         }
 
-        async function submitReply(commentId) {
-            const input = document.getElementById(`reply-input-${commentId}`);
-            const content = input.value.trim();
-            if (!content) return;
-
-            const res = await fetch(`/api/posts/${postId}/comments/${commentId}/reply`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ content })
-            });
-            
-            const data = await res.json();
-            if (data.ok) {
-                fetchComments(); // Reload to show new reply
-            }
-        }
-
-        // Main Comment Submit
-        document.getElementById('submitCommentBtn').onclick = async () => {
-            const input = document.getElementById('mainCommentInput');
-            const content = input.value.trim();
-            if(!content) return;
-            
-            const res = await fetch(`/api/posts/${postId}/comment`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ content })
-            });
-            const data = await res.json();
-            if (data.ok) {
-                input.value = '';
-                document.getElementById('commentsCount').textContent = data.newComments || parseInt(document.getElementById('commentsCount').textContent) + 1;
-                fetchComments();
-            }
-        };
-
-        // Delete Post
-        async function deletePost(id) {
-            if(confirm('هل أنت متأكد من حذف هذا المنشور؟')) {
-                const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
-                if(res.ok) window.location.href = '/chat_list';
+        // نسخ النص
+        function copyPostText(btn) {
+            const text = btn.getAttribute('data-text');
+            if (text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalIcon = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check text-green-500"></i>';
+                    setTimeout(() => btn.innerHTML = originalIcon, 2000);
+                });
             }
         }
 
-        // Audio Handler
+        // تشغيل الصوت
         function toggleAudio(id, url) {
             const container = document.getElementById(`wave-${id}`);
             const btn = document.getElementById(`btn-${id}`);
             
             if (!container.innerHTML) {
+                // إنشاء مشغل جديد
                 const ws = WaveSurfer.create({
                     container: container,
-                    waveColor: '#555',
-                    progressColor: '#fff',
-                    height: 50,
+                    waveColor: '#666',
+                    progressColor: '#3b82f6',
+                    height: 40,
                     barWidth: 2,
+                    barRadius: 2,
                     cursorWidth: 0,
-                    barGap: 1
                 });
                 ws.load(url);
                 ws.on('ready', () => {
+                    if (activeWaveSurfer && activeWaveSurfer !== ws) activeWaveSurfer.pause();
                     ws.play();
                     btn.innerHTML = '<i class="fas fa-pause"></i>';
                     activeWaveSurfer = ws;
                 });
-                ws.on('finish', () => btn.innerHTML = '<i class="fas fa-play"></i>');
+                ws.on('finish', () => {
+                    btn.innerHTML = '<i class="fas fa-play"></i>';
+                });
+                ws.on('pause', () => {
+                    btn.innerHTML = '<i class="fas fa-play"></i>';
+                });
+                ws.on('play', () => {
+                    btn.innerHTML = '<i class="fas fa-pause"></i>';
+                });
                 container.wsInstance = ws;
             } else {
                 const ws = container.wsInstance;
                 if (ws.isPlaying()) {
                     ws.pause();
-                    btn.innerHTML = '<i class="fas fa-play"></i>';
                 } else {
-                    if (activeWaveSurfer && activeWaveSurfer !== ws) activeWaveSurfer.pause();
+                    if (activeWaveSurfer && activeWaveSurfer !== ws) {
+                        activeWaveSurfer.pause();
+                    }
                     ws.play();
-                    btn.innerHTML = '<i class="fas fa-pause"></i>';
                     activeWaveSurfer = ws;
                 }
             }
         }
+
+        // الإعجاب
+        async function toggleLike(postId, btn) {
+            // تحديث الواجهة فورياً (Optimistic UI)
+            const icon = btn.querySelector('i');
+            const countSpan = btn.querySelector('.like-count');
+            let count = parseInt(countSpan.textContent) || 0;
+            const isLiked = btn.classList.contains('liked');
+
+            btn.classList.toggle('liked');
+            if (isLiked) {
+                icon.classList.replace('fas', 'far');
+                count = Math.max(0, count - 1);
+            } else {
+                icon.classList.replace('far', 'fas');
+                count++;
+            }
+            countSpan.textContent = count;
+
+            // إرسال للسيرفر
+            try {
+                await fetch(`/api/posts/${postId}/like`, { method: 'POST' });
+            } catch (err) {
+                console.error('Like failed', err);
+                // تراجع في حال الخطأ
+                btn.classList.toggle('liked');
+                countSpan.textContent = isLiked ? count + 1 : count - 1;
+            }
+        }
+
+        // --- منطق التعليقات ---
+        
+        async function openComments(postId) {
+            currentPostId = postId;
+            const modal = document.getElementById('commentsModal');
+            const list = document.getElementById('commentsList');
+            
+            list.innerHTML = '<div class="text-center py-5"><i class="fas fa-circle-notch fa-spin"></i> جاري التحميل...</div>';
+            modal.style.display = 'flex'; // إظهار النافذة
+
+            try {
+                const res = await fetch(`/api/posts/${postId}/comments`);
+                const data = await res.json();
+                renderComments(data.comments || []);
+            } catch (err) {
+                list.innerHTML = '<div class="text-center text-red-400">فشل تحميل التعليقات</div>';
+            }
+        }
+
+        function closeComments() {
+            document.getElementById('commentsModal').style.display = 'none';
+            currentPostId = null;
+        }
+
+        function renderComments(comments) {
+            const list = document.getElementById('commentsList');
+            if (!comments.length) {
+                list.innerHTML = '<div class="text-center text-gray-500 py-4">كن أول المعلقين!</div>';
+                return;
+            }
+
+            list.innerHTML = comments.map(c => `
+                <div class="flex gap-3 animate-fade-in">
+                    <img src="${c.profile_picture_url || DEFAULT_AVATAR}" class="w-8 h-8 rounded-full object-cover border border-gray-700">
+                    <div class="flex-1">
+                        <div class="bg-[#3a3b3c] px-3 py-2 rounded-2xl inline-block max-w-[90%]">
+                            <div class="font-bold text-xs text-white mb-0.5">${c.username || 'مستخدم'}</div>
+                            <div class="text-sm text-gray-200">${escapeHtml(c.content)}</div>
+                        </div>
+                        <div class="flex gap-3 mt-1 mr-2 text-xs text-gray-400">
+                            <span>${timeAgo(c.created_at)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // تمرير للأسفل
+            list.scrollTop = list.scrollHeight;
+        }
+
+        async function submitComment(e) {
+            e.preventDefault();
+            const input = document.getElementById('commentInput');
+            const content = input.value.trim();
+            if (!content || !currentPostId) return;
+
+            // إضافة وهمية سريعة
+            const list = document.getElementById('commentsList');
+            const fakeComment = document.createElement('div');
+            // ... يمكنك إضافة العنصر مباشرة هنا لتحسين التجربة ...
+            
+            try {
+                input.value = ''; // تفريغ الحقل
+                const res = await fetch(`/api/posts/${currentPostId}/comments`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ content })
+                });
+                
+                if (res.ok) {
+                    // إعادة تحميل التعليقات لضمان البيانات الصحيحة
+                    const data = await res.json();
+                    // إذا أرجع السيرفر التعليق الجديد، يمكن إضافته، أو نعيد جلب القائمة
+                    openComments(currentPostId); 
+                    
+                    // تحديث عداد التعليقات في الصفحة الخلفية
+                    const commentCountSpan = document.querySelector(`#post-${currentPostId} .fa-comment`).nextElementSibling;
+                    if(commentCountSpan) commentCountSpan.textContent = parseInt(commentCountSpan.textContent) + 1;
+                }
+            } catch (err) {
+                alert('فشل إرسال التعليق');
+            }
+        }
+
+        // دوال مساعدة
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function timeAgo(dateParam) {
+            const date = new Date(dateParam);
+            const now = new Date();
+            const seconds = Math.round((now - date) / 1000);
+            if (seconds < 60) return 'الآن';
+            const minutes = Math.round(seconds / 60);
+            if (minutes < 60) return `منذ ${minutes} دقيقة`;
+            const hours = Math.round(minutes / 60);
+            if (hours < 24) return `منذ ${hours} ساعة`;
+            return date.toLocaleDateString('ar-EG');
+        }
+
+        // تكبير الصور
+        window.openImageModal = function(src) {
+            // يمكن إضافة lightbox بسيط هنا، أو مجرد فتح الصورة في تبويب جديد
+            const modal = document.createElement('div');
+            modal.style = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:flex;justify-content:center;align-items:center;cursor:pointer;';
+            modal.innerHTML = `<img src="${src}" style="max-width:95%;max-height:95%;border-radius:8px;">`;
+            modal.onclick = () => document.body.removeChild(modal);
+            document.body.appendChild(modal);
+        }
+
     </script>
 </body>
 </html>
