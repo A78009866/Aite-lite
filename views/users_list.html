@@ -15,6 +15,7 @@
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
+            padding-bottom: 60px; /* مساحة للشريط السفلي */
         }
 
         .glass-navbar {
@@ -24,239 +25,368 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        .app-logo { font-family: 'Montserrat', sans-serif; font-weight: 800; }
+        .app-logo {
+            font-family: 'Montserrat', sans-serif; 
+            font-weight: 800;
+        }
 
+        .glass-dropdown {
+            background-color: rgba(30, 30, 30, 0.9);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+        }
+
+        /* نمط بطاقة المستخدم الزجاجية */
         .glass-user-card {
-            background-color: rgba(20, 20, 20, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: transform 0.3s ease, background-color 0.3s ease;
+            background-color: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        /* 🌟 نمط الرسائل غير المقروءة */
         .glass-user-card.unread {
-            background-color: rgba(13, 148, 136, 0.12);
-            border-right: 4px solid #0d9488;
+            border-right: 4px solid #0d9488; /* شريط أخضر لتمييز الدردشة */
+            background-color: rgba(13, 148, 136, 0.1); /* خلفية خفيفة */
         }
-
+        
+        /* 🌟 نمط بادج الرسائل غير المقروءة */
         .unread-badge {
-            background-color: #0d9488;
+            background-color: #0d9488; /* لون أخضر/فيروزي */
             color: white;
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 12px;
+            font-size: 10px;
             font-weight: bold;
-        }
-
-        .verified-badge-img {
-            width: 22px;
-            height: 22px;
-            margin-right: 5px;
+            padding: 3px 8px;
+            border-radius: 9999px; /* شكل حبة دواء */
+            min-width: 24px;
+            text-align: center;
+            line-height: 1;
             flex-shrink: 0;
         }
 
-        .name-wrapper {
-            display: flex;
-            align-items: center;
-            overflow: hidden;
-            max-width: 100%;
+        .friend-req-badge {
+          position: absolute;
+          top: -6px;
+          left: -6px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 6px;
+          background: #ef4444; /* موحّد بالأحمر */
+          color: #fff;
+          font-size: 12px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
-        .username-text {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        /* --- تعديل نقطة النشاط (Online Dot) --- */
+        .avatar-with-dot { 
+            position: relative; 
+            display: inline-block; 
+            line-height: 0;
         }
-
+        
         .online-dot {
-            position: absolute;
-            bottom: 2px;
-            left: 2px;
-            width: 12px;
-            height: 12px;
-            background: #22c55e;
-            border: 2px solid #000;
-            border-radius: 50%;
+          position: absolute;
+          bottom: 0px;    /* تم النقل للأسفل */
+          left: 0px;      /* في الزاوية اليسرى للصورة */
+          width: 13px;
+          height: 13px;
+          background: #22c55e;
+          border: 2px solid #202020; /* حدود داكنة لفصل النقطة عن الصورة */
+          border-radius: 50%;
+          display: inline-block;
+          z-index: 10;
         }
 
-        /* تنسيق علامات الصح */
-        .status-icon {
-            font-size: 11px; /* تكبير بسيط */
-            margin-left: 6px;
+        /* VERIFIED BADGE IMAGE */
+        .verified-badge-img {
+          display: inline-block;
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          margin-left: 6px;
+          object-fit: cover;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+          border: 1px solid rgba(255,255,255,0.06);
+          vertical-align: middle;
         }
-        .status-read {
-            color: #4ade80; /* أخضر ساطع */
+
+        /* تحسين عرض البطاقات على الهاتف */
+        @media (max-width: 480px) {
+          .glass-user-card { padding: 10px; }
+          .unread-badge { min-width: 20px; padding: 2px 6px; font-size: 11px; }
         }
-        .status-sent {
-            color: #9ca3af; /* رمادي فاتح */
-        }
+
+        a.chat-link { text-decoration:none; color:inherit; display:block; }
 
     </style>
 </head>
-<body>
+<body class="min-h-screen">
 
     <header class="sticky top-0 z-50 glass-navbar p-3">
-        <nav class="flex justify-between items-center max-w-6xl mx-auto">
-            <div class="flex items-center">
-                <img id="userProfilePic" src="https://via.placeholder.com/40" class="w-10 h-10 rounded-full border border-gray-700 object-cover">
-            </div>
-            <div class="absolute inset-0 flex justify-center items-center pointer-events-none">
-                <span class="text-2xl font-extrabold text-white app-logo">Aite</span>
-            </div>
-            <a href="/chat_list" class="text-gray-400 p-2"><i class="fas fa-arrow-left text-xl"></i></a>
-        </nav>
-    </header>
-
-    <main class="max-w-xl mx-auto p-4">
-        <div id="usersListContainer" class="flex flex-col space-y-3">
-            <div id="loading" class="text-center py-10 text-gray-500">
-                <i class="fas fa-spinner fa-spin mr-2"></i> جاري التحميل...
+    <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
+        
+        <div class="flex items-center relative">
+            <button id="profileMenuButton" class="relative block" onclick="toggleProfileDropdown(event)">
+                <img id="userProfilePic" src="https://via.placeholder.com/40/3182CE/FFFFFF?text=P" alt="صورة الملف الشخصي" class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+            </button>
+            
+            <div id="profileDropdown" class="absolute top-12 right-0 mt-2 w-48 rounded-lg shadow-xl glass-dropdown hidden">
+                <a href="/profile" class="flex items-center px-4 py-3 text-white hover:bg-white/10 rounded-t-lg transition duration-200">
+                    <i class="fas fa-user-circle text-xl ml-3"></i>
+                    الملف الشخصي
+                </a>
+                <a href="/logout" class="flex items-center px-4 py-3 text-red-400 hover:bg-white/10 rounded-b-lg transition duration-200 border-t border-gray-700">
+                    <i class="fas fa-sign-out-alt text-xl ml-3"></i>
+                    تسجيل الخروج
+                </a>
             </div>
         </div>
+        
+        <div class="absolute inset-0 flex justify-center items-center pointer-events-none">
+            <span class="text-2xl font-extrabold text-white tracking-widest app-logo">
+                المحادثات
+            </span>
+        </div>
+
+        <div class="flex items-center">
+            <a href="/chat_list" class="text-gray-400 hover:text-white p-2 transition-colors">
+                <i class="fas fa-arrow-left text-2xl"></i>
+            </a>
+        </div>
+
+    </nav>
+</header>
+
+    <main class="max-w-6xl mx-auto p-4">
+        
+        <div id="usersListContainer" class="max-w-xl mx-auto mt-4 space-y-3">
+            <div class="text-center text-gray-500 p-4" id="loadingMessage">
+                <i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...
+            </div>
+        </div>
+
     </main>
+    
+
 
     <script>
-        const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768032345/post_media/1768032345297-Picsart_26-01-02_19-12-04-799.png";
-        const container = document.getElementById('usersListContainer');
-        let currentUserId = null;
+        const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png";
+        const usersListContainer = document.getElementById('usersListContainer');
+        const profileDropdown = document.getElementById('profileDropdown'); 
+        const profileMenuButton = document.getElementById('profileMenuButton'); 
+        let currentUserId = null; // لتخزين ID المستخدم الحالي
 
-        function getTimeLabel(timestamp) {
-            if (!timestamp) return '';
-            const date = new Date(timestamp);
-            const now = new Date();
-            if (date.toDateString() === now.toDateString()) {
-                return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+        function toggleProfileDropdown(event) {
+            event.stopPropagation();
+            profileDropdown.classList.toggle('hidden');
+        }
+
+        function closeProfileDropdownOnClickOutside(event) {
+            if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
+                profileDropdown.classList.add('hidden');
             }
-            return date.toLocaleDateString('ar-EG');
         }
 
-        // --- دالة تحديد أيقونة الحالة (الجديدة) ---
-        function getStatusHtml(msg) {
-            // تظهر الأيقونات فقط إذا كنت أنا مرسل آخر رسالة
-            if (!msg || msg.senderId !== currentUserId) return '';
-            
-            // إذا كانت مقروءة (تأتي من الخادم كـ true)
-            if (msg.is_read === true) {
-                // صحين خضر
-                return '<i class="fas fa-check-double status-icon status-read"></i> ';
-            }
-            
-            // إذا لم تقرأ بعد (مرسلة فقط)
-            // صح واحد رمادي
-            return '<i class="fas fa-check status-icon status-sent"></i> ';
-        }
+        document.addEventListener('click', closeProfileDropdownOnClickOutside);
+        
+        // ******************** وظائف عرض قائمة المحادثات ********************
 
-        function createCard(user) {
-            const lastMsg = user.last_message || {};
-            const isUnread = (user.unread_count || 0) > 0;
-            const timeLabel = getTimeLabel(lastMsg.timestamp);
-            // استدعاء الدالة الجديدة
-            const statusHtml = getStatusHtml(lastMsg);
-            
-            const card = document.createElement('div');
-            card.id = `user-${user.id}`;
-            card.className = `glass-user-card p-3 rounded-2xl flex items-center cursor-pointer mb-1 ${isUnread ? 'unread' : ''}`;
-            // نخزن التايم ستامب وحالة القراءة لتجنب الوميض غير الضروري
-            card.dataset.timestamp = lastMsg.timestamp || 0;
-            card.dataset.readstatus = lastMsg.is_read || 'false';
+        function createUserCard(user, currentUserId) {
+            const chatLink = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
+            const unreadCount = user.unread_count || 0;
+            const isUnread = unreadCount > 0;
+            let lastMessageText = '<p class="text-gray-400 text-sm">ابدأ المحادثة...</p>';
 
-            card.onclick = () => window.location.href = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
-
-            card.innerHTML = `
-                <div class="relative flex-shrink-0 ml-3">
-                    <img src="${user.profile_picture_url}" class="w-14 h-14 rounded-full object-cover">
-                    ${user.is_online ? '<div class="online-dot"></div>' : ''}
-                </div>
-                <div class="flex-grow min-w-0">
-                    <div class="flex justify-between items-center">
-                        <div class="name-wrapper">
-                            <span class="username-text font-bold text-gray-100 text-lg">${user.username}</span>
-                            ${user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : ''}
-                        </div>
-                        <span class="text-xs text-gray-500">${timeLabel}</span>
-                    </div>
-                    <div class="flex justify-between items-center mt-1">
-                        <div class="flex items-center text-sm truncate flex-grow ${isUnread ? 'text-white font-semibold' : 'text-gray-400'}">
-                            ${statusHtml}
-                            <span class="truncate">${lastMsg.content || 'ابدأ المحادثة الآن...'}</span>
-                        </div>
-                        ${isUnread ? `<span class="unread-badge mr-2">${user.unread_count}</span>` : ''}
-                    </div>
-                </div>
-            `;
-            return card;
-        }
-
-        function updateList(users) {
-            document.getElementById('loading')?.remove();
-
-            users.sort((a, b) => {
-                const timeA = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
-                const timeB = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
-                return timeB - timeA;
-            });
-
-            users.forEach((user) => {
-                const existingCard = document.getElementById(`user-${user.id}`);
-                const newCard = createCard(user);
-
-                if (existingCard) {
-                    const currentTs = existingCard.dataset.timestamp;
-                    const currentRead = existingCard.dataset.readstatus;
-                    const newTs = String(user.last_message?.timestamp || 0);
-                    const newRead = String(user.last_message?.is_read || 'false');
-
-                    // تحديث فقط إذا تغير الوقت أو حالة القراءة
-                    if (currentTs !== newTs || currentRead !== newRead) {
-                        container.replaceChild(newCard, existingCard);
-                    }
-                } else {
-                    container.appendChild(newCard);
-                }
-            });
-            
-            // إعادة الترتيب البصري إذا لزم الأمر
-            const cards = Array.from(container.children);
-            cards.sort((a, b) => (b.dataset.timestamp || 0) - (a.dataset.timestamp || 0));
-            cards.forEach(card => container.appendChild(card));
-        }
-
-        // --- نظام إرسال نبضات النشاط (Heartbeat) ---
-        function startHeartbeat() {
-            // إرسال إشارة فورية
-            fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
-            
-            // تكرار الإشارة كل 45 ثانية
-            setInterval(() => {
-                fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
-            }, 45000);
-        }
-
-        function init() {
-            // إرسال إشارة النشاط عند تحميل الصفحة
-            fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
-
-            fetch('/api/profile').then(r => r.json()).then(d => {
-                currentUserId = d.id;
-                document.getElementById('userProfilePic').src = d.profile_picture_url || '';
+            // بناء محتوى الرسالة الأخيرة
+            if (user.last_message) {
+                let content = user.last_message.content 
+                            ? user.last_message.content.substring(0, 30) + (user.last_message.content.length > 30 ? '...' : '') 
+                            : '[ملف مرفق]';
+                            
+                const senderPrefix = user.last_message.senderId === currentUserId ? 'أنت: ' : '';
                 
-                // تشغيل نظام النشاط بمجرد معرفة المستخدم
-                startHeartbeat();
-            });
+                lastMessageText = `
+                    <p class="text-gray-400 text-sm overflow-hidden whitespace-nowrap text-ellipsis" style="max-width: 95%;">
+                        ${senderPrefix}${content}
+                    </p>
+                `;
+            }
 
-            const es = new EventSource('/api/users/stream', { withCredentials: true });
-            es.onmessage = (e) => {
-                const data = JSON.parse(e.data);
-                if (data.users) updateList(data.users);
-            };
+            const onlineDotHtml = user.is_online ? `<span class="online-dot" title="متصل الآن"></span>` : '';
+
+            // placeholder for verified badge — will be filled later by updateVerifiedBadges()
+            const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${user.id}"></span>`;
+
+            return `
+                <a href="${chatLink}" class="chat-link">
+                    <div class="glass-user-card flex items-center p-3 rounded-xl transition duration-300 cursor-pointer ${isUnread ? 'unread hover:bg-white/10' : 'hover:bg-white/10'}">
+                        <div style="margin-left:12px; position:relative;" class="avatar-with-dot">
+                            <img src="${user.profile_picture_url}" alt="${user.username}" class="w-12 h-12 rounded-full object-cover border-2 ${isUnread ? 'border-teal-500' : 'border-gray-600'}">
+                            ${onlineDotHtml}
+                        </div>
+                        <div class="flex-grow min-w-0">
+                            <p class="text-white font-semibold text-lg">${user.username} ${verifiedPlaceholder}</p>
+                            ${lastMessageText}
+                        </div>
+                        <div class="flex flex-col items-end justify-center ml-2 h-12">
+                            ${isUnread ? `<span class="unread-badge mb-1">${unreadCount}</span>` : ''}
+                            <i class="fas fa-chevron-left text-gray-400 text-base ${isUnread ? 'mt-auto' : ''}"></i>
+                        </div>
+                    </div>
+                </a>
+            `;
         }
 
-        // إرسال نبض نشاط عند دخول المستخدم للصفحة
-        window.addEventListener('load', init);
+        async function fetchAndDisplayFriends() {
+            usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحادثات...</div>';
 
-        // (اختياري) إرسال نبض نشاط عند عودة المستخدم من الخلفية
-        window.addEventListener('focus', () => {
-            fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
+            try {
+                // 1. جلب ID المستخدم الحالي
+                const myProfileResponse = await fetch('/api/profile');
+                if (myProfileResponse.ok) {
+                    const myProfile = await myProfileResponse.json();
+                    currentUserId = myProfile.id;
+                } 
+
+                // 2. جلب قائمة الأصدقاء (المحادثات)
+                const response = await fetch('/api/users'); // now returns friends only with is_online
+                const result = await response.json();
+                
+                usersListContainer.innerHTML = ''; // مسح رسالة التحميل
+                
+                if (response.ok && result.ok) {
+                    let users = result.users || [];
+                    
+                    if (users.length === 0) {
+                        usersListContainer.innerHTML = '<div class="text-center text-gray-500 p-4">ليس لديك محادثات بعد.</div>';
+                        return;
+                    }
+                    
+                    // ترتيب: غير المقروء أولاً ثم حسب آخر رسالة
+                    users.sort((a, b) => {
+                        const aUnread = a.unread_count || 0;
+                        const bUnread = b.unread_count || 0;
+                        if (aUnread !== bUnread) return bUnread - aUnread;
+                        const aTime = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
+                        const bTime = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
+                        return bTime - aTime;
+                    });
+
+                    users.forEach(user => {
+                        usersListContainer.innerHTML += createUserCard(user, currentUserId);
+                    });
+
+                    // بعد العرض، حدّث شعارات التوثيق
+                    updateVerifiedBadges();
+
+                } else {
+                    usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">فشل في جلب المحادثات.</div>';
+                }
+            } catch (error) {
+                console.error('Error fetching friends:', error);
+                usersListContainer.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في الاتصال بالخادم.</div>';
+            }
+        }
+        
+        // جلب صورة الملف الشخصي للمستخدم الحالي في النافبار
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/profile')
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const profilePicElement = document.getElementById('userProfilePic');
+                    if (data && data.profile_picture_url) {
+                        profilePicElement.src = data.profile_picture_url;
+                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                        currentUserId = data.id;
+                    }
+                }).catch(console.error);
+                
+            fetchAndDisplayFriends();
+            
+            // تحديث قائمة المحادثات كل 10 ثواني (أثناء التواجد في الصفحة)
+            setInterval(fetchAndDisplayFriends, 10000);
+
+            // initial friend-requests badge fetch
+            updateFriendReqBadge();
         });
 
-    </script>
+        async function updateFriendReqBadge() {
+            try {
+                const r = await fetch('/api/friends/requests_count', { credentials: 'same-origin' });
+                const j = await r.json();
+                if (r.ok && j.ok) {
+                    let badge = document.getElementById('friendReqBadgeHeader');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.id = 'friendReqBadgeHeader';
+                        badge.className = 'friend-req-badge';
+                        badge.style.display = 'none';
+                        document.getElementById('profileMenuButton').appendChild(badge);
+                    }
+                    if (j.count > 0) {
+                        badge.style.display = 'inline-flex';
+                        badge.textContent = j.count > 99 ? '99+' : String(j.count);
+                    } else badge.style.display = 'none';
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        // listen to SSE notifications to update badge live
+        (function setupNotifSSEUsers() {
+          if (!window.EventSource) return;
+          const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+          es.addEventListener('notifications', (e) => {
+            try {
+              const payload = JSON.parse(e.data);
+              const pendingFR = payload.pending_friend_requests_count || 0;
+              let badge = document.getElementById('friendReqBadgeHeader');
+              if (!badge) {
+                badge = document.createElement('span');
+                badge.id = 'friendReqBadgeHeader';
+                badge.className = 'friend-req-badge';
+                badge.style.display = 'none';
+                document.getElementById('profileMenuButton').appendChild(badge);
+              }
+              if (pendingFR > 0) { badge.style.display = 'inline-flex'; badge.textContent = pendingFR > 99 ? '99+' : String(pendingFR); }
+              else badge.style.display = 'none';
+            } catch (err) { console.error('SSE parse error', err); }
+          });
+          es.addEventListener('error', (err) => { console.warn('Notifications SSE error', err); });
+        })();
+
+        // ----------------- VERIFIED BADGES HELPERS -----------------
+        // Fetch profile for each placeholder and insert badge if is_verified
+        async function updateVerifiedBadges() {
+          const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
+          if (placeholders.length === 0) return;
+          await Promise.all(placeholders.map(async ph => {
+            const uid = ph.dataset.userId;
+            if (!uid) return;
+            try {
+              const res = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' });
+              if (!res.ok) return;
+              const data = await res.json();
+              if (data && data.ok && data.is_verified) {
+                const img = document.createElement('img');
+                img.src = VERIFIED_IMG_URL;
+                img.alt = 'موثق';
+                img.title = 'موثق';
+                img.className = 'verified-badge-img';
+                ph.replaceWith(img);
+              } else {
+                ph.remove();
+              }
+            } catch (e) {
+              ph.remove();
+            }
+          }));
+        }
+
+      </script>
 </body>
 </html>
