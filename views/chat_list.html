@@ -449,9 +449,23 @@
         }
 
         /* Comments UI tweaks */
-        .comment-item { padding: 8px; border-radius: 12px; background: #131313; border: 1px solid #222; }
+        .comment-item { 
+            padding: 12px; 
+            border-radius: 12px; 
+            background: rgba(30, 30, 30, 0.7); 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 8px;
+        }
         .comment-actions button { font-size: 12px; }
-        .reply-item { margin-right: 40px; margin-top: 6px; background: #0f1416; padding: 6px; border-radius: 10px; border: 1px solid #222; }
+        .reply-item { 
+            margin-right: 40px; 
+            margin-top: 6px; 
+            background: rgba(20, 20, 20, 0.8); 
+            padding: 10px; 
+            border-radius: 10px; 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            border-right: 3px solid #3b82f6;
+        }
         .small-avatar { width: 28px; height: 28px; border-radius: 999px; }
         .like-count { font-weight: 700; color: #9ca3af; font-size: 12px; }
         /* شارة التحقق داخل التعليقات في الهوم */
@@ -577,6 +591,56 @@
 
         /* hide the old controls bar to keep the UI minimal */
         [id^="controls-bar-"] { display: none !important; }
+
+        /* New styles for unified comment/reply input */
+        .reply-section {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .reply-input-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        
+        .reply-input-container input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .reply-input-container button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .reply-input-container button:hover {
+            background: #2563eb;
+        }
+        
+        /* Heart button always red */
+        .heart-btn {
+            color: #ef4444 !important;
+        }
+        
+        .heart-btn i {
+            color: #ef4444 !important;
+        }
 
     </style>
 </head>
@@ -1277,8 +1341,6 @@ function handleNotifClick(el) {
             if (event && event.stopPropagation) event.stopPropagation();
             const video = document.getElementById(`video-${postId}`);
             const playOverlay = document.getElementById(`play-overlay-${postId}`);
-            // const controlIcon = document.getElementById(`control-icon-${postId}`);
-            // const controlsBar = document.getElementById(`controls-bar-${postId}`);
 
             if (!video) return;
 
@@ -1416,8 +1478,8 @@ function handleNotifClick(el) {
                 }
             }
 
-            const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400';
-            const likeButtonClass = post.is_liked ? 'text-red-500' : 'text-gray-400';
+            const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-red-500'; // Always red
+            const likeButtonClass = 'text-red-500'; // Always red
             const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online_dot_small" title="متصل الآن"></span>` : '';
             const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
 
@@ -1455,7 +1517,7 @@ function handleNotifClick(el) {
                     </div>
 
                     <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
-                        <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button gap-2" 
+                        <button class="flex items-center ${likeButtonClass} hover:text-red-600 transition duration-300 w-full justify-center post-like-button gap-2 heart-btn" 
                                 data-is-liked="${post.is_liked}" 
                                 onclick="handleLike('${post.postId}', this)">
                             <i class="${likeIconClass} ml-2 like-icon text-lg"></i>
@@ -1509,70 +1571,86 @@ function handleNotifClick(el) {
         }
 
         // Create comment HTML (uses enriched comment object returned by server)
-function createCommentHtml(comment, postId) {
-    const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
-    // Force heart color to red as requested (outline when not liked, filled when liked)
-    const likedClass = 'text-red-400';
-    const likeIcon = comment.is_liked ? 'fas' : 'far';
-    const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
-        <div class="reply-item flex items-start gap-2">
-            <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
-            <div class="flex-1">
-                <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
-            </div>
-        </div>
-    `).join('') : '';
-
-    // badge container: important -> updateCommentsVerification() سيملؤه بصورة الشارة إذا كان المستخدم موثق
-    const badgeContainer = `<span class="badge-container" data-badge-user-id="${escapeAttr(comment.user.userId)}"></span>`;
-
-    return `
-        <div class="comment-item" id="comment-${comment.commentId}">
-            <div class="flex items-start gap-3">
-                <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
-                <div class="flex-1">
-                    <div class="flex items-center justify-between gap-2">
-                        <div>
-                            <div class="text-sm font-bold text-white">
-                                ${escapeHtml(comment.user.username)} ${badgeContainer}
+        function createCommentHtml(comment, postId) {
+            const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
+            // Heart always red - solid when liked, outline when not liked
+            const likedClass = 'text-red-500';
+            const likeIcon = comment.is_liked ? 'fas' : 'far';
+            
+            // تنسيق الردود بطريقة أكثر أناقة
+            const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
+                <div class="reply-item">
+                    <div class="flex items-start gap-2">
+                        <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="text-xs font-bold text-white">${escapeHtml(r.username)}</div>
+                                    <span class="badge-container" data-badge-user-id="${escapeAttr(r.userId || '')}"></span>
+                                </div>
+                                <div class="text-xs text-gray-500">${new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</div>
                             </div>
-                            <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
-                        </div>
-                        <div class="flex items-center gap-2 comment-actions">
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass}" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
-                                <i class="${likeIcon} fa-heart"></i>
-                                <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
-                            </button>
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyBox('${comment.commentId}')">
-                                <i class="fas fa-reply"></i>
-                                <span class="text-xs">رد</span>
-                            </button>
-                            <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-400 hidden" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
-                                <i class="fas fa-angle-down"></i>
-                                <span class="text-xs">عرض الردود</span>
-                            </button>
+                            <div class="text-sm text-gray-200 mt-1">${escapeHtml(r.content)}</div>
                         </div>
                     </div>
-                    <div class="mt-2 text-sm text-gray-200">${escapeHtml(comment.content)}</div>
-
-                    <div id="replies-container-${comment.commentId}" class="mt-3 space-y-2">
-                        ${repliesPreviewHtml}
-                    </div>
-
-                    <div id="reply-box-${comment.commentId}" class="mt-2 hidden">
-                        <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl">
-                            <img src="${document.getElementById('userProfilePic').src}" class="w-7 h-7 rounded-full" alt="me">
-                            <input id="reply-input-${comment.commentId}" class="flex-1 bg-transparent text-sm text-white outline-none" placeholder="أكتب رد..." />
-                            <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReply('${postId}', '${comment.commentId}')"><i class="fas fa-paper-plane"></i></button>
-                        </div>
-                    </div>
-
                 </div>
-            </div>
-        </div>
-    `;
-}
+            `).join('') : '';
+
+            // badge container: important -> updateCommentsVerification() سيملؤه بصورة الشارة إذا كان المستخدم موثق
+            const badgeContainer = `<span class="badge-container" data-badge-user-id="${escapeAttr(comment.user.userId)}"></span>`;
+
+            return `
+                <div class="comment-item" id="comment-${comment.commentId}">
+                    <div class="flex items-start gap-3">
+                        <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-white">
+                                        ${escapeHtml(comment.user.username)} ${badgeContainer}
+                                    </div>
+                                    <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
+                                </div>
+                                <div class="flex items-center gap-2 comment-actions">
+                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass} heart-btn" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
+                                        <i class="${likeIcon} fa-heart"></i>
+                                        <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
+                                    </button>
+                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="openReplyInput('${comment.commentId}')">
+                                        <i class="fas fa-reply"></i>
+                                        <span class="text-xs">رد</span>
+                                    </button>
+                                    ${(comment.repliesCount || 0) > (comment.recentReplies ? comment.recentReplies.length : 0) ? 
+                                        `<button class="flex items-center gap-1 px-2 py-1 rounded-full text-blue-400" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                                            <i class="fas fa-angle-down"></i>
+                                            <span class="text-xs">عرض الردود (${comment.repliesCount})</span>
+                                        </button>` : ''}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-200">${escapeHtml(comment.content)}</div>
+
+                            <div id="replies-container-${comment.commentId}" class="mt-3 space-y-2">
+                                ${repliesPreviewHtml}
+                            </div>
+
+                            <!-- حقل الرد الموحد - نفس حقل التعليق -->
+                            <div id="reply-input-section-${comment.commentId}" class="reply-section hidden">
+                                <div class="reply-input-container">
+                                    <img src="${document.getElementById('userProfilePic').src}" class="w-7 h-7 rounded-full" alt="me">
+                                    <input id="reply-input-${comment.commentId}" 
+                                           class="flex-1 bg-transparent text-sm text-white outline-none" 
+                                           placeholder="أكتب رد..." 
+                                           onkeypress="if(event.key === 'Enter') postReply('${postId}', '${comment.commentId}')" />
+                                    <button class="px-3 py-1 bg-blue-600 rounded-md hover:bg-blue-700" onclick="postReply('${postId}', '${comment.commentId}')">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
 
         // Toggle like on a comment (frontend)
         async function toggleCommentLike(postId, commentId, btnEl) {
@@ -1600,8 +1678,8 @@ function createCommentHtml(comment, postId) {
         }
 
         // Open reply input under a comment
-        function openReplyBox(commentId) {
-            const box = document.getElementById(`reply-box-${commentId}`);
+        function openReplyInput(commentId) {
+            const box = document.getElementById(`reply-input-section-${commentId}`);
             if (!box) return;
             box.classList.toggle('hidden');
             const input = document.getElementById(`reply-input-${commentId}`);
@@ -1614,8 +1692,13 @@ function createCommentHtml(comment, postId) {
             if (!input) return;
             const content = input.value.trim();
             if (!content) return;
-            const btn = input.nextElementSibling; // not reliable cross markup; disable via general approach
+            
+            // إظهار حالة التحميل
+            const originalBtn = input.nextElementSibling;
+            const originalHTML = originalBtn.innerHTML;
+            originalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             input.disabled = true;
+            
             try {
                 const res = await fetch(`/api/posts/${postId}/comments/${commentId}/reply`, {
                     method: 'POST',
@@ -1625,15 +1708,21 @@ function createCommentHtml(comment, postId) {
                 });
                 const data = await res.json();
                 if (res.ok && data.ok) {
-                    // Refresh comments list
+                    // إخفاء حقل الرد
+                    document.getElementById(`reply-input-section-${commentId}`).classList.add('hidden');
+                    input.value = '';
+                    
+                    // تحديث قائمة التعليقات
                     await fetchAndDisplayComments(postId);
                 } else {
-                    alert(data.error || 'فشل في إرسال الرد');
+                    showToast(data.error || 'فشل في إرسال الرد');
+                    originalBtn.innerHTML = originalHTML;
                     input.disabled = false;
                 }
             } catch (e) {
                 console.error(e);
-                alert('فشل في الاتصال');
+                showToast('فشل في الاتصال');
+                originalBtn.innerHTML = originalHTML;
                 input.disabled = false;
             }
         }
@@ -1642,26 +1731,38 @@ function createCommentHtml(comment, postId) {
         async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
             try {
                 triggerBtn.disabled = true;
+                const originalText = triggerBtn.innerHTML;
+                triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
                 const res = await fetch(`/api/posts/${postId}/comments/${commentId}/replies`, { credentials: 'same-origin' });
                 const data = await res.json();
                 if (res.ok && data.ok) {
                     const container = document.getElementById(`replies-container-${commentId}`);
                     if (container) {
                         container.innerHTML = data.replies.map(r => `
-                            <div class="reply-item flex items-start gap-2">
-                                <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
-                                <div class="flex-1">
-                                    <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                                    <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                            <div class="reply-item">
+                                <div class="flex items-start gap-2">
+                                    <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center">
+                                                <div class="text-xs font-bold text-white">${escapeHtml(r.username)}</div>
+                                            </div>
+                                            <div class="text-xs text-gray-500">${new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</div>
+                                        </div>
+                                        <div class="text-sm text-gray-200 mt-1">${escapeHtml(r.content)}</div>
+                                    </div>
                                 </div>
                             </div>
                         `).join('');
                     }
+                    // إخفاء زر "عرض الردود" بعد عرضها جميعاً
+                    triggerBtn.style.display = 'none';
                 }
             } catch (e) {
                 console.error(e);
-            } finally {
                 triggerBtn.disabled = false;
+                triggerBtn.innerHTML = originalText;
             }
         }
 
@@ -1709,76 +1810,76 @@ function createCommentHtml(comment, postId) {
         }
 
        // الرابط الموحد للصورة الافتراضية
-const DEFAULT_FAM_IMG = "https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop";
+        const DEFAULT_FAM_IMG = "https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop";
 
-function renderFamilyCard(f) {
-    // التحقق: إذا كانت الصورة مفقودة أو تحتوي على رابط Placeholder قديم، استخدم الصورة الموحدة
-    const imgUrl = (f.imageUrl && f.imageUrl.length > 0 && !f.imageUrl.includes('placeholder')) 
-                   ? f.imageUrl 
-                   : DEFAULT_FAM_IMG;
-    
-    const members = f.membersCount || 0;
-    const isMember = f.is_member || false;
-    
-    // شارات الحالة (عضو أو مقفل)
-    const badge = isMember 
-        ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` 
-        : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
+        function renderFamilyCard(f) {
+            // التحقق: إذا كانت الصورة مفقودة أو تحتوي على رابط Placeholder قديم، استخدم الصورة الموحدة
+            const imgUrl = (f.imageUrl && f.imageUrl.length > 0 && !f.imageUrl.includes('placeholder')) 
+                           ? f.imageUrl 
+                           : DEFAULT_FAM_IMG;
+            
+            const members = f.membersCount || 0;
+            const isMember = f.is_member || false;
+            
+            // شارات الحالة (عضو أو مقفل)
+            const badge = isMember 
+                ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` 
+                : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
 
-    return `
-        <div class="family-card" data-family-id="${escapeAttr(f.familyId || f.id)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId || f.id)}', ${isMember})">
-            <img src="${escapeHtml(imgUrl)}" 
-                 alt="${escapeHtml(f.name)}" 
-                 onerror="this.onerror=null;this.src='${DEFAULT_FAM_IMG}';">
-            <div class="meta">
-                <div class="name" title="${escapeHtml(f.name || '')}">${escapeHtml(f.name)}</div>
-                <div class="count">${members} عضو • ${badge}</div>
-            </div>
-        </div>
-    `;
-}
+            return `
+                <div class="family-card" data-family-id="${escapeAttr(f.familyId || f.id)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId || f.id)}', ${isMember})">
+                    <img src="${escapeHtml(imgUrl)}" 
+                         alt="${escapeHtml(f.name)}" 
+                         onerror="this.onerror=null;this.src='${DEFAULT_FAM_IMG}';">
+                    <div class="meta">
+                        <div class="name" title="${escapeHtml(f.name || '')}">${escapeHtml(f.name)}</div>
+                        <div class="count">${members} عضو • ${badge}</div>
+                    </div>
+                </div>
+            `;
+        }
 
-async function fetchAndDisplayFamilies() {
-    if (!familiesRow) return;
-    
-    // حالة التحميل
-    familiesRow.innerHTML = '<div class="text-gray-400 p-4">جاري تحميل العائلات...</div>';
-    
-    try {
-        // دائماً اظهر بطاقة "إنشاء عائلة" في البداية
-        const createHtml = renderCreateFamilyCard();
-        let html = createHtml;
-
-        // محاولة جلب كل العائلات
-        const res = await fetch('/api/families', { credentials: 'same-origin' });
-        const data = await res.json();
-
-        if (res.ok && data.ok) {
-            const families = data.families || [];
-            const famHtml = families.map(f => renderFamilyCard(f)).join('');
-            html += famHtml;
-        } else {
-            // حالة احتياطية (Fallback): جلب عائلاتي فقط في حال فشل المسار العام
+        async function fetchAndDisplayFamilies() {
+            if (!familiesRow) return;
+            
+            // حالة التحميل
+            familiesRow.innerHTML = '<div class="text-gray-400 p-4">جاري تحميل العائلات...</div>';
+            
             try {
-                const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
-                const d2 = await res2.json();
-                if (res2.ok && d2.ok) {
-                    const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
-                    html += famHtml2;
+                // دائماً اظهر بطاقة "إنشاء عائلة" في البداية
+                const createHtml = renderCreateFamilyCard();
+                let html = createHtml;
+
+                // محاولة جلب كل العائلات
+                const res = await fetch('/api/families', { credentials: 'same-origin' });
+                const data = await res.json();
+
+                if (res.ok && data.ok) {
+                    const families = data.families || [];
+                    const famHtml = families.map(f => renderFamilyCard(f)).join('');
+                    html += famHtml;
+                } else {
+                    // حالة احتياطية (Fallback): جلب عائلاتي فقط في حال فشل المسار العام
+                    try {
+                        const res2 = await fetch('/api/families/my', { credentials: 'same-origin' });
+                        const d2 = await res2.json();
+                        if (res2.ok && d2.ok) {
+                            const famHtml2 = d2.families.map(f => renderFamilyCard({ ...f, is_member: true })).join('');
+                            html += famHtml2;
+                        }
+                    } catch (e) {
+                        console.error('Fallback fetch failed', e);
+                    }
                 }
+                
+                familiesRow.innerHTML = html;
+
             } catch (e) {
-                console.error('Fallback fetch failed', e);
+                console.error('Failed to load families', e);
+                // في حال الخطأ الكلي، اظهر بطاقة الإنشاء فقط
+                familiesRow.innerHTML = renderCreateFamilyCard();
             }
         }
-        
-        familiesRow.innerHTML = html;
-
-    } catch (e) {
-        console.error('Failed to load families', e);
-        // في حال الخطأ الكلي، اظهر بطاقة الإنشاء فقط
-        familiesRow.innerHTML = renderCreateFamilyCard();
-    }
-}
 
         function onCreateFamilyClick() {
             // simply navigate to create-family page (server view)
@@ -2087,16 +2188,12 @@ async function fetchAndDisplayFamilies() {
                     }
 
                     if (result.action === 'liked') {
-                        likeIcon.classList.remove('far', 'text-gray-400');
-                        likeIcon.classList.add('fas', 'text-red-500');
-                        buttonElement.classList.remove('text-gray-400');
-                        buttonElement.classList.add('text-red-500');
+                        likeIcon.classList.remove('far');
+                        likeIcon.classList.add('fas');
                         buttonElement.dataset.isLiked = 'true';
                     } else {
-                        likeIcon.classList.remove('fas', 'text-red-500');
-                        likeIcon.classList.add('far', 'text-gray-400');
-                        buttonElement.classList.remove('text-red-500');
-                        buttonElement.classList.add('text-gray-400');
+                        likeIcon.classList.remove('fas');
+                        likeIcon.classList.add('far');
                         buttonElement.dataset.isLiked = 'false';
                     }
                     
