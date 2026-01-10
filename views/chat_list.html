@@ -563,11 +563,6 @@
             transition: opacity 0.18s;
             z-index: 30;
         }
-        .video-play-overlay i {
-            font-size: 54px;
-            color: rgba(255,255,255,0.94);
-            text-shadow: 0 6px 24px rgba(0,0,0,0.6);
-        }
         .video-play-overlay.hidden { opacity: 0; pointer-events: none; }
 
         /* fullscreen button (small) */
@@ -705,7 +700,6 @@
         <div id="familiesWrapper" class="max-w-xl mx-auto mt-4">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-white font-bold">العائلات</h2>
-                <!-- استبدل رابط إنشاء عائلة بزر عرض كل العائلات -->
                 <button id="viewAllFamiliesBtn" onclick="window.location.href='/families'">عرض كل العائلات</button>
             </div>
             <div id="familiesRow" class="families-row">
@@ -2088,12 +2082,33 @@ function handleNotifClick(el) {
                 postsFeed.innerHTML = '';
                 
                 if (postsRes.ok) {
-                    const posts = postsRes.posts || [];
+                    let posts = postsRes.posts || [];
                     
-                    // خلط المنشورات عشوائياً
-                    const shuffledPosts = shuffleArray([...posts]);
-                    
-                    if (shuffledPosts.length === 0) {
+                    // ----------------------------------------------------------------
+                    // التعديل: ترتيب المنشورات
+                    // 1. فرز جميع المنشورات حسب عدد الإعجابات (الأعلى أولاً)
+                    // 2. إذا كان هناك مستخدم حالي، نقل منشوراته إلى قمة القائمة
+                    // ----------------------------------------------------------------
+
+                    // أولاً: الترتيب حسب اللايكات (تنازلياً)
+                    posts.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+
+                    // ثانياً: وضع منشوراتي في المقدمة (لضمان رؤية المنشور الجديد فوراً)
+                    if (currentUserId) {
+                        const myPosts = posts.filter(p => p.userId === currentUserId);
+                        // ترتيب منشوراتي زمنياً (الأحدث أولاً)
+                        myPosts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                        
+                        const otherPosts = posts.filter(p => p.userId !== currentUserId);
+                        // otherPosts مرتبة بالفعل حسب اللايكات من الخطوة الأولى
+
+                        // دمج القائمتين: منشوراتي أولاً، ثم البقية حسب اللايكات
+                        posts = [...myPosts, ...otherPosts];
+                    }
+
+                    // تم إزالة الكود القديم للخلط العشوائي (shuffleArray)
+
+                    if (posts.length === 0) {
                         // Even if no posts, show reels if available
                         if(reelsHtml) postsFeed.innerHTML = reelsHtml;
                         postsFeed.innerHTML += '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
@@ -2102,7 +2117,7 @@ function handleNotifClick(el) {
                         return;
                     }
                     
-                    const userIds = [...new Set(shuffledPosts.map(p => p.userId))];
+                    const userIds = [...new Set(posts.map(p => p.userId))];
 
                     const profileMap = {};
                     try {
@@ -2121,7 +2136,7 @@ function handleNotifClick(el) {
 
                     const audioPostsToInit = [];
 
-                    shuffledPosts.forEach((post, index) => {
+                    posts.forEach((post, index) => {
                         const prof = profileMap[post.userId];
                         if (prof) {
                             post.user = post.user || {};
