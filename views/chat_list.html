@@ -436,11 +436,11 @@
           border-width: 1.5px;
         }
 
-        /* VERIFIED BADGE - الجديدة */
+        /* VERIFIED BADGE */
         .verified-badge-img {
           display: inline-block;
-          width: 16px;
-          height: 16px;
+          width: 14px;
+          height: 14px;
           border-radius: 50%;
           margin-right: 4px;
           margin-left: 2px;
@@ -471,8 +471,8 @@
         /* شارة التحقق داخل التعليقات في الهوم */
         .badge-container .verified-badge-img,
         .comment-item .verified-badge-img {
-          width: 14px;
-          height: 14px;
+          width: 12px;
+          height: 12px;
           margin-left: 6px;
           vertical-align: middle;
         }
@@ -607,39 +607,6 @@
             background: rgba(59, 130, 246, 0.1);
         }
 
-        /* جديد: زر التنقل بين أنواع المحتوى */
-        .content-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            padding: 5px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            overflow-x: auto;
-        }
-        
-        .content-tab {
-            padding: 8px 16px;
-            border-radius: 10px;
-            background: transparent;
-            color: #9ca3af;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            white-space: nowrap;
-            transition: all 0.2s ease;
-        }
-        
-        .content-tab.active {
-            background: #3b82f6;
-            color: white;
-        }
-        
-        .content-tab:hover:not(.active) {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-        }
-
     </style>
 </head>
 <body class="min-h-screen">
@@ -745,25 +712,7 @@
                 </div>
         </div>
 
-        <!-- أزرار التبويب للتحكم في عرض المحتوى -->
-        <div id="contentTabsContainer" class="max-w-xl mx-auto mt-6 mb-4">
-            <div class="content-tabs">
-                <button class="content-tab active" onclick="switchContentTab('mixed')">
-                    <i class="fas fa-random ml-2"></i> مختلط
-                </button>
-                <button class="content-tab" onclick="switchContentTab('top')">
-                    <i class="fas fa-fire ml-2"></i> الأعلى
-                </button>
-                <button class="content-tab" onclick="switchContentTab('newest')">
-                    <i class="fas fa-bolt ml-2"></i> الأحدث
-                </button>
-                <button class="content-tab" onclick="switchContentTab('reels')">
-                    <i class="fas fa-clapperboard ml-2"></i> ريلز فقط
-                </button>
-            </div>
-        </div>
-
-        <div id="postsFeed" class="max-w-xl mx-auto mt-4 space-y-4">
+        <div id="postsFeed" class="max-w-xl mx-auto mt-6 space-y-4">
         </div>
     </main>
     
@@ -975,13 +924,16 @@ function handleNotifClick(el) {
         let currentReplyingTo = null;
         let currentReplyCommentId = null;
 
-        // نوع المحتوى الحالي
-        let currentContentType = 'mixed';
-        let allPostsCache = [];
-        let allReelsCache = [];
+        // دالة لتوليد ترتيب عشوائي
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
 
-        // شارة التحقق الجديدة
-        const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768032345/post_media/1768032345297-Picsart_26-01-02_19-12-04-799.png";
+        const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1766696799/post_media/1766696799284-verified.png";
         const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
         const CREATE_FAMILY_BG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -1111,12 +1063,6 @@ function handleNotifClick(el) {
                     const el = document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`);
                     if (el) el.remove();
                     deleteModal.classList.add('hidden');
-                    
-                    // تحديث الكاش بعد الحذف
-                    allPostsCache = allPostsCache.filter(p => p.postId !== currentPostIdToDelete);
-                    
-                    // إعادة عرض المحتوى
-                    displayContentBasedOnType();
                 } else {
                     deleteMessage.textContent = result.error || 'فشل الحذف.';
                     deleteMessage.classList.remove('hidden');
@@ -1538,7 +1484,7 @@ function handleNotifClick(el) {
             `;
 
             return `
-                <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}" data-likes="${post.likes}" data-timestamp="${post.timestamp}">
+                <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center">
                             <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
@@ -2001,9 +1947,8 @@ function handleNotifClick(el) {
                 if(!res.ok) return [];
                 const data = await res.json();
                 if(data.ok && data.reels && data.reels.length > 0) {
-                    // تخزين الريلز في الكاش
-                    allReelsCache = data.reels;
-                    return allReelsCache;
+                    // خلط الريلز عشوائياً
+                    return shuffleArray(data.reels);
                 }
             } catch(e) { console.error('fetch reels error', e); }
             return [];
@@ -2126,258 +2071,40 @@ function handleNotifClick(el) {
             }
         }
 
-        // دالة لتوليد ترتيب عشوائي مع تفضيل المنشورات الحديثة
-        function shuffleArrayWithWeight(array, weightKey = 'timestamp') {
-            const now = Date.now();
-            const shuffled = [...array];
-            
-            for (let i = shuffled.length - 1; i > 0; i--) {
-                // حساب وزن عشوائي مع تفضيل المحتوى الحديث
-                const weight = Math.random() * (shuffled[i][weightKey] ? (now - new Date(shuffled[i][weightKey]).getTime()) / (1000 * 60 * 60 * 24) : 1);
-                const j = Math.floor(Math.random() * (i + 1));
-                
-                // تبادل العناصر مع مراعاة الوزن
-                if (weight < Math.random() * 2) { // تفضيل المحتوى الحديث
-                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-                }
-            }
-            return shuffled;
-        }
-
-        // دالة لمزج المنشورات والريلز معاً
-        function mixPostsAndReels(posts, reels) {
-            const mixed = [];
-            
-            // إضافة المنشورات
-            posts.forEach(post => {
-                mixed.push({
-                    type: 'post',
-                    data: post,
-                    timestamp: post.timestamp,
-                    weight: post.likes || 0
-                });
-            });
-            
-            // إضافة الريلز
-            reels.forEach(reel => {
-                mixed.push({
-                    type: 'reel',
-                    data: reel,
-                    timestamp: reel.createdAt || Date.now(),
-                    weight: reel.likes || reel.views || 0
-                });
-            });
-            
-            // ترتيب حسب الوزن (الإعجابات/المشاهدات) مع عشوائية
-            return mixed.sort((a, b) => {
-                // تفضيل المحتوى ذو الإعجابات الأعلى
-                const weightDiff = b.weight - a.weight;
-                
-                // إضافة بعض العشوائية (30%)
-                const randomFactor = Math.random() * 0.3;
-                
-                // تفضيل المحتوى الحديث (30%)
-                const timeDiff = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-                const timeFactor = timeDiff / (1000 * 60 * 60 * 24 * 7); // أسابيع
-                
-                return weightDiff * 0.4 + randomFactor * 100 + timeFactor * 0.3;
-            });
-        }
-
-        // عرض المحتوى بناءً على النوع المختار
-        function displayContentBasedOnType() {
-            postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحتوى...</div>';
-            
-            setTimeout(() => {
-                let contentToDisplay = '';
-                const audioPostsToInit = [];
-                
-                if (currentContentType === 'reels') {
-                    // عرض الريلز فقط
-                    if (allReelsCache.length > 0) {
-                        // خلط الريلز عشوائياً مع تفضيل الحديث
-                        const shuffledReels = shuffleArrayWithWeight([...allReelsCache]);
-                        
-                        shuffledReels.forEach(reel => {
-                            contentToDisplay += `
-                                <div class="glass-post-card p-4 rounded-xl shadow-lg">
-                                    <div class="flex items-start justify-between mb-3">
-                                        <div class="flex items-center">
-                                            <div class="avatar-with-dot">
-                                                <img src="${reel.user?.profile_picture_url || DEFAULT_AVATAR}" alt="${reel.user?.username || 'مستخدم'}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
-                                            </div>
-                                            <div>
-                                                <div class="text-white font-semibold">${reel.user?.username || 'مستخدم'}</div>
-                                                <p class="text-gray-400 text-xs">ريلز</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="reel-card-item" style="width:100%;height:400px;margin:10px 0;" onclick="window.location.href='/reels?id=${escapeAttr(reel.reelId)}'">
-                                        <img src="${reel.thumbnailUrl || reel.posterUrl || 'https://via.placeholder.com/600x800?text=Reel'}" 
-                                             alt="ريلز" 
-                                             class="w-full h-full object-cover">
-                                        <div class="reel-play-icon"><i class="fas fa-play"></i></div>
-                                        <div class="reel-user-avatar">
-                                            <img src="${reel.user?.profile_picture_url || DEFAULT_AVATAR}" class="w-full h-full rounded-full object-cover">
-                                        </div>
-                                        <div class="reel-card-overlay">
-                                            <span class="text-white text-sm font-bold">@${reel.user?.username || 'مستخدم'}</span>
-                                            <span class="text-gray-300 text-xs mt-1">${reel.likes || 0} إعجاب • ${reel.views || 0} مشاهدة</span>
-                                        </div>
-                                    </div>
-                                    <div class="mt-3 text-gray-200">${reel.caption || ''}</div>
-                                </div>
-                            `;
-                        });
-                    } else {
-                        contentToDisplay = '<div class="text-center text-gray-500 p-4">لا توجد ريلز لعرضها.</div>';
-                    }
-                } 
-                else if (currentContentType === 'top') {
-                    // عرض الأعلى حسب الإعجابات
-                    const sortedPosts = [...allPostsCache].sort((a, b) => (b.likes || 0) - (a.likes || 0));
-                    
-                    if (sortedPosts.length === 0) {
-                        contentToDisplay = '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها.</div>';
-                    } else {
-                        sortedPosts.forEach(post => {
-                            contentToDisplay += createPostCard(post);
-                            
-                            if (post.media && post.media.type === 'audio') {
-                                audioPostsToInit.push({ postId: post.postId, url: post.media.url });
-                            }
-                        });
-                    }
-                }
-                else if (currentContentType === 'newest') {
-                    // عرض الأحدث أولاً
-                    const sortedPosts = [...allPostsCache].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-                    
-                    if (sortedPosts.length === 0) {
-                        contentToDisplay = '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها.</div>';
-                    } else {
-                        sortedPosts.forEach(post => {
-                            contentToDisplay += createPostCard(post);
-                            
-                            if (post.media && post.media.type === 'audio') {
-                                audioPostsToInit.push({ postId: post.postId, url: post.media.url });
-                            }
-                        });
-                    }
-                }
-                else {
-                    // مختلط: مزج المنشورات والريلز
-                    const mixedContent = mixPostsAndReels(allPostsCache, allReelsCache);
-                    
-                    if (mixedContent.length === 0) {
-                        contentToDisplay = '<div class="text-center text-gray-500 p-4">لا توجد محتويات لعرضها.</div>';
-                    } else {
-                        let reelCount = 0;
-                        
-                        mixedContent.forEach((item, index) => {
-                            if (item.type === 'post') {
-                                contentToDisplay += createPostCard(item.data);
-                                
-                                if (item.data.media && item.data.media.type === 'audio') {
-                                    audioPostsToInit.push({ postId: item.data.postId, url: item.data.media.url });
-                                }
-                                
-                                // إضافة الريلز بعد أول منشورين
-                                if (index === 1 && allReelsCache.length > 0 && reelCount === 0) {
-                                    const reelsHtml = createReelsTrayHtml(allReelsCache.slice(0, 5));
-                                    if (reelsHtml) {
-                                        contentToDisplay += reelsHtml;
-                                        reelCount += 5;
-                                    }
-                                }
-                            } else if (item.type === 'reel' && reelCount < 10) {
-                                // عرض بعض الريلز في المزيج
-                                const reel = item.data;
-                                contentToDisplay += `
-                                    <div class="glass-post-card p-4 rounded-xl shadow-lg">
-                                        <div class="flex items-start justify-between mb-3">
-                                            <div class="flex items-center">
-                                                <div class="avatar-with-dot">
-                                                    <img src="${reel.user?.profile_picture_url || DEFAULT_AVATAR}" alt="${reel.user?.username || 'مستخدم'}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
-                                                </div>
-                                                <div>
-                                                    <div class="text-white font-semibold">${reel.user?.username || 'مستخدم'}</div>
-                                                    <p class="text-gray-400 text-xs">ريلز</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="reel-card-item" style="width:100%;height:400px;margin:10px 0;" onclick="window.location.href='/reels?id=${escapeAttr(reel.reelId)}'">
-                                            <img src="${reel.thumbnailUrl || reel.posterUrl || 'https://via.placeholder.com/600x800?text=Reel'}" 
-                                                 alt="ريلز" 
-                                                 class="w-full h-full object-cover">
-                                            <div class="reel-play-icon"><i class="fas fa-play"></i></div>
-                                            <div class="reel-user-avatar">
-                                                <img src="${reel.user?.profile_picture_url || DEFAULT_AVATAR}" class="w-full h-full rounded-full object-cover">
-                                            </div>
-                                            <div class="reel-card-overlay">
-                                                <span class="text-white text-sm font-bold">@${reel.user?.username || 'مستخدم'}</span>
-                                                <span class="text-gray-300 text-xs mt-1">${reel.likes || 0} إعجاب • ${reel.views || 0} مشاهدة</span>
-                                            </div>
-                                        </div>
-                                        <div class="mt-3 text-gray-200">${reel.caption || ''}</div>
-                                    </div>
-                                `;
-                                reelCount++;
-                            }
-                        });
-                    }
-                }
-                
-                postsFeed.innerHTML = contentToDisplay;
-                
-                // تهيئة مشغلات الصوت
-                setTimeout(() => {
-                    audioPostsToInit.forEach(ap => {
-                        initializePostWaveSurfer(ap.postId, ap.url);
-                    });
-                    
-                    // توليد الصور المصغرة للريلز
-                    if (currentContentType === 'mixed' || currentContentType === 'reels') {
-                        generateReelThumbnails();
-                    }
-                }, 100);
-                
-            }, 100);
-        }
-
-        // التبديل بين أنواع المحتوى
-        function switchContentTab(type) {
-            currentContentType = type;
-            
-            // تحديث الأزرار النشطة
-            document.querySelectorAll('.content-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            
-            // عرض المحتوى بناءً على النوع المختار
-            displayContentBasedOnType();
-        }
-
-        // Fetch and display posts (feed) - مع حفظ الكاش
+        // Fetch and display posts (feed) - مع خلط عشوائي
         async function fetchAndDisplayPosts() {
-            postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المحتوى...</div>';
+            postsFeed.innerHTML = '<div class="text-center text-gray-500 p-4"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>';
             
             try {
-                // جلب البيانات بالتوازي
+                // Parallel fetch: posts + reels
                 const [postsRes, reelsData] = await Promise.all([
                     fetch('/api/posts').then(r => r.ok ? r.json() : {ok:false}),
                     fetchReelsData()
                 ]);
+
+                // Prepare reels HTML if any
+                const reelsHtml = createReelsTrayHtml(reelsData);
                 
-                // حفظ البيانات في الكاش
+                postsFeed.innerHTML = '';
+                
                 if (postsRes.ok) {
-                    allPostsCache = postsRes.posts || [];
+                    const posts = postsRes.posts || [];
                     
-                    // إضافة المستخدمين المعتمدين
-                    const userIds = [...new Set(allPostsCache.map(p => p.userId))];
+                    // خلط المنشورات عشوائياً
+                    const shuffledPosts = shuffleArray([...posts]);
+                    
+                    if (shuffledPosts.length === 0) {
+                        // Even if no posts, show reels if available
+                        if(reelsHtml) postsFeed.innerHTML = reelsHtml;
+                        postsFeed.innerHTML += '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
+                        // after inserting, try generating thumbnails for reels
+                        setTimeout(generateReelThumbnails, 100);
+                        return;
+                    }
+                    
+                    const userIds = [...new Set(shuffledPosts.map(p => p.userId))];
+
                     const profileMap = {};
-                    
                     try {
                         const profilePromises = userIds.map(uid => fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' })
                                                             .then(r => r.ok ? r.json() : null)
@@ -2392,8 +2119,9 @@ function handleNotifClick(el) {
                         console.warn('Failed to fetch profiles for verification status', e);
                     }
 
-                    // تحديث حالة التحقق في الكاش
-                    allPostsCache.forEach(post => {
+                    const audioPostsToInit = [];
+
+                    shuffledPosts.forEach((post, index) => {
                         const prof = profileMap[post.userId];
                         if (prof) {
                             post.user = post.user || {};
@@ -2402,15 +2130,40 @@ function handleNotifClick(el) {
                             post.user = post.user || {};
                             post.user.is_verified = !!post.user.is_verified;
                         }
-                    });
-                }
-                
-                // عرض المحتوى بناءً على النوع الحالي
-                displayContentBasedOnType();
 
+                        // Append Post
+                        postsFeed.innerHTML += createPostCard(post);
+                        
+                        // Insert Reels Tray AFTER the first post (index 0)
+                        if (index === 0 && reelsHtml) {
+                            postsFeed.innerHTML += reelsHtml;
+                        }
+
+                        if (post.media && post.media.type === 'audio') {
+                            audioPostsToInit.push({ postId: post.postId, url: post.media.url });
+                        }
+                    });
+                    
+                    setTimeout(() => {
+                        audioPostsToInit.forEach(ap => {
+                            initializePostWaveSurfer(ap.postId, ap.url);
+                        });
+                        // after rendering reels, attempt thumbnail capture for any missing posters
+                        generateReelThumbnails();
+                    }, 100); 
+
+                } else {
+                    // if postsRes not ok, still render reels if available
+                    if (reelsHtml) {
+                        postsFeed.innerHTML = reelsHtml;
+                        setTimeout(generateReelThumbnails, 100);
+                    } else {
+                        postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
+                    }
+                }
             } catch (error) {
                 console.error('Error:', error);
-                postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المحتوى.</div>';
+                postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
             }
         }
         
@@ -2431,13 +2184,6 @@ function handleNotifClick(el) {
                     if (postCard) {
                         const likesSpan = postCard.querySelector('.flex.justify-between span:first-child');
                         if (likesSpan) likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
-                        
-                        // تحديث بيانات الإعجاب في الكاش
-                        const postIndex = allPostsCache.findIndex(p => p.postId === postId);
-                        if (postIndex !== -1) {
-                            allPostsCache[postIndex].likes = result.newLikes;
-                            allPostsCache[postIndex].is_liked = result.action === 'liked';
-                        }
                     }
 
                     if (result.action === 'liked') {
@@ -2461,20 +2207,6 @@ function handleNotifClick(el) {
             }
         }
         
-        // إضافة منشور جديد إلى البداية (عند إنشائه)
-        function addNewPostToTop(newPost) {
-            // إضافة المنشور الجديد إلى بداية الكاش
-            allPostsCache.unshift(newPost);
-            
-            // إعادة عرض المحتوى
-            displayContentBasedOnType();
-            
-            // التمرير إلى الأعلى
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            
-            showToast('تم نشر منشورك الجديد!');
-        }
-
         /* =========================================================
            منطق التعليقات الجديد (Fix: عرض الكل فوراً + تحديث العداد)
            ========================================================= */
