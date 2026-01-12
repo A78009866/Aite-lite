@@ -1600,6 +1600,16 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
     console.error('Send Error:', error);
     res.status(500).json({ error: 'Failed to send message' });
   }
+  // بعد إرسال الرسالة بنجاح
+const senderName = req.session.userDisplayName || "مستخدم";
+const targetUrl = `https://aite-lite.vercel.app/chat?contactId=${senderId}`;
+
+sendPushNotificationToUser(
+    contact_id, 
+    "رسالة جديدة", 
+    `أرسل لك ${senderName} رسالة جديدة`, 
+    targetUrl
+);
 });
 
 app.post('/api/mark_read', requireAuth, async (req, res) => {
@@ -2331,6 +2341,18 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   } catch (error) {
     res.status(500).json({ ok: false });
   }
+  // داخل كود الإعجاب
+if (!isLiked) { // نرسل إشعار فقط عند إضافة الإعجاب وليس إزالته
+    const senderName = req.session.userDisplayName || "شخص ما";
+    const targetUrl = `https://aite-lite.vercel.app/post/${postId}`;
+    
+    sendPushNotificationToUser(
+        postData.userId, 
+        "تفاعل جديد", 
+        `قام ${senderName} بالإعجاب بمنشورك`, 
+        targetUrl
+    );
+}
 });
 
 // Comment on post (UPDATED: normalize, return newComments)
@@ -2415,6 +2437,16 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
     console.error('Error adding comment:', error);
     res.status(500).json({ ok: false, error: 'فشل في إضافة التعليق.' });
   }
+  // بعد حفظ التعليق بنجاح
+const senderName = req.session.userDisplayName || "شخص ما";
+const targetUrl = `https://aite-lite.vercel.app/post/${postId}`;
+
+sendPushNotificationToUser(
+    postData.userId, 
+    "تعليق جديد", 
+    `علق ${senderName} على منشورك: "${content.substring(0, 20)}..."`, 
+    targetUrl
+);
 });
 
 // ---------------- New Feature: Like a comment ----------------
