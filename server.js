@@ -3919,7 +3919,52 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
     res.end();
   });
 });
+// دالة مساعدة لإرسال إشعار لمستخدم معين
+async function sendPushNotification(targetUserId, title, body, linkUrl) {
+    try {
+        // 1. جلب التوكنات الخاصة بالمستخدم
+        const tokensSnapshot = await admin.database().ref(`users/${targetUserId}/fcmTokens`).once('value');
+        if (!tokensSnapshot.exists()) return;
 
+        const tokens = Object.keys(tokensSnapshot.val()).map(k => k.replace(/_/g, '.')); // إذا كنت خزنت التوكن كـ Key، قم باستعادته، أو عدل المنطق حسب التخزين
+
+        // استبدل المنطق أعلاه بما يناسب طريقة حفظك، المهم أن تحصل على مصفوفة من التوكنات الحقيقية
+        // مثال بسيط لو كنت تخزن توكن واحد: const token = user.fcmToken;
+
+        if (tokens.length === 0) return;
+
+        // 2. تجهيز الرسالة
+        const message = {
+            data: {
+                title: title,
+                body: body,
+                url: linkUrl // الرابط الذي سيفتح عند الضغط (مثلاً: /chats/123)
+            },
+            tokens: tokens // الإرسال لأجهزة متعددة
+        };
+
+        // 3. الإرسال عبر Firebase Messaging
+        const response = await admin.messaging().sendMulticast(message);
+        console.log('Notifications sent:', response.successCount);
+        
+        // تنظيف التوكنات القديمة التي فشل الإرسال لها (اختياري ولكنه مهم)
+        if (response.failureCount > 0) {
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    // حذف التوكن غير الصالح من قاعدة البيانات
+                    // tokens[idx] ...
+                }
+            });
+        }
+
+    } catch (error) {
+        console.error('Error sending push:', error);
+    }
+}
+
+// مثال للاستخدام: عند إضافة رسالة جديدة في الشات
+// myChatsRef.on('child_added', ...) -> داخلها استدعِ:
+// sendPushNotification(receiverId, "رسالة جديدة", "قام أحمد بإرسال صورة...", "https://aite.app/chats/friendId");
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
