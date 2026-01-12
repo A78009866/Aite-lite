@@ -163,29 +163,7 @@ app.get('/check-status', (req, res) => {
 app.get('/accounts', (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'accounts.html'));
 });
-// API لحفظ التوكن القادم من التطبيق
-app.post('/api/save-fcm-token', async (req, res) => {
-  const { token } = req.body;
-  // نفترض أنك تستخدم Session وتعرف المستخدم الحالي
-  // هذا يعتمد على طريقة المصادقة لديك، سأفترض req.session.user.uid أو مشابه
-  const userId = req.session?.user?.uid || req.session?.user?.id; 
 
-  if (!userId || !token) {
-    return res.status(400).json({ error: 'Missing data' });
-  }
-
-  try {
-    // حفظ التوكن في مسار المستخدم
-    // يفضل حفظه في قائمة لأن المستخدم قد يكون لديه أكثر من جهاز
-    await admin.database().ref(`users/${userId}/fcmTokens/${token.replace(/[.#$/[\]]/g, '_')}`).set(true); 
-    // ملاحظة: قمنا باستخدام التوكن كـ Key (مع تنظيف الرموز) أو يمكنك حفظه كقيمة
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Save Token Error:', error);
-    res.status(500).json({ error: 'Failed' });
-  }
-});
 // إضافة هذا المسار في قسم Routes: Pages (ضعه بالقرب من باقي app.get للـ views)
 app.get('/families', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'families.html'));
@@ -1600,16 +1578,6 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
     console.error('Send Error:', error);
     res.status(500).json({ error: 'Failed to send message' });
   }
-  // بعد إرسال الرسالة بنجاح
-const senderName = req.session.userDisplayName || "مستخدم";
-const targetUrl = `https://aite-lite.vercel.app/chat?contactId=${senderId}`;
-
-sendPushNotificationToUser(
-    contact_id, 
-    "رسالة جديدة", 
-    `أرسل لك ${senderName} رسالة جديدة`, 
-    targetUrl
-);
 });
 
 app.post('/api/mark_read', requireAuth, async (req, res) => {
@@ -2341,18 +2309,6 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   } catch (error) {
     res.status(500).json({ ok: false });
   }
-  // داخل كود الإعجاب
-if (!isLiked) { // نرسل إشعار فقط عند إضافة الإعجاب وليس إزالته
-    const senderName = req.session.userDisplayName || "شخص ما";
-    const targetUrl = `https://aite-lite.vercel.app/post/${postId}`;
-    
-    sendPushNotificationToUser(
-        postData.userId, 
-        "تفاعل جديد", 
-        `قام ${senderName} بالإعجاب بمنشورك`, 
-        targetUrl
-    );
-}
 });
 
 // Comment on post (UPDATED: normalize, return newComments)
@@ -2437,16 +2393,6 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
     console.error('Error adding comment:', error);
     res.status(500).json({ ok: false, error: 'فشل في إضافة التعليق.' });
   }
-  // بعد حفظ التعليق بنجاح
-const senderName = req.session.userDisplayName || "شخص ما";
-const targetUrl = `https://aite-lite.vercel.app/post/${postId}`;
-
-sendPushNotificationToUser(
-    postData.userId, 
-    "تعليق جديد", 
-    `علق ${senderName} على منشورك: "${content.substring(0, 20)}..."`, 
-    targetUrl
-);
 });
 
 // ---------------- New Feature: Like a comment ----------------
@@ -3951,52 +3897,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
     res.end();
   });
 });
-// دالة مساعدة لإرسال إشعار لمستخدم معين
-async function sendPushNotification(targetUserId, title, body, linkUrl) {
-    try {
-        // 1. جلب التوكنات الخاصة بالمستخدم
-        const tokensSnapshot = await admin.database().ref(`users/${targetUserId}/fcmTokens`).once('value');
-        if (!tokensSnapshot.exists()) return;
 
-        const tokens = Object.keys(tokensSnapshot.val()).map(k => k.replace(/_/g, '.')); // إذا كنت خزنت التوكن كـ Key، قم باستعادته، أو عدل المنطق حسب التخزين
-
-        // استبدل المنطق أعلاه بما يناسب طريقة حفظك، المهم أن تحصل على مصفوفة من التوكنات الحقيقية
-        // مثال بسيط لو كنت تخزن توكن واحد: const token = user.fcmToken;
-
-        if (tokens.length === 0) return;
-
-        // 2. تجهيز الرسالة
-        const message = {
-            data: {
-                title: title,
-                body: body,
-                url: linkUrl // الرابط الذي سيفتح عند الضغط (مثلاً: /chats/123)
-            },
-            tokens: tokens // الإرسال لأجهزة متعددة
-        };
-
-        // 3. الإرسال عبر Firebase Messaging
-        const response = await admin.messaging().sendMulticast(message);
-        console.log('Notifications sent:', response.successCount);
-        
-        // تنظيف التوكنات القديمة التي فشل الإرسال لها (اختياري ولكنه مهم)
-        if (response.failureCount > 0) {
-            response.responses.forEach((resp, idx) => {
-                if (!resp.success) {
-                    // حذف التوكن غير الصالح من قاعدة البيانات
-                    // tokens[idx] ...
-                }
-            });
-        }
-
-    } catch (error) {
-        console.error('Error sending push:', error);
-    }
-}
-
-// مثال للاستخدام: عند إضافة رسالة جديدة في الشات
-// myChatsRef.on('child_added', ...) -> داخلها استدعِ:
-// sendPushNotification(receiverId, "رسالة جديدة", "قام أحمد بإرسال صورة...", "https://aite.app/chats/friendId");
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
