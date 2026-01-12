@@ -163,7 +163,29 @@ app.get('/check-status', (req, res) => {
 app.get('/accounts', (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'accounts.html'));
 });
+// API لحفظ التوكن القادم من التطبيق
+app.post('/api/save-fcm-token', async (req, res) => {
+  const { token } = req.body;
+  // نفترض أنك تستخدم Session وتعرف المستخدم الحالي
+  // هذا يعتمد على طريقة المصادقة لديك، سأفترض req.session.user.uid أو مشابه
+  const userId = req.session?.user?.uid || req.session?.user?.id; 
 
+  if (!userId || !token) {
+    return res.status(400).json({ error: 'Missing data' });
+  }
+
+  try {
+    // حفظ التوكن في مسار المستخدم
+    // يفضل حفظه في قائمة لأن المستخدم قد يكون لديه أكثر من جهاز
+    await admin.database().ref(`users/${userId}/fcmTokens/${token.replace(/[.#$/[\]]/g, '_')}`).set(true); 
+    // ملاحظة: قمنا باستخدام التوكن كـ Key (مع تنظيف الرموز) أو يمكنك حفظه كقيمة
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save Token Error:', error);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
 // إضافة هذا المسار في قسم Routes: Pages (ضعه بالقرب من باقي app.get للـ views)
 app.get('/families', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'families.html'));
