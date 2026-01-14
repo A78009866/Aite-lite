@@ -1497,41 +1497,37 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   }
 });
 
-// --- تعديل مسار إرسال الرسائل ليكون متوافقاً مع chat.html الحالي ---
+// تعديل المسار ليتعرف على حقل 'media' الذي يرسله ملف chat.html
 app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, res) => {
   try {
     const senderId = req.session.userId;
     
     // صفحة chat.html ترسل المعرف باسم other_id
-    // الكود أدناه يدعم كل الاحتمالات لضمان عدم حدوث خطأ 400
     let contact_id = req.body.other_id || req.body.contact_id || req.body.contactId;
     
-    // تنظيف المعرف من أي علامات تنصيص زائدة قد تأتي من الـ Frontend
+    // تنظيف الـ ID
     if (contact_id) contact_id = String(contact_id).replace(/['\"]+/g, '').trim();
 
     const content = req.body.content || '';
     const reply_to_id = req.body.reply_to_id || null;
     
-    // صفحة chat.html ترسل الملفات في حقل باسم 'media'
-    // وبما أننا استخدمنا upload.array('media') بالأعلى، سنجدها في req.files
+    // جلب الملفات المرفوعة من حقل 'media'
     const files = req.files || [];
 
-    // التحقق من وجود المعرف
     if (!contact_id) {
-      console.error("❌ Error: Missing contact_id/other_id in request body");
       return res.status(400).json({ ok: false, error: 'Target user ID is missing' });
     }
 
-    // منع إرسال رسالة فارغة (لا نص ولا ملفات)
+    // إذا لم يكن هناك نص ولا ملفات، نعتبرها رسالة فارغة
     if (!content.trim() && files.length === 0) {
-       return res.status(400).json({ ok: false, error: 'Message cannot be empty' });
+       return res.status(400).json({ ok: false, error: 'لا يمكن إرسال رسالة فارغة' });
     }
 
     const chatRoomId = [senderId, contact_id].sort().join('_');
     const timestamp = admin.database.ServerValue.TIMESTAMP;
     const messageId = db.ref(`messages/${chatRoomId}`).push().key;
 
-    // معالجة الملفات المرفوعة (صور، فيديو، صوت)
+    // معالجة المرفقات (صور، فيديوهات، الخ)
     let attachments = [];
     if (files.length > 0) {
       attachments = files.map(file => ({
@@ -1550,23 +1546,21 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
       attachments: attachments,
       timestamp: timestamp,
       is_read: false,
-      reactions: {},
       reply_to_id: reply_to_id
     };
 
-    // 1. حفظ الرسالة في Firebase
+    // 1. حفظ الرسالة
     await db.ref(`messages/${chatRoomId}/${messageId}`).set(newMessage);
 
-    // 2. تجهيز نص المعاينة للقوائم والإشعارات
+    // 2. تحديث نص المعاينة (Preview) لكي لا تظهر الرسالة فارغة في القائمة
     let previewText = content;
     if (!content && attachments.length > 0) {
       const type = attachments[0].type;
       previewText = type === 'image' ? '📷 صورة' : type === 'video' ? '🎥 فيديو' : '📎 ملف مرفق';
     }
 
-    // 3. تحديث قائمة المحادثات للطرفين
+    // 3. تحديث قائمة المحادثات (Chat List)
     const updates = {};
-    // للمستلم: زيادة عداد غير المقروء
     updates[`chats/${contact_id}/${senderId}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
@@ -1575,7 +1569,6 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
       last_message_sender_id: senderId,
       last_message_is_read: false
     };
-    // للمرسل: تصفير العداد لديه
     updates[`chats/${senderId}/${contact_id}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
@@ -1586,33 +1579,12 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
     };
     await db.ref().update(updates);
 
-    // 4. حفظ إشعار في DB (ليظهر في صفحة الإشعارات)
-    await db.ref(`notifications/${contact_id}`).push({
-      type: 'new_message',
-      from_user_id: senderId,
-      content: `رسالة جديدة: ${previewText.substring(0, 30)}...`,
-      timestamp: timestamp,
-      is_read: false,
-      link: `/chat?contactId=${senderId}`
-    });
-
-    // 5. إرسال Push Notification إذا كانت الدالة موجودة
-    if (typeof sendPushNotificationToUser === 'function') {
-        const senderName = req.session.userDisplayName || "مستخدم";
-        sendPushNotificationToUser(
-            contact_id, 
-            "رسالة جديدة", 
-            `${senderName}: ${previewText}`, 
-            `https://aite-lite.vercel.app/chat?contactId=${senderId}`
-        );
-    }
-
-    // إرجاع استجابة نجاح متوافقة مع ما ينتظره ملف chat.html
+    // 4. إرسال استجابة بنجاح (مع إرجاع messageData ليعرضها الشات فوراً)
     res.json({ ok: true, messageId, messageData: newMessage });
 
   } catch (error) {
-    console.error('❌ Server Error in /api/messages/send:', error);
-    res.status(500).json({ ok: false, error: 'Internal Server Error' });
+    console.error('❌ Error sending message:', error);
+    res.status(500).json({ ok: false, error: 'فشل إرسال الرسالة' });
   }
 });
 app.post('/api/mark_read', requireAuth, async (req, res) => {
