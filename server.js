@@ -1502,14 +1502,17 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
   const { contact_id, content, reply_to_id } = req.body;
   const files = req.files || [];
 
-  if (!contact_id) return res.status(400).json({ error: 'Contact ID required' });
+  // التأكد من وجود معرف المستلم لمنع خطأ 400
+  if (!contact_id) {
+    return res.status(400).json({ error: 'Contact ID required' });
+  }
 
   try {
     const chatRoomId = [senderId, contact_id].sort().join('_');
     const timestamp = admin.database.ServerValue.TIMESTAMP;
     const messageId = db.ref(`messages/${chatRoomId}`).push().key;
 
-    // معالجة الملفات (رفعها وجلب الروابط)
+    // 1. معالجة الملفات المرفوعة (Cloudinary)
     let attachments = [];
     if (files.length > 0) {
       attachments = files.map(file => ({
@@ -1520,66 +1523,82 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
       }));
     }
 
-    // تجهيز كائن الرسالة
+    // 2. تجهيز كائن الرسالة
     const newMessage = {
       id: messageId,
       senderId: senderId,
       content: content || '',
       attachments: attachments,
       timestamp: timestamp,
-      is_read: false, // الرسالة غير مقروءة مبدئياً
+      is_read: false,
       reactions: {},
       reply_to_id: reply_to_id || null
     };
 
-    // حفظ الرسالة في قاعدة البيانات
+    // 3. حفظ الرسالة في قاعدة البيانات
     await db.ref(`messages/${chatRoomId}/${messageId}`).set(newMessage);
 
-    // تحديد نص المعاينة (Preview Text)
-    let previewText = content || 'ملف مرفق';
+    // 4. تحديد نص المعاينة (Preview Text) للإشعارات
+    let previewText = content || '';
     if (!content && attachments.length > 0) {
-      previewText = attachments[0].type === 'image' ? '📷 صورة' : '📎 ملف';
+      previewText = attachments[0].type === 'image' ? '📷 صورة' : '📎 ملف مرفق';
     }
 
-    // --- التحديثات لملخص المحادثة ---
-
-    // 1. تحديث عند المرسل إليه (الطرف الآخر)
-    await db.ref(`chats/${contact_id}/${senderId}`).update({
+    // 5. تحديث ملخص المحادثات (الطرفين)
+    const updates = {};
+    // التحديث عند المستلم
+    updates[`chats/${contact_id}/${senderId}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
       contact_id: senderId,
       unread_count: admin.database.ServerValue.increment(1),
       last_message_sender_id: senderId,
-      last_message_is_read: false // <--- مهم: لم تقرأ بعد
-    });
-
-    // 2. تحديث عند المرسل (أنا)
-    await db.ref(`chats/${senderId}/${contact_id}`).update({
+      last_message_is_read: false
+    };
+    // التحديث عند المرسل
+    updates[`chats/${senderId}/${contact_id}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
       contact_id: contact_id,
       unread_count: 0,
       last_message_sender_id: senderId,
-      last_message_is_read: false // <--- مهم: لم تقرأ بعد
-    });
+      last_message_is_read: false
+    };
+    await db.ref().update(updates);
 
-    // إرسال إشعار للطرف الآخر (بدون تغيير هنا، فقط إشعار الرسالة الجديدة)
+    // 6. إشعار داخل التطبيق (صفحة الإشعارات)
     await db.ref(`notifications/${contact_id}`).push({
       type: 'new_message',
       from_user_id: senderId,
-      content: `رسالة جديدة: ${previewText}`,
+      content: previewText,
       timestamp: timestamp,
       is_read: false,
       link: `/chat?contactId=${senderId}`
     });
 
+    // 7. إرسال الإشعار الفوري (Push Notification) للهاتف
+    // وضعناه داخل الـ try لضمان تنفيذه فقط عند نجاح الحفظ
+    const senderName = req.session.userDisplayName || "مستخدم";
+    const targetUrl = `https://aite-lite.vercel.app/chat?contactId=${senderId}`;
+
+    // استدعاء دالة FCM (تأكد أن الدالة معرفة في أسفل الملف)
+    if (typeof sendPushNotificationToUser === 'function') {
+        sendPushNotificationToUser(
+            contact_id, 
+            "رسالة جديدة", 
+            `أرسل لك ${senderName}: ${previewText.substring(0, 30)}`, 
+            targetUrl
+        );
+    }
+
+    // إرسال الرد للعميل
     res.json({ ok: true, messageId });
+
   } catch (error) {
-    console.error('Send Error:', error);
+    console.error('Send Message Error:', error);
     res.status(500).json({ error: 'Failed to send message' });
   }
 });
-
 app.post('/api/mark_read', requireAuth, async (req, res) => {
   const userId = req.session.userId; // أنا (القارئ)
   const { other_id } = req.body;     // المرسل (الطرف الآخر)
