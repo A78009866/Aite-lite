@@ -1497,7 +1497,8 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   }
 });
 
-// تعديل المسار ليتعرف على حقل 'media' الذي يرسله ملف chat.html
+// استبدل هذا الجزء بالكامل في ملف server.js
+
 app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, res) => {
   try {
     const senderId = req.session.userId;
@@ -1509,9 +1510,11 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
     if (contact_id) contact_id = String(contact_id).replace(/['\"]+/g, '').trim();
 
     const content = req.body.content || '';
-    const reply_to_id = req.body.reply_to_id || null;
+    const reply_to_id = req.body.replied_to_id || null; // لاحظ: الاسم في chat.html هو replied_to_id
+    const reply_to_sender = req.body.replied_to_sender || null;
+    const reply_to_content = req.body.replied_to_content || null;
     
-    // جلب الملفات المرفوعة من حقل 'media'
+    // جلب الملفات المرفوعة
     const files = req.files || [];
 
     if (!contact_id) {
@@ -1525,61 +1528,78 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
 
     const chatRoomId = [senderId, contact_id].sort().join('_');
     const timestamp = admin.database.ServerValue.TIMESTAMP;
-    const messageId = db.ref(`messages/${chatRoomId}`).push().key;
+    const messageRef = db.ref(`messages/${chatRoomId}`).push();
+    const messageId = messageRef.key;
 
-    // معالجة المرفقات (صور، فيديوهات، الخ)
-    let attachments = [];
+    // === التصحيح هنا: إعداد كائن media ليتوافق مع chat.html ===
+    let mediaObject = null;
+    
     if (files.length > 0) {
-      attachments = files.map(file => ({
+      const file = files[0]; // نأخذ الملف الأول لأن chat.html يدعم عرض ملف واحد لكل رسالة
+      let type = 'file';
+      
+      if (file.mimetype.startsWith('image/')) type = 'image';
+      else if (file.mimetype.startsWith('video/')) type = 'video';
+      else if (file.mimetype.startsWith('audio/') || file.mimetype === 'audio/webm') type = 'audio';
+      
+      mediaObject = {
         url: file.path, 
-        type: file.mimetype.startsWith('image/') ? 'image' : 
-              file.mimetype.startsWith('video/') ? 'video' : 
-              file.mimetype.startsWith('audio/') ? 'audio' : 'file',
+        type: type,
         filename: file.originalname
-      }));
+      };
     }
+    // =========================================================
 
     const newMessage = {
       id: messageId,
+      messageId: messageId, // تكرار للتأكد
       senderId: senderId,
       content: content,
-      attachments: attachments,
+      media: mediaObject, // حفظنا الكائن بالاسم الذي ينتظره chat.html
       timestamp: timestamp,
       is_read: false,
-      reply_to_id: reply_to_id
+      // بيانات الرد إذا وجدت
+      replied_to_id: reply_to_id,
+      replied_to_sender: reply_to_sender,
+      replied_to_content: reply_to_content
     };
 
     // 1. حفظ الرسالة
-    await db.ref(`messages/${chatRoomId}/${messageId}`).set(newMessage);
+    await messageRef.set(newMessage);
 
-    // 2. تحديث نص المعاينة (Preview) لكي لا تظهر الرسالة فارغة في القائمة
+    // 2. تحديث نص المعاينة (Preview) في قائمة الشات
     let previewText = content;
-    if (!content && attachments.length > 0) {
-      const type = attachments[0].type;
-      previewText = type === 'image' ? '📷 صورة' : type === 'video' ? '🎥 فيديو' : '📎 ملف مرفق';
+    if (!content && mediaObject) {
+      const type = mediaObject.type;
+      previewText = type === 'image' ? '📷 صورة' : type === 'video' ? '🎥 فيديو' : type === 'audio' ? '🎤 رسالة صوتية' : '📎 ملف مرفق';
     }
 
-    // 3. تحديث قائمة المحادثات (Chat List)
+    // 3. تحديث قائمة المحادثات (Chat List) للطرفين
     const updates = {};
+    
+    // التحديث عند الطرف الآخر (المستقبل)
     updates[`chats/${contact_id}/${senderId}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
-      contact_id: senderId,
+      contact_id: senderId, // الصديق بالنسبة له هو أنا (المرسل)
       unread_count: admin.database.ServerValue.increment(1),
       last_message_sender_id: senderId,
       last_message_is_read: false
     };
+
+    // التحديث عندي (المرسل)
     updates[`chats/${senderId}/${contact_id}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
-      contact_id: contact_id,
-      unread_count: 0,
+      contact_id: contact_id, // الصديق بالنسبة لي هو هو
+      unread_count: 0, // أنا قرأت رسالتي
       last_message_sender_id: senderId,
       last_message_is_read: false
     };
+
     await db.ref().update(updates);
 
-    // 4. إرسال استجابة بنجاح (مع إرجاع messageData ليعرضها الشات فوراً)
+    // 4. إرسال استجابة بنجاح
     res.json({ ok: true, messageId, messageData: newMessage });
 
   } catch (error) {
@@ -1587,6 +1607,8 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
     res.status(500).json({ ok: false, error: 'فشل إرسال الرسالة' });
   }
 });
+
+    
 app.post('/api/mark_read', requireAuth, async (req, res) => {
   const userId = req.session.userId; // أنا (القارئ)
   const { other_id } = req.body;     // المرسل (الطرف الآخر)
