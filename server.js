@@ -1497,40 +1497,43 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   }
 });
 
+// استبدل مسار إرسال الرسائل بهذا الكود المحسن
 app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, res) => {
   try {
-    // 1. طباعة البيانات المستلمة في الكونسول لمعرفة سبب الخطأ
-    console.log("Message Request Body:", req.body);
-    console.log("Message Files:", req.files);
+    // 1. طباعة البيانات المستلمة في التيرمينال لمعرفة ماذا يصل للسيرفر
+    console.log("📨 Send Message Request:");
+    console.log("Body:", req.body);
+    console.log("Files:", req.files ? req.files.length : 0);
 
     const senderId = req.session.userId;
     
-    // 2. استقبال contact_id سواء تم إرساله كـ contact_id أو contactId
-    // ونقوم بتنظيفه من علامات التنصيص الزائدة إن وجدت
+    // 2. استقبال معرف المستخدم بمرونة (سواء وصل contact_id أو contactId)
+    // وتنظيفه من أي علامات تنصيص زائدة
     let contact_id = req.body.contact_id || req.body.contactId;
-    if (contact_id) contact_id = contact_id.toString().trim();
+    if (contact_id) contact_id = String(contact_id).trim();
 
-    const content = req.body.content || ''; 
+    const content = req.body.content ? req.body.content.trim() : '';
     const reply_to_id = req.body.reply_to_id || null;
     const files = req.files || [];
 
-    // 3. التحقق الحاسم: إذا لم يوجد contact_id نوقف العملية
+    // 3. التحقق الحاسم: إذا لم نجد المعرف نوقف العملية ونرسل تفاصيل الخطأ
     if (!contact_id) {
-      console.error("Error: Missing contact_id");
-      return res.status(400).json({ error: 'Contact ID required (contact_id or contactId)' });
+      console.error("❌ Error: Missing contact_id");
+      return res.status(400).json({ ok: false, error: 'Contact ID required (contact_id or contactId is missing)' });
     }
 
-    // 4. منع إرسال رسالة فارغة (لا نص ولا ملفات)
+    // 4. منع إرسال رسالة فارغة تماماً
     if (!content && files.length === 0) {
-       console.error("Error: Empty message");
-       return res.status(400).json({ error: 'Message cannot be empty' });
+       console.error("❌ Error: Empty message content");
+       return res.status(400).json({ ok: false, error: 'Message cannot be empty' });
     }
 
+    // 5. إنشاء معرف المحادثة (ترتيب المعرفات لضمان التطابق)
     const chatRoomId = [senderId, contact_id].sort().join('_');
     const timestamp = admin.database.ServerValue.TIMESTAMP;
     const messageId = db.ref(`messages/${chatRoomId}`).push().key;
 
-    // معالجة الملفات
+    // 6. معالجة الملفات المرفوعة
     let attachments = [];
     if (files.length > 0) {
       attachments = files.map(file => ({
@@ -1541,6 +1544,7 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
       }));
     }
 
+    // 7. تجهيز كائن الرسالة
     const newMessage = {
       id: messageId,
       senderId: senderId,
@@ -1552,17 +1556,19 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
       reply_to_id: reply_to_id
     };
 
-    // حفظ في Firebase
+    // 8. الحفظ في قاعدة البيانات
     await db.ref(`messages/${chatRoomId}/${messageId}`).set(newMessage);
 
-    // تجهيز نص المعاينة
+    // 9. تحديد نص المعاينة للإشعارات والقوائم
     let previewText = content;
     if (!content && attachments.length > 0) {
-      previewText = attachments[0].type === 'image' ? '📷 صورة' : '📎 ملف';
+      const type = attachments[0].type;
+      previewText = type === 'image' ? '📷 صورة' : type === 'video' ? '🎥 فيديو' : '📎 ملف';
     }
 
-    // تحديث Chat List
+    // 10. تحديث قائمة المحادثات (Chat List) للطرفين
     const updates = {};
+    // تحديث عند المستلم
     updates[`chats/${contact_id}/${senderId}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
@@ -1571,6 +1577,7 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
       last_message_sender_id: senderId,
       last_message_is_read: false
     };
+    // تحديث عند المرسل
     updates[`chats/${senderId}/${contact_id}`] = {
       last_message_content: previewText,
       last_message_timestamp: timestamp,
@@ -1581,41 +1588,43 @@ app.post('/api/messages/send', upload.array('files'), requireAuth, async (req, r
     };
     await db.ref().update(updates);
 
-    // حفظ إشعار في DB
+    // 11. حفظ الإشعار في قاعدة البيانات (ليظهر في صفحة الإشعارات)
     await db.ref(`notifications/${contact_id}`).push({
       type: 'new_message',
       from_user_id: senderId,
-      content: `رسالة: ${previewText}`,
+      content: `رسالة: ${previewText.substring(0, 50)}`, // تقصير النص الطويل
       timestamp: timestamp,
       is_read: false,
       link: `/chat?contactId=${senderId}`
     });
 
-    // 5. إرسال الإشعار الفوري (Push Notification)
-    // نضعه داخل الـ Try ولكنه معزول بـ try داخلي حتى لا يوقف الرسالة إذا فشل
+    // 12. إرسال الإشعار الفوري (Push Notification)
+    // نستخدم try/catch منفصل هنا حتى لا تتوقف الرسالة إذا فشل الإشعار
     try {
         const senderName = req.session.userDisplayName || "مستخدم";
         const targetUrl = `https://aite-lite.vercel.app/chat?contactId=${senderId}`;
         
-        // استدعاء الدالة المساعدة
+        // التحقق من وجود الدالة قبل استدعائها
         if (typeof sendPushNotificationToUser === 'function') {
-            await sendPushNotificationToUser(
+            sendPushNotificationToUser(
                 contact_id, 
                 "رسالة جديدة", 
-                `${senderName}: ${previewText || 'ملف مرفق'}`, 
+                `${senderName}: ${previewText}`, 
                 targetUrl
             );
+        } else {
+            console.warn("⚠️ Warning: sendPushNotificationToUser function is not defined.");
         }
     } catch (pushErr) {
-        console.error("Push Notification Failed:", pushErr);
-        // لا نوقف الرد، الرسالة تم حفظها بالفعل
+        console.error("⚠️ Push Notification Failed:", pushErr);
     }
 
+    // الرد بنجاح
     res.json({ ok: true, messageId });
 
   } catch (error) {
-    console.error('Server Send Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('❌ Server Send Error:', error);
+    res.status(500).json({ ok: false, error: 'Internal Server Error' });
   }
 });
 app.post('/api/mark_read', requireAuth, async (req, res) => {
