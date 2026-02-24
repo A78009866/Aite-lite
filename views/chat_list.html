@@ -2829,6 +2829,24 @@ window.receiveAndroidToken = function(token) {
         body: JSON.stringify({ token: token })
     }).catch(err => console.error("Error saving token", err));
 };
+    function formatAndEscapeContent(text) {
+    if (!text && text !== 0) return '';
+    
+    // 1. الحماية من ثغرات XSS عبر تشفير الرموز الحساسة
+    let escapedText = String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    // 2. تحويل الروابط إلى عناصر قابلة للنقر
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return escapedText.replace(urlRegex, function(url) {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 hover:underline transition" dir="ltr" style="display:inline-block; max-width:100%; word-break:break-all;" onclick="event.stopPropagation()">${url}</a>`;
+    });
+}
+
 </script>
 
 </body>
