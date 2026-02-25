@@ -602,6 +602,58 @@
             background: rgba(59, 130, 246, 0.1);
         }
 
+        /* Post content: prevent long words from breaking layout and add show more/less behavior */
+        .post-content { position: relative; }
+        .post-text {
+            color: #e6eefb;
+            line-height: 1.55;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            white-space: pre-wrap; /* keep user's line breaks but wrap long text */
+            -webkit-font-smoothing: antialiased;
+        }
+        /* default collapsed state */
+        .post-text.collapsed {
+            max-height: 6.6em; /* about 4 lines */
+            overflow: hidden;
+        }
+        .post-text.expanded { max-height: none; }
+
+        /* Fade gradient to indicate there's more text */
+        .post-text-fade {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2.2em;
+            pointer-events: none;
+            background: linear-gradient(to top, rgba(24,25,26,1), rgba(24,25,26,0));
+        }
+
+        .read-more-btn {
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:6px;
+            margin-top:8px;
+            background: transparent;
+            border: none;
+            color: #60a5fa;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.95rem;
+            padding: 4px 6px;
+        }
+
+        .post-text a {
+            color: #60a5fa;
+            text-decoration: underline;
+            word-break: break-all; /* keep long URLs wrapable */
+        }
+
+        /* ensure anchor clicks don't bubble up by default */
+        .post-text a { cursor: pointer; }
+
     </style>
 </head>
 <body class="min-h-screen">
@@ -657,14 +709,58 @@
 </header>
 
 <script>
+    // --- Utilities early so other functions can rely on safe escaping / linkifying ---
+
+    // small helpers (safe escaping)
+    function escapeHtml(s) {
+        if (s === undefined || s === null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) {
+        if (s === undefined || s === null) return '';
+        return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Convert plain text to safe HTML and linkify URLs.
+    // Ensures anchors cannot trigger parent click handlers (stopPropagation).
+    function formatAndEscapeContent(text) {
+        if (text === undefined || text === null) return '';
+        // 1. escape
+        let escapedText = String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        // 2. linkify (simple)
+        const urlRegex = /(https?:\/\/[^\s'"]+)/g;
+        const replaced = escapedText.replace(urlRegex, function(url) {
+            // ensure href is attribute-escaped
+            const href = escapeAttr(url);
+            const visible = escapeHtml(url);
+            // stopPropagation added to prevent parent click handlers (media viewer / navigation) from triggering
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 hover:underline transition" dir="ltr" onclick="event.stopPropagation()">${visible}</a>`;
+        });
+
+        return replaced;
+    }
+</script>
+
+<script>
     /**
      * وظيفة إظهار/إخفاء قائمة البروفيل
      */
     function toggleProfileDropdown(event) {
         // منع انتشار الحدث لكي لا يتم إغلاق القائمة فوراً بواسطة مستمع الضغط الخارجي
-        event.stopPropagation();
+        if (event && event.stopPropagation) event.stopPropagation();
         const dropdown = document.getElementById('profileDropdown');
-        dropdown.classList.toggle('hidden');
+        if (dropdown) dropdown.classList.toggle('hidden');
     }
 
     /**
@@ -683,11 +779,12 @@
 
     // تحديث صورة البروفيل في الهيدر عند تحميل الصفحة
     (function updateNavAvatar() {
-        fetch('/api/profile')
-            .then(res => res.json())
+        fetch('/api/profile', { credentials: 'same-origin' })
+            .then(res => res.ok ? res.json() : null)
             .then(user => {
                 if (user && user.profile_picture_url) {
-                    document.getElementById('userProfilePic').src = user.profile_picture_url;
+                    const el = document.getElementById('userProfilePic');
+                    if (el) el.src = user.profile_picture_url;
                 }
             })
             .catch(err => console.error("Error loading nav avatar:", err));
@@ -962,11 +1059,6 @@ function handleNotifClick(el) {
         const replyIndicator = document.getElementById('replyIndicator');
         const replyingToUsername = document.getElementById('replyingToUsername');
 
-        function toggleProfileDropdown(event) {
-            event.stopPropagation();
-            profileDropdown.classList.toggle('hidden');
-        }
-
         function closeProfileDropdownOnClickOutside(event) {
             if (!profileDropdown.contains(event.target) && !profileMenuButton.contains(event.target)) {
                 profileDropdown.classList.add('hidden');
@@ -998,14 +1090,14 @@ function handleNotifClick(el) {
         });
         
         function openMediaViewer(url, type, event) {
-            event.stopPropagation();
+            if (event && event.stopPropagation) event.stopPropagation();
             if (type === 'audio' || type === 'video') return;
 
             let mediaElement;
             mediaViewerContent.innerHTML = '';
             
             if (type === 'image') {
-                mediaElement = `<img src="${url}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
+                mediaElement = `<img src="${escapeAttr(url)}" alt="Media Viewer" class="max-w-full max-h-full object-contain rounded-lg">`;
             } else {
                 return;
             }
@@ -1015,7 +1107,7 @@ function handleNotifClick(el) {
         }
 
         function closeMediaViewer(event) {
-            if (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times')) {
+            if (event && (event.target.id === 'mediaViewerModal' || event.target.closest('.fa-times'))) {
                 const activeMedia = mediaViewerContent.querySelector('video, audio');
                 if (activeMedia) {
                     activeMedia.pause();
@@ -1026,7 +1118,7 @@ function handleNotifClick(el) {
         }
 
         function openDeleteModal(postId, event) {
-            event.stopPropagation();
+            if (event && event.stopPropagation) event.stopPropagation();
             currentPostIdToDelete = postId;
             deleteMessage.classList.add('hidden');
             deleteModal.classList.remove('hidden');
@@ -1046,15 +1138,16 @@ function handleNotifClick(el) {
             deleteMessage.classList.add('hidden');
 
             try {
-                const response = await fetch(`/api/posts/${currentPostIdToDelete}`, {
+                const response = await fetch(`/api/posts/${encodeURIComponent(currentPostIdToDelete)}`, {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    const el = document.querySelector(`div[data-post-id="${currentPostIdToDelete}"]`);
+                    const el = document.querySelector(`div[data-post-id="${escapeAttr(currentPostIdToDelete)}"]`);
                     if (el) el.remove();
                     deleteModal.classList.add('hidden');
                 } else {
@@ -1073,7 +1166,7 @@ function handleNotifClick(el) {
 
         // Replaced togglePostMenu with bottom sheet opener
         function togglePostMenu(postId, userId, event, menuButton) {
-            event.stopPropagation();
+            if (event && event.stopPropagation) event.stopPropagation();
             openPostOptionsModal(postId, userId);
         }
 
@@ -1088,7 +1181,7 @@ function handleNotifClick(el) {
             postOptionsAddFriendBtn.style.display = 'none';
 
             // If owner -> show delete, hide add-friend
-            if (currentUserId && userId === currentUserId) {
+            if (currentUserId && String(userId) === String(currentUserId)) {
                 postOptionsDeleteBtn.style.display = 'flex';
                 postOptionsAddFriendBtn.style.display = 'none';
             } else {
@@ -1128,7 +1221,7 @@ function handleNotifClick(el) {
 
         // Called when user taps delete inside bottom sheet
         function confirmDeleteFromOptions(e) {
-            e.stopPropagation();
+            if (e && e.stopPropagation) e.stopPropagation();
             if (!currentOptionsPostId) return;
             // reuse existing delete modal logic
             openDeleteModal(currentOptionsPostId, e);
@@ -1137,7 +1230,7 @@ function handleNotifClick(el) {
 
         // Add friend from bottom sheet
         async function addFriendFromOptions(e) {
-            e.stopPropagation();
+            if (e && e.stopPropagation) e.stopPropagation();
             if (!currentOptionsUserId) return;
             postOptionsAddFriendBtn.disabled = true;
             postOptionsMessage.classList.add('hidden');
@@ -1424,40 +1517,43 @@ function handleNotifClick(el) {
             
             if (post.media) {
                 if (post.media.type === 'image') {
+                    const imgUrl = escapeAttr(post.media.url || '');
                     mediaContent = `
-                        <div class="mt-3 cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)">
-                            <img src="${post.media.url}" alt="صورة المنشور" class="w-full max-h-96 object-cover rounded-lg">
+                        <div class="mt-3 cursor-pointer" onclick="openMediaViewer('${imgUrl}', 'image', event)">
+                            <img src="${imgUrl}" alt="صورة المنشور" class="w-full max-h-96 object-cover rounded-lg" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'">
                         </div>
                     `;
                 } else if (post.media.type === 'video') {
                      // LARGER, CLEANER VIDEO DISPLAY (minimal controls, big and clear)
-                     const poster = post.media.poster || post.media.thumbnail || 'https://via.placeholder.com/1200x675?text=Video';
+                     const poster = escapeAttr(post.media.poster || post.media.thumbnail || 'https://via.placeholder.com/1200x675?text=Video');
+                     const videoSrc = escapeAttr(post.media.url || '');
                      mediaContent = `
                         <div class="mt-3 relative w-full video-large rounded-lg overflow-hidden bg-black group">
-                            <video id="video-${post.postId}" src="${post.media.url}" 
+                            <video id="video-${escapeAttr(post.postId)}" src="${videoSrc}" 
                                    class="w-full h-full object-cover" 
                                    poster="${poster}" 
                                    preload="metadata"
-                                   onclick="toggleVideoPlay('${post.postId}', event)">
+                                   onclick="toggleVideoPlay('${escapeAttr(post.postId)}', event)">
                             </video>
                             
-                            <div id="play-overlay-${post.postId}" class="video-play-overlay" onclick="toggleVideoPlay('${post.postId}', event)">
+                            <div id="play-overlay-${escapeAttr(post.postId)}" class="video-play-overlay" onclick="toggleVideoPlay('${escapeAttr(post.postId)}', event)">
                                 <i class="fas fa-play"></i>
                             </div>
 
-                            <button class="video-fs-btn" onclick="toggleFullscreen('${post.postId}', event)" title="تكبير">
+                            <button class="video-fs-btn" onclick="toggleFullscreen('${escapeAttr(post.postId)}', event)" title="تكبير">
                               <i class="fas fa-expand"></i>
                             </button>
                         </div>
                     `;
                 } else if (post.media.type === 'audio') {
+                    const url = escapeAttr(post.media.url || '');
                     mediaContent = `
                         <div class="mt-3">
                             <div class="audio-play-wrapper">
-                                <button id="audio-btn-${post.postId}" class="audio-play-button" onclick="toggleAudioPlay('${post.postId}')">
+                                <button id="audio-btn-${escapeAttr(post.postId)}" class="audio-play-button" onclick="toggleAudioPlay('${escapeAttr(post.postId)}')">
                                     <i class="fas fa-play"></i>
                                 </button>
-                                <div id="waveform-${post.postId}" class="waveform-post flex-grow" data-src="${post.media.url}"></div>
+                                <div id="waveform-${escapeAttr(post.postId)}" class="waveform-post flex-grow" data-src="${url}"></div>
                             </div>
                         </div>
                     `;
@@ -1466,56 +1562,64 @@ function handleNotifClick(el) {
 
             const likeIconClass = post.is_liked ? 'fas fa-heart text-red-500' : 'far fa-heart text-red-500'; // Always red
             const likeButtonClass = 'text-red-500'; // Always red
-            const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online_dot_small" title="متصل الآن"></span>` : '';
+            const onlineDotHtml = post.user && post.user.is_online ? `<span class="online-dot online-dot-small" title="متصل الآن"></span>` : '';
             const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
 
             // Show post-menu (three dots) only for click target - always render button but it will open bottom sheet
             const menuButtonHtml = `
                 <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" 
-                        onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)">
+                        onclick="togglePostMenu('${escapeAttr(post.postId)}', '${escapeAttr(post.userId)}', event, this)">
                     <i class="fas fa-ellipsis-v"></i>
                 </button>
             `;
 
+            const safeUsername = escapeHtml((post.user && (post.user.username || post.user.name)) || 'مستخدم');
+            const profilePic = escapeAttr((post.user && post.user.profile_picture_url) || DEFAULT_AVATAR);
+
+            // Use the safe linkifying + escaping function for content
+            const formattedContent = formatAndEscapeContent(post.content || '');
+
             return `
-                <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
+                <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${escapeAttr(post.postId)}">
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center">
-                            <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
-                                <img src="${post.user.profile_picture_url}" alt="${post.user.username}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300">
+                            <a href="/profile?userId=${escapeAttr(post.userId)}" class="avatar-with-dot" onclick="event.stopPropagation()">
+                                <img src="${profilePic}" alt="${safeUsername}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'">
                                 ${onlineDotHtml}
                             </a>
                             <div>
-                                 <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${post.user.username} ${verifiedBadgeHtml}</a>
+                                 <a href="/profile?userId=${escapeAttr(post.userId)}" class="text-white font-semibold hover:text-blue-400" onclick="event.stopPropagation()">${safeUsername} ${verifiedBadgeHtml}</a>
                                 <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
                             </div>
                         </div>
                         ${menuButtonHtml}
                     </div>
 
-                    <p class="text-gray-200 whitespace-pre-wrap">${post.content}</p>
+                    <div class="post-content mt-2">
+                        <div class="post-text" dir="auto">${formattedContent}</div>
+                    </div>
 
                     ${mediaContent}
 
                     <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
-                        <span><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
-                        <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="handleComment('${post.postId}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
+                        <span><i class="fas fa-heart ml-1"></i> ${Number(post.likes || 0)} إعجاب</span>
+                        <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="handleComment('${escapeAttr(post.postId)}')"><i class="far fa-comment-dots ml-1"></i> ${post.commentsCount || 0} تعليق</span>
                     </div>
 
                     <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
                         <button class="flex items-center ${likeButtonClass} hover:text-red-600 transition duration-300 w-full justify-center post-like-button gap-2 heart-btn" 
                                 data-is-liked="${post.is_liked}" 
-                                onclick="handleLike('${post.postId}', this)">
+                                onclick="handleLike('${escapeAttr(post.postId)}', this)">
                             <i class="${likeIconClass} ml-2 like-icon text-lg"></i>
                             <span class="text-sm font-medium">إعجاب</span>
                         </button>
 
-                        <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="handleComment('${post.postId}')">
+                        <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="handleComment('${escapeAttr(post.postId)}')">
                             <i class="fas fa-comment-dots text-lg"></i>
                             <span class="text-sm font-medium">تعليق</span>
                         </button>
 
-                        <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="copyPostLink('${post.postId}', event)">
+                        <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="copyPostLink('${escapeAttr(post.postId)}', event)">
                             <i class="fas fa-link text-lg"></i>
                             <span class="text-sm font-medium">نسخ</span>
                         </button>
@@ -1524,10 +1628,81 @@ function handleNotifClick(el) {
             `;
         }
 
+        // After rendering posts, setup "show more/less" for long texts
+        function setupShowMoreButtons() {
+            // find all post-text elements
+            document.querySelectorAll('.post-content').forEach(container => {
+                try {
+                    const textEl = container.querySelector('.post-text');
+                    if (!textEl) return;
+
+                    // Remove previous button/overlay if any
+                    const existingBtn = container.querySelector('.read-more-btn');
+                    const existingFade = container.querySelector('.post-text-fade');
+                    if (existingBtn) existingBtn.remove();
+                    if (existingFade) existingFade.remove();
+
+                    // mark collapsed by default
+                    textEl.classList.add('collapsed');
+                    textEl.classList.remove('expanded');
+
+                    // Use a small timeout to ensure layout (images may affect height)
+                    setTimeout(() => {
+                        // if content actually overflows collapsed height then show button
+                        if (textEl.scrollHeight > textEl.clientHeight + 3) {
+                            // add fade overlay
+                            const fade = document.createElement('div');
+                            fade.className = 'post-text-fade';
+                            container.appendChild(fade);
+
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'read-more-btn';
+                            btn.innerText = 'عرض المزيد';
+                            btn.setAttribute('aria-expanded', 'false');
+
+                            btn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                const expanded = textEl.classList.toggle('expanded');
+                                if (expanded) {
+                                    textEl.classList.remove('collapsed');
+                                    btn.innerText = 'عرض أقل';
+                                    btn.setAttribute('aria-expanded', 'true');
+                                    if (fade) fade.style.display = 'none';
+                                } else {
+                                    textEl.classList.add('collapsed');
+                                    btn.innerText = 'عرض المزيد';
+                                    btn.setAttribute('aria-expanded', 'false');
+                                    if (fade) fade.style.display = '';
+                                    // scroll into view if needed
+                                    try { container.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e){}
+                                }
+                            });
+
+                            container.appendChild(btn);
+                        } else {
+                            // no overflow -> ensure classes clean
+                            textEl.classList.remove('collapsed', 'expanded');
+                        }
+                    }, 80);
+                } catch (e) {
+                    console.warn('showMore setup failed', e);
+                }
+            });
+
+            // ensure links inside posts do not propagate clicks higher
+            document.querySelectorAll('.post-text a').forEach(a => {
+                a.addEventListener('click', (ev) => {
+                    if (ev && ev.stopPropagation) ev.stopPropagation();
+                    // allow default navigation
+                });
+            });
+        }
+
         // Helper to update comment count shown on post card and in modal badge
         function updatePostCommentCount(postId, count) {
             // update count in post card (feed)
-            const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+            const postCard = document.querySelector(`div[data-post-id="${escapeAttr(postId)}"]`);
             if (postCard) {
                 const commentSpan = postCard.querySelector('.comment-count-display');
                 if (commentSpan) {
@@ -1548,26 +1723,35 @@ function handleNotifClick(el) {
             const diffInHours = (now - date) / (1000 * 60 * 60);
 
             if (diffInHours < 24) {
-                return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                try {
+                    return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                } catch (e) { return date.toLocaleTimeString(); }
             } else if (diffInHours < 7 * 24) {
-                return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+                try {
+                    return date.toLocaleDateString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+                } catch (e) { return date.toLocaleDateString(); }
             } else {
-                return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+                try {
+                    return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+                } catch (e) { return date.toLocaleDateString(); }
             }
         }
 
         // Create comment HTML (uses enriched comment object returned by server)
         function createCommentHtml(comment, postId) {
-            const verifiedHtml = ''; // لا نستخدم مباشرة صورة هنا، سنحجز مكاناً ليتم تعبئته لاحقاً
-            // Heart always red - solid when liked, outline when not liked
+            // Ensure we use escaping for all user-provided values
+            const user = comment.user || {};
+            const username = escapeHtml(user.username || comment.username || 'مستخدم');
+            const profilePic = escapeAttr(user.profile_picture_url || comment.profile_picture_url || DEFAULT_AVATAR);
+            const verifiedPlaceholder = `<span class="badge-container" data-badge-user-id="${escapeAttr((user.userId || comment.userId || ''))}"></span>`;
             const likedClass = 'text-red-500';
             const likeIcon = comment.is_liked ? 'fas' : 'far';
-            
-            // تنسيق الردود بطريقة أكثر أناقة
+
+            // Replies preview (safely escaped)
             const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
                 <div class="reply-item">
                     <div class="flex items-start gap-2">
-                        <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                        <img src="${escapeAttr(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
                         <div class="flex-1">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center">
@@ -1582,32 +1766,29 @@ function handleNotifClick(el) {
                 </div>
             `).join('') : '';
 
-            // badge container: important -> updateCommentsVerification() سيملؤه بصورة الشارة إذا كان المستخدم موثق
-            const badgeContainer = `<span class="badge-container" data-badge-user-id="${escapeAttr(comment.user.userId)}"></span>`;
-
             return `
-                <div class="comment-item" id="comment-${comment.commentId}" data-comment-id="${comment.commentId}">
+                <div class="comment-item" id="comment-${escapeAttr(comment.commentId)}" data-comment-id="${escapeAttr(comment.commentId)}">
                     <div class="flex items-start gap-3">
-                        <img src="${escapeHtml(comment.user.profile_picture_url || DEFAULT_AVATAR)}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${escapeHtml(comment.user.username)}">
+                        <img src="${profilePic}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${username}">
                         <div class="flex-1">
                             <div class="flex items-center justify-between gap-2">
                                 <div>
                                     <div class="text-sm font-bold text-white">
-                                        ${escapeHtml(comment.user.username)} ${badgeContainer}
+                                        ${username} ${verifiedPlaceholder}
                                     </div>
                                     <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
                                 </div>
                                 <div class="flex items-center gap-2 comment-actions">
-                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass} heart-btn" onclick="toggleCommentLike('${postId}', '${comment.commentId}', this)">
+                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full ${likedClass} heart-btn" onclick="toggleCommentLike('${escapeAttr(postId)}', '${escapeAttr(comment.commentId)}', this)">
                                         <i class="${likeIcon} fa-heart"></i>
-                                        <span class="like-count" id="comment-like-count-${comment.commentId}">${comment.likes || 0}</span>
+                                        <span class="like-count" id="comment-like-count-${escapeAttr(comment.commentId)}">${Number(comment.likes || 0)}</span>
                                     </button>
-                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="setupReply('${comment.commentId}', '${escapeHtml(comment.user.username)}')">
+                                    <button class="flex items-center gap-1 px-2 py-1 rounded-full text-gray-300" onclick="setupReply('${escapeAttr(comment.commentId)}', '${escapeAttr(username)}')">
                                         <i class="fas fa-reply"></i>
                                         <span class="text-xs">رد</span>
                                     </button>
                                     ${(comment.repliesCount || 0) > (comment.recentReplies ? comment.recentReplies.length : 0) ? 
-                                        `<button class="flex items-center gap-1 px-2 py-1 rounded-full text-blue-400" onclick="fetchAndShowAllReplies('${postId}', '${comment.commentId}', this)">
+                                        `<button class="flex items-center gap-1 px-2 py-1 rounded-full text-blue-400" onclick="fetchAndShowAllReplies('${escapeAttr(postId)}', '${escapeAttr(comment.commentId)}', this)">
                                             <i class="fas fa-angle-down"></i>
                                             <span class="text-xs">عرض الردود (${comment.repliesCount})</span>
                                         </button>` : ''}
@@ -1615,7 +1796,7 @@ function handleNotifClick(el) {
                             </div>
                             <div class="mt-2 text-sm text-gray-200">${escapeHtml(comment.content)}</div>
 
-                            <div id="replies-container-${comment.commentId}" class="mt-3 space-y-2">
+                            <div id="replies-container-${escapeAttr(comment.commentId)}" class="mt-3 space-y-2">
                                 ${repliesPreviewHtml}
                             </div>
                         </div>
@@ -1670,10 +1851,10 @@ function handleNotifClick(el) {
         async function toggleCommentLike(postId, commentId, btnEl) {
             btnEl.disabled = true;
             try {
-                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST', credentials: 'same-origin' });
+                const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`, { method: 'POST', credentials: 'same-origin' });
                 const data = await res.json();
                 if (res.ok && data.ok) {
-                    const countEl = document.getElementById(`comment-like-count-${commentId}`);
+                    const countEl = document.getElementById(`comment-like-count-${escapeAttr(commentId)}`);
                     if (countEl) countEl.textContent = data.likes;
                     // Always keep heart red; only switch outline/solid
                     const i = btnEl.querySelector('i');
@@ -1694,7 +1875,7 @@ function handleNotifClick(el) {
         // Post a reply to a comment
         async function postReply(postId, commentId, content) {
             try {
-                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/reply`, {
+                const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/reply`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
@@ -1723,15 +1904,15 @@ function handleNotifClick(el) {
                 const originalText = triggerBtn.innerHTML;
                 triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                 
-                const res = await fetch(`/api/posts/${postId}/comments/${commentId}/replies`, { credentials: 'same-origin' });
+                const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
                 const data = await res.json();
                 if (res.ok && data.ok) {
-                    const container = document.getElementById(`replies-container-${commentId}`);
+                    const container = document.getElementById(`replies-container-${escapeAttr(commentId)}`);
                     if (container) {
                         container.innerHTML = data.replies.map(r => `
                             <div class="reply-item">
                                 <div class="flex items-start gap-2">
-                                    <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                                    <img src="${escapeAttr(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
                                     <div class="flex-1">
                                         <div class="flex items-center justify-between">
                                             <div class="flex items-center">
@@ -1788,7 +1969,7 @@ function handleNotifClick(el) {
 
         function renderCreateFamilyCard() {
             return `
-                <div class="create-family-card" style="background-image: url('${CREATE_FAMILY_BG}');" onclick="onCreateFamilyClick()">
+                <div class="create-family-card" style="background-image: url('${escapeAttr(CREATE_FAMILY_BG)}');" onclick="onCreateFamilyClick()">
                     <div class="overlay"></div>
                     <div class="label">
                         <div class="text-sm font-semibold">إنشاء عائلة</div>
@@ -1817,11 +1998,11 @@ function handleNotifClick(el) {
 
             return `
                 <div class="family-card" data-family-id="${escapeAttr(f.familyId || f.id)}" onclick="onFamilyCardClick('${escapeAttr(f.familyId || f.id)}', ${isMember})">
-                    <img src="${escapeHtml(imgUrl)}" 
-                         alt="${escapeHtml(f.name)}" 
-                         onerror="this.onerror=null;this.src='${DEFAULT_FAM_IMG}';">
+                    <img src="${escapeAttr(imgUrl)}" 
+                         alt="${escapeAttr(f.name)}" 
+                         onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_FAM_IMG)}';">
                     <div class="meta">
-                        <div class="name" title="${escapeHtml(f.name || '')}">${escapeHtml(f.name)}</div>
+                        <div class="name" title="${escapeAttr(f.name || '')}">${escapeHtml(f.name)}</div>
                         <div class="count">${members} عضو • ${badge}</div>
                     </div>
                 </div>
@@ -1955,10 +2136,10 @@ function handleNotifClick(el) {
                 const videoUrl = r.videoUrl || r.video_url || '';
                 // show poster image if available, otherwise show placeholder for later thumbnail extraction
                 const posterHtml = thumb
-                  ? `<img src="${escapeHtml(thumb)}" alt="thumbnail" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23000%22/></svg>'">`
+                  ? `<img src="${escapeAttr(thumb)}" alt="thumbnail" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23000%22/></svg>'">`
                   : `<img id="reel-thumb-${escapeAttr(r.reelId)}" data-video-url="${escapeAttr(videoUrl)}" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'><rect width='100%' height='100%' fill='%23000'/></svg>" alt="thumbnail" class="w-full h-full object-cover">`;
 
-                const userPic = r.user && r.user.profile_picture_url ? escapeHtml(r.user.profile_picture_url) : DEFAULT_AVATAR;
+                const userPic = r.user && r.user.profile_picture_url ? escapeAttr(r.user.profile_picture_url) : DEFAULT_AVATAR;
                 const username = r.user && r.user.username ? escapeHtml(r.user.username) : 'user';
 
                 return `
@@ -2072,7 +2253,7 @@ function handleNotifClick(el) {
             try {
                 // Parallel fetch: posts + reels
                 const [postsRes, reelsData] = await Promise.all([
-                    fetch('/api/posts').then(r => r.ok ? r.json() : {ok:false}),
+                    fetch('/api/posts', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {ok:false}),
                     fetchReelsData()
                 ]);
 
@@ -2095,6 +2276,8 @@ function handleNotifClick(el) {
                         postsFeed.innerHTML += '<div class="text-center text-gray-500 p-4">لا توجد منشورات لعرضها بعد.</div>';
                         // after inserting, try generating thumbnails for reels
                         setTimeout(generateReelThumbnails, 100);
+                        // also setup show-more (there may be none)
+                        setTimeout(setupShowMoreButtons, 150);
                         return;
                     }
                     
@@ -2146,7 +2329,10 @@ function handleNotifClick(el) {
                         });
                         // after rendering reels, attempt thumbnail capture for any missing posters
                         generateReelThumbnails();
-                    }, 100); 
+
+                        // After everything is rendered, setup show more/less
+                        setupShowMoreButtons();
+                    }, 150); 
 
                 } else {
                     // if postsRes not ok, still render reels if available
@@ -2156,6 +2342,7 @@ function handleNotifClick(el) {
                     } else {
                         postsFeed.innerHTML = '<div class="text-center text-red-500 p-4">حدث خطأ في جلب المنشورات.</div>';
                     }
+                    setTimeout(setupShowMoreButtons, 120);
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -2168,18 +2355,19 @@ function handleNotifClick(el) {
             buttonElement.disabled = true;
 
             try {
-                const response = await fetch(`/api/posts/${postId}/like`, {
+                const response = await fetch(`/api/posts/${encodeURIComponent(postId)}/like`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    const postCard = document.querySelector(`div[data-post-id="${postId}"]`);
+                    const postCard = document.querySelector(`div[data-post-id="${escapeAttr(postId)}"]`);
                     if (postCard) {
                         const likesSpan = postCard.querySelector('.flex.justify-between span:first-child');
-                        if (likesSpan) likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${result.newLikes} إعجاب`;
+                        if (likesSpan) likesSpan.innerHTML = `<i class="fas fa-heart ml-1"></i> ${Number(result.newLikes)} إعجاب`;
                     }
 
                     if (result.action === 'liked') {
@@ -2214,7 +2402,7 @@ function handleNotifClick(el) {
 
             try {
                 // Same-origin EventSource will include cookies for session auth
-                commentsEventSource = new EventSource(`/api/posts/${postId}/comments/stream`);
+                commentsEventSource = new EventSource(`/api/posts/${encodeURIComponent(postId)}/comments/stream`);
             } catch (err) {
                 console.warn('Failed to create EventSource', err);
                 commentsEventSource = null;
@@ -2405,7 +2593,7 @@ function handleNotifClick(el) {
             commentsListEl.innerHTML = '<div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>';
             
             try {
-                const response = await fetch(`/api/posts/${postId}/comments`, { credentials: 'same-origin' });
+                const response = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, { credentials: 'same-origin' });
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
@@ -2462,12 +2650,12 @@ function handleNotifClick(el) {
              if(userIds.length === 0) return;
 
              try {
-                const promises = userIds.map(uid => fetch(`/api/profile?userId=${uid}`).then(r => r.ok ? r.json() : null).catch(()=>null));
+                const promises = userIds.map(uid => fetch(`/api/profile?userId=${encodeURIComponent(uid)}`).then(r => r.ok ? r.json() : null).catch(()=>null));
                 const profiles = await Promise.all(promises);
                 
                 profiles.forEach(p => {
                     if(p && p.id && p.is_verified) {
-                        const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${p.id}"]`);
+                        const containers = document.querySelectorAll(`.badge-container[data-badge-user-id="${escapeAttr(p.id)}"]`);
                         containers.forEach(cont => {
                             if(cont.innerHTML.trim() === '') {
                                 cont.innerHTML = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="Verified">`;
@@ -2494,7 +2682,7 @@ function handleNotifClick(el) {
                 let response;
                 if (currentReplyCommentId) {
                     // إذا كان هناك رد على تعليق
-                    response = await fetch(`/api/posts/${currentPostIdForComments}/comments/${currentReplyCommentId}/reply`, {
+                    response = await fetch(`/api/posts/${encodeURIComponent(currentPostIdForComments)}/comments/${encodeURIComponent(currentReplyCommentId)}/reply`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'same-origin',
@@ -2502,7 +2690,7 @@ function handleNotifClick(el) {
                     });
                 } else {
                     // إذا كان تعليق عادي
-                    response = await fetch(`/api/posts/${currentPostIdForComments}/comment`, {
+                    response = await fetch(`/api/posts/${encodeURIComponent(currentPostIdForComments)}/comment`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'same-origin',
@@ -2548,17 +2736,19 @@ function handleNotifClick(el) {
         });
         
         document.addEventListener('DOMContentLoaded', () => {
-            fetch('/api/profile')
+            fetch('/api/profile', { credentials: 'same-origin' })
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
                     const profilePicElement = document.getElementById('userProfilePic');
                     const meDot = document.getElementById('meOnlineDot');
-                    if (data && data.profile_picture_url) {
-                        profilePicElement.src = data.profile_picture_url;
-                        profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
-                        currentUserId = data.id;
-                        if (data.is_online) meDot.style.display = 'inline-block';
-                        else meDot.style.display = 'none';
+                    if (data && profilePicElement) {
+                        if (data.profile_picture_url) {
+                            profilePicElement.src = data.profile_picture_url;
+                            profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
+                        }
+                        currentUserId = data && (data.id || null);
+                        if (data && data.is_online) meDot.style.display = 'inline-block';
+                        else if (meDot) meDot.style.display = 'none';
                     }
                 }).catch(console.error);
                 
@@ -2650,7 +2840,7 @@ function handleNotifClick(el) {
         })();
 
         function sendHeartbeat() {
-            fetch('/api/status/heartbeat', { method: 'POST' })
+            fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' })
                 .then(r => r.json())
                 .catch(err => console.error('Heartbeat failed', err));
         }
@@ -2664,19 +2854,9 @@ function handleNotifClick(el) {
             }
         });
 
-        // small helpers
-        function escapeHtml(s) {
-            if (!s && s !== 0) return '';
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        }
-        function escapeAttr(s) {
-            if (!s && s !== 0) return '';
-            return String(s).replace(/"/g, '&quot;');
-        }
-
         // optional: seek video helper for click on progress bar
         function seekVideo(postId, event) {
-            event.stopPropagation();
+            if (event && event.stopPropagation) event.stopPropagation();
             const bar = event.currentTarget || event.target;
             const rect = bar.getBoundingClientRect();
             const x = event.clientX - rect.left;
@@ -2791,8 +2971,8 @@ function handleNotifClick(el) {
     const STORAGE_KEY = 'trimer_accounts_v1';
     
     // نستخدم الـ API الموجود بالفعل لجلب بيانات المستخدم الحالي
-    fetch('/api/profile')
-        .then(r => r.json())
+    fetch('/api/profile', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : null)
         .then(user => {
             if (user && user.username) {
                 let accounts = [];
@@ -2826,27 +3006,10 @@ window.receiveAndroidToken = function(token) {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ token: token })
+        body: JSON.stringify({ token: token }),
+        credentials: 'same-origin'
     }).catch(err => console.error("Error saving token", err));
 };
-    function formatAndEscapeContent(text) {
-    if (!text && text !== 0) return '';
-    
-    // 1. الحماية من ثغرات XSS عبر تشفير الرموز الحساسة
-    let escapedText = String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
-    // 2. تحويل الروابط إلى عناصر قابلة للنقر
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return escapedText.replace(urlRegex, function(url) {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 hover:underline transition" dir="ltr" style="display:inline-block; max-width:100%; word-break:break-all;" onclick="event.stopPropagation()">${url}</a>`;
-    });
-}
-
 </script>
 
 </body>
