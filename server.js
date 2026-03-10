@@ -658,7 +658,11 @@ app.post('/api/stories/create', requireAuth, upload.single('story_media'), async
     const musicId = req.body.musicId || null;
     const musicUrl = req.body.musicUrl || null;
     const musicTitle = req.body.musicTitle || null;
-    const bgColor = req.body.bgColor || null;
+    // Validate bgColor to prevent XSS - only allow valid hex colors
+    let bgColor = req.body.bgColor || null;
+    if (bgColor && !/^#[0-9a-fA-F]{3,8}$/.test(bgColor)) {
+      bgColor = null;
+    }
 
     if (!mediaUrl && !caption && !musicUrl) {
       return res.status(400).json({ ok: false, error: 'محتوى القصة مطلوب' });
@@ -738,7 +742,7 @@ app.get('/api/stories', requireAuth, async (req, res) => {
       if (uid !== currentUserId) result.push(grouped[uid]);
     });
 
-    res.json({ ok: true, storyGroups: result });
+    res.json({ ok: true, stories: result });
   } catch (error) {
     console.error('Error fetching stories:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب القصص' });
