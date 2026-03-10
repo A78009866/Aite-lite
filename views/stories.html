@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aite - القصص</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="icon" href="https://res.cloudinary.com/duixjs8az/image/upload/v1765127215/post_media/1765127215249-trimer.jpg" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #000;
+            color: #e4e6eb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .glass-navbar {
+            background-color: rgba(30, 30, 30, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .app-logo {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 800;
+        }
+
+        /* Stories Grid */
+        .stories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            padding: 16px;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .story-grid-card {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 9/16;
+            max-height: 260px;
+            cursor: pointer;
+            background: rgba(20,20,20,0.8);
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .story-grid-card:hover {
+            transform: scale(1.03);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+        }
+        .story-grid-card .story-bg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .story-grid-card video.story-bg {
+            object-fit: cover;
+        }
+        .story-grid-card .story-gradient {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%);
+        }
+        .story-grid-card .story-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px;
+            z-index: 2;
+        }
+        .story-grid-card .story-avatar-sm {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #3b82f6;
+            object-fit: cover;
+        }
+        .story-grid-card .story-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .story-grid-card .story-time {
+            font-size: 10px;
+            color: rgba(255,255,255,0.6);
+        }
+        .story-grid-card .story-music-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(6px);
+            border-radius: 20px;
+            padding: 4px 8px;
+            font-size: 10px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            z-index: 3;
+        }
+        .story-grid-card .story-delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(239,68,68,0.8);
+            backdrop-filter: blur(6px);
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 4;
+            transition: background 0.2s;
+        }
+        .story-grid-card .story-delete-btn:hover {
+            background: rgba(239,68,68,1);
+        }
+
+        /* Add Story Card */
+        .add-story-grid-card {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 9/16;
+            max-height: 260px;
+            cursor: pointer;
+            background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1));
+            border: 2px dashed rgba(59,130,246,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+        .add-story-grid-card:hover {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15));
+        }
+        .add-story-grid-card .add-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(59,130,246,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #3b82f6;
+            font-size: 22px;
+        }
+        .add-story-grid-card .add-label {
+            color: #3b82f6;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        /* Story Viewer (fullscreen overlay) */
+        .story-viewer {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: #000;
+            display: none;
+            flex-direction: column;
+        }
+        .story-viewer.active {
+            display: flex;
+        }
+        .story-viewer .viewer-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            padding: 12px 16px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+        }
+        .story-viewer .progress-bars {
+            display: flex;
+            gap: 3px;
+            margin-bottom: 10px;
+        }
+        .story-viewer .progress-bar {
+            flex: 1;
+            height: 3px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.3);
+            overflow: hidden;
+        }
+        .story-viewer .progress-bar .fill {
+            height: 100%;
+            background: #fff;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        .story-viewer .viewer-media {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .story-viewer .viewer-media img,
+        .story-viewer .viewer-media video {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .story-viewer .viewer-media .text-story {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            padding: 32px;
+            font-size: 24px;
+            font-weight: 700;
+            text-align: center;
+            color: #fff;
+        }
+        .story-viewer .viewer-caption {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            padding: 20px 16px;
+            background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+            color: #fff;
+            font-size: 14px;
+            text-align: center;
+        }
+        .story-viewer .nav-area {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 40%;
+            z-index: 5;
+            cursor: pointer;
+        }
+        .story-viewer .nav-area.prev { right: 0; }
+        .story-viewer .nav-area.next { left: 0; }
+
+        /* Create Story Modal */
+        .create-story-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 90;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .create-story-modal.active {
+            display: flex;
+        }
+        .create-story-inner {
+            max-width: 500px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px 16px;
+            flex: 1;
+        }
+        .media-upload-area {
+            border: 2px dashed rgba(255,255,255,0.15);
+            border-radius: 16px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255,255,255,0.02);
+            margin-bottom: 16px;
+        }
+        .media-upload-area:hover {
+            border-color: rgba(59,130,246,0.5);
+            background: rgba(59,130,246,0.05);
+        }
+        .media-upload-area.has-file {
+            border-style: solid;
+            border-color: rgba(59,130,246,0.3);
+        }
+        .media-preview {
+            max-height: 300px;
+            border-radius: 12px;
+            object-fit: contain;
+            margin: 12px auto;
+            display: block;
+        }
+        .bg-color-picker {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 12px 0;
+        }
+        .bg-color-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .bg-color-btn.selected {
+            border-color: #fff;
+            transform: scale(1.15);
+        }
+        .music-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.02);
+        }
+        .music-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .music-item:last-child { border-bottom: none; }
+        .music-item:hover { background: rgba(255,255,255,0.04); }
+        .music-item.selected { background: rgba(59,130,246,0.15); }
+        .music-item .music-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        /* Glass bottom navbar */
+        .glass-bottom-navbar {
+            background-color: rgba(15, 15, 15, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 90px;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 12px;
+            z-index: 200;
+            font-weight: 600;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+        /* Confirm dialog */
+        .confirm-dialog {
+            position: fixed;
+            inset: 0;
+            z-index: 150;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .confirm-dialog.active { display: flex; }
+        .confirm-dialog .dialog-box {
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 340px;
+            width: 100%;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="sticky top-0 z-50 glass-navbar p-3">
+    <nav class="flex justify-between items-center max-w-6xl mx-auto">
+        <a href="/chat_list" class="text-gray-300 hover:text-white transition p-2">
+            <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <h1 class="text-xl font-bold text-white app-logo">القصص</h1>
+        <div style="width:40px"></div>
+    </nav>
+</header>
+
+<!-- Stories Grid -->
+<div id="storiesContainer" class="stories-grid" style="padding-bottom: 90px;">
+    <div class="text-gray-400 text-center p-8" style="grid-column: 1/-1;">
+        <i class="fas fa-spinner fa-spin text-2xl mb-3"></i>
+        <p>جاري تحميل القصص...</p>
+    </div>
+</div>
+
+<!-- Story Viewer -->
+<div id="storyViewer" class="story-viewer">
+    <div class="viewer-header">
+        <div id="progressBars" class="progress-bars"></div>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <img id="viewerAvatar" src="" class="w-9 h-9 rounded-full object-cover border-2 border-white/30">
+                <div>
+                    <div id="viewerUsername" class="text-white font-bold text-sm"></div>
+                    <div id="viewerTime" class="text-white/60 text-xs"></div>
+                </div>
+            </div>
+            <button onclick="closeViewer()" class="text-white/80 hover:text-white p-2">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+    </div>
+    <div class="viewer-media">
+        <div id="viewerContent"></div>
+        <div class="nav-area prev" onclick="prevStory()"></div>
+        <div class="nav-area next" onclick="nextStory()"></div>
+    </div>
+    <div id="viewerCaption" class="viewer-caption" style="display:none"></div>
+</div>
+
+<!-- Create Story Modal -->
+<div id="createStoryModal" class="create-story-modal">
+    <div class="create-story-inner">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-white font-bold text-lg">قصة جديدة</h2>
+            <button onclick="closeCreateModal()" class="text-gray-400 hover:text-white p-2">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Media Upload -->
+        <div id="mediaUploadArea" class="media-upload-area" onclick="document.getElementById('storyFileInput').click()">
+            <i class="fas fa-cloud-upload-alt text-3xl text-gray-500 mb-3"></i>
+            <p class="text-gray-400 text-sm">اضغط لاختيار صورة أو فيديو</p>
+            <p class="text-gray-600 text-xs mt-1">أو اترك فارغاً لقصة نصية</p>
+        </div>
+        <input type="file" id="storyFileInput" accept="image/*,video/*" class="hidden" onchange="onFileSelected(event)">
+        <div id="mediaPreviewContainer" class="hidden mb-4 text-center">
+            <div class="relative inline-block">
+                <img id="imgPreview" class="media-preview hidden">
+                <video id="vidPreview" class="media-preview hidden" controls></video>
+                <button onclick="clearMedia()" class="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Caption -->
+        <div class="mb-4">
+            <label class="text-gray-400 text-sm mb-1 block">النص (اختياري)</label>
+            <textarea id="captionInput" rows="2" maxlength="500"
+                class="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm resize-none focus:outline-none focus:border-blue-500/50"
+                placeholder="اكتب شيئاً..."></textarea>
+        </div>
+
+        <!-- Background Color (for text stories) -->
+        <div id="bgColorSection" class="mb-4">
+            <label class="text-gray-400 text-sm mb-2 block">لون الخلفية (للقصص النصية)</label>
+            <div class="bg-color-picker">
+                <div class="bg-color-btn selected" style="background: linear-gradient(135deg, #667eea, #764ba2)" data-color="#667eea" onclick="selectBgColor(this)"></div>
+                <div class="bg-color-btn" style="background: linear-gradient(135deg, #f093fb, #f5576c)" data-color="#f093fb" onclick="selectBgColor(this)"></div>
+                <div class="bg-color-btn" style="background: linear-gradient(135deg, #4facfe, #00f2fe)" data-color="#4facfe" onclick="selectBgColor(this)"></div>
+                <div class="bg-color-btn" style="background: linear-gradient(135deg, #43e97b, #38f9d7)" data-color="#43e97b" onclick="selectBgColor(this)"></div>
+                <div class="bg-color-btn" style="background: linear-gradient(135deg, #fa709a, #fee140)" data-color="#fa709a" onclick="selectBgColor(this)"></div>
+                <div class="bg-color-btn" style="background: linear-gradient(135deg, #a18cd1, #fbc2eb)" data-color="#a18cd1" onclick="selectBgColor(this)"></div>
+                <div class="bg-color-btn" style="background: linear-gradient(135deg, #ffecd2, #fcb69f)" data-color="#ffecd2" onclick="selectBgColor(this)"></div>
+                <div class="bg-color-btn" style="background: #1a1a2e" data-color="#1a1a2e" onclick="selectBgColor(this)"></div>
+            </div>
+        </div>
+
+        <!-- Music Section -->
+        <div class="mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <label class="text-gray-400 text-sm">موسيقى (اختياري)</label>
+                <button id="toggleMusicBtn" onclick="toggleMusicList()" class="text-blue-400 text-xs hover:text-blue-300">
+                    <i class="fas fa-music ml-1"></i> اختر موسيقى
+                </button>
+            </div>
+            <div id="selectedMusicInfo" class="hidden mb-2 flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <i class="fas fa-music text-blue-400"></i>
+                <span id="selectedMusicName" class="text-sm text-white flex-1"></span>
+                <button onclick="clearMusic()" class="text-red-400 hover:text-red-300 text-xs"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="musicListContainer" class="hidden">
+                <div id="musicList" class="music-list">
+                    <div class="text-gray-500 text-center p-4 text-sm">جاري تحميل المكتبة...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit -->
+        <button id="submitStoryBtn" onclick="submitStory()" 
+            class="w-full py-3 rounded-xl text-white font-bold text-base transition"
+            style="background: linear-gradient(135deg, #3b82f6, #8b5cf6);">
+            <i class="fas fa-paper-plane ml-2"></i> نشر القصة
+        </button>
+    </div>
+</div>
+
+<!-- Confirm Delete Dialog -->
+<div id="confirmDialog" class="confirm-dialog">
+    <div class="dialog-box">
+        <i class="fas fa-exclamation-triangle text-red-500 text-3xl mb-3"></i>
+        <h3 class="text-white font-bold text-lg mb-2">حذف القصة</h3>
+        <p class="text-gray-400 text-sm mb-5">هل أنت متأكد من حذف هذه القصة؟</p>
+        <div class="flex gap-3">
+            <button id="confirmDeleteBtn" class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition">حذف</button>
+            <button onclick="closeConfirmDialog()" class="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-bold transition">الغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom Navbar -->
+<div class="fixed bottom-0 left-0 right-0 z-50 glass-bottom-navbar">
+    <nav class="flex justify-around items-center max-w-lg mx-auto h-14">
+        <a href="/chat_list" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition">
+            <i class="fas fa-home text-xl"></i>
+        </a>
+        <a href="/users_list" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition">
+            <i class="fas fa-comment-dots text-xl"></i>
+        </a>
+        <a href="/reels" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition">
+            <i class="fas fa-clapperboard text-xl"></i>
+        </a>
+        <a href="/notifications" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition">
+            <i class="fas fa-bell text-xl"></i>
+        </a>
+        <a href="/all_users" class="flex flex-col items-center justify-center p-2 text-gray-400 hover:text-white transition">
+            <i class="fas fa-users text-xl"></i>
+        </a>
+    </nav>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+    const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
+
+    let allStories = [];         // flat list of all story objects
+    let groupedStories = [];     // grouped by user
+    let currentUserId = null;
+    let musicTracks = [];
+    let selectedMusic = null;
+    let selectedBgColor = '#667eea';
+    let selectedFile = null;
+    let storyToDelete = null;
+
+    // viewer state
+    let viewerGroupIdx = 0;
+    let viewerStoryIdx = 0;
+    let viewerTimer = null;
+    let viewerAudio = null;
+    const STORY_DURATION = 6000; // 6s per story
+
+    function escapeHtml(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function escapeAttr(s) {
+        if (!s) return '';
+        return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function timeAgo(ts) {
+        const diff = Date.now() - ts;
+        const m = Math.floor(diff / 60000);
+        if (m < 1) return 'الآن';
+        if (m < 60) return m + ' د';
+        const h = Math.floor(m / 60);
+        if (h < 24) return h + ' س';
+        return Math.floor(h / 24) + ' ي';
+    }
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    // ---- Fetch & Display Stories ----
+    async function loadStories() {
+        try {
+            const [storiesRes, profileRes] = await Promise.all([
+                fetch('/api/stories', { credentials: 'same-origin' }),
+                fetch('/api/profile', { credentials: 'same-origin' })
+            ]);
+            const storiesData = await storiesRes.json();
+            const profileData = await profileRes.json();
+            currentUserId = profileData.id || profileData.userId || null;
+
+            if (storiesData.ok && storiesData.stories) {
+                groupedStories = storiesData.stories;
+                allStories = [];
+                groupedStories.forEach(g => {
+                    if (g.stories) allStories.push(...g.stories);
+                });
+            }
+            renderStoriesGrid();
+        } catch (e) {
+            console.error('Failed to load stories', e);
+            document.getElementById('storiesContainer').innerHTML = 
+                '<div class="text-red-400 text-center p-8" style="grid-column:1/-1">فشل في تحميل القصص</div>';
+        }
+    }
+
+    function renderStoriesGrid() {
+        const container = document.getElementById('storiesContainer');
+        let html = '';
+
+        // Add story card
+        html += `
+            <div class="add-story-grid-card" onclick="openCreateModal()">
+                <div class="add-icon"><i class="fas fa-plus"></i></div>
+                <div class="add-label">أضف قصة</div>
+            </div>
+        `;
+
+        // Render each user's latest story as a card
+        groupedStories.forEach((group, gIdx) => {
+            const stories = group.stories || [];
+            if (stories.length === 0) return;
+            const latest = stories[0]; // most recent
+            const avatar = (latest.user && latest.user.profile_picture_url) || DEFAULT_AVATAR;
+            const username = (latest.user && latest.user.username) || 'مستخدم';
+            const isOwn = latest.userId === currentUserId;
+            const time = timeAgo(latest.timestamp || Date.now());
+
+            let bgContent = '';
+            if (latest.mediaType === 'image' && latest.mediaUrl) {
+                bgContent = `<img class="story-bg" src="${escapeAttr(latest.mediaUrl)}" alt="story" onerror="this.style.display='none'">`;
+            } else if (latest.mediaType === 'video' && latest.mediaUrl) {
+                bgContent = `<video class="story-bg" src="${escapeAttr(latest.mediaUrl)}" muted preload="metadata"></video>`;
+            } else {
+                const bg = latest.bgColor || '#667eea';
+                bgContent = `<div class="story-bg" style="background: linear-gradient(135deg, ${bg}, ${adjustColor(bg)})"></div>`;
+            }
+
+            const musicBadge = latest.musicTitle 
+                ? `<div class="story-music-badge"><i class="fas fa-music"></i> ${escapeHtml(latest.musicTitle)}</div>` 
+                : '';
+
+            const deleteBtn = isOwn 
+                ? `<button class="story-delete-btn" onclick="event.stopPropagation();confirmDelete('${escapeAttr(latest.storyId)}')" title="حذف"><i class="fas fa-trash-alt"></i></button>` 
+                : '';
+
+            html += `
+                <div class="story-grid-card" onclick="openViewer(${gIdx}, 0)">
+                    ${bgContent}
+                    <div class="story-gradient"></div>
+                    ${musicBadge}
+                    ${deleteBtn}
+                    <div class="story-info">
+                        <div class="flex items-center gap-2 mb-1">
+                            <img class="story-avatar-sm" src="${escapeAttr(avatar)}" alt="${escapeAttr(username)}" onerror="this.src='${escapeAttr(DEFAULT_AVATAR)}'">
+                            <div style="min-width:0">
+                                <div class="story-name">${escapeHtml(username)}</div>
+                                <div class="story-time">${time}${stories.length > 1 ? ' &bull; ' + stories.length + ' قصص' : ''}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (groupedStories.length === 0) {
+            html += '<div class="text-gray-500 text-center p-8" style="grid-column:1/-1"><i class="fas fa-camera-retro text-3xl mb-3 opacity-50"></i><p>لا توجد قصص حالياً</p><p class="text-xs mt-1">كن أول من ينشر قصة!</p></div>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    function adjustColor(hex) {
+        // Darken/shift color slightly for gradient end
+        try {
+            let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+            r = Math.max(0, r - 40); g = Math.max(0, g - 30); b = Math.min(255, b + 20);
+            return '#' + [r,g,b].map(c => c.toString(16).padStart(2,'0')).join('');
+        } catch(e) { return '#333'; }
+    }
+
+    // ---- Story Viewer ----
+    function openViewer(groupIdx, storyIdx) {
+        viewerGroupIdx = groupIdx;
+        viewerStoryIdx = storyIdx || 0;
+        document.getElementById('storyViewer').classList.add('active');
+        document.body.style.overflow = 'hidden';
+        showCurrentStory();
+        // Mark as viewed
+        const story = getCurrentStory();
+        if (story) {
+            fetch(`/api/stories/${story.storyId}/view`, { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+        }
+    }
+
+    function closeViewer() {
+        document.getElementById('storyViewer').classList.remove('active');
+        document.body.style.overflow = '';
+        clearInterval(viewerTimer);
+        if (viewerAudio) { viewerAudio.pause(); viewerAudio = null; }
+        // Stop any playing video
+        const vid = document.querySelector('#viewerContent video');
+        if (vid) vid.pause();
+    }
+
+    function getCurrentStory() {
+        const group = groupedStories[viewerGroupIdx];
+        if (!group || !group.stories) return null;
+        return group.stories[viewerStoryIdx] || null;
+    }
+
+    function showCurrentStory() {
+        const story = getCurrentStory();
+        if (!story) { closeViewer(); return; }
+
+        const group = groupedStories[viewerGroupIdx];
+        const stories = group.stories || [];
+
+        // Progress bars
+        const pbHtml = stories.map((_, i) => {
+            let fillWidth = '0%';
+            if (i < viewerStoryIdx) fillWidth = '100%';
+            return `<div class="progress-bar"><div class="fill" id="pb-${i}" style="width:${fillWidth}"></div></div>`;
+        }).join('');
+        document.getElementById('progressBars').innerHTML = pbHtml;
+
+        // Header info
+        const avatar = (story.user && story.user.profile_picture_url) || DEFAULT_AVATAR;
+        const username = (story.user && story.user.username) || 'مستخدم';
+        document.getElementById('viewerAvatar').src = avatar;
+        document.getElementById('viewerUsername').textContent = username;
+        document.getElementById('viewerTime').textContent = timeAgo(story.timestamp || Date.now());
+
+        // Media content
+        const contentEl = document.getElementById('viewerContent');
+        if (story.mediaType === 'image' && story.mediaUrl) {
+            contentEl.innerHTML = `<img src="${escapeAttr(story.mediaUrl)}" style="width:100%;height:100%;object-fit:contain">`;
+        } else if (story.mediaType === 'video' && story.mediaUrl) {
+            contentEl.innerHTML = `<video src="${escapeAttr(story.mediaUrl)}" autoplay muted playsinline style="width:100%;height:100%;object-fit:contain"></video>`;
+        } else {
+            const bg = story.bgColor || '#667eea';
+            contentEl.innerHTML = `<div class="text-story" style="background:linear-gradient(135deg,${bg},${adjustColor(bg)})">${escapeHtml(story.caption || '')}</div>`;
+        }
+
+        // Caption
+        const captionEl = document.getElementById('viewerCaption');
+        if (story.caption && story.mediaUrl) {
+            captionEl.textContent = story.caption;
+            captionEl.style.display = 'block';
+        } else {
+            captionEl.style.display = 'none';
+        }
+
+        // Music
+        if (viewerAudio) { viewerAudio.pause(); viewerAudio = null; }
+        if (story.musicUrl) {
+            viewerAudio = new Audio(story.musicUrl);
+            viewerAudio.volume = 0.5;
+            viewerAudio.play().catch(() => {});
+        }
+
+        // Auto-advance timer
+        startProgress();
+    }
+
+    function startProgress() {
+        clearInterval(viewerTimer);
+        const story = getCurrentStory();
+        if (!story) return;
+
+        const isVideo = story.mediaType === 'video' && story.mediaUrl;
+        let duration = STORY_DURATION;
+        
+        if (isVideo) {
+            const vid = document.querySelector('#viewerContent video');
+            if (vid) {
+                vid.onloadedmetadata = () => {
+                    duration = Math.min(vid.duration * 1000, 30000);
+                    runProgressBar(duration);
+                };
+                vid.onended = () => advanceStory();
+                // If metadata already loaded
+                if (vid.duration) {
+                    duration = Math.min(vid.duration * 1000, 30000);
+                }
+            }
+        }
+        runProgressBar(duration);
+    }
+
+    function runProgressBar(duration) {
+        clearInterval(viewerTimer);
+        const fill = document.getElementById(`pb-${viewerStoryIdx}`);
+        if (!fill) return;
+        const startTime = Date.now();
+        viewerTimer = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const pct = Math.min(100, (elapsed / duration) * 100);
+            fill.style.width = pct + '%';
+            if (pct >= 100) {
+                clearInterval(viewerTimer);
+                advanceStory();
+            }
+        }, 50);
+    }
+
+    function advanceStory() {
+        const group = groupedStories[viewerGroupIdx];
+        if (!group) { closeViewer(); return; }
+        if (viewerStoryIdx < group.stories.length - 1) {
+            viewerStoryIdx++;
+        } else if (viewerGroupIdx < groupedStories.length - 1) {
+            viewerGroupIdx++;
+            viewerStoryIdx = 0;
+        } else {
+            closeViewer();
+            return;
+        }
+        showCurrentStory();
+        const story = getCurrentStory();
+        if (story) fetch(`/api/stories/${story.storyId}/view`, { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    }
+
+    function nextStory() { advanceStory(); }
+
+    function prevStory() {
+        if (viewerStoryIdx > 0) {
+            viewerStoryIdx--;
+        } else if (viewerGroupIdx > 0) {
+            viewerGroupIdx--;
+            const g = groupedStories[viewerGroupIdx];
+            viewerStoryIdx = (g && g.stories) ? g.stories.length - 1 : 0;
+        }
+        showCurrentStory();
+    }
+
+    // ---- Create Story ----
+    function openCreateModal() {
+        document.getElementById('createStoryModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+        loadMusicLibrary();
+    }
+
+    function closeCreateModal() {
+        document.getElementById('createStoryModal').classList.remove('active');
+        document.body.style.overflow = '';
+        clearMedia();
+        document.getElementById('captionInput').value = '';
+        clearMusic();
+    }
+
+    function onFileSelected(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        selectedFile = file;
+        const isImage = file.type.startsWith('image/');
+        const isVideo = file.type.startsWith('video/');
+        
+        document.getElementById('mediaUploadArea').classList.add('has-file');
+        const previewCont = document.getElementById('mediaPreviewContainer');
+        previewCont.classList.remove('hidden');
+
+        if (isImage) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = document.getElementById('imgPreview');
+                img.src = ev.target.result;
+                img.classList.remove('hidden');
+                document.getElementById('vidPreview').classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+        } else if (isVideo) {
+            const url = URL.createObjectURL(file);
+            const vid = document.getElementById('vidPreview');
+            vid.src = url;
+            vid.classList.remove('hidden');
+            document.getElementById('imgPreview').classList.add('hidden');
+        }
+    }
+
+    function clearMedia() {
+        selectedFile = null;
+        document.getElementById('storyFileInput').value = '';
+        document.getElementById('mediaUploadArea').classList.remove('has-file');
+        document.getElementById('mediaPreviewContainer').classList.add('hidden');
+        document.getElementById('imgPreview').classList.add('hidden');
+        document.getElementById('vidPreview').classList.add('hidden');
+    }
+
+    function selectBgColor(el) {
+        document.querySelectorAll('.bg-color-btn').forEach(b => b.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedBgColor = el.dataset.color;
+    }
+
+    // ---- Music ----
+    async function loadMusicLibrary() {
+        if (musicTracks.length > 0) return;
+        try {
+            const res = await fetch('/api/stories/music', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (data.ok && data.tracks) {
+                musicTracks = data.tracks;
+                renderMusicList();
+            }
+        } catch (e) {
+            console.error('Failed to load music', e);
+        }
+    }
+
+    function renderMusicList() {
+        const list = document.getElementById('musicList');
+        if (musicTracks.length === 0) {
+            list.innerHTML = '<div class="text-gray-500 text-center p-4 text-sm">لا تتوفر موسيقى</div>';
+            return;
+        }
+        list.innerHTML = musicTracks.map(t => `
+            <div class="music-item ${selectedMusic && selectedMusic.id === t.id ? 'selected' : ''}" onclick="selectTrack('${escapeAttr(t.id)}')">
+                <div class="music-icon"><i class="fas fa-music"></i></div>
+                <div style="min-width:0;flex:1">
+                    <div class="text-white text-sm font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.title)}</div>
+                    <div class="text-gray-500 text-xs">${escapeHtml(t.artist)} &bull; ${t.duration || 30}s</div>
+                </div>
+                ${selectedMusic && selectedMusic.id === t.id ? '<i class="fas fa-check-circle text-blue-400"></i>' : ''}
+            </div>
+        `).join('');
+    }
+
+    function toggleMusicList() {
+        const cont = document.getElementById('musicListContainer');
+        cont.classList.toggle('hidden');
+    }
+
+    function selectTrack(trackId) {
+        const track = musicTracks.find(t => t.id === trackId);
+        if (!track) return;
+        if (selectedMusic && selectedMusic.id === trackId) {
+            clearMusic();
+            return;
+        }
+        selectedMusic = track;
+        document.getElementById('selectedMusicInfo').classList.remove('hidden');
+        document.getElementById('selectedMusicName').textContent = track.title + ' - ' + track.artist;
+        renderMusicList();
+    }
+
+    function clearMusic() {
+        selectedMusic = null;
+        document.getElementById('selectedMusicInfo').classList.add('hidden');
+        document.getElementById('selectedMusicName').textContent = '';
+        renderMusicList();
+    }
+
+    // ---- Submit Story ----
+    async function submitStory() {
+        const btn = document.getElementById('submitStoryBtn');
+        const caption = document.getElementById('captionInput').value.trim();
+
+        if (!selectedFile && !caption) {
+            showToast('أضف صورة/فيديو أو نص على الأقل');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري النشر...';
+
+        try {
+            const formData = new FormData();
+            if (selectedFile) formData.append('story_media', selectedFile);
+            if (caption) formData.append('caption', caption);
+            formData.append('bgColor', selectedBgColor);
+            if (selectedMusic) {
+                formData.append('musicId', selectedMusic.id);
+                formData.append('musicUrl', selectedMusic.url);
+                formData.append('musicTitle', selectedMusic.title);
+            }
+
+            const res = await fetch('/api/stories/create', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (res.ok && data.ok) {
+                showToast('تم نشر القصة بنجاح!');
+                closeCreateModal();
+                loadStories();
+            } else {
+                showToast(data.error || 'فشل في نشر القصة');
+            }
+        } catch (e) {
+            console.error('Submit story error', e);
+            showToast('خطأ في الاتصال');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i> نشر القصة';
+        }
+    }
+
+    // ---- Delete Story ----
+    function confirmDelete(storyId) {
+        storyToDelete = storyId;
+        document.getElementById('confirmDialog').classList.add('active');
+        document.getElementById('confirmDeleteBtn').onclick = () => deleteStory(storyId);
+    }
+
+    function closeConfirmDialog() {
+        storyToDelete = null;
+        document.getElementById('confirmDialog').classList.remove('active');
+    }
+
+    async function deleteStory(storyId) {
+        try {
+            const res = await fetch(`/api/stories/${encodeURIComponent(storyId)}`, {
+                method: 'DELETE',
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                showToast('تم حذف القصة');
+                closeConfirmDialog();
+                loadStories();
+            } else {
+                showToast(data.error || 'فشل في الحذف');
+            }
+        } catch (e) {
+            showToast('خطأ في الاتصال');
+        }
+    }
+
+    // ---- Init ----
+    document.addEventListener('DOMContentLoaded', () => {
+        loadStories();
+    });
+</script>
+</body>
+</html>
