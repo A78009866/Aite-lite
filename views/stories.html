@@ -152,7 +152,7 @@
             word-break: break-word;
         }
 
-        /* Bottom section (like button) */
+        /* Bottom section (like button + views) */
         .story-bottom {
             position: absolute;
             bottom: 24px;
@@ -160,9 +160,29 @@
             right: 0;
             padding: 0 24px;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             align-items: center;
             z-index: 30;
+        }
+        /* Views count */
+        .views-count {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+            cursor: default;
+        }
+        .views-count.clickable {
+            cursor: pointer;
+        }
+        .views-count.clickable:hover {
+            opacity: 0.8;
+        }
+        .views-count i {
+            font-size: 18px;
         }
         .like-btn {
             background: none;
@@ -319,6 +339,143 @@
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
+
+        /* Viewers Modal */
+        .viewers-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            z-index: 100;
+        }
+        .viewers-overlay.active {
+            display: flex;
+        }
+        .viewers-panel {
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-bottom: none;
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-width: 500px;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+            transform: translateY(100%);
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .viewers-overlay.active .viewers-panel {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .viewers-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 20px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .viewers-header h3 {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .viewers-header h3 .count-badge {
+            background: rgba(255,255,255,0.12);
+            color: #ccc;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 99px;
+        }
+        .viewers-header .close-viewers {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .viewers-header .close-viewers:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .viewers-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+        .viewers-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .viewers-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.15);
+            border-radius: 4px;
+        }
+        .viewer-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            gap: 12px;
+            transition: background 0.15s;
+        }
+        .viewer-item:hover {
+            background: rgba(255,255,255,0.04);
+        }
+        .viewer-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+        .viewer-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .viewer-name {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .viewer-name .verify-badge {
+            color: #3b82f6;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .viewer-liked {
+            flex-shrink: 0;
+            font-size: 22px;
+            color: #ef4444;
+        }
+        .viewers-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+            font-size: 15px;
+        }
+        .viewers-empty i {
+            font-size: 40px;
+            margin-bottom: 12px;
+            display: block;
+            opacity: 0.4;
+        }
     </style>
 </head>
 <body>
@@ -358,8 +515,12 @@
     <!-- Text -->
     <div class="story-text" id="storyText"></div>
 
-    <!-- Bottom (Like) -->
+    <!-- Bottom (Views + Like) -->
     <div class="story-bottom">
+        <div class="views-count" id="viewsCount" onclick="openViewersModal()">
+            <i class="far fa-eye"></i>
+            <span id="viewsNumber">0</span>
+        </div>
         <button class="like-btn" id="likeBtn" title="إعجاب">
             <i class="far fa-heart" id="likeIcon"></i>
         </button>
@@ -382,6 +543,24 @@
         <div class="btn-row">
             <button class="btn-delete" id="confirmDeleteBtn">حذف</button>
             <button class="btn-cancel" id="cancelDeleteBtn">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Viewers Modal -->
+<div class="viewers-overlay" id="viewersOverlay">
+    <div class="viewers-panel">
+        <div class="viewers-header">
+            <h3><i class="far fa-eye"></i> المشاهدات <span class="count-badge" id="viewersCountBadge">0</span></h3>
+            <button class="close-viewers" id="closeViewersBtn" title="إغلاق">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="viewers-list" id="viewersList">
+            <div class="viewers-empty" id="viewersEmpty">
+                <i class="far fa-eye-slash"></i>
+                لا توجد مشاهدات بعد
+            </div>
         </div>
     </div>
 </div>
@@ -596,13 +775,113 @@
             }
         });
 
+        // Close viewers modal
+        document.getElementById('closeViewersBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeViewersModal();
+        });
+
+        // Close viewers on overlay click
+        document.getElementById('viewersOverlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                closeViewersModal();
+            }
+        });
+
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
             if (document.getElementById('confirmOverlay').classList.contains('active')) return;
+            if (document.getElementById('viewersOverlay').classList.contains('active')) {
+                if (e.key === 'Escape') closeViewersModal();
+                return;
+            }
             if (e.key === 'ArrowLeft') nextStory();
             else if (e.key === 'ArrowRight') prevStory();
             else if (e.key === 'Escape') goBack();
         });
+    }
+
+    // ==================== Record View ====================
+    async function recordView(storyId) {
+        try {
+            await fetch(`/api/stories/${storyId}/view`, {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+        } catch(e) { console.error('View record error:', e); }
+    }
+
+    // ==================== Fetch Views Count ====================
+    async function fetchViewsCount(storyId) {
+        try {
+            const res = await fetch(`/api/stories/${storyId}/views-count`, { credentials: 'same-origin' });
+            if (res.ok) {
+                const data = await res.json();
+                return data.viewsCount || 0;
+            }
+        } catch(e) { console.error('Views count error:', e); }
+        return 0;
+    }
+
+    // ==================== Fetch Viewers List ====================
+    async function fetchViewers(storyId) {
+        try {
+            const res = await fetch(`/api/stories/${storyId}/viewers`, { credentials: 'same-origin' });
+            if (res.ok) {
+                const data = await res.json();
+                return data.viewers || [];
+            }
+        } catch(e) { console.error('Viewers fetch error:', e); }
+        return [];
+    }
+
+    // ==================== Viewers Modal ====================
+    async function openViewersModal() {
+        const group = storiesGroups[currentGroupIndex];
+        // فقط صاحب القصة يمكنه فتح النافذة
+        if (String(group.userId) !== String(currentUserId)) return;
+
+        pauseTimer();
+        const story = group.items[currentItemIndex];
+        const overlay = document.getElementById('viewersOverlay');
+        const list = document.getElementById('viewersList');
+        const badge = document.getElementById('viewersCountBadge');
+        const emptyMsg = document.getElementById('viewersEmpty');
+
+        // عرض حالة التحميل
+        list.innerHTML = '<div class="viewers-empty"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+        overlay.classList.add('active');
+
+        const viewers = await fetchViewers(story.id);
+        badge.textContent = viewers.length;
+
+        if (viewers.length === 0) {
+            list.innerHTML = '<div class="viewers-empty"><i class="far fa-eye-slash"></i> لا توجد مشاهدات بعد</div>';
+        } else {
+            let html = '';
+            for (const v of viewers) {
+                const verifyBadge = v.is_verified ? '<i class="fas fa-check-circle verify-badge"></i>' : '';
+                const heartIcon = v.hasLiked ? '<i class="fas fa-heart viewer-liked"></i>' : '';
+                html += `
+                    <div class="viewer-item">
+                        <img class="viewer-avatar" src="${escapeAttr(v.profile_picture_url || DEFAULT_AVATAR)}" onerror="this.src='${DEFAULT_AVATAR}'" alt="">
+                        <div class="viewer-info">
+                            <div class="viewer-name">
+                                ${escapeHtml(v.username)}
+                                ${verifyBadge}
+                            </div>
+                        </div>
+                        ${heartIcon}
+                    </div>
+                `;
+            }
+            list.innerHTML = html;
+        }
+    }
+
+    function closeViewersModal() {
+        document.getElementById('viewersOverlay').classList.remove('active');
+        resumeTimer();
     }
 
     // ==================== Render Story ====================
@@ -623,11 +902,20 @@
         document.getElementById('storyUsername').textContent = group.username || 'مستخدم';
 
         // Delete button visibility
+        const isOwner = String(group.userId) === String(currentUserId);
         const deleteBtn = document.getElementById('deleteBtn');
-        if (String(group.userId) === String(currentUserId)) {
+        if (isOwner) {
             deleteBtn.style.display = 'flex';
         } else {
             deleteBtn.style.display = 'none';
+        }
+
+        // Views count - make clickable only for owner
+        const viewsCountEl = document.getElementById('viewsCount');
+        if (isOwner) {
+            viewsCountEl.classList.add('clickable');
+        } else {
+            viewsCountEl.classList.remove('clickable');
         }
 
         // Progress bars
@@ -672,12 +960,23 @@
         likeIcon.className = 'far fa-heart';
         likeBtn.classList.remove('liked');
 
-        // Check if already liked
-        const isLiked = await checkLikeStatus(story.id);
+        // Reset views count
+        document.getElementById('viewsNumber').textContent = '0';
+
+        // Record view + fetch like status + fetch views count in parallel
+        const [isLiked, viewsCount] = await Promise.all([
+            checkLikeStatus(story.id),
+            fetchViewsCount(story.id),
+            recordView(story.id)
+        ]);
+
         if (isLiked) {
             likeIcon.className = 'fas fa-heart';
             likeBtn.classList.add('liked');
         }
+
+        // Update views count display
+        document.getElementById('viewsNumber').textContent = viewsCount;
     }
 
     // ==================== Progress Bars ====================
