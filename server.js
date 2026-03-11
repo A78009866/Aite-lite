@@ -807,6 +807,94 @@ app.post('/api/stories/:storyId/unlike', requireAuth, async (req, res) => {
   }
 });
 
+// 7. تسجيل مشاهدة قصة (View)
+app.post('/api/stories/:storyId/view', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { storyId } = req.params;
+
+  try {
+    // تحقق من وجود القصة
+    const storySnap = await db.ref(`stories/${storyId}`).once('value');
+    if (!storySnap.exists()) return res.status(404).json({ ok: false, error: 'القصة غير موجودة' });
+
+    // تسجيل المشاهدة (لن تتكرر لنفس المستخدم)
+    await db.ref(`story_views/${storyId}/${userId}`).set({
+      userId: userId,
+      timestamp: admin.database.ServerValue.TIMESTAMP
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error recording story view:', error);
+    res.status(500).json({ ok: false, error: 'فشل تسجيل المشاهدة' });
+  }
+});
+
+// 8. جلب عدد مشاهدات قصة (للعامة)
+app.get('/api/stories/:storyId/views-count', requireAuth, async (req, res) => {
+  const { storyId } = req.params;
+
+  try {
+    const viewsSnap = await db.ref(`story_views/${storyId}`).once('value');
+    const viewsCount = viewsSnap.exists() ? Object.keys(viewsSnap.val()).length : 0;
+    res.json({ ok: true, viewsCount });
+  } catch (error) {
+    console.error('Error fetching views count:', error);
+    res.status(500).json({ ok: false, viewsCount: 0 });
+  }
+});
+
+// 9. جلب قائمة المشاهدين (لصاحب القصة فقط)
+app.get('/api/stories/:storyId/viewers', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { storyId } = req.params;
+
+  try {
+    // تحقق أن المستخدم هو صاحب القصة
+    const storySnap = await db.ref(`stories/${storyId}`).once('value');
+    if (!storySnap.exists()) return res.status(404).json({ ok: false, error: 'القصة غير موجودة' });
+
+    const story = storySnap.val();
+    if (story.userId !== userId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح - فقط صاحب القصة يمكنه رؤية المشاهدين' });
+    }
+
+    // جلب المشاهدات
+    const viewsSnap = await db.ref(`story_views/${storyId}`).once('value');
+    const viewsData = viewsSnap.val() || {};
+
+    // جلب الإعجابات
+    const likesSnap = await db.ref(`story_likes/${storyId}`).once('value');
+    const likesData = likesSnap.val() || {};
+
+    // جلب بيانات البروفايلات
+    const viewerIds = Object.keys(viewsData);
+    const viewers = [];
+
+    for (const viewerId of viewerIds) {
+      const profileSnap = await db.ref(`profiles/${viewerId}`).once('value');
+      const profile = profileSnap.val() || {};
+
+      viewers.push({
+        userId: viewerId,
+        username: profile.username || 'مستخدم',
+        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_verified: !!profile.is_verified,
+        hasLiked: !!likesData[viewerId],
+        viewedAt: viewsData[viewerId].timestamp || 0
+      });
+    }
+
+    // ترتيب حسب الأحدث
+    viewers.sort((a, b) => b.viewedAt - a.viewedAt);
+
+    res.json({ ok: true, viewers, viewsCount: viewers.length });
+  } catch (error) {
+    console.error('Error fetching story viewers:', error);
+    res.status(500).json({ ok: false, error: 'فشل جلب المشاهدين' });
+  }
+});
+
 // ---------------- API: Chat & Messages ----------------
 
 app.get('/api/chats', requireAuth, async (req, res) => {
