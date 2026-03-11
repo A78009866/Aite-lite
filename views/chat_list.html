@@ -2302,6 +2302,59 @@ function handleNotifClick(el) {
                 showToast("خطأ في الحذف");
             }
         }
+        async function fetchAndDisplayStories() {
+    const storiesRow = document.getElementById('storiesRow');
+    if (!storiesRow) return;
+
+    try {
+        const res = await fetch('/api/stories', { credentials: 'same-origin' });
+        const data = await res.json();
+
+        // حتى لو لم تكن هناك قصص من الأصدقاء، يجب إظهار دائرة "إضافتي"
+        let stories = (data && data.ok && Array.isArray(data.stories)) ? data.stories : [];
+        storiesDataGroups = stories; 
+
+        // رسم شريط القصص
+        let trayHtml = `
+            <div class="story-circle-wrapper" onclick="location.href='/create-story'">
+                <div class="story-circle viewed">
+                    <img src="${escapeAttr(document.getElementById('userProfilePic').src)}" alt="أنا">
+                    <div class="create-story-btn"><i class="fas fa-plus"></i></div>
+                </div>
+                <span class="story-username">إضافتي</span>
+            </div>
+        `;
+
+        // إضافة قصص الأصدقاء إذا وجدت
+        stories.forEach((group, index) => {
+            const hasUnviewed = group.items.some(item => !item.viewed);
+            trayHtml += `
+                <div class="story-circle-wrapper" onclick="openStoryViewer(${index})">
+                    <div class="story-circle ${hasUnviewed ? '' : 'viewed'}">
+                        <img src="${escapeAttr(group.profile_picture_url || DEFAULT_AVATAR)}" alt="${escapeHtml(group.username)}">
+                    </div>
+                    <span class="story-username">${escapeHtml(group.username)}</span>
+                </div>
+            `;
+        });
+
+        storiesRow.innerHTML = trayHtml;
+
+    } catch (e) {
+        console.error("خطأ في جلب القصص:", e);
+        // في حالة الخطأ، أظهر على الأقل زر إضافة قصة
+        storiesRow.innerHTML = `
+            <div class="story-circle-wrapper" onclick="location.href='/create-story'">
+                <div class="story-circle viewed">
+                    <img src="${escapeAttr(document.getElementById('userProfilePic').src)}" alt="أنا">
+                    <div class="create-story-btn"><i class="fas fa-plus"></i></div>
+                </div>
+                <span class="story-username">إضافتي</span>
+            </div>
+        `;
+    }
+}
+
 
             
 
