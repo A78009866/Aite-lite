@@ -204,6 +204,15 @@
             display: inline-block;
             line-height: 0;
         }
+        .avatar-wrapper.has-story img#profileImage {
+            border: 4px solid transparent;
+            background-image: linear-gradient(#000, #000), linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+        }
+        .avatar-wrapper.no-story img#profileImage {
+            border-color: #4b5563;
+        }
 
         .status-indicator {
             position: absolute;
@@ -476,7 +485,7 @@
 
 
     <main class="max-w-6xl mx-auto p-4">
-        <div class="max-w-xl mx-auto">
+        <div class="max-w-full mx-auto">
 
             <div id="profileCard" class="glass-profile-card rounded-xl shadow-2xl p-0 overflow-hidden mb-4 animate-fadeIn">
 
@@ -1087,7 +1096,7 @@ function createPostCard(post) {
         if (post.media.type === 'image') {
             mediaContent = `
                 <div class="mt-3 cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)">
-                    <img src="${post.media.url}" alt="صورة المنشور" class="w-full max-h-96 object-cover rounded-lg">
+                    <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover rounded-lg">
                 </div>`;
         } else if (post.media.type === 'video') {
             const poster = post.media.poster || post.media.thumbnail || 'https://via.placeholder.com/1200x675?text=Video';
@@ -1797,6 +1806,15 @@ async function fetchAndDisplayProfile() {
             document.getElementById('pageTitle').textContent = `Aite - @${data.username}`;
 
             setUserOnlineUI(data.id, !!data.is_online, data.last_seen);
+
+            // Story-based avatar border coloring
+            if (data.has_story) {
+                profileAvatarWrap.classList.add('has-story');
+                profileAvatarWrap.classList.remove('no-story');
+            } else {
+                profileAvatarWrap.classList.add('no-story');
+                profileAvatarWrap.classList.remove('has-story');
+            }
 
             const friendActionContainer = document.getElementById('friendActionContainer');
             friendActionContainer.innerHTML = '';
