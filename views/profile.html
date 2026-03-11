@@ -12,12 +12,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
     <style>
         body {
-            background-color: #000000;
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
             padding-bottom: 60px;
         }
+
 
         .glass-navbar {
             background-color: rgba(30, 30, 30, 0.5);
@@ -432,7 +432,11 @@
 
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen relative">
+
+    <div id="pageDynamicBackground" class="fixed inset-0 z-[-2] bg-cover bg-center bg-no-repeat transition-all duration-700"></div>
+    
+    <div class="fixed inset-0 z-[-1] bg-black/60 backdrop-blur-2xl"></div>
 
     <header class="sticky top-0 z-50 glass-navbar p-3">
         <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
@@ -466,6 +470,7 @@
             </div>
         </nav>
     </header>
+
 
     <main class="max-w-6xl mx-auto p-4">
         <div class="max-w-xl mx-auto">
@@ -1732,6 +1737,7 @@ async function fetchCurrentUser() {
     }
 }
 
+
 async function fetchAndDisplayProfile() {
     await fetchCurrentUser();
 
@@ -1755,7 +1761,15 @@ async function fetchAndDisplayProfile() {
 
             // ensure we use server default when no profile picture
             document.getElementById('profileImage').src = data.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
-            if (data.cover_photo_url) document.getElementById('coverPhotoContainer').style.backgroundImage = `url('${data.cover_photo_url}')`;
+            
+            // --- التعديل الجديد لجعل صورة الغلاف خلفية للموقع ---
+            if (data.cover_photo_url) {
+                document.getElementById('coverPhotoContainer').style.backgroundImage = `url('${data.cover_photo_url}')`;
+                document.getElementById('pageDynamicBackground').style.backgroundImage = `url('${data.cover_photo_url}')`;
+            } else {
+                document.getElementById('pageDynamicBackground').style.backgroundImage = `url('/assets/default_cover_photo.jpg')`;
+            }
+            // ---------------------------------------------------
 
             const profileUsernameEl = document.getElementById('profileUsername');
             profileUsernameEl.innerHTML = `@${data.username}` + (data.is_verified ? ` <img src="${VERIFIED_IMG_URL}" class="verified-badge-img list" alt="موثق" title="موثق">` : '');
@@ -1854,6 +1868,8 @@ async function fetchAndDisplayProfile() {
         document.getElementById('userPostsFeed').innerHTML = '<div class="text-center text-red-500 p-8">حدث خطأ في جلب بيانات الملف الشخصي.</div>';
     }
 }
+
+
 
 /* ----------------- Presence & SSE ----------------- */
 
