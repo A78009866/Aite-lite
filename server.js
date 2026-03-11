@@ -685,6 +685,8 @@ app.get('/api/stories', requireAuth, async (req, res) => {
           userId: story.userId,
           username: user.username || 'مستخدم',
           profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/150',
+          is_verified: !!user.is_verified,
+          is_online: !!user.is_online,
           items: []
         };
       }
@@ -1201,6 +1203,15 @@ app.get('/api/users', requireAuth, async (req, res) => {
     const allChatsSnap = await db.ref(`chats/${currentUserId}`).once('value');
     const allChats = allChatsSnap.val() || {};
 
+    // Check which friends have active stories
+    const now = Date.now();
+    const storiesSnap = await db.ref('stories').once('value');
+    const allStories = storiesSnap.val() || {};
+    const usersWithStories = new Set();
+    Object.values(allStories).forEach(story => {
+      if (story.expiresAt > now) usersWithStories.add(story.userId);
+    });
+
     const usersList = profiles.map((user) => {
       const contactId = user.id;
       const chatSummary = allChats[contactId] || {};
@@ -1209,7 +1220,8 @@ app.get('/api/users', requireAuth, async (req, res) => {
         lastMessage = {
           content: chatSummary.last_message_content,
           timestamp: chatSummary.last_message_timestamp,
-          senderId: chatSummary.last_message_sender_id
+          senderId: chatSummary.last_message_sender_id,
+          is_read: !!chatSummary.last_message_is_read
         };
       }
       return {
@@ -1219,7 +1231,9 @@ app.get('/api/users', requireAuth, async (req, res) => {
         profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40',
         last_message: lastMessage,
         unread_count: chatSummary.unread_count || 0,
-        is_online: !!user.is_online
+        is_online: !!user.is_online,
+        is_verified: !!user.is_verified,
+        has_story: usersWithStories.has(user.id)
       };
     });
 
@@ -1482,6 +1496,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
     let isFriend = false;
     let requestSent = false;
     let requestReceived = false;
+    let hasStory = false;
     try {
       if (!isOwner) {
         const friendSnap = await db.ref(`friends/${currentUserId}/${requestedUserId}`).once('value');
@@ -1493,7 +1508,16 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       }
     } catch (e) { /* ignore */ }
 
-    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived });
+    // Check if user has active stories
+    try {
+      const storiesSnap = await db.ref('stories').orderByChild('userId').equalTo(requestedUserId).once('value');
+      const now = Date.now();
+      storiesSnap.forEach(child => {
+        if (child.val().expiresAt > now) hasStory = true;
+      });
+    } catch (e) { /* ignore */ }
+
+    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived, has_story: hasStory });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -1505,7 +1529,18 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     const profileSnap = await db.ref('profiles').child(userId).once('value');
     const profile = profileSnap.val();
     if (!profile) return res.status(404).json({ ok: false });
-    res.json(profile);
+
+    // Check if user has active stories
+    let hasStory = false;
+    try {
+      const storiesSnap = await db.ref('stories').orderByChild('userId').equalTo(userId).once('value');
+      const now = Date.now();
+      storiesSnap.forEach(child => {
+        if (child.val().expiresAt > now) hasStory = true;
+      });
+    } catch (e) { /* ignore */ }
+
+    res.json({ ...profile, has_story: hasStory });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -3324,6 +3359,15 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
       const profilePromises = friendIds.map(id => profilesRef.child(id).once('value'));
       const profileSnapshots = await Promise.all(profilePromises);
       
+      // Check which friends have active stories
+      const now = Date.now();
+      const storiesSnap = await db.ref('stories').once('value');
+      const allStoriesData = storiesSnap.val() || {};
+      const usersWithStories = new Set();
+      Object.values(allStoriesData).forEach(story => {
+        if (story.expiresAt > now) usersWithStories.add(story.userId);
+      });
+
       const usersList = [];
       
       profileSnapshots.forEach(snap => {
@@ -3336,7 +3380,8 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 lastMessage = {
                     content: chatSummary.last_message_content,
                     timestamp: chatSummary.last_message_timestamp,
-                    senderId: chatSummary.last_message_sender_id
+                    senderId: chatSummary.last_message_sender_id,
+                    is_read: !!chatSummary.last_message_is_read
                 };
             }
 
@@ -3348,7 +3393,8 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 is_verified: !!user.is_verified,
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0,
-                is_online: !!user.is_online
+                is_online: !!user.is_online,
+                has_story: usersWithStories.has(user.id)
             });
         }
       });
