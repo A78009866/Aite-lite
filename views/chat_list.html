@@ -2129,7 +2129,7 @@ function handleNotifClick(el) {
         let currentStoryItemIndex = 0;
         let storyTimeout;
         let storyProgressInterval;
-        const STORY_DURATION = 8000; // تم رفع المدة إلى 8 ثوانٍ
+        const STORY_DURATION = 15000; // تم رفع المدة إلى 8 ثوانٍ
                 // --- متغيرات الصوت والبحث ---
         let previewAudio = new Audio(); // مشغل معاينة الأغاني
         let currentPlayingUrl = '';
@@ -2548,21 +2548,24 @@ function handleNotifClick(el) {
             
             document.getElementById('storyViewerUsername').textContent = group.username;
             document.getElementById('storyViewerAvatar').src = group.profile_picture_url || DEFAULT_AVATAR;
-            
-            // منطق زر الحذف (يظهر فقط لصاحب القصة)
-            const delBtn = document.getElementById('deleteStoryBtn');
-            if (delBtn) {
-                // window.currentUserId يجب أن تكون معرفة في نظامك
-                if (String(group.userId) === String(window.currentUserId || currentUserId)) {
-                    delBtn.classList.remove('hidden');
-                    delBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        deleteCurrentStory(story.id);
-                    };
-                } else {
-                    delBtn.classList.add('hidden');
-                }
-            }
+            // --- داخل دالة renderCurrentStoryItem ---
+
+const delBtn = document.getElementById('deleteStoryBtn');
+if (delBtn) {
+    // التأكد من مطابقة معرف المستخدم (صاحب القصة)
+    if (String(group.userId) === String(window.currentUserId || currentUserId)) {
+        delBtn.classList.remove('hidden');
+        
+        // عند الضغط على الزر، نقوم بفتح النافذة المخصصة بدلاً من الحذف المباشر
+        delBtn.onclick = (e) => {
+            e.stopPropagation(); // منع انتقال القصة للخلف أو الأمام
+            openConfirmModal(story.id); // استدعاء النافذة الزجاجية مع تمرير معرف القصة
+        };
+    } else {
+        delBtn.classList.add('hidden');
+    }
+}
+
 
             // رسم أشرطة التقدم
             const progressContainer = document.getElementById('storyProgressBars');
