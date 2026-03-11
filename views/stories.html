@@ -355,8 +355,10 @@
             display: flex;
         }
         .viewers-panel {
-            background: #1a1a2e;
-            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.08);
             border-bottom: none;
             border-radius: 24px 24px 0 0;
             width: 100%;
@@ -378,7 +380,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 20px 20px 14px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .viewers-header h3 {
             color: #fff;
@@ -454,9 +456,13 @@
             font-size: 15px;
             font-weight: 600;
         }
-        .viewer-name .verify-badge {
-            color: #3b82f6;
-            font-size: 14px;
+        .viewer-name .verified-badge-img {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            object-fit: cover;
+            vertical-align: middle;
             flex-shrink: 0;
         }
         .viewer-liked {
@@ -571,6 +577,7 @@
 <script>
     // ==================== Constants ====================
     const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
+    const VERIFIED_IMG_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png';
     const STORY_DURATION = 60000; // دقيقة واحدة للصور
 
     // ==================== State ====================
@@ -716,6 +723,10 @@
         currentGroupIndex = foundGroup;
         currentItemIndex = foundItem;
 
+        // Preload first story data BEFORE showing page (eliminates flicker)
+        const firstStory = storiesGroups[currentGroupIndex].items[currentItemIndex];
+        await preloadStoryData(firstStory.id);
+
         // Show page
         loadingScreen.classList.add('hidden');
         storyPage.style.display = 'flex';
@@ -723,7 +734,7 @@
         // Setup event listeners
         setupEvents();
 
-        // Render first story
+        // Render first story (data already preloaded, instant display)
         renderStory();
     }
 
@@ -860,7 +871,7 @@
         } else {
             let html = '';
             for (const v of viewers) {
-                const verifyBadge = v.is_verified ? '<i class="fas fa-check-circle verify-badge"></i>' : '';
+                const verifyBadge = v.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق">` : '';
                 const heartIcon = v.hasLiked ? '<i class="fas fa-heart viewer-liked"></i>' : '';
                 html += `
                     <div class="viewer-item">
@@ -884,6 +895,33 @@
         resumeTimer();
     }
 
+    // ==================== Preload story data ====================
+    // Cache for preloaded data per storyId
+    let preloadedData = {}; // { storyId: { liked, viewsCount, loaded } }
+
+    async function preloadStoryData(storyId) {
+        if (preloadedData[storyId]) return preloadedData[storyId];
+        const [isLiked, viewsCount] = await Promise.all([
+            checkLikeStatus(storyId),
+            fetchViewsCount(storyId)
+        ]);
+        preloadedData[storyId] = { liked: isLiked, viewsCount };
+        return preloadedData[storyId];
+    }
+
+    // Preload next stories data in background
+    function preloadNextStories() {
+        const group = storiesGroups[currentGroupIndex];
+        // Preload next item in same group
+        if (currentItemIndex + 1 < group.items.length) {
+            preloadStoryData(group.items[currentItemIndex + 1].id);
+        }
+        // Preload first item of next group
+        if (currentGroupIndex + 1 < storiesGroups.length) {
+            preloadStoryData(storiesGroups[currentGroupIndex + 1].items[0].id);
+        }
+    }
+
     // ==================== Render Story ====================
     async function renderStory() {
         clearTimeout(storyTimeout);
@@ -891,6 +929,9 @@
 
         const group = storiesGroups[currentGroupIndex];
         const story = group.items[currentItemIndex];
+
+        // Preload data FIRST before any UI update to avoid flicker
+        const data = await preloadStoryData(story.id);
 
         // Update URL without reload (for sharing/bookmarking)
         const newUrl = `/stories?storyId=${encodeURIComponent(story.id)}`;
@@ -917,6 +958,20 @@
         } else {
             viewsCountEl.classList.remove('clickable');
         }
+
+        // Set like state IMMEDIATELY from preloaded data (no flicker)
+        const likeIcon = document.getElementById('likeIcon');
+        const likeBtnEl = document.getElementById('likeBtn');
+        if (data.liked) {
+            likeIcon.className = 'fas fa-heart';
+            likeBtnEl.classList.add('liked');
+        } else {
+            likeIcon.className = 'far fa-heart';
+            likeBtnEl.classList.remove('liked');
+        }
+
+        // Set views count IMMEDIATELY from preloaded data (no flicker)
+        document.getElementById('viewsNumber').textContent = data.viewsCount;
 
         // Progress bars
         renderProgressBars(group.items.length, currentItemIndex);
@@ -953,30 +1008,11 @@
             audioPlayer.src = '';
         }
 
-        // Like state - fetch from server
-        const likeIcon = document.getElementById('likeIcon');
-        const likeBtn = document.getElementById('likeBtn');
-        // Reset to unliked first
-        likeIcon.className = 'far fa-heart';
-        likeBtn.classList.remove('liked');
+        // Record view in background (fire-and-forget)
+        recordView(story.id);
 
-        // Reset views count
-        document.getElementById('viewsNumber').textContent = '0';
-
-        // Record view + fetch like status + fetch views count in parallel
-        const [isLiked, viewsCount] = await Promise.all([
-            checkLikeStatus(story.id),
-            fetchViewsCount(story.id),
-            recordView(story.id)
-        ]);
-
-        if (isLiked) {
-            likeIcon.className = 'fas fa-heart';
-            likeBtn.classList.add('liked');
-        }
-
-        // Update views count display
-        document.getElementById('viewsNumber').textContent = viewsCount;
+        // Preload next stories data in background
+        preloadNextStories();
     }
 
     // ==================== Progress Bars ====================
