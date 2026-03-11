@@ -2060,107 +2060,7 @@ function handleNotifClick(el) {
             };
         }
 
-                // --- Stories Logic ---
-        let storiesDataGroups = [];
-        let currentStoryGroupIndex = 0;
-        let currentStoryItemIndex = 0;
-        let storyTimeout;
-        let storyProgressInterval;
-        const STORY_DURATION = 5000; // 5 seconds per image (videos will use their own duration)
-
-        async function fetchAndDisplayStories() {
-            const storiesRow = document.getElementById('storiesRow');
-            if(!storiesRow) return;
-
-            try {
-                const res = await fetch('/api/stories', { credentials: 'same-origin' });
-                const data = await res.json();
-                
-                let myPic = DEFAULT_AVATAR;
-                const userPicEl = document.getElementById('userProfilePic');
-                if(userPicEl) myPic = userPicEl.src;
-
-                // Add "Create Story" Circle first
-                let html = `
-                    <div class="story-circle-wrapper" onclick="openCreateStoryModal()">
-                        <div class="story-circle" style="background: #333;">
-                            <img src="${escapeAttr(myPic)}" alt="أضف قصة">
-                            <div class="create-story-btn"><i class="fas fa-plus"></i></div>
-                        </div>
-                        <span class="story-username">إضافتي</span>
-                    </div>
-                `;
-
-                if(res.ok && data.ok) {
-                    storiesDataGroups = data.storiesGroups || [];
-                    
-                    storiesDataGroups.forEach((group, index) => {
-                        html += `
-                            <div class="story-circle-wrapper" onclick="openStoryViewer(${index})">
-                                <div class="story-circle">
-                                    <img src="${escapeAttr(group.profile_picture_url)}" alt="${escapeAttr(group.username)}" onerror="this.src='${DEFAULT_AVATAR}'">
-                                </div>
-                                <span class="story-username">${escapeHtml(group.username)}</span>
-                            </div>
-                        `;
-                    });
-                }
-                
-                storiesRow.innerHTML = html;
-            } catch (e) {
-                console.error("Error fetching stories", e);
-            }
-        }
-
-        function openCreateStoryModal() {
-            document.getElementById('createStoryModal').classList.remove('hidden');
-        }
-        
-        function closeCreateStoryModal(e) {
-            if(e) e.stopPropagation();
-            document.getElementById('createStoryModal').classList.add('hidden');
-        }
-
-        async function submitStory(btn) {
-            const mediaInput = document.getElementById('storyMediaInput');
-            const audioInput = document.getElementById('storyAudioInput');
-            const textInput = document.getElementById('storyTextInput');
-
-            if(!mediaInput.files[0]) {
-                showToast("يجب اختيار صورة أو فيديو!");
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
-
-            const formData = new FormData();
-            formData.append('story_media', mediaInput.files[0]);
-            if(audioInput.files[0]) formData.append('story_audio', audioInput.files[0]);
-            formData.append('text', textInput.value);
-
-            try {
-                const res = await fetch('/api/stories/create', {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'same-origin'
-                });
-                const data = await res.json();
-                if(res.ok && data.ok) {
-                    closeCreateStoryModal();
-                    mediaInput.value = ''; audioInput.value = ''; textInput.value = '';
-                    fetchAndDisplayStories(); // Refresh list
-                    showToast("تم نشر القصة بنجاح!");
-                } else {
-                    showToast(data.error || "فشل النشر");
-                }
-            } catch (e) {
-                showToast("خطأ في الاتصال");
-            } finally {
-                btn.disabled = false;
-                btn.innerText = 'نشر القصة';
-            }
-        }
+ 
 
         // --- Story Viewer Logic ---
         function openStoryViewer(groupIndex) {
@@ -2241,19 +2141,210 @@ function handleNotifClick(el) {
                 audioPlayer.pause();
                 audioPlayer.src = '';
             }
+        // --- Stories Logic ---
+        let storiesDataGroups = [];
+        let currentStoryGroupIndex = 0;
+        let currentStoryItemIndex = 0;
+        let storyTimeout;
+        let storyProgressInterval;
+        const STORY_DURATION = 5000; // 5 ثوانٍ للصور
+
+        async function fetchAndDisplayStories() {
+            const storiesRow = document.getElementById('storiesRow');
+            if (!storiesRow) return;
+
+            try {
+                const res = await fetch('/api/stories', { credentials: 'same-origin' });
+                const data = await res.json();
+                
+                let myPic = typeof DEFAULT_AVATAR !== 'undefined' ? DEFAULT_AVATAR : 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+                const userPicEl = document.getElementById('userProfilePic');
+                if (userPicEl) myPic = userPicEl.src;
+
+                // إضافة دائرة "إضافة قصة" أولاً مع استدعاء النافذة المنبثقة مباشرة
+                let html = `
+                    <div class="story-circle-wrapper" onclick="openCreateStoryModal()">
+                        <div class="story-circle viewed">
+                            <img src="${escapeAttr(myPic)}" alt="أضف قصة">
+                            <div class="create-story-btn"><i class="fas fa-plus"></i></div>
+                        </div>
+                        <span class="story-username">إضافتي</span>
+                    </div>
+                `;
+
+                if (res.ok && data.ok) {
+                    storiesDataGroups = data.storiesGroups || [];
+                    
+                    storiesDataGroups.forEach((group, index) => {
+                        // التحقق إذا كانت هناك قصص غير مشهودة (اختياري حسب السيرفر)
+                        const hasUnviewed = group.items.some(item => !item.viewed);
+                        html += `
+                            <div class="story-circle-wrapper" onclick="openStoryViewer(${index})">
+                                <div class="story-circle ${hasUnviewed ? '' : 'viewed'}">
+                                    <img src="${escapeAttr(group.profile_picture_url || myPic)}" 
+                                         alt="${escapeAttr(group.username)}" 
+                                         onerror="this.src='${myPic}'">
+                                </div>
+                                <span class="story-username">${escapeHtml(group.username)}</span>
+                            </div>
+                        `;
+                    });
+                }
+                
+                storiesRow.innerHTML = html;
+            } catch (e) {
+                console.error("Error fetching stories", e);
+            }
+        }
+
+        function openCreateStoryModal() {
+            document.getElementById('createStoryModal').classList.remove('hidden');
+        }
+        
+        function closeCreateStoryModal(e) {
+            if (e) e.stopPropagation();
+            document.getElementById('createStoryModal').classList.add('hidden');
+            // تنظيف الحقول عند الإغلاق
+            document.getElementById('storyMediaInput').value = '';
+            document.getElementById('storyAudioInput').value = '';
+            document.getElementById('storyTextInput').value = '';
+        }
+
+        async function submitStory(btn) {
+            const mediaInput = document.getElementById('storyMediaInput');
+            const audioInput = document.getElementById('storyAudioInput');
+            const textInput = document.getElementById('storyTextInput');
+
+            if (!mediaInput.files[0]) {
+                alert("يجب اختيار صورة أو فيديو أولاً!");
+                return;
+            }
+
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
+
+            const formData = new FormData();
+            formData.append('story_media', mediaInput.files[0]);
+            if (audioInput.files[0]) formData.append('story_audio', audioInput.files[0]);
+            formData.append('text', textInput.value);
+
+            try {
+                const res = await fetch('/api/stories/create', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    closeCreateStoryModal();
+                    fetchAndDisplayStories(); 
+                    if (typeof showToast === 'function') showToast("تم نشر القصة بنجاح!");
+                    else alert("تم نشر القصة بنجاح!");
+                } else {
+                    alert(data.error || "فشل النشر");
+                }
+            } catch (e) {
+                alert("خطأ في الاتصال بالسيرفر");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+
+        // --- Story Viewer Logic ---
+        function openStoryViewer(groupIndex) {
+            if (!storiesDataGroups[groupIndex]) return;
+            currentStoryGroupIndex = groupIndex;
+            currentStoryItemIndex = 0;
+            
+            document.getElementById('storyViewerModal').classList.remove('hidden');
+            renderCurrentStoryItem();
+        }
+
+        function closeStoryViewer() {
+            document.getElementById('storyViewerModal').classList.add('hidden');
+            clearTimeout(storyTimeout);
+            clearInterval(storyProgressInterval);
+            
+            const mediaContent = document.getElementById('storyMediaContent');
+            mediaContent.innerHTML = ''; 
+            
+            const audioPlayer = document.getElementById('storyAudioPlayer');
+            audioPlayer.pause();
+            audioPlayer.src = '';
+        }
+
+        function renderCurrentStoryItem() {
+            clearTimeout(storyTimeout);
+            clearInterval(storyProgressInterval);
+            
+            const group = storiesDataGroups[currentStoryGroupIndex];
+            const story = group.items[currentStoryItemIndex];
+            
+            document.getElementById('storyViewerUsername').textContent = group.username;
+            document.getElementById('storyViewerAvatar').src = group.profile_picture_url || (typeof DEFAULT_AVATAR !== 'undefined' ? DEFAULT_AVATAR : '');
+            
+            // زر الحذف (يظهر فقط لقصص المستخدم الحالي)
+            const delBtn = document.getElementById('deleteStoryBtn');
+            if (delBtn) {
+                if (String(group.userId) === String(window.currentUserId)) {
+                    delBtn.classList.remove('hidden');
+                    delBtn.onclick = () => deleteCurrentStory(story.id);
+                } else {
+                    delBtn.classList.add('hidden');
+                }
+            }
+
+            // رسم أشرطة التقدم
+            const progressContainer = document.getElementById('storyProgressBars');
+            progressContainer.innerHTML = group.items.map((_, i) => `
+                <div class="story-progress-bar">
+                    <div class="story-progress-fill" id="story-progress-${i}" style="width: ${i < currentStoryItemIndex ? '100%' : '0%'}"></div>
+                </div>
+            `).join('');
+
+            const mediaContainer = document.getElementById('storyMediaContent');
+            const audioPlayer = document.getElementById('storyAudioPlayer');
+            document.getElementById('storyTextContent').textContent = story.text || '';
+            
+            // التعامل مع الوسائط
+            if (story.mediaType === 'video') {
+                mediaContainer.innerHTML = `<video id="activeStoryVideo" src="${escapeAttr(story.mediaUrl)}" autoplay playsinline class="w-full h-full object-contain"></video>`;
+                const vid = document.getElementById('activeStoryVideo');
+                vid.onloadedmetadata = () => {
+                    const duration = vid.duration * 1000;
+                    startStoryTimer(duration);
+                };
+                vid.onended = () => nextStoryItem();
+            } else {
+                mediaContainer.innerHTML = `<img src="${escapeAttr(story.mediaUrl)}" class="w-full h-full object-contain">`;
+                startStoryTimer(STORY_DURATION);
+            }
+
+            // التعامل مع الصوت المرفق
+            if (story.audioUrl) {
+                audioPlayer.src = story.audioUrl;
+                audioPlayer.play().catch(e => console.warn("Audio play blocked", e));
+            } else {
+                audioPlayer.pause();
+                audioPlayer.src = '';
+            }
         }
 
         function startStoryTimer(duration) {
             const progressFill = document.getElementById(`story-progress-${currentStoryItemIndex}`);
             let startTime = Date.now();
             
+            clearInterval(storyProgressInterval);
             storyProgressInterval = setInterval(() => {
                 let elapsed = Date.now() - startTime;
                 let percent = (elapsed / duration) * 100;
-                if(percent > 100) percent = 100;
-                if(progressFill) progressFill.style.width = `${percent}%`;
-            }, 50);
+                if (percent > 100) percent = 100;
+                if (progressFill) progressFill.style.width = `${percent}%`;
+            }, 30);
 
+            clearTimeout(storyTimeout);
             storyTimeout = setTimeout(() => {
                 nextStoryItem();
             }, duration);
@@ -2284,76 +2375,22 @@ function handleNotifClick(el) {
             }
         }
 
-        async function deleteCurrentStory() {
-            const delBtn = document.getElementById('deleteStoryBtn');
-            const storyId = delBtn.dataset.storyId;
-            if(!storyId) return;
-            
-            if(!confirm("هل أنت متأكد من حذف هذه القصة؟")) return;
+        async function deleteCurrentStory(storyId) {
+            if (!storyId) return;
+            if (!confirm("هل أنت متأكد من حذف هذه القصة؟")) return;
 
             try {
                 const res = await fetch(`/api/stories/${storyId}`, { method: 'DELETE', credentials: 'same-origin' });
-                if(res.ok) {
-                    showToast("تم الحذف");
+                if (res.ok) {
                     closeStoryViewer();
-                    fetchAndDisplayStories(); // Refresh
+                    fetchAndDisplayStories();
+                } else {
+                    alert("فشل حذف القصة");
                 }
-            } catch(e) {
-                showToast("خطأ في الحذف");
+            } catch (e) {
+                console.error("Delete error:", e);
             }
         }
-        async function fetchAndDisplayStories() {
-    const storiesRow = document.getElementById('storiesRow');
-    if (!storiesRow) return;
-
-    try {
-        const res = await fetch('/api/stories', { credentials: 'same-origin' });
-        const data = await res.json();
-
-        // حتى لو لم تكن هناك قصص من الأصدقاء، يجب إظهار دائرة "إضافتي"
-        let stories = (data && data.ok && Array.isArray(data.stories)) ? data.stories : [];
-        storiesDataGroups = stories; 
-
-        // رسم شريط القصص
-        let trayHtml = `
-            <div class="story-circle-wrapper" onclick="location.href='/create-story'">
-                <div class="story-circle viewed">
-                    <img src="${escapeAttr(document.getElementById('userProfilePic').src)}" alt="أنا">
-                    <div class="create-story-btn"><i class="fas fa-plus"></i></div>
-                </div>
-                <span class="story-username">إضافتي</span>
-            </div>
-        `;
-
-        // إضافة قصص الأصدقاء إذا وجدت
-        stories.forEach((group, index) => {
-            const hasUnviewed = group.items.some(item => !item.viewed);
-            trayHtml += `
-                <div class="story-circle-wrapper" onclick="openStoryViewer(${index})">
-                    <div class="story-circle ${hasUnviewed ? '' : 'viewed'}">
-                        <img src="${escapeAttr(group.profile_picture_url || DEFAULT_AVATAR)}" alt="${escapeHtml(group.username)}">
-                    </div>
-                    <span class="story-username">${escapeHtml(group.username)}</span>
-                </div>
-            `;
-        });
-
-        storiesRow.innerHTML = trayHtml;
-
-    } catch (e) {
-        console.error("خطأ في جلب القصص:", e);
-        // في حالة الخطأ، أظهر على الأقل زر إضافة قصة
-        storiesRow.innerHTML = `
-            <div class="story-circle-wrapper" onclick="location.href='/create-story'">
-                <div class="story-circle viewed">
-                    <img src="${escapeAttr(document.getElementById('userProfilePic').src)}" alt="أنا">
-                    <div class="create-story-btn"><i class="fas fa-plus"></i></div>
-                </div>
-                <span class="story-username">إضافتي</span>
-            </div>
-        `;
-    }
-}
 
 
             
@@ -3263,60 +3300,7 @@ window.receiveAndroidToken = function(token) {
     }).catch(err => console.error("Error saving token", err));
 };
 
-function openCreateStoryModal() {
-    document.getElementById('createStoryModal').classList.remove('hidden');
-}
 
-function closeCreateStoryModal() {
-    document.getElementById('createStoryModal').classList.add('hidden');
-    // تنظيف الحقول عند الإغلاق
-    document.getElementById('storyMediaInput').value = '';
-    document.getElementById('storyAudioInput').value = '';
-    document.getElementById('storyTextInput').value = '';
-}
-
-async function submitStory() {
-    const mediaInput = document.getElementById('storyMediaInput');
-    const audioInput = document.getElementById('storyAudioInput');
-    const textInput = document.getElementById('storyTextInput');
-    const btn = document.getElementById('submitStoryBtn');
-
-    if (!mediaInput.files[0]) {
-        alert("يرجى اختيار صورة أو فيديو أولاً!");
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('story_media', mediaInput.files[0]);
-    if (audioInput.files[0]) formData.append('story_audio', audioInput.files[0]);
-    formData.append('text', textInput.value);
-
-    btn.disabled = true;
-    btn.textContent = "جاري النشر...";
-
-    try {
-        const response = await fetch('/api/stories/create', {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-        });
-
-        const result = await response.json();
-        if (result.ok) {
-            closeCreateStoryModal();
-            fetchAndDisplayStories(); // تحديث الشريط فوراً
-            alert("تم نشر قصتك بنجاح!");
-        } else {
-            alert("خطأ: " + result.error);
-        }
-    } catch (error) {
-        console.error("Error submitting story:", error);
-        alert("فشل الاتصال بالسيرفر");
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "نشر";
-    }
-}
 
 </script>
 
