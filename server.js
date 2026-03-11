@@ -642,6 +642,8 @@ app.post('/api/stories/create', requireAuth, upload.fields([{ name: 'story_media
     const storyId = newStoryRef.key;
     const timestamp = admin.database.ServerValue.TIMESTAMP;
 
+    const storyColor = req.body.story_color ? req.body.story_color.trim() : '';
+
     const storyData = {
       id: storyId,
       userId: userId,
@@ -649,6 +651,7 @@ app.post('/api/stories/create', requireAuth, upload.fields([{ name: 'story_media
       mediaType: mediaType,
       audioUrl: audioFile ? audioFile.path : null, // الموسيقى الخلفية
       text: text,
+      story_color: storyColor, // لون القصة المتدرج
       timestamp: timestamp,
       expiresAt: Date.now() + (24 * 60 * 60 * 1000) // تنتهي بعد 24 ساعة
     };
@@ -678,6 +681,11 @@ app.get('/api/stories', requireAuth, async (req, res) => {
     const profilesSnap = await db.ref('profiles').once('value');
     const profiles = profilesSnap.val() || {};
 
+    // جلب المشاهدات لتحديد حالة viewed
+    const currentUserId = req.session.userId;
+    const viewsSnap = await db.ref('story_views').once('value');
+    const allViews = viewsSnap.val() || {};
+
     activeStories.forEach(story => {
       if (!groupedStories[story.userId]) {
         const user = profiles[story.userId] || {};
@@ -690,6 +698,9 @@ app.get('/api/stories', requireAuth, async (req, res) => {
           items: []
         };
       }
+      // إضافة حالة المشاهدة ولون القصة
+      const storyViews = allViews[story.id] || {};
+      story.viewed = !!storyViews[currentUserId];
       groupedStories[story.userId].items.push(story);
     });
 
@@ -699,7 +710,6 @@ app.get('/api/stories', requireAuth, async (req, res) => {
     });
 
     // جعل قصص المستخدم الحالي (إن وجدت) في البداية
-    const currentUserId = req.session.userId;
     let finalArray = Object.values(groupedStories);
     finalArray.sort((a, b) => {
       if (a.userId === currentUserId) return -1;
@@ -1203,14 +1213,24 @@ app.get('/api/users', requireAuth, async (req, res) => {
     const allChatsSnap = await db.ref(`chats/${currentUserId}`).once('value');
     const allChats = allChatsSnap.val() || {};
 
-    // Check which friends have active stories
+    // Check which friends have active stories + viewed status + story color
     const now = Date.now();
     const storiesSnap = await db.ref('stories').once('value');
     const allStories = storiesSnap.val() || {};
     const usersWithStories = new Set();
+    const userStoryColors = {};
+    const userStoryIds = {};
     Object.values(allStories).forEach(story => {
-      if (story.expiresAt > now) usersWithStories.add(story.userId);
+      if (story.expiresAt > now) {
+        usersWithStories.add(story.userId);
+        if (!userStoryColors[story.userId] && story.story_color) userStoryColors[story.userId] = story.story_color;
+        if (!userStoryIds[story.userId]) userStoryIds[story.userId] = [];
+        userStoryIds[story.userId].push(story.id);
+      }
     });
+
+    const viewsSnap = await db.ref('story_views').once('value');
+    const allViews = viewsSnap.val() || {};
 
     const usersList = profiles.map((user) => {
       const contactId = user.id;
@@ -1224,6 +1244,13 @@ app.get('/api/users', requireAuth, async (req, res) => {
           is_read: !!chatSummary.last_message_is_read
         };
       }
+      let storyViewed = false;
+      if (usersWithStories.has(user.id) && userStoryIds[user.id]) {
+        storyViewed = userStoryIds[user.id].every(sid => {
+          const sv = allViews[sid] || {};
+          return !!sv[currentUserId];
+        });
+      }
       return {
         id: user.id,
         username: user.username,
@@ -1233,7 +1260,9 @@ app.get('/api/users', requireAuth, async (req, res) => {
         unread_count: chatSummary.unread_count || 0,
         is_online: !!user.is_online,
         is_verified: !!user.is_verified,
-        has_story: usersWithStories.has(user.id)
+        has_story: usersWithStories.has(user.id),
+        story_viewed: storyViewed,
+        story_color: userStoryColors[user.id] || ''
       };
     });
 
@@ -1508,16 +1537,28 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       }
     } catch (e) { /* ignore */ }
 
-    // Check if user has active stories
+    // Check if user has active stories + viewed status + story color
+    let storyViewed = false;
+    let storyColor = '';
     try {
       const storiesSnap = await db.ref('stories').orderByChild('userId').equalTo(requestedUserId).once('value');
       const now = Date.now();
+      const viewsSnap = await db.ref('story_views').once('value');
+      const allViews = viewsSnap.val() || {};
+      let allViewedFlag = true;
       storiesSnap.forEach(child => {
-        if (child.val().expiresAt > now) hasStory = true;
+        const s = child.val();
+        if (s.expiresAt > now) {
+          hasStory = true;
+          if (!storyColor && s.story_color) storyColor = s.story_color;
+          const sv = allViews[s.id] || {};
+          if (!sv[req.session.userId]) allViewedFlag = false;
+        }
       });
+      if (hasStory) storyViewed = allViewedFlag;
     } catch (e) { /* ignore */ }
 
-    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived, has_story: hasStory });
+    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -1530,17 +1571,29 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     const profile = profileSnap.val();
     if (!profile) return res.status(404).json({ ok: false });
 
-    // Check if user has active stories
+    // Check if user has active stories + viewed status + story color
     let hasStory = false;
+    let storyViewed = false;
+    let storyColor = '';
     try {
       const storiesSnap = await db.ref('stories').orderByChild('userId').equalTo(userId).once('value');
       const now = Date.now();
+      const viewsSnap = await db.ref('story_views').once('value');
+      const allViews = viewsSnap.val() || {};
+      let allViewedFlag = true;
       storiesSnap.forEach(child => {
-        if (child.val().expiresAt > now) hasStory = true;
+        const s = child.val();
+        if (s.expiresAt > now) {
+          hasStory = true;
+          if (!storyColor && s.story_color) storyColor = s.story_color;
+          const sv = allViews[s.id] || {};
+          if (!sv[req.session.userId]) allViewedFlag = false;
+        }
       });
+      if (hasStory) storyViewed = allViewedFlag;
     } catch (e) { /* ignore */ }
 
-    res.json({ ...profile, has_story: hasStory });
+    res.json({ ...profile, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -3359,14 +3412,25 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
       const profilePromises = friendIds.map(id => profilesRef.child(id).once('value'));
       const profileSnapshots = await Promise.all(profilePromises);
       
-      // Check which friends have active stories
+      // Check which friends have active stories + viewed status + story color
       const now = Date.now();
       const storiesSnap = await db.ref('stories').once('value');
       const allStoriesData = storiesSnap.val() || {};
       const usersWithStories = new Set();
+      const userStoryColors = {};
+      const userStoryIds = {};
       Object.values(allStoriesData).forEach(story => {
-        if (story.expiresAt > now) usersWithStories.add(story.userId);
+        if (story.expiresAt > now) {
+          usersWithStories.add(story.userId);
+          if (!userStoryColors[story.userId] && story.story_color) userStoryColors[story.userId] = story.story_color;
+          if (!userStoryIds[story.userId]) userStoryIds[story.userId] = [];
+          userStoryIds[story.userId].push(story.id);
+        }
       });
+
+      // جلب المشاهدات لتحديد حالة viewed
+      const viewsSnap = await db.ref('story_views').once('value');
+      const allViews = viewsSnap.val() || {};
 
       const usersList = [];
       
@@ -3385,6 +3449,15 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 };
             }
 
+            // تحديد حالة المشاهدة
+            let storyViewed = false;
+            if (usersWithStories.has(user.id) && userStoryIds[user.id]) {
+              storyViewed = userStoryIds[user.id].every(sid => {
+                const sv = allViews[sid] || {};
+                return !!sv[currentUserId];
+              });
+            }
+
             usersList.push({
                 id: user.id,
                 username: user.username,
@@ -3394,7 +3467,9 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0,
                 is_online: !!user.is_online,
-                has_story: usersWithStories.has(user.id)
+                has_story: usersWithStories.has(user.id),
+                story_viewed: storyViewed,
+                story_color: userStoryColors[user.id] || ''
             });
         }
       });
