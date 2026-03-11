@@ -3263,6 +3263,60 @@ window.receiveAndroidToken = function(token) {
     }).catch(err => console.error("Error saving token", err));
 };
 
+function openCreateStoryModal() {
+    document.getElementById('createStoryModal').classList.remove('hidden');
+}
+
+function closeCreateStoryModal() {
+    document.getElementById('createStoryModal').classList.add('hidden');
+    // تنظيف الحقول عند الإغلاق
+    document.getElementById('storyMediaInput').value = '';
+    document.getElementById('storyAudioInput').value = '';
+    document.getElementById('storyTextInput').value = '';
+}
+
+async function submitStory() {
+    const mediaInput = document.getElementById('storyMediaInput');
+    const audioInput = document.getElementById('storyAudioInput');
+    const textInput = document.getElementById('storyTextInput');
+    const btn = document.getElementById('submitStoryBtn');
+
+    if (!mediaInput.files[0]) {
+        alert("يرجى اختيار صورة أو فيديو أولاً!");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('story_media', mediaInput.files[0]);
+    if (audioInput.files[0]) formData.append('story_audio', audioInput.files[0]);
+    formData.append('text', textInput.value);
+
+    btn.disabled = true;
+    btn.textContent = "جاري النشر...";
+
+    try {
+        const response = await fetch('/api/stories/create', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        });
+
+        const result = await response.json();
+        if (result.ok) {
+            closeCreateStoryModal();
+            fetchAndDisplayStories(); // تحديث الشريط فوراً
+            alert("تم نشر قصتك بنجاح!");
+        } else {
+            alert("خطأ: " + result.error);
+        }
+    } catch (error) {
+        console.error("Error submitting story:", error);
+        alert("فشل الاتصال بالسيرفر");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "نشر";
+    }
+}
 
 </script>
 
