@@ -1197,6 +1197,89 @@ app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (re
     res.status(500).json({ ok: false });
   }
 });
+
+// ---------------- API: Delete Message ----------------
+app.delete('/api/messages/:otherId/:messageId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { otherId, messageId } = req.params;
+
+  const chatId = [userId, otherId].sort().join('_');
+
+  try {
+    const messageRef = db.ref(`messages/${chatId}/${messageId}`);
+    const messageSnap = await messageRef.once('value');
+
+    if (!messageSnap.exists()) {
+      return res.status(404).json({ ok: false, error: 'الرسالة غير موجودة' });
+    }
+
+    const message = messageSnap.val();
+
+    // فقط المرسل يمكنه حذف رسالته
+    if (message.senderId !== userId) {
+      return res.status(403).json({ ok: false, error: 'لا يمكنك حذف رسالة شخص آخر' });
+    }
+
+    // حذف الرسالة بالكامل أو تحويلها إلى "تم حذف هذه الرسالة"
+    await messageRef.update({
+      content: '',
+      media: null,
+      is_deleted: true,
+      deleted_at: admin.database.ServerValue.TIMESTAMP
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete message error:', error);
+    res.status(500).json({ ok: false, error: 'فشل حذف الرسالة' });
+  }
+});
+
+// ---------------- API: Edit Message ----------------
+app.put('/api/messages/:otherId/:messageId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { otherId, messageId } = req.params;
+  const { content } = req.body;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ ok: false, error: 'محتوى الرسالة مطلوب' });
+  }
+
+  const chatId = [userId, otherId].sort().join('_');
+
+  try {
+    const messageRef = db.ref(`messages/${chatId}/${messageId}`);
+    const messageSnap = await messageRef.once('value');
+
+    if (!messageSnap.exists()) {
+      return res.status(404).json({ ok: false, error: 'الرسالة غير موجودة' });
+    }
+
+    const message = messageSnap.val();
+
+    // فقط المرسل يمكنه تعديل رسالته
+    if (message.senderId !== userId) {
+      return res.status(403).json({ ok: false, error: 'لا يمكنك تعديل رسالة شخص آخر' });
+    }
+
+    // لا يمكن تعديل رسالة محذوفة
+    if (message.is_deleted) {
+      return res.status(400).json({ ok: false, error: 'لا يمكن تعديل رسالة محذوفة' });
+    }
+
+    await messageRef.update({
+      content: content.trim(),
+      is_edited: true,
+      edited_at: admin.database.ServerValue.TIMESTAMP
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Edit message error:', error);
+    res.status(500).json({ ok: false, error: 'فشل تعديل الرسالة' });
+  }
+});
+
 // ---------------- API: Users & Profile ----------------
 // /api/users -> returns friends only
 app.get('/api/users', requireAuth, async (req, res) => {
