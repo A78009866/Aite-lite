@@ -607,12 +607,12 @@
             height: 68px;
             border-radius: 50%;
             padding: 3px;
-            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
             position: relative;
         }
 
-        .story-circle.viewed {
-            background: #4b5563; /* رمادي للقصص المشاهدة */
+        .story-circle.no-story {
+            background: #4b5563; /* رمادي عند عدم توفر قصة */
         }
 
         .story-circle img {
@@ -2152,11 +2152,13 @@ function handleNotifClick(el) {
                 if (res.ok && data.ok) {
                     storiesDataGroups = data.storiesGroups || [];
                     storiesDataGroups.forEach((group, index) => {
-                        const hasUnviewed = group.items.some(item => !item.viewed);
+                        const hasStory = group.items && group.items.length > 0;
                         const onlineDotHtml = group.is_online ? '<span class="online-dot online-dot-small" style="z-index:10;"></span>' : '';
+                        const circleClass = hasStory ? '' : 'no-story';
+                        const clickAction = hasStory ? `window.location.href='/stories?groupIndex=${index}'` : `window.location.href='/profile?userId=${group.userId}'`;
                         html += `
-                            <div class="story-circle-wrapper" onclick="window.location.href='/stories?groupIndex=${index}'">
-                                <div class="story-circle ${hasUnviewed ? '' : 'viewed'}">
+                            <div class="story-circle-wrapper" onclick="${clickAction}">
+                                <div class="story-circle ${circleClass}">
                                     <img src="${escapeAttr(group.profile_picture_url || myPic)}" 
                                          alt="${escapeAttr(group.username)}" 
                                          onerror="this.src='${myPic}'">

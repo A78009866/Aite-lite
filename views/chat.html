@@ -77,13 +77,15 @@ html, body {
 }
 .avatar-with-dot.has-story {
   border: 2px solid transparent;
-  background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
   background-origin: border-box;
   background-clip: padding-box, border-box;
   border-radius: 12px;
+  cursor: pointer;
 }
 .avatar-with-dot.no-story {
   border: 2px solid #4b5563;
+  cursor: pointer;
 }
 
 .avatar {
@@ -595,6 +597,9 @@ textarea:focus { border-color: var(--accent); }
 
     <div class="input-row">
       <input type="file" id="media-input" style="display:none" accept="image/*,video/*,audio/*">
+      <input type="file" id="media-input-image" style="display:none" accept="image/*">
+      <input type="file" id="media-input-video" style="display:none" accept="video/*">
+      <input type="file" id="media-input-audio" style="display:none" accept="audio/*">
       
       <button type="button" class="action-btn" id="attach-btn">
         <i class="fas fa-paperclip" style="font-size:16px"></i>
@@ -618,6 +623,37 @@ textarea:focus { border-color: var(--accent); }
     </div>
   </form>
 </div>
+
+<!-- Attachment Options Modal -->
+<div id="attach-modal-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;backdrop-filter:blur(4px);" onclick="closeAttachModal()">
+  <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:20px 20px 0 0;padding:20px 16px 28px;animation:slideUp 0.3s ease;" onclick="event.stopPropagation()">
+    <div style="width:40px;height:4px;background:#4b5563;border-radius:4px;margin:0 auto 18px;"></div>
+    <h3 style="color:#fff;text-align:center;font-size:16px;margin-bottom:18px;font-weight:600;">إرفاق ملف</h3>
+    <div style="display:flex;justify-content:center;gap:24px;">
+      <button onclick="pickAttachment('image')" style="display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:12px 18px;border-radius:16px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#60a5fa);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(59,130,246,0.4);">
+          <i class="fas fa-image" style="color:#fff;font-size:22px;"></i>
+        </div>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:500;">صورة</span>
+      </button>
+      <button onclick="pickAttachment('video')" style="display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:12px 18px;border-radius:16px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#ec4899,#f472b6);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(236,72,153,0.4);">
+          <i class="fas fa-video" style="color:#fff;font-size:22px;"></i>
+        </div>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:500;">فيديو</span>
+      </button>
+      <button onclick="pickAttachment('audio')" style="display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:12px 18px;border-radius:16px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(16,185,129,0.4);">
+          <i class="fas fa-microphone" style="color:#fff;font-size:22px;"></i>
+        </div>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:500;">صوت</span>
+      </button>
+    </div>
+  </div>
+</div>
+<style>
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+</style>
 
 <script>
 // --- Config & State ---
@@ -720,9 +756,13 @@ async function fetchProfile() {
         if (data.has_story) {
           avatarDot.classList.add('has-story');
           avatarDot.classList.remove('no-story');
+          // Click on blue circle -> go to story
+          avatarDot.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/stories?userId=${otherId}`; };
         } else {
           avatarDot.classList.add('no-story');
           avatarDot.classList.remove('has-story');
+          // Click on gray circle -> go to profile
+          avatarDot.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/profile?userId=${otherId}`; };
         }
       }
     }
@@ -1087,8 +1127,23 @@ function renderComposerPreview(file, type) {
 }
 
 // --- Attachments ---
-attachBtn.onclick = () => mediaInput.click();
-mediaInput.onchange = (e) => {
+const attachModalBg = document.getElementById('attach-modal-bg');
+const mediaInputImage = document.getElementById('media-input-image');
+const mediaInputVideo = document.getElementById('media-input-video');
+const mediaInputAudio = document.getElementById('media-input-audio');
+
+attachBtn.onclick = () => attachModalBg.style.display = 'block';
+
+function closeAttachModal() { attachModalBg.style.display = 'none'; }
+
+function pickAttachment(type) {
+  closeAttachModal();
+  if (type === 'image') mediaInputImage.click();
+  else if (type === 'video') mediaInputVideo.click();
+  else if (type === 'audio') mediaInputAudio.click();
+}
+
+function handleFileSelected(e) {
   const file = e.target.files[0];
   if (!file) return;
   uploadedFile = file;
@@ -1096,10 +1151,14 @@ mediaInput.onchange = (e) => {
   if(file.type.startsWith('image')) type = 'image';
   else if(file.type.startsWith('video')) type = 'video';
   else if(file.type.startsWith('audio')) type = 'audio';
-  
   renderComposerPreview(file, type);
   toggleSendButton();
-};
+}
+
+mediaInput.onchange = handleFileSelected;
+mediaInputImage.onchange = handleFileSelected;
+mediaInputVideo.onchange = handleFileSelected;
+mediaInputAudio.onchange = handleFileSelected;
 
 // --- Recording ---
 micBtn.onclick = () => { if (isRecording) stopRecording(); else startRecording(); };
@@ -1304,13 +1363,13 @@ function triggerReply(msg) {
   const senderName = isMe ? 'أنت' : document.getElementById('header-name').textContent;
   let preview = msg.content;
   if(!preview && msg.media) {
-     if(msg.media.type.startsWith('image')) preview = '📷 صورة';
-     else if(msg.media.type.startsWith('video')) preview = '🎥 فيديو';
-     else if(msg.media.type.startsWith('audio') || msg.media.url.endsWith('.webm')) preview = '🎤 تسجيل صوتي';
+     if(msg.media.type.startsWith('image')) preview = '<i class="fas fa-image" style="color:#60a5fa;margin-left:4px;"></i> صورة';
+     else if(msg.media.type.startsWith('video')) preview = '<i class="fas fa-video" style="color:#f472b6;margin-left:4px;"></i> فيديو';
+     else if(msg.media.type.startsWith('audio') || msg.media.url.endsWith('.webm')) preview = '<i class="fas fa-microphone" style="color:#34d399;margin-left:4px;"></i> تسجيل صوتي';
   }
   replyData = { id: msg.messageId, sender: senderName, content: preview };
   document.getElementById('reply-to-name').textContent = senderName;
-  document.getElementById('reply-to-text').textContent = preview;
+  document.getElementById('reply-to-text').innerHTML = preview;
   replyContainer.style.display = 'flex';
   msgInput.focus();
 }
