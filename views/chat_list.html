@@ -2144,197 +2144,21 @@ function handleNotifClick(el) {
                 user
             };
         }
-
- 
-
-        // --- Stories Logic ---
+/////
+            
+// --- Stories Logic ---
         let storiesDataGroups = [];
         let currentStoryGroupIndex = 0;
         let currentStoryItemIndex = 0;
         let storyTimeout;
         let storyProgressInterval;
-        const STORY_DURATION = 15000; // تم رفع المدة إلى 8 ثوانٍ
-                // --- متغيرات الصوت والبحث ---
-        let previewAudio = new Audio(); // مشغل معاينة الأغاني
+        const STORY_DURATION = 8000; // مدة الصورة 8 ثوانٍ
+
+        // --- متغيرات الصوت والبحث ---
+        let selectedAudioBlob = null;
+        let previewAudio = new Audio();
         let currentPlayingUrl = '';
         let searchTimeout;
-
-        // 1. وظيفة البحث التلقائي (Debounce) لمنع الضغط على السيرفر أثناء الكتابة
-        function debounceSearch(query) {
-            clearTimeout(searchTimeout);
-            const resultsDiv = document.getElementById('musicSearchResults');
-            
-            if (!query.trim()) {
-                resultsDiv.innerHTML = '';
-                return;
-            }
-
-            resultsDiv.innerHTML = '<div class="text-white text-center py-4"><i class="fas fa-circle-notch fa-spin text-2xl"></i> جاري البحث...</div>';
-            
-            searchTimeout = setTimeout(() => {
-                executeMusicSearch(query);
-            }, 600); // ينتظر نصف ثانية بعد توقفك عن الكتابة
-        }
-
-        async function executeMusicSearch(query) {
-            const resultsDiv = document.getElementById('musicSearchResults');
-            try {
-                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=10`);
-                const data = await res.json();
-                
-                resultsDiv.innerHTML = '';
-                if (data.results.length === 0) {
-                    resultsDiv.innerHTML = '<div class="text-gray-400 text-center py-2 text-sm">لا توجد نتائج</div>';
-                    return;
-                }
-                
-                data.results.forEach(track => {
-                    if(!track.previewUrl) return;
-                    
-                    const div = document.createElement('div');
-                    div.className = "flex items-center justify-between bg-black/40 p-2 rounded-xl hover:bg-white/10 transition border border-white/5";
-                    div.innerHTML = `
-                        <div class="flex items-center gap-3 overflow-hidden">
-                            <button onclick="togglePreviewPlay('${track.previewUrl}', this, event)" class="preview-play-btn w-8 h-8 flex-shrink-0 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/40 transition">
-                                <i class="fas fa-play text-xs"></i>
-                            </button>
-                            <img src="${track.artworkUrl30 || track.artworkUrl60}" class="w-10 h-10 rounded-full shadow-md">
-                            <div class="flex flex-col overflow-hidden">
-                                <span class="text-white text-sm font-bold truncate w-32">${track.trackName}</span>
-                                <span class="text-gray-300 text-xs truncate w-32">${track.artistName}</span>
-                            </div>
-                        </div>
-                        <button onclick="selectTrack('${track.previewUrl}', '${track.trackName.replace(/'/g, "\\'")}', event)" class="bg-white text-black rounded-full px-4 py-1 text-sm font-bold shrink-0 hover:bg-gray-200 active:scale-95 transition-transform">دمج</button>
-                    `;
-                    resultsDiv.appendChild(div);
-                });
-            } catch (e) {
-                resultsDiv.innerHTML = '<div class="text-red-400 text-center py-2 text-sm">حدث خطأ في جلب الموسيقى</div>';
-            }
-        }
-
-        // 2. وظيفة تشغيل وإيقاف المعاينة الصوتية
-        function togglePreviewPlay(url, btnElement, event) {
-            event.stopPropagation(); // منع انتقال الضغطة
-            
-            // إعادة كل الأزرار لشكل "تشغيل"
-            document.querySelectorAll('.preview-play-btn').forEach(btn => {
-                btn.innerHTML = '<i class="fas fa-play text-xs"></i>';
-            });
-
-            if (currentPlayingUrl === url && !previewAudio.paused) {
-                previewAudio.pause();
-                btnElement.innerHTML = '<i class="fas fa-play text-xs"></i>';
-            } else {
-                previewAudio.src = url;
-                previewAudio.play();
-                currentPlayingUrl = url;
-                btnElement.innerHTML = '<i class="fas fa-pause text-xs"></i>'; // تحويل الزر لـ "إيقاف"
-            }
-        }
-
-        // عند دمج الأغنية نوقف المعاينة
-        async function selectTrack(previewUrl, trackName, event) {
-            if(event) event.stopPropagation();
-            previewAudio.pause(); // إيقاف الموسيقى فور اختيارها
-            
-            document.getElementById('musicSearchResults').innerHTML = '';
-            document.getElementById('musicSearchInput').value = '';
-            
-            document.getElementById('selectedTrackName').textContent = trackName;
-            document.getElementById('selectedTrackUI').classList.remove('hidden');
-            document.getElementById('selectedTrackUI').classList.add('flex');
-            
-            try {
-                const res = await fetch(previewUrl);
-                selectedAudioBlob = await res.blob();
-            } catch (e) {
-                alert("تعذر تحميل المقطع الصوتي.");
-                clearSelectedTrack();
-            }
-        }
-
-        // 3. التنقل بين القصص (تمت إضافة event.stopPropagation())
-        function nextStoryItem(event) {
-            if(event) event.stopPropagation();
-            const group = storiesDataGroups[currentStoryGroupIndex];
-            if (currentStoryItemIndex < group.items.length - 1) {
-                currentStoryItemIndex++;
-                renderCurrentStoryItem();
-            } else if (currentStoryGroupIndex < storiesDataGroups.length - 1) {
-                currentStoryGroupIndex++;
-                currentStoryItemIndex = 0;
-                renderCurrentStoryItem();
-            } else {
-                closeStoryViewer();
-            }
-        }
-
-        function prevStoryItem(event) {
-            if(event) event.stopPropagation();
-            if (currentStoryItemIndex > 0) {
-                currentStoryItemIndex--;
-                renderCurrentStoryItem();
-            } else if (currentStoryGroupIndex > 0) {
-                currentStoryGroupIndex--;
-                currentStoryItemIndex = storiesDataGroups[currentStoryGroupIndex].items.length - 1;
-                renderCurrentStoryItem();
-            }
-        }
-
-        // 4. نافذة الحذف المخصصة
-        let storyIdToDelete = null;
-
-        function openConfirmModal(storyId) {
-            storyIdToDelete = storyId;
-            const modal = document.getElementById('customConfirmModal');
-            const box = document.getElementById('confirmModalBox');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => { box.classList.remove('scale-95'); box.classList.add('scale-100'); }, 10);
-        }
-
-        function closeConfirmModal() {
-            storyIdToDelete = null;
-            const modal = document.getElementById('customConfirmModal');
-            const box = document.getElementById('confirmModalBox');
-            box.classList.remove('scale-100');
-            box.classList.add('scale-95');
-            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 200);
-        }
-
-        // قم بربط الزر الجديد بوظيفة الحذف الحقيقية
-        document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
-            if (!storyIdToDelete) return;
-            const btn = document.getElementById('confirmDeleteBtn');
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch(`/api/stories/${storyIdToDelete}`, { method: 'DELETE', credentials: 'same-origin' });
-                if (res.ok) {
-                    closeConfirmModal();
-                    closeStoryViewer();
-                    fetchAndDisplayStories();
-                    if (typeof showToast === 'function') showToast("تم الحذف بنجاح");
-                } else {
-                    alert("فشل الحذف");
-                }
-            } catch (e) {
-                console.error("Delete error:", e);
-            } finally {
-                btn.innerHTML = 'حذف';
-                btn.disabled = false;
-            }
-        });
-
-        // وفي دالة renderCurrentStoryItem() قم بتغيير حدث زر السلة ليستدعي المودال الجديد:
-        // بدلاً من deleteCurrentStory(story.id) اجعلها:
-        // delBtn.onclick = (e) => { e.stopPropagation(); openConfirmModal(story.id); };
-
-
-        // --- متغيرات مكتبة الموسيقى ---
-        let selectedAudioBlob = null;
 
         async function fetchAndDisplayStories() {
             const storiesRow = document.getElementById('storiesRow');
@@ -2354,7 +2178,7 @@ function handleNotifClick(el) {
                             <img src="${escapeAttr(myPic)}" alt="أضف قصة">
                             <div class="create-story-btn"><i class="fas fa-plus"></i></div>
                         </div>
-                        <span class="story-username">إضافة قصة</span>
+                        <span class="story-username">إضافتي</span>
                     </div>
                 `;
 
@@ -2395,6 +2219,7 @@ function handleNotifClick(el) {
             document.getElementById('musicSearchInput').value = '';
             document.getElementById('musicSearchResults').innerHTML = '';
             document.getElementById('storyTextInput').value = '';
+            previewAudio.pause(); // إيقاف الموسيقى عند الإغلاق
         }
 
         function previewStoryMedia(input) {
@@ -2429,16 +2254,26 @@ function handleNotifClick(el) {
         }
 
         // --- وظائف البحث عن الموسيقى (iTunes API مجاني) ---
-        async function searchMusic() {
-            const query = document.getElementById('musicSearchInput').value.trim();
-            if (!query) return;
-            
+        function debounceSearch(query) {
+            clearTimeout(searchTimeout);
             const resultsDiv = document.getElementById('musicSearchResults');
-            resultsDiv.innerHTML = '<div class="text-white text-center py-4"><i class="fas fa-circle-notch fa-spin text-2xl"></i></div>';
             
+            if (!query.trim()) {
+                resultsDiv.innerHTML = '';
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="text-white text-center py-4"><i class="fas fa-circle-notch fa-spin text-2xl"></i> جاري البحث...</div>';
+            
+            searchTimeout = setTimeout(() => {
+                executeMusicSearch(query);
+            }, 600);
+        }
+
+        async function executeMusicSearch(query) {
+            const resultsDiv = document.getElementById('musicSearchResults');
             try {
-                // استخدام واجهة ايتونز المجانية لجلب المقاطع (تسمح بالـ CORS)
-                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=15`);
+                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=10`);
                 const data = await res.json();
                 
                 resultsDiv.innerHTML = '';
@@ -2448,19 +2283,22 @@ function handleNotifClick(el) {
                 }
                 
                 data.results.forEach(track => {
-                    if(!track.previewUrl) return; // تأكد من وجود ملف صوتي
+                    if(!track.previewUrl) return;
                     
                     const div = document.createElement('div');
-                    div.className = "flex items-center justify-between bg-black/40 p-2 rounded-xl hover:bg-white/20 cursor-pointer transition border border-white/5";
+                    div.className = "flex items-center justify-between bg-black/40 p-2 rounded-xl hover:bg-white/10 transition border border-white/5";
                     div.innerHTML = `
                         <div class="flex items-center gap-3 overflow-hidden">
+                            <button onclick="togglePreviewPlay('${track.previewUrl}', this, event)" class="preview-play-btn w-8 h-8 flex-shrink-0 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/40 transition">
+                                <i class="fas fa-play text-xs"></i>
+                            </button>
                             <img src="${track.artworkUrl30 || track.artworkUrl60}" class="w-10 h-10 rounded-full shadow-md">
                             <div class="flex flex-col overflow-hidden">
-                                <span class="text-white text-sm font-bold truncate w-40">${track.trackName}</span>
-                                <span class="text-gray-300 text-xs truncate w-40">${track.artistName}</span>
+                                <span class="text-white text-sm font-bold truncate w-32">${track.trackName}</span>
+                                <span class="text-gray-300 text-xs truncate w-32">${track.artistName}</span>
                             </div>
                         </div>
-                        <button onclick="selectTrack('${track.previewUrl}', '${track.trackName.replace(/'/g, "\\'")}')" class="bg-white text-black rounded-full px-4 py-1 text-sm font-bold shrink-0 hover:bg-gray-200 active:scale-95 transition-transform">دمج</button>
+                        <button onclick="selectTrack('${track.previewUrl}', '${track.trackName.replace(/'/g, "\\'")}', event)" class="bg-white text-black rounded-full px-4 py-1 text-sm font-bold shrink-0 hover:bg-gray-200 active:scale-95 transition-transform">دمج</button>
                     `;
                     resultsDiv.appendChild(div);
                 });
@@ -2469,7 +2307,27 @@ function handleNotifClick(el) {
             }
         }
 
-        async function selectTrack(previewUrl, trackName) {
+        function togglePreviewPlay(url, btnElement, event) {
+            event.stopPropagation();
+            document.querySelectorAll('.preview-play-btn').forEach(btn => {
+                btn.innerHTML = '<i class="fas fa-play text-xs"></i>';
+            });
+
+            if (currentPlayingUrl === url && !previewAudio.paused) {
+                previewAudio.pause();
+                btnElement.innerHTML = '<i class="fas fa-play text-xs"></i>';
+            } else {
+                previewAudio.src = url;
+                previewAudio.play();
+                currentPlayingUrl = url;
+                btnElement.innerHTML = '<i class="fas fa-pause text-xs"></i>';
+            }
+        }
+
+        async function selectTrack(previewUrl, trackName, event) {
+            if(event) event.stopPropagation();
+            previewAudio.pause(); 
+            
             document.getElementById('musicSearchResults').innerHTML = '';
             document.getElementById('musicSearchInput').value = '';
             
@@ -2477,12 +2335,11 @@ function handleNotifClick(el) {
             document.getElementById('selectedTrackUI').classList.remove('hidden');
             document.getElementById('selectedTrackUI').classList.add('flex');
             
-            // تحميل المقطع الصوتي وتحويله إلى ملف جاهز للرفع
             try {
                 const res = await fetch(previewUrl);
                 selectedAudioBlob = await res.blob();
             } catch (e) {
-                alert("تعذر تحميل المقطع الصوتي، حاول اختيار أغنية أخرى.");
+                alert("تعذر تحميل المقطع الصوتي.");
                 clearSelectedTrack();
             }
         }
@@ -2510,7 +2367,6 @@ function handleNotifClick(el) {
             const formData = new FormData();
             formData.append('story_media', mediaInput.files[0]);
             
-            // دمج الموسيقى المختارة كملف صوتي
             if (selectedAudioBlob) {
                 const audioFile = new File([selectedAudioBlob], "story_music.m4a", { type: selectedAudioBlob.type || "audio/mp4" });
                 formData.append('story_audio', audioFile);
@@ -2550,39 +2406,6 @@ function handleNotifClick(el) {
             renderCurrentStoryItem();
         }
 
-        function closeStoryViewer() {
-            document.getElementById('storyViewerModal').classList.add('hidden');
-            clearTimeout(storyTimeout);
-            clearInterval(storyProgressInterval);
-            
-            const mediaContent = document.getElementById('storyMediaContent');
-            mediaContent.innerHTML = ''; 
-            
-            const audioPlayer = document.getElementById('storyAudioPlayer');
-            audioPlayer.pause();
-            audioPlayer.src = '';
-        }
-
-        function renderCurrentStoryItem() {
-            clearTimeout(storyTimeout);
-            clearInterval(storyProgressInterval);
-            
-            const group = storiesDataGroups[currentStoryGroupIndex];
-            const story = group.items[currentStoryItemIndex];
-            
-            document.getElementById('storyViewerUsername').textContent = group.username;
-            document.getElementById('storyViewerAvatar').src = group.profile_picture_url || DEFAULT_AVATAR;
-            // --- داخل دالة renderCurrentStoryItem ---
-
-// تعديل دالة الحذف المستقلة
-        function handleDeleteClick(event) {
-            event.stopPropagation(); // يمنع إغلاق القصة أو تمريرها
-            const group = storiesDataGroups[currentStoryGroupIndex];
-            const story = group.items[currentStoryItemIndex];
-            openConfirmModal(story.id);
-        }
-
-        // تعديل دالة إغلاق القصة (إضافة event)
         function closeStoryViewer(event) {
             if (event) event.stopPropagation();
             document.getElementById('storyViewerModal').classList.add('hidden');
@@ -2597,7 +2420,6 @@ function handleNotifClick(el) {
             audioPlayer.src = '';
         }
 
-        // إغلاق النافذة وتصفير زر الإعجاب عند الانتقال لقصة جديدة
         function renderCurrentStoryItem() {
             clearTimeout(storyTimeout);
             clearInterval(storyProgressInterval);
@@ -2608,17 +2430,19 @@ function handleNotifClick(el) {
             document.getElementById('storyViewerUsername').textContent = group.username;
             document.getElementById('storyViewerAvatar').src = group.profile_picture_url || DEFAULT_AVATAR;
             
-            // إعادة ضبط زر الإعجاب (ليصبح أبيض وفارغ مع كل قصة جديدة)
+            // إعادة ضبط زر الإعجاب مع كل قصة جديدة
             const likeIcon = document.getElementById('likeStoryIcon');
-            likeIcon.classList.remove('fas', 'text-red-500');
-            likeIcon.classList.add('far');
+            if (likeIcon) {
+                // ملاحظة: هنا سنقرأ حالة الإعجاب من السيرفر لاحقاً (story.isLiked)
+                likeIcon.classList.remove('fas', 'text-red-500');
+                likeIcon.classList.add('far');
+            }
 
-            // منطق زر الحذف 
+            // إظهار زر الحذف لصاحب القصة فقط
             const delBtn = document.getElementById('deleteStoryBtn');
             if (delBtn) {
                 if (String(group.userId) === String(window.currentUserId || currentUserId)) {
                     delBtn.classList.remove('hidden');
-                    // تم نقل الـ onclick إلى الـ HTML باسم handleDeleteClick
                 } else {
                     delBtn.classList.add('hidden');
                 }
@@ -2639,7 +2463,9 @@ function handleNotifClick(el) {
             if (story.mediaType === 'video') {
                 mediaContainer.innerHTML = `<video id="activeStoryVideo" src="${escapeAttr(story.mediaUrl)}" autoplay playsinline class="w-full h-full object-contain bg-black"></video>`;
                 const vid = document.getElementById('activeStoryVideo');
-                vid.onloadedmetadata = () => startStoryTimer(vid.duration * 1000);
+                vid.onloadedmetadata = () => {
+                    startStoryTimer(vid.duration * 1000);
+                };
                 vid.onended = () => nextStoryItem();
             } else {
                 mediaContainer.innerHTML = `<img src="${escapeAttr(story.mediaUrl)}" class="w-full h-full object-contain bg-black">`;
@@ -2673,7 +2499,10 @@ function handleNotifClick(el) {
             }, duration);
         }
 
-        function nextStoryItem() {
+        // --- دوال التنقل (يمين/يسار) ---
+        // في تطبيقات السوشيال ميديا: الضغط على اليمين يعرض القصة التالية، واليسار السابقة
+        function nextStoryItem(event) {
+            if(event) event.stopPropagation();
             const group = storiesDataGroups[currentStoryGroupIndex];
             if (currentStoryItemIndex < group.items.length - 1) {
                 currentStoryItemIndex++;
@@ -2687,7 +2516,8 @@ function handleNotifClick(el) {
             }
         }
 
-        function prevStoryItem() {
+        function prevStoryItem(event) {
+            if(event) event.stopPropagation();
             if (currentStoryItemIndex > 0) {
                 currentStoryItemIndex--;
                 renderCurrentStoryItem();
@@ -2698,42 +2528,23 @@ function handleNotifClick(el) {
             }
         }
 
-        async function deleteCurrentStory(storyId) {
-            if (!storyId) return;
-            if (!confirm("هل أنت متأكد من حذف هذه القصة؟")) return;
-
-            try {
-                const res = await fetch(`/api/stories/${storyId}`, { method: 'DELETE', credentials: 'same-origin' });
-                if (res.ok) {
-                    closeStoryViewer();
-                    fetchAndDisplayStories();
-                    if (typeof showToast === 'function') showToast("تم حذف القصة بنجاح");
-                } else {
-                    alert("فشل حذف القصة");
-                }
-            } catch (e) {
-                console.error("Delete error:", e);
-            }
-        }
-
-
-// --- ميزة الإعجاب بالقصص ---
+        // --- ميزة الإعجاب (Likes) والأنيميشن ---
         function toggleLikeStory(event) {
             if (event) event.stopPropagation();
             const icon = document.getElementById('likeStoryIcon');
             
             if (icon.classList.contains('far')) {
-                // تفعيل الإعجاب (يصبح أحمر ومليء)
                 icon.classList.remove('far');
                 icon.classList.add('fas', 'text-red-500');
                 showBigHeartAnimation();
                 
-                // هنا يمكنك إضافة كود fetch لإرسال الإعجاب للسيرفر لاحقاً
+                // يمكنك استدعاء دالة API السيرفر هنا لاحقاً:
+                // const currentStoryId = storiesDataGroups[currentStoryGroupIndex].items[currentStoryItemIndex].id;
                 // fetch(`/api/stories/${currentStoryId}/like`, { method: 'POST' });
             } else {
-                // إلغاء الإعجاب
                 icon.classList.remove('fas', 'text-red-500');
                 icon.classList.add('far');
+                // استدعاء إلغاء الإعجاب بالسيرفر هنا لاحقاً
             }
         }
 
@@ -2741,7 +2552,6 @@ function handleNotifClick(el) {
             if (event) event.stopPropagation();
             const icon = document.getElementById('likeStoryIcon');
             
-            // إذا لم يكن معجباً بها، قم بالإعجاب. وإذا كان معجباً بالفعل، أظهر الأنيميشن فقط
             if (icon.classList.contains('far')) {
                 toggleLikeStory();
             } else {
@@ -2751,12 +2561,10 @@ function handleNotifClick(el) {
 
         function showBigHeartAnimation() {
             const heart = document.createElement('i');
-            heart.className = 'fas fa-heart text-red-500 absolute text-[150px] drop-shadow-2xl z-50 transition-all duration-700 ease-out flex items-center justify-center inset-0 m-auto animate-pulse';
+            heart.className = 'fas fa-heart text-red-500 absolute text-[150px] drop-shadow-2xl z-50 transition-all duration-700 ease-out flex items-center justify-center inset-0 m-auto animate-pulse pointer-events-none';
             
-            // تأثير الظهور والاختفاء
             heart.style.opacity = '0';
             heart.style.transform = 'scale(0.5)';
-            
             document.getElementById('storyViewerModal').appendChild(heart);
             
             setTimeout(() => {
@@ -2771,6 +2579,79 @@ function handleNotifClick(el) {
             
             setTimeout(() => heart.remove(), 1200);
         }
+
+        // --- دوال الحذف والمودال الزجاجي ---
+        let storyIdToDelete = null;
+
+        function handleDeleteClick(event) {
+            if(event) event.stopPropagation(); 
+            const group = storiesDataGroups[currentStoryGroupIndex];
+            const story = group.items[currentStoryItemIndex];
+            openConfirmModal(story.id);
+        }
+
+        function openConfirmModal(storyId) {
+            storyIdToDelete = storyId;
+            const modal = document.getElementById('customConfirmModal');
+            const box = document.getElementById('confirmModalBox');
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            setTimeout(() => {
+                box.classList.remove('scale-95', 'opacity-0');
+                box.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('customConfirmModal');
+            const box = document.getElementById('confirmModalBox');
+            
+            box.classList.remove('scale-100', 'opacity-100');
+            box.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                storyIdToDelete = null;
+            }, 200);
+        }
+
+        // ربط زر "تأكيد الحذف" في المودال بدالة الحذف الفعلي
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        if(confirmDeleteBtn) {
+            confirmDeleteBtn.addEventListener('click', async function() {
+                if (!storyIdToDelete) return;
+                
+                const btn = this;
+                const originalText = btn.innerText;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحذف...';
+
+                try {
+                    const res = await fetch(`/api/stories/${storyIdToDelete}`, { 
+                        method: 'DELETE', 
+                        credentials: 'same-origin' 
+                    });
+                    
+                    if (res.ok) {
+                        closeConfirmModal();
+                        closeStoryViewer();
+                        fetchAndDisplayStories();
+                        if (typeof showToast === 'function') showToast("تم الحذف بنجاح");
+                    } else {
+                        alert("فشل حذف القصة من السيرفر");
+                    }
+                } catch (e) {
+                    console.error("Delete error:", e);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }
+            });
+    }
+
             
 
         /* ---------------- REELS TRAY LOGIC (NEW) ---------------- */
