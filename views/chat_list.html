@@ -609,10 +609,18 @@
             padding: 3px;
             background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
             position: relative;
+            animation: storyPulse 2s ease-in-out infinite;
         }
 
         .story-circle.no-story {
-            background: #4b5563; /* رمادي عند عدم توفر قصة */
+            background: #4b5563;
+            animation: none;
+        }
+
+        @keyframes storyPulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
+            50% { box-shadow: 0 0 12px 4px rgba(0, 198, 255, 0.4); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
         }
 
         .story-circle img {
@@ -923,6 +931,40 @@
             <div id="musicSearchResults" class="max-h-40 overflow-y-auto flex flex-col gap-2 rounded-xl custom-scrollbar"></div>
         </div>
 
+
+        <!-- اختيار لون القصة -->
+        <div class="w-full bg-white/10 backdrop-blur-md rounded-3xl p-5 border border-white/20 shadow-lg">
+            <div class="flex items-center gap-2 mb-4 text-white">
+                <i class="fas fa-palette text-xl"></i>
+                <h3 class="font-bold text-lg">لون الدائرة</h3>
+            </div>
+            <div id="storyColorPicker" class="flex flex-wrap justify-center gap-3">
+                <button type="button" onclick="selectStoryColor('')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);" data-color="" title="افتراضي">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #f093fb 0%, #f5576c 100%)')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #f093fb 0%, #f5576c 100%);" data-color="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" title="وردي">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);" data-color="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)" title="أخضر">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #fa709a 0%, #fee140 100%)')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #fa709a 0%, #fee140 100%);" data-color="linear-gradient(135deg, #fa709a 0%, #fee140 100%)" title="برتقالي">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);" data-color="linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)" title="بنفسجي">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #f6d365 0%, #fda085 100%)')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #f6d365 0%, #fda085 100%);" data-color="linear-gradient(135deg, #f6d365 0%, #fda085 100%)" title="ذهبي">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #667eea 0%, #764ba2 100%)')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);" data-color="linear-gradient(135deg, #667eea 0%, #764ba2 100%)" title="نيلي">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #ff0844 0%, #ffb199 100%)')" class="story-color-opt w-10 h-10 rounded-full border-2 border-white/30 transition-all hover:scale-110" style="background:linear-gradient(135deg, #ff0844 0%, #ffb199 100%);" data-color="linear-gradient(135deg, #ff0844 0%, #ffb199 100%)" title="أحمر">
+                    <i class="fas fa-check text-white text-sm hidden"></i>
+                </button>
+            </div>
+        </div>
 
         <input type="text" id="storyTextInput" placeholder="أضف تعليقاً على القصة..." class="w-full bg-white/10 backdrop-blur-md text-white rounded-full py-4 px-6 outline-none border border-white/20 focus:border-white/50 placeholder-gray-300 shadow-lg">
 
@@ -2121,6 +2163,24 @@ function handleNotifClick(el) {
         let storyProgressInterval;
         const STORY_DURATION = 20000; // مدة الصورة 8 ثوانٍ
 
+        // --- متغير لون القصة ---
+        let selectedStoryColor = '';
+
+        function selectStoryColor(color) {
+            selectedStoryColor = color;
+            document.querySelectorAll('.story-color-opt .fa-check').forEach(icon => icon.classList.add('hidden'));
+            const allBtns = document.querySelectorAll('.story-color-opt');
+            allBtns.forEach(btn => {
+                btn.style.borderColor = 'rgba(255,255,255,0.3)';
+                btn.style.transform = 'scale(1)';
+                if (btn.getAttribute('data-color') === color) {
+                    btn.querySelector('.fa-check').classList.remove('hidden');
+                    btn.style.borderColor = '#fff';
+                    btn.style.transform = 'scale(1.15)';
+                }
+            });
+        }
+
         // --- متغيرات الصوت والبحث ---
         let selectedAudioBlob = null;
         let previewAudio = new Audio();
@@ -2145,20 +2205,23 @@ function handleNotifClick(el) {
                             <img src="${escapeAttr(myPic)}" alt="أضف قصة">
                             <div class="create-story-btn"><i class="fas fa-plus"></i></div>
                         </div>
-                        <span class="story-username">إضافتي</span>
+                        <span class="story-username">إضافة قصة</span>
                     </div>
                 `;
 
                 if (res.ok && data.ok) {
                     storiesDataGroups = data.storiesGroups || [];
                     storiesDataGroups.forEach((group, index) => {
-                        const hasStory = group.items && group.items.length > 0;
+                        const hasUnviewed = group.items.some(item => !item.viewed);
                         const onlineDotHtml = group.is_online ? '<span class="online-dot online-dot-small" style="z-index:10;"></span>' : '';
-                        const circleClass = hasStory ? '' : 'no-story';
-                        const clickAction = hasStory ? `window.location.href='/stories?groupIndex=${index}'` : `window.location.href='/profile?userId=${group.userId}'`;
+                        const circleClass = hasUnviewed ? '' : 'no-story';
+                        // لون القصة المخصص (إن وجد)
+                        const storyColor = group.items[0] && group.items[0].story_color ? group.items[0].story_color : '';
+                        const customStyle = (hasUnviewed && storyColor) ? `background:${storyColor};` : '';
+                        const clickAction = hasUnviewed ? `window.location.href='/stories?groupIndex=${index}'` : `window.location.href='/profile?userId=${group.userId}'`;
                         html += `
                             <div class="story-circle-wrapper" onclick="${clickAction}">
-                                <div class="story-circle ${circleClass}">
+                                <div class="story-circle ${circleClass}" style="${customStyle}">
                                     <img src="${escapeAttr(group.profile_picture_url || myPic)}" 
                                          alt="${escapeAttr(group.username)}" 
                                          onerror="this.src='${myPic}'">
@@ -2190,6 +2253,9 @@ function handleNotifClick(el) {
             document.getElementById('musicSearchInput').value = '';
             document.getElementById('musicSearchResults').innerHTML = '';
             document.getElementById('storyTextInput').value = '';
+            selectedStoryColor = '';
+            document.querySelectorAll('.story-color-opt .fa-check').forEach(icon => icon.classList.add('hidden'));
+            document.querySelectorAll('.story-color-opt').forEach(btn => { btn.style.borderColor = 'rgba(255,255,255,0.3)'; btn.style.transform = 'scale(1)'; });
             previewAudio.pause(); // إيقاف الموسيقى عند الإغلاق
         }
 
@@ -2344,6 +2410,7 @@ function handleNotifClick(el) {
             }
             
             formData.append('text', textInput.value);
+            if (selectedStoryColor) formData.append('story_color', selectedStoryColor);
 
             try {
                 const res = await fetch('/api/stories/create', {

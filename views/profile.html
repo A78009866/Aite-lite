@@ -210,10 +210,20 @@
             background-origin: border-box;
             background-clip: padding-box, border-box;
             cursor: pointer;
+            animation: storyPulse 2s ease-in-out infinite;
+        }
+        .avatar-wrapper.has-story.viewed img#profileImage {
+            background-image: linear-gradient(#000, #000), linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+            animation: none;
         }
         .avatar-wrapper.no-story img#profileImage {
             border-color: #4b5563;
             cursor: pointer;
+        }
+        @keyframes storyPulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
+            50% { box-shadow: 0 0 12px 4px rgba(0, 198, 255, 0.4); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
         }
 
         .status-indicator {
@@ -1814,10 +1824,21 @@ async function fetchAndDisplayProfile() {
             if (data.has_story) {
                 profileAvatarWrap.classList.add('has-story');
                 profileAvatarWrap.classList.remove('no-story');
+                // تحقق من حالة المشاهدة
+                if (data.story_viewed) {
+                    profileAvatarWrap.classList.add('viewed');
+                } else {
+                    profileAvatarWrap.classList.remove('viewed');
+                    // تطبيق لون مخصص إن وجد
+                    if (data.story_color && profileImg) {
+                        profileImg.style.backgroundImage = `linear-gradient(#000, #000), ${data.story_color}`;
+                    }
+                }
                 if (profileImg) profileImg.onclick = (e) => { e.stopPropagation(); window.location.href = `/stories?userId=${data.id}`; };
             } else {
                 profileAvatarWrap.classList.add('no-story');
                 profileAvatarWrap.classList.remove('has-story');
+                profileAvatarWrap.classList.remove('viewed');
                 if (profileImg) profileImg.onclick = null; // Already on profile
             }
 
