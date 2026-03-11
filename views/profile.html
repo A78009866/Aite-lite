@@ -11,12 +11,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
     <style>
-        body {
+                body {
+            background-color: #000000; /* أعدنا اللون الأسود هنا */
             color: #e4e6eb;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
             padding-bottom: 60px;
         }
+
 
 
         .glass-navbar {
@@ -434,9 +436,9 @@
 </head>
 <body class="min-h-screen relative">
 
-    <div id="pageDynamicBackground" class="fixed inset-0 z-[-2] bg-cover bg-center bg-no-repeat transition-all duration-700"></div>
+    <div id="pageDynamicBackground" class="fixed inset-0 z-[-2] bg-cover bg-center bg-no-repeat transition-all duration-700 hidden"></div>
     
-    <div class="fixed inset-0 z-[-1] bg-black/60 backdrop-blur-2xl"></div>
+    <div id="glassOverlay" class="fixed inset-0 z-[-1] bg-black/60 backdrop-blur-2xl hidden"></div>
 
     <header class="sticky top-0 z-50 glass-navbar p-3">
         <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
@@ -470,6 +472,7 @@
             </div>
         </nav>
     </header>
+
 
 
     <main class="max-w-6xl mx-auto p-4">
@@ -1738,6 +1741,7 @@ async function fetchCurrentUser() {
 }
 
 
+
 async function fetchAndDisplayProfile() {
     await fetchCurrentUser();
 
@@ -1762,12 +1766,26 @@ async function fetchAndDisplayProfile() {
             // ensure we use server default when no profile picture
             document.getElementById('profileImage').src = data.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
             
-            // --- التعديل الجديد لجعل صورة الغلاف خلفية للموقع ---
+            // --- التعديل الجديد للتحكم في الخلفية ---
+            const dynamicBg = document.getElementById('pageDynamicBackground');
+            const glassOverlay = document.getElementById('glassOverlay');
+
             if (data.cover_photo_url) {
+                // وضع الصورة في غلاف البروفايل (المستطيل)
                 document.getElementById('coverPhotoContainer').style.backgroundImage = `url('${data.cover_photo_url}')`;
-                document.getElementById('pageDynamicBackground').style.backgroundImage = `url('${data.cover_photo_url}')`;
+                
+                // تفعيل صورة الخلفية للموقع بالكامل وإظهار تأثير الزجاج
+                dynamicBg.style.backgroundImage = `url('${data.cover_photo_url}')`;
+                dynamicBg.classList.remove('hidden');
+                if (glassOverlay) glassOverlay.classList.remove('hidden');
             } else {
-                document.getElementById('pageDynamicBackground').style.backgroundImage = `url('/assets/default_cover_photo.jpg')`;
+                // في حال عدم وجود صورة، نضع صورة غلاف افتراضية للمستطيل فقط
+                document.getElementById('coverPhotoContainer').style.backgroundImage = `url('/assets/default_cover_photo.jpg')`;
+                
+                // إخفاء الخلفية وتأثير الزجاج للعودة للون الأسود الطبيعي
+                dynamicBg.style.backgroundImage = 'none';
+                dynamicBg.classList.add('hidden');
+                if (glassOverlay) glassOverlay.classList.add('hidden');
             }
             // ---------------------------------------------------
 
@@ -1868,6 +1886,7 @@ async function fetchAndDisplayProfile() {
         document.getElementById('userPostsFeed').innerHTML = '<div class="text-center text-red-500 p-8">حدث خطأ في جلب بيانات الملف الشخصي.</div>';
     }
 }
+
 
 
 
