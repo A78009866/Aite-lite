@@ -186,6 +186,9 @@ app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 
 app.get('/reels', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'reels.html')); });
 app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_reel.html')); });
 
+// Stories page
+app.get('/stories', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'stories.html')); });
+
 // Notifications page
 app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
 
@@ -776,7 +779,21 @@ app.post('/api/stories/:storyId/like', requireAuth, async (req, res) => {
   }
 });
 
-// 5. إلغاء إعجاب بقصة (Unlike)
+// 5. فحص حالة الإعجاب (Like Status)
+app.get('/api/stories/:storyId/like-status', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { storyId } = req.params;
+
+  try {
+    const snap = await db.ref(`story_likes/${storyId}/${userId}`).once('value');
+    res.json({ ok: true, liked: snap.exists() });
+  } catch (error) {
+    console.error('Error checking story like status:', error);
+    res.status(500).json({ ok: false, liked: false });
+  }
+});
+
+// 6. إلغاء إعجاب بقصة (Unlike)
 app.post('/api/stories/:storyId/unlike', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { storyId } = req.params;
