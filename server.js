@@ -729,11 +729,66 @@ app.delete('/api/stories/:storyId', requireAuth, async (req, res) => {
   }
 });
 
+// 4. إعجاب بقصة (Like) + إرسال إشعار لصاحب القصة
+app.post('/api/stories/:storyId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { storyId } = req.params;
 
+  try {
+    const storyRef = db.ref(`stories/${storyId}`);
+    const snap = await storyRef.once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'القصة غير موجودة' });
 
-        
+    const story = snap.val();
 
-  
+    // حفظ الإعجاب في قاعدة البيانات
+    await db.ref(`story_likes/${storyId}/${userId}`).set({
+      userId: userId,
+      timestamp: admin.database.ServerValue.TIMESTAMP
+    });
+
+    // إرسال إشعار لصاحب القصة (إذا لم يكن هو نفسه)
+    if (story.userId && story.userId !== userId) {
+      try {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${story.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'story_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          storyId: storyId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      } catch (nerr) {
+        console.error('Failed to create story_like notification:', nerr);
+      }
+    }
+
+    res.json({ ok: true, action: 'liked' });
+  } catch (error) {
+    console.error('Error liking story:', error);
+    res.status(500).json({ ok: false, error: 'فشل الإعجاب' });
+  }
+});
+
+// 5. إلغاء إعجاب بقصة (Unlike)
+app.post('/api/stories/:storyId/unlike', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { storyId } = req.params;
+
+  try {
+    await db.ref(`story_likes/${storyId}/${userId}`).remove();
+    res.json({ ok: true, action: 'unliked' });
+  } catch (error) {
+    console.error('Error unliking story:', error);
+    res.status(500).json({ ok: false, error: 'فشل إلغاء الإعجاب' });
+  }
+});
 
 // ---------------- API: Chat & Messages ----------------
 
