@@ -965,9 +965,9 @@
         </div>
     </div>
 
-    <div class="absolute inset-y-0 right-0 w-1/4 z-40 cursor-pointer" onclick="nextStoryItem(event)"></div>
+    <div class="absolute inset-y-0 right-0 w-1/4 z-40 cursor-pointer" onclick="prevStoryItem(event)"></div>
     
-    <div class="absolute inset-y-0 left-0 w-1/4 z-40 cursor-pointer" onclick="prevStoryItem(event)"></div>
+    <div class="absolute inset-y-0 left-0 w-1/4 z-40 cursor-pointer" onclick="nextStoryItem(event)"></div>
     
     <div class="absolute inset-y-0 inset-x-1/4 w-1/2 z-40 cursor-pointer" ondblclick="likeCurrentStory(event)"></div>
 </div>
@@ -2428,7 +2428,7 @@ function handleNotifClick(el) {
             document.getElementById('storyTextContent').textContent = story.text || '';
             
             if (story.mediaType === 'video') {
-                mediaContainer.innerHTML = `<video id="activeStoryVideo" src="${escapeAttr(story.mediaUrl)}" autoplay playsinline class="w-full h-full object-contain bg-black"></video>`;
+                mediaContainer.innerHTML = `<video id="activeStoryVideo" src="${escapeAttr(story.mediaUrl)}" autoplay playsinline poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect fill='%23000' width='1' height='1'/%3E%3C/svg%3E" class="w-full h-full object-contain bg-black"></video>`;
                 const vid = document.getElementById('activeStoryVideo');
                 vid.onloadedmetadata = () => {
                     startStoryTimer(vid.duration * 1000);
@@ -2496,22 +2496,33 @@ function handleNotifClick(el) {
         }
 
         // --- ميزة الإعجاب (Likes) والأنيميشن ---
-        function toggleLikeStory(event) {
+        async function toggleLikeStory(event) {
             if (event) event.stopPropagation();
             const icon = document.getElementById('likeStoryIcon');
+            const story = storiesDataGroups[currentStoryGroupIndex].items[currentStoryItemIndex];
             
             if (icon.classList.contains('far')) {
                 icon.classList.remove('far');
                 icon.classList.add('fas', 'text-red-500');
                 showBigHeartAnimation();
                 
-                // يمكنك استدعاء دالة API السيرفر هنا لاحقاً:
-                // const currentStoryId = storiesDataGroups[currentStoryGroupIndex].items[currentStoryItemIndex].id;
-                // fetch(`/api/stories/${currentStoryId}/like`, { method: 'POST' });
+                // حفظ الإعجاب في السيرفر وإرسال إشعار لصاحب القصة
+                try {
+                    await fetch(`/api/stories/${story.id}/like`, {
+                        method: 'POST',
+                        credentials: 'same-origin'
+                    });
+                } catch(e) { console.error('Story like error:', e); }
             } else {
                 icon.classList.remove('fas', 'text-red-500');
                 icon.classList.add('far');
-                // استدعاء إلغاء الإعجاب بالسيرفر هنا لاحقاً
+                // إلغاء الإعجاب
+                try {
+                    await fetch(`/api/stories/${story.id}/unlike`, {
+                        method: 'POST',
+                        credentials: 'same-origin'
+                    });
+                } catch(e) { console.error('Story unlike error:', e); }
             }
         }
 
@@ -2559,6 +2570,12 @@ function handleNotifClick(el) {
 
         function openConfirmModal(storyId) {
             storyIdToDelete = storyId;
+            // إيقاف مؤقت للقصة أثناء عرض نافذة التأكيد
+            clearTimeout(storyTimeout);
+            clearInterval(storyProgressInterval);
+            const vid = document.getElementById('activeStoryVideo');
+            if (vid) vid.pause();
+
             const modal = document.getElementById('customConfirmModal');
             const box = document.getElementById('confirmModalBox');
             
@@ -2583,6 +2600,16 @@ function handleNotifClick(el) {
                 modal.classList.remove('flex');
                 storyIdToDelete = null;
             }, 200);
+
+            // استئناف تشغيل القصة بعد إغلاق نافذة التأكيد (إلغاء الحذف)
+            const vid = document.getElementById('activeStoryVideo');
+            if (vid && !vid.ended) {
+                vid.play().catch(()=>{});
+                startStoryTimer((vid.duration - vid.currentTime) * 1000);
+            } else if (!vid) {
+                // صورة: استئناف المؤقت بالوقت المتبقي
+                startStoryTimer(STORY_DURATION);
+            }
         }
 
         // ربط زر "تأكيد الحذف" في المودال بدالة الحذف الفعلي
