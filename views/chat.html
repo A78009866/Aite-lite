@@ -272,17 +272,62 @@ html, body {
   object-fit: contain;
 }
 
-/* Audio Player - Fixed Styles */
+/* Audio Player - Glass Morphism Live Style */
 .msg-audio-player {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 240px; /* Slightly wider */
-  padding: 6px 0;
+  gap: 10px;
+  width: 260px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+.msg-audio-player::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 60%);
+  border-radius: 16px;
+  pointer-events: none;
+}
+.msg-audio-player:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+/* Live audio bars animation */
+.audio-live-bars {
+  display: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 20px;
+  margin-right: 6px;
+}
+.audio-live-bars.active { display: flex; }
+.audio-live-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to top, #0ea5e9, #7dd3fc);
+  animation: audioBarBounce 0.8s ease-in-out infinite;
+}
+.audio-live-bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+.audio-live-bar:nth-child(2) { height: 14px; animation-delay: 0.15s; }
+.audio-live-bar:nth-child(3) { height: 10px; animation-delay: 0.3s; }
+.audio-live-bar:nth-child(4) { height: 18px; animation-delay: 0.1s; }
+.audio-live-bar:nth-child(5) { height: 6px; animation-delay: 0.25s; }
+@keyframes audioBarBounce {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
 }
 
 .audio-play-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
   color: #fff;
   border: none;
   width: 36px;
@@ -293,20 +338,36 @@ html, body {
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 3px 12px rgba(14, 165, 233, 0.35);
+  position: relative;
+  z-index: 1;
 }
-.audio-play-btn:active { background: rgba(255,255,255,0.3); }
+.audio-play-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 18px rgba(14, 165, 233, 0.5);
+}
+.audio-play-btn:active {
+  transform: scale(0.92);
+}
 
 .audio-waveform-container { 
-    flex: 1; 
-    height: 34px; 
-    min-width: 120px;
-    position: relative;
-    display: block;
-    /* Force visibility */
-    opacity: 1 !important;
+  flex: 1; 
+  height: 34px; 
+  min-width: 120px;
+  position: relative;
+  display: block;
+  opacity: 1 !important;
 }
-.audio-time { font-size: 11px; color: #fff; font-weight: 600; min-width: 32px; text-align: center; }
+.audio-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  min-width: 36px;
+  text-align: center;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.5px;
+}
 
 /* Reply Context */
 .reply-context {
@@ -724,27 +785,142 @@ textarea:focus { border-color: var(--accent); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .send-btn {
-  background: #0ea5e9;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
   border: none;
   color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4), 0 0 20px rgba(99, 102, 241, 0.2);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: sendBtnPulse 2s ease-in-out infinite;
 }
-.send-btn:disabled { background: #334155; opacity: 0.7; }
+.send-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.send-btn:hover::before { opacity: 1; }
+.send-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 25px rgba(14, 165, 233, 0.5), 0 0 30px rgba(99, 102, 241, 0.3);
+}
+.send-btn:active {
+  transform: scale(0.9) !important;
+  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.3);
+}
+.send-btn:disabled {
+  background: #334155;
+  opacity: 0.5;
+  box-shadow: none;
+  animation: none;
+}
+.send-btn:disabled::before { display: none; }
+@keyframes sendBtnPulse {
+  0%, 100% { box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4), 0 0 20px rgba(99, 102, 241, 0.2); }
+  50% { box-shadow: 0 4px 20px rgba(14, 165, 233, 0.6), 0 0 30px rgba(99, 102, 241, 0.35); }
+}
+.send-btn i {
+  transition: transform 0.3s;
+}
+.send-btn:hover i {
+  transform: translateX(-2px) rotate(-15deg);
+}
 
-/* Recording UI */
+/* Recording UI - Glass Morphism Live */
 #recording-ui {
   display: none;
   flex: 1;
   align-items: center;
   gap: 10px;
-  background: rgba(185, 28, 28, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(185, 28, 28, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: 20px;
   padding: 0 15px;
-  height: 38px;
+  height: 42px;
+  position: relative;
+  overflow: hidden;
+  animation: recGlassGlow 2s ease-in-out infinite;
 }
-.rec-dot { width: 10px; height: 10px; background: #ef4444; border-radius: 50%; animation: pulse 1s infinite; }
-.rec-time { font-size: 13px; color: #fff; flex: 1; font-weight: 600; font-feature-settings: "tnum"; }
-.cancel-rec { color: #fca5a5; cursor: pointer; font-size: 12px; font-weight: 600; }
+#recording-ui::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(239,68,68,0.08) 0%, transparent 50%, rgba(239,68,68,0.08) 100%);
+  animation: recShimmer 2s linear infinite;
+  pointer-events: none;
+}
+@keyframes recGlassGlow {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.25); box-shadow: 0 0 10px rgba(239,68,68,0.1); }
+  50% { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 20px rgba(239,68,68,0.2); }
+}
+@keyframes recShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.rec-dot {
+  width: 12px;
+  height: 12px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: recDotPulse 1s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  flex-shrink: 0;
+}
+@keyframes recDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px rgba(239,68,68,0.6); }
+  50% { opacity: 0.4; transform: scale(0.75); box-shadow: 0 0 4px rgba(239,68,68,0.3); }
+}
+
+/* Live audio visualizer bars during recording */
+.rec-live-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  flex: 1;
+}
+.rec-live-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to top, #ef4444, #fca5a5);
+  transition: height 0.1s ease;
+  min-height: 3px;
+}
+
+.rec-time {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+  letter-spacing: 1px;
+  min-width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.cancel-rec {
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 10px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.cancel-rec:hover { background: rgba(239, 68, 68, 0.2); color: #fff; }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
 </style>
@@ -850,6 +1026,7 @@ textarea:focus { border-color: var(--accent); }
 
       <div id="recording-ui">
         <div class="rec-dot"></div>
+        <div class="rec-live-bars" id="rec-live-bars"></div>
         <div class="rec-time" id="rec-timer">0:00</div>
         <div class="cancel-rec" id="cancel-rec-btn">إلغاء</div>
       </div>
@@ -913,6 +1090,10 @@ let recTimerInterval = null;
 let audioWaveSurfers = {}; // Stores { id: WaveSurferInstance }
 let composerWaveSurfer = null;
 let activeLongPressMsgId = null;
+let recAudioContext = null;
+let recAnalyser = null;
+let recAnimFrame = null;
+let recLiveBarsEl = null;
 let activeContextMsg = null; // stores full msg object for context menu
 
 // DOM Elements
@@ -1171,6 +1352,9 @@ function createMsgElement(msg) {
            <button class="audio-play-btn" onclick="playAudio('${url}', '${audioId}', this)">
              <i class="fas fa-play" style="font-size:14px"></i>
            </button>
+           <div class="audio-live-bars">
+             <div class="audio-live-bar"></div><div class="audio-live-bar"></div><div class="audio-live-bar"></div><div class="audio-live-bar"></div><div class="audio-live-bar"></div>
+           </div>
            <div id="${audioId}" class="audio-waveform-container"></div>
            <div class="audio-time">...</div>
          </div>
@@ -1641,10 +1825,17 @@ function startRecording() {
     attachBtn.style.display = 'none';
     recordingUi.style.display = 'flex';
     
+    // Setup live audio visualizer
+    setupRecLiveVisualizer(stream);
+    
     let sec = 0;
+    const timerEl = document.getElementById('rec-timer');
     recTimerInterval = setInterval(() => {
       sec++;
-      document.getElementById('rec-timer').textContent = fmtTime(sec);
+      timerEl.textContent = fmtTime(sec);
+      // Pulse animation on timer
+      timerEl.style.transform = 'scale(1.1)';
+      setTimeout(() => { timerEl.style.transform = 'scale(1)'; }, 150);
     }, 1000);
 
     mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
@@ -1656,6 +1847,44 @@ function startRecording() {
        toggleSendButton();
     };
   }).catch(e => alert('Mic error'));
+}
+
+function setupRecLiveVisualizer(stream) {
+  try {
+    recAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    recAnalyser = recAudioContext.createAnalyser();
+    const source = recAudioContext.createMediaStreamSource(stream);
+    source.connect(recAnalyser);
+    recAnalyser.fftSize = 64;
+    
+    recLiveBarsEl = document.getElementById('rec-live-bars');
+    recLiveBarsEl.innerHTML = '';
+    const barCount = 20;
+    for (let i = 0; i < barCount; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'rec-live-bar';
+      bar.style.height = '3px';
+      recLiveBarsEl.appendChild(bar);
+    }
+    
+    const dataArray = new Uint8Array(recAnalyser.frequencyBinCount);
+    
+    function animateBars() {
+      if (!isRecording) return;
+      recAnalyser.getByteFrequencyData(dataArray);
+      const bars = recLiveBarsEl.children;
+      for (let i = 0; i < bars.length; i++) {
+        const dataIndex = Math.floor(i * dataArray.length / bars.length);
+        const value = dataArray[dataIndex] || 0;
+        const height = Math.max(3, (value / 255) * 24);
+        bars[i].style.height = height + 'px';
+      }
+      recAnimFrame = requestAnimationFrame(animateBars);
+    }
+    animateBars();
+  } catch(e) {
+    console.error('Audio visualizer error:', e);
+  }
 }
 
 function stopRecording() { if(mediaRecorder) mediaRecorder.stop(); }
@@ -1671,6 +1900,12 @@ function resetRecordingUI() {
   msgInput.style.display = 'block';
   micBtn.style.display = 'flex';
   attachBtn.style.display = 'flex';
+  
+  // Cleanup audio visualizer
+  if (recAnimFrame) { cancelAnimationFrame(recAnimFrame); recAnimFrame = null; }
+  if (recAudioContext) { recAudioContext.close().catch(()=>{}); recAudioContext = null; }
+  recAnalyser = null;
+  if (recLiveBarsEl) recLiveBarsEl.innerHTML = '';
 }
 
 function toggleSendButton() {
@@ -1727,14 +1962,29 @@ function playAudio(url, id, btn) {
   const ws = audioWaveSurfers[id];
   if(!ws) return;
   ws.playPause();
+  
+  const player = btn.closest('.msg-audio-player');
+  let liveBars = player ? player.querySelector('.audio-live-bars') : null;
+  
   if (ws.isPlaying()) {
       btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
+      if (liveBars) liveBars.classList.add('active');
   } else {
       btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+      if (liveBars) liveBars.classList.remove('active');
   }
   
-  ws.on('play', () => btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>');
-  ws.on('pause', () => btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>');
+  ws.on('play', () => {
+    btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
+    if (liveBars) liveBars.classList.add('active');
+  });
+  ws.on('pause', () => {
+    btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+    if (liveBars) liveBars.classList.remove('active');
+  });
+  ws.on('finish', () => {
+    if (liveBars) liveBars.classList.remove('active');
+  });
 }
 
 // --- Helpers ---
