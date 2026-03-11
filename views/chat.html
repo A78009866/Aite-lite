@@ -77,12 +77,12 @@ html, body {
 }
 .avatar-with-dot.has-story {
   border: 2px solid transparent;
-  background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+  background-image: linear-gradient(var(--bg), var(--bg)), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff));
   background-origin: border-box;
   background-clip: padding-box, border-box;
   border-radius: 12px;
   cursor: pointer;
-  animation: storyPulse 2s ease-in-out infinite;
+  animation: storySnake 1.8s linear infinite;
 }
 .avatar-with-dot.has-story.viewed {
   background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
@@ -92,10 +92,13 @@ html, body {
   border: 2px solid #4b5563;
   cursor: pointer;
 }
-@keyframes storyPulse {
-  0% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
-  50% { box-shadow: 0 0 12px 4px rgba(0, 198, 255, 0.4); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
+@property --story-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes storySnake {
+  to { --story-angle: 360deg; }
 }
 
 .avatar {
@@ -773,7 +776,11 @@ async function fetchProfile() {
             avatarDot.classList.remove('viewed');
             // تطبيق لون مخصص إن وجد
             if (data.story_color) {
-              avatarDot.style.backgroundImage = `linear-gradient(var(--bg), var(--bg)), ${data.story_color}`;
+              const cm = data.story_color.match(/#[0-9a-fA-F]{6}/g);
+              if (cm && cm.length >= 2) {
+                avatarDot.style.setProperty('--c1', cm[0]);
+                avatarDot.style.setProperty('--c2', cm[1]);
+              }
             }
           }
           // Click on blue circle -> go to story

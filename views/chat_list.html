@@ -607,9 +607,13 @@
             height: 68px;
             border-radius: 50%;
             padding: 3px;
-            background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
             position: relative;
-            animation: storyPulse 2s ease-in-out infinite;
+            background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+        }
+
+        .story-circle.has-active-story {
+            background: conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff));
+            animation: storySnake 1.8s linear infinite;
         }
 
         .story-circle.no-story {
@@ -617,10 +621,25 @@
             animation: none;
         }
 
-        @keyframes storyPulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
-            50% { box-shadow: 0 0 12px 4px rgba(0, 198, 255, 0.4); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
+        @property --story-angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+        }
+
+        @keyframes storySnake {
+            to { --story-angle: 360deg; }
+        }
+
+        /* fallback for browsers that don't support @property */
+        @supports not (background: conic-gradient(from 0deg, red, blue)) {
+            .story-circle.has-active-story {
+                animation: storySnakeFallback 1.8s linear infinite;
+            }
+            @keyframes storySnakeFallback {
+                0%   { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
         }
 
         .story-circle img {
@@ -2214,10 +2233,17 @@ function handleNotifClick(el) {
                     storiesDataGroups.forEach((group, index) => {
                         const hasUnviewed = group.items.some(item => !item.viewed);
                         const onlineDotHtml = group.is_online ? '<span class="online-dot online-dot-small" style="z-index:10;"></span>' : '';
-                        const circleClass = hasUnviewed ? '' : 'no-story';
+                        const circleClass = hasUnviewed ? 'has-active-story' : 'no-story';
                         // لون القصة المخصص (إن وجد)
                         const storyColor = group.items[0] && group.items[0].story_color ? group.items[0].story_color : '';
-                        const customStyle = (hasUnviewed && storyColor) ? `background:${storyColor};` : '';
+                        let customStyle = '';
+                        if (hasUnviewed && storyColor) {
+                            // استخراج الألوان من التدرج
+                            const colorMatch = storyColor.match(/#[0-9a-fA-F]{6}/g);
+                            if (colorMatch && colorMatch.length >= 2) {
+                                customStyle = `--c1:${colorMatch[0]};--c2:${colorMatch[1]};`;
+                            }
+                        }
                         const clickAction = hasUnviewed ? `window.location.href='/stories?groupIndex=${index}'` : `window.location.href='/profile?userId=${group.userId}'`;
                         html += `
                             <div class="story-circle-wrapper" onclick="${clickAction}">

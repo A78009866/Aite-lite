@@ -82,19 +82,22 @@
         }
         .avatar-circle.has-story {
             border: 3px solid transparent;
-            background-image: linear-gradient(#000, #000), linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+            background-image: linear-gradient(#000, #000), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff));
             background-origin: border-box;
             background-clip: padding-box, border-box;
-            animation: storyPulse 2s ease-in-out infinite;
+            animation: storySnake 1.8s linear infinite;
         }
         .avatar-circle.has-story.viewed {
             background-image: linear-gradient(#000, #000), linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
             animation: none;
         }
-        @keyframes storyPulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
-            50% { box-shadow: 0 0 12px 4px rgba(0, 198, 255, 0.4); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.5); }
+        @property --story-angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+        }
+        @keyframes storySnake {
+            to { --story-angle: 360deg; }
         }
 
         /* تنسيق علامات الصح */
@@ -189,9 +192,16 @@
                 }
             };
 
+            // استخراج ألوان القصة المخصصة
+            let storyColorStyle = '';
+            if (user.has_story && user.story_color && !user.story_viewed) {
+                const cm = user.story_color.match(/#[0-9a-fA-F]{6}/g);
+                if (cm && cm.length >= 2) storyColorStyle = `style="--c1:${cm[0]};--c2:${cm[1]};"`;
+            }
+
             card.innerHTML = `
                 <div class="relative flex-shrink-0 ml-3 avatar-click-area" style="cursor:pointer;">
-                    <img src="${user.profile_picture_url}" class="w-14 h-14 rounded-full object-cover avatar-circle ${user.has_story ? (user.story_viewed ? 'has-story viewed' : 'has-story') : ''}" ${user.has_story && user.story_color && !user.story_viewed ? `style="background-image: linear-gradient(#000, #000), ${user.story_color}; background-origin: border-box; background-clip: padding-box, border-box;"` : ''}>
+                    <img src="${user.profile_picture_url}" class="w-14 h-14 rounded-full object-cover avatar-circle ${user.has_story ? (user.story_viewed ? 'has-story viewed' : 'has-story') : ''}" ${storyColorStyle}>
                     ${user.is_online ? '<div class="online-dot"></div>' : ''}
                 </div>
                 <div class="flex-grow min-w-0">
