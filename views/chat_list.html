@@ -2925,7 +2925,8 @@ function handleNotifClick(el) {
             }
         });
         
-        document.addEventListener('DOMContentLoaded', () => {
+                document.addEventListener('DOMContentLoaded', () => {
+            // جلب بيانات البروفايل لتحديث الصورة العلوية
             fetch('/api/profile', { credentials: 'same-origin' })
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
@@ -2936,16 +2937,24 @@ function handleNotifClick(el) {
                             profilePicElement.src = data.profile_picture_url;
                             profilePicElement.alt = `صورة بروفايل ${data.username || 'المستخدم'}`;
                         }
-                        currentUserId = data && (data.id || null);
-                        if (data && data.is_online) meDot.style.display = 'inline-block';
-                        else if (meDot) meDot.style.display = 'none';
+                        currentUserId = data.id || null;
+                        if (data.is_online && meDot) meDot.style.display = 'inline-block';
                     }
-                }).catch(console.error);
-                
-                        // load stories first
-            fetchAndDisplayStories().then(() => {
+                }).catch(err => console.error("Profile fetch error:", err));
+
+            // تشغيل القصص أولاً، وبعد نجاحها أو فشلها يتم تحميل المنشورات
+            if (typeof fetchAndDisplayStories === 'function') {
+                fetchAndDisplayStories().finally(() => {
+                    if (typeof fetchAndDisplayPosts === 'function') {
+                        fetchAndDisplayPosts();
+                    }
+                });
+            } else {
+                // إذا لم تكن دالة القصص موجودة، حمل المنشورات مباشرة
                 fetchAndDisplayPosts();
-            });
+            }
+        });
+
 
 
         (function setupNotifSSE() {
