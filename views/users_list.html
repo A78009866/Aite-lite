@@ -28,40 +28,28 @@
 
         .glass-user-card {
             background-color: rgba(20, 20, 20, 0.6);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            transition: transform 0.2s ease, background-color 0.2s ease;
-        }
-        .glass-user-card:active {
-            transform: scale(0.98);
-            background-color: rgba(30, 30, 30, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s ease, background-color 0.3s ease;
         }
 
         .glass-user-card.unread {
-            background-color: rgba(13, 148, 136, 0.10);
-            border-right: 3px solid #0d9488;
+            background-color: rgba(13, 148, 136, 0.12);
+            border-right: 4px solid #0d9488;
         }
 
         .unread-badge {
             background-color: #0d9488;
             color: white;
             font-size: 11px;
-            min-width: 22px;
-            height: 22px;
-            padding: 0 6px;
-            border-radius: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
             font-weight: bold;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
         }
 
         .verified-badge-img {
-            width: 16px;
-            height: 16px;
-            margin-right: 4px;
+            width: 17px;
+            height: 17px;
+            margin-right: 5px;
             flex-shrink: 0;
         }
 
@@ -88,40 +76,40 @@
             border: 2px solid #000;
             border-radius: 50%;
         }
-
-        .chat-avatar {
-            width: 52px;
-            height: 52px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid rgba(255,255,255,0.08);
+        .avatar-circle {
+            border: 3px solid #4b5563;
+            transition: border-color 0.3s;
+        }
+        .avatar-circle.has-story {
+            border: 3px solid transparent;
+            background-image: linear-gradient(#000, #000), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff));
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+            animation: storySnake 1.8s linear infinite;
+        }
+        .avatar-circle.has-story.viewed {
+            background-image: linear-gradient(#000, #000), linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+            animation: none;
+        }
+        @property --story-angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+        }
+        @keyframes storySnake {
+            to { --story-angle: 360deg; }
         }
 
         /* تنسيق علامات الصح */
         .status-icon {
-            font-size: 11px;
+            font-size: 11px; /* تكبير بسيط */
             margin-left: 6px;
         }
         .status-read {
-            color: #4ade80;
+            color: #4ade80; /* أخضر ساطع */
         }
         .status-sent {
-            color: #9ca3af;
-        }
-
-        .msg-type-icon {
-            font-size: 12px;
-            margin-left: 4px;
-            color: #9ca3af;
-            flex-shrink: 0;
-        }
-
-        .last-msg-text {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            flex: 1;
-            min-width: 0;
+            color: #9ca3af; /* رمادي فاتح */
         }
     </style>
 </head>
@@ -162,24 +150,20 @@
             return date.toLocaleDateString('ar-EG');
         }
 
-        // --- دالة تحديد أيقونة الحالة ---
+        // --- دالة تحديد أيقونة الحالة (الجديدة) ---
         function getStatusHtml(msg) {
+            // تظهر الأيقونات فقط إذا كنت أنا مرسل آخر رسالة
             if (!msg || msg.senderId !== currentUserId) return '';
+            
+            // إذا كانت مقروءة (تأتي من الخادم كـ true)
             if (msg.is_read === true) {
+                // صحين خضر
                 return '<i class="fas fa-check-double status-icon status-read"></i> ';
             }
+            
+            // إذا لم تقرأ بعد (مرسلة فقط)
+            // صح واحد رمادي
             return '<i class="fas fa-check status-icon status-sent"></i> ';
-        }
-
-        // --- أيقونة نوع الرسالة ---
-        function getMsgTypeIcon(msg) {
-            if (!msg || !msg.content) return '';
-            if (msg.media) {
-                if (msg.media === 'image' || (typeof msg.content === 'string' && msg.content.includes('[صورة]'))) return '<i class="fas fa-image msg-type-icon"></i>';
-                if (msg.media === 'video' || (typeof msg.content === 'string' && msg.content.includes('[فيديو]'))) return '<i class="fas fa-video msg-type-icon"></i>';
-                if (msg.media === 'audio' || (typeof msg.content === 'string' && msg.content.includes('[صوت]'))) return '<i class="fas fa-microphone msg-type-icon"></i>';
-            }
-            return '';
         }
 
         function createCard(user) {
@@ -198,30 +182,49 @@
 
             card.onclick = () => window.location.href = `/chat?contactId=${user.id}&contactName=${encodeURIComponent(user.username)}`;
 
-            const msgTypeIcon = getMsgTypeIcon(lastMsg);
+            // Avatar click: story if has_story, else profile
+            const avatarClickHandler = (e) => {
+                e.stopPropagation();
+                if (user.has_story) {
+                    window.location.href = `/stories?userId=${user.id}`;
+                } else {
+                    window.location.href = `/profile?userId=${user.id}`;
+                }
+            };
+
+            // استخراج ألوان القصة المخصصة
+            let storyColorStyle = '';
+            if (user.has_story && user.story_color && !user.story_viewed) {
+                const cm = user.story_color.match(/#[0-9a-fA-F]{6}/g);
+                if (cm && cm.length >= 2) storyColorStyle = `style="--c1:${cm[0]};--c2:${cm[1]};"`;
+            }
 
             card.innerHTML = `
-                <div class="relative flex-shrink-0 ml-3">
-                    <img src="${user.profile_picture_url}" class="chat-avatar" onerror="this.onerror=null;this.src='https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png'">
+                <div class="relative flex-shrink-0 ml-3 avatar-click-area" style="cursor:pointer;">
+                    <img src="${user.profile_picture_url}" class="w-14 h-14 rounded-full object-cover avatar-circle ${user.has_story ? (user.story_viewed ? 'has-story viewed' : 'has-story') : ''}" ${storyColorStyle}>
                     ${user.is_online ? '<div class="online-dot"></div>' : ''}
                 </div>
                 <div class="flex-grow min-w-0">
                     <div class="flex justify-between items-center">
                         <div class="name-wrapper">
-                            <span class="username-text font-bold text-gray-100 text-base">${user.username}</span>
+                            <span class="username-text font-bold text-gray-100 text-lg">${user.username}</span>
                             ${user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : ''}
                         </div>
-                        <span class="text-xs text-gray-500 flex-shrink-0 mr-2">${timeLabel}</span>
+                        <span class="text-xs text-gray-500">${timeLabel}</span>
                     </div>
-                    <div class="flex justify-between items-center mt-1 gap-2">
-                        <div class="flex items-center text-sm flex-grow min-w-0 ${isUnread ? 'text-white font-semibold' : 'text-gray-400'}">
-                            ${statusHtml}${msgTypeIcon}
-                            <span class="last-msg-text">${lastMsg.content || 'ابدأ المحادثة الآن...'}</span>
+                    <div class="flex justify-between items-center mt-1">
+                        <div class="flex items-center text-sm truncate flex-grow ${isUnread ? 'text-white font-semibold' : 'text-gray-400'}">
+                            ${statusHtml}
+                            <span class="truncate">${lastMsg.content || 'ابدأ المحادثة الآن...'}</span>
                         </div>
-                        ${isUnread ? `<span class="unread-badge">${user.unread_count}</span>` : ''}
+                        ${isUnread ? `<span class="unread-badge mr-2">${user.unread_count}</span>` : ''}
                     </div>
                 </div>
             `;
+            // Attach avatar click handler
+            const avatarArea = card.querySelector('.avatar-click-area');
+            if (avatarArea) avatarArea.addEventListener('click', avatarClickHandler);
+
             return card;
         }
 

@@ -75,6 +75,37 @@ html, body {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+.avatar-with-dot.has-story {
+  border: 2px solid transparent;
+  background-image: linear-gradient(var(--bg), var(--bg)), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  border-radius: 12px;
+  cursor: pointer;
+  animation: storySnake 2.4s ease-in-out infinite;
+}
+.avatar-with-dot.has-story.viewed {
+  background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+  animation: none;
+}
+.avatar-with-dot.no-story {
+  border: 2px solid #4b5563;
+  cursor: pointer;
+}
+@property --story-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes storySnake {
+  0%   { --story-angle: 0deg; transform: scale(1); }
+  15%  { --story-angle: 70deg; transform: scale(1.04); }
+  30%  { --story-angle: 120deg; transform: scale(1); }
+  45%  { --story-angle: 190deg; transform: scale(1.04); }
+  60%  { --story-angle: 240deg; transform: scale(1); }
+  75%  { --story-angle: 310deg; transform: scale(1.04); }
+  100% { --story-angle: 360deg; transform: scale(1); }
+}
 
 .avatar {
   width: 100%;
@@ -241,17 +272,62 @@ html, body {
   object-fit: contain;
 }
 
-/* Audio Player - Fixed Styles */
+/* Audio Player - Glass Morphism Live Style */
 .msg-audio-player {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 240px; /* Slightly wider */
-  padding: 6px 0;
+  gap: 10px;
+  width: 260px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+.msg-audio-player::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 60%);
+  border-radius: 16px;
+  pointer-events: none;
+}
+.msg-audio-player:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+/* Live audio bars animation */
+.audio-live-bars {
+  display: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 20px;
+  margin-right: 6px;
+}
+.audio-live-bars.active { display: flex; }
+.audio-live-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to top, #0ea5e9, #7dd3fc);
+  animation: audioBarBounce 0.8s ease-in-out infinite;
+}
+.audio-live-bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+.audio-live-bar:nth-child(2) { height: 14px; animation-delay: 0.15s; }
+.audio-live-bar:nth-child(3) { height: 10px; animation-delay: 0.3s; }
+.audio-live-bar:nth-child(4) { height: 18px; animation-delay: 0.1s; }
+.audio-live-bar:nth-child(5) { height: 6px; animation-delay: 0.25s; }
+@keyframes audioBarBounce {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
 }
 
 .audio-play-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
   color: #fff;
   border: none;
   width: 36px;
@@ -262,20 +338,36 @@ html, body {
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 3px 12px rgba(14, 165, 233, 0.35);
+  position: relative;
+  z-index: 1;
 }
-.audio-play-btn:active { background: rgba(255,255,255,0.3); }
+.audio-play-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 18px rgba(14, 165, 233, 0.5);
+}
+.audio-play-btn:active {
+  transform: scale(0.92);
+}
 
 .audio-waveform-container { 
-    flex: 1; 
-    height: 34px; 
-    min-width: 120px;
-    position: relative;
-    display: block;
-    /* Force visibility */
-    opacity: 1 !important;
+  flex: 1; 
+  height: 34px; 
+  min-width: 120px;
+  position: relative;
+  display: block;
+  opacity: 1 !important;
 }
-.audio-time { font-size: 11px; color: #fff; font-weight: 600; min-width: 32px; text-align: center; }
+.audio-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  min-width: 36px;
+  text-align: center;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.5px;
+}
 
 /* Reply Context */
 .reply-context {
@@ -323,31 +415,219 @@ html, body {
 .outgoing-container .msg-reaction-badge { left: -8px; }
 .incoming-container .msg-reaction-badge { right: -8px; }
 
-/* Reaction Menu (Floating & Fixed) */
-.reaction-menu {
+/* Context Menu (Floating & Fixed) */
+.context-menu-overlay {
   position: fixed;
-  background: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 50px;
-  padding: 8px 14px;
+  inset: 0;
+  z-index: 9998;
   display: none;
-  gap: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-  z-index: 9999;
-  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-@keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.context-menu-overlay.active { display: block; }
 
-.reaction-item {
-  font-size: 24px;
+.context-menu {
+  position: fixed;
+  background: rgba(22, 30, 46, 0.97);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 0;
+  display: none;
+  flex-direction: column;
+  min-width: 220px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  z-index: 9999;
+  animation: menuPopIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: hidden;
+}
+@keyframes menuPopIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.context-menu .reactions-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.context-menu .reaction-item {
+  font-size: 26px;
   cursor: pointer;
-  transition: transform 0.1s;
+  transition: transform 0.15s;
   user-select: none;
   line-height: 1;
 }
-.reaction-item:hover { transform: scale(1.3); }
-.reaction-item:active { transform: scale(0.9); }
+.context-menu .reaction-item:hover { transform: scale(1.3); }
+.context-menu .reaction-item:active { transform: scale(0.9); }
+
+.context-menu .menu-actions {
+  display: flex;
+  flex-direction: column;
+}
+.context-menu .menu-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  color: #e2e8f0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: right;
+  font-family: inherit;
+}
+.context-menu .menu-action:hover { background: rgba(255,255,255,0.08); }
+.context-menu .menu-action:active { background: rgba(255,255,255,0.12); }
+.context-menu .menu-action i { width: 18px; text-align: center; font-size: 14px; color: #94a3b8; }
+.context-menu .menu-action.danger { color: #f87171; }
+.context-menu .menu-action.danger i { color: #f87171; }
+.context-menu .menu-separator { height: 1px; background: rgba(255,255,255,0.08); margin: 0; }
+
+/* Edit Modal */
+.edit-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 10002;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.edit-modal-overlay.active { display: flex; }
+.edit-modal {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 24px;
+  width: 90%;
+  max-width: 400px;
+  animation: menuPopIn 0.25s ease;
+}
+.edit-modal h3 { color: #fff; font-size: 16px; margin: 0 0 16px; text-align: center; font-weight: 600; }
+.edit-modal textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  padding: 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  resize: none;
+  min-height: 80px;
+  max-height: 200px;
+  outline: none;
+  line-height: 1.5;
+  direction: rtl;
+}
+.edit-modal textarea:focus { border-color: #7dd3fc; }
+.edit-modal-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+.edit-modal-buttons button {
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.edit-modal-buttons .cancel-edit-btn {
+  background: rgba(255,255,255,0.1);
+  color: #e2e8f0;
+}
+.edit-modal-buttons .cancel-edit-btn:hover { background: rgba(255,255,255,0.15); }
+.edit-modal-buttons .save-edit-btn {
+  background: #0ea5e9;
+  color: #fff;
+}
+.edit-modal-buttons .save-edit-btn:hover { background: #0284c7; }
+.edit-modal-buttons .save-edit-btn:disabled { background: #334155; opacity: 0.6; cursor: not-allowed; }
+
+/* Delete Confirm Modal */
+.delete-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 10002;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.delete-modal-overlay.active { display: flex; }
+.delete-modal {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 24px;
+  width: 85%;
+  max-width: 360px;
+  text-align: center;
+  animation: menuPopIn 0.25s ease;
+}
+.delete-modal .delete-icon {
+  width: 56px;
+  height: 56px;
+  background: rgba(239, 68, 68, 0.15);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+.delete-modal .delete-icon i { font-size: 24px; color: #ef4444; }
+.delete-modal h3 { color: #fff; font-size: 16px; margin: 0 0 8px; font-weight: 600; }
+.delete-modal p { color: #94a3b8; font-size: 13px; margin: 0 0 20px; line-height: 1.5; }
+.delete-modal-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.delete-modal-buttons button {
+  padding: 10px 24px;
+  border-radius: 10px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  flex: 1;
+}
+.delete-modal-buttons .cancel-delete-btn {
+  background: rgba(255,255,255,0.1);
+  color: #e2e8f0;
+}
+.delete-modal-buttons .cancel-delete-btn:hover { background: rgba(255,255,255,0.15); }
+.delete-modal-buttons .confirm-delete-btn {
+  background: #ef4444;
+  color: #fff;
+}
+.delete-modal-buttons .confirm-delete-btn:hover { background: #dc2626; }
+
+/* Deleted message style */
+.msg-deleted {
+  font-style: italic;
+  color: rgba(255,255,255,0.4) !important;
+  font-size: 13px;
+}
+.msg-deleted i { margin-left: 4px; }
+
+/* Edited label */
+.msg-edited-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  font-style: italic;
+  margin-left: 4px;
+}
 
 /* --- Full Screen Image Overlay --- */
 .img-overlay {
@@ -505,37 +785,142 @@ textarea:focus { border-color: var(--accent); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .send-btn {
-  background: transparent;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
   border: none;
-  color: #0ea5e9;
-  width: 32px;
-  height: 32px;
-  font-size: 18px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s, transform 0.15s;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4), 0 0 20px rgba(99, 102, 241, 0.2);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: sendBtnPulse 2s ease-in-out infinite;
 }
-.send-btn:hover { color: #38bdf8; transform: scale(1.1); }
-.send-btn:active { transform: scale(0.95); }
-.send-btn:disabled { color: #334155; opacity: 0.7; }
+.send-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.send-btn:hover::before { opacity: 1; }
+.send-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 25px rgba(14, 165, 233, 0.5), 0 0 30px rgba(99, 102, 241, 0.3);
+}
+.send-btn:active {
+  transform: scale(0.9) !important;
+  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.3);
+}
+.send-btn:disabled {
+  background: #334155;
+  opacity: 0.5;
+  box-shadow: none;
+  animation: none;
+}
+.send-btn:disabled::before { display: none; }
+@keyframes sendBtnPulse {
+  0%, 100% { box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4), 0 0 20px rgba(99, 102, 241, 0.2); }
+  50% { box-shadow: 0 4px 20px rgba(14, 165, 233, 0.6), 0 0 30px rgba(99, 102, 241, 0.35); }
+}
+.send-btn i {
+  transition: transform 0.3s;
+}
+.send-btn:hover i {
+  transform: translateX(-2px) rotate(-15deg);
+}
 
-/* Recording UI */
+/* Recording UI - Glass Morphism Live */
 #recording-ui {
   display: none;
   flex: 1;
   align-items: center;
   gap: 10px;
-  background: rgba(185, 28, 28, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(185, 28, 28, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: 20px;
   padding: 0 15px;
-  height: 38px;
+  height: 42px;
+  position: relative;
+  overflow: hidden;
+  animation: recGlassGlow 2s ease-in-out infinite;
 }
-.rec-dot { width: 10px; height: 10px; background: #ef4444; border-radius: 50%; animation: pulse 1s infinite; }
-.rec-time { font-size: 13px; color: #fff; flex: 1; font-weight: 600; font-feature-settings: "tnum"; }
-.cancel-rec { color: #fca5a5; cursor: pointer; font-size: 12px; font-weight: 600; }
+#recording-ui::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(239,68,68,0.08) 0%, transparent 50%, rgba(239,68,68,0.08) 100%);
+  animation: recShimmer 2s linear infinite;
+  pointer-events: none;
+}
+@keyframes recGlassGlow {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.25); box-shadow: 0 0 10px rgba(239,68,68,0.1); }
+  50% { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 20px rgba(239,68,68,0.2); }
+}
+@keyframes recShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.rec-dot {
+  width: 12px;
+  height: 12px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: recDotPulse 1s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  flex-shrink: 0;
+}
+@keyframes recDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px rgba(239,68,68,0.6); }
+  50% { opacity: 0.4; transform: scale(0.75); box-shadow: 0 0 4px rgba(239,68,68,0.3); }
+}
+
+/* Live audio visualizer bars during recording */
+.rec-live-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  flex: 1;
+}
+.rec-live-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to top, #ef4444, #fca5a5);
+  transition: height 0.1s ease;
+  min-height: 3px;
+}
+
+.rec-time {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+  letter-spacing: 1px;
+  min-width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.cancel-rec {
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 10px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.cancel-rec:hover { background: rgba(239, 68, 68, 0.2); color: #fff; }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
 </style>
@@ -570,12 +955,48 @@ textarea:focus { border-color: var(--accent); }
   <div class="glass">
     <div id="messages" class="messages"></div>
     
-    <div id="reaction-menu" class="reaction-menu">
-      <div class="reaction-item" onclick="sendReaction('😂')">😂</div>
-      <div class="reaction-item" onclick="sendReaction('♥️')">♥️</div>
-      <div class="reaction-item" onclick="sendReaction('😢')">😢</div>
-      <div class="reaction-item" onclick="sendReaction('😡')">😡</div>
-      <div class="reaction-item" onclick="sendReaction('👍')">👍</div>
+    <!-- Context Menu Overlay -->
+    <div id="context-menu-overlay" class="context-menu-overlay" onclick="closeContextMenu()"></div>
+    <div id="context-menu" class="context-menu">
+      <div class="reactions-row">
+        <div class="reaction-item" onclick="sendReaction('😂')">😂</div>
+        <div class="reaction-item" onclick="sendReaction('♥️')">♥️</div>
+        <div class="reaction-item" onclick="sendReaction('😢')">😢</div>
+        <div class="reaction-item" onclick="sendReaction('😡')">😡</div>
+        <div class="reaction-item" onclick="sendReaction('👍')">👍</div>
+      </div>
+      <div class="menu-actions">
+        <button class="menu-action" id="ctx-reply" onclick="contextReply()"><i class="fas fa-reply"></i> رد</button>
+        <button class="menu-action" id="ctx-copy" onclick="contextCopy()"><i class="fas fa-copy"></i> نسخ النص</button>
+        <div class="menu-separator"></div>
+        <button class="menu-action" id="ctx-edit" onclick="contextEdit()" style="display:none"><i class="fas fa-pen"></i> تعديل</button>
+        <button class="menu-action danger" id="ctx-delete" onclick="contextDelete()" style="display:none"><i class="fas fa-trash-alt"></i> حذف</button>
+      </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal-overlay" class="edit-modal-overlay" onclick="closeEditModal()">
+      <div class="edit-modal" onclick="event.stopPropagation()">
+        <h3><i class="fas fa-pen" style="margin-left:6px;color:#7dd3fc"></i> تعديل الرسالة</h3>
+        <textarea id="edit-msg-input" placeholder="أدخل النص الجديد..."></textarea>
+        <div class="edit-modal-buttons">
+          <button class="cancel-edit-btn" onclick="closeEditModal()">إلغاء</button>
+          <button class="save-edit-btn" id="save-edit-btn" onclick="saveEdit()">حفظ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div id="delete-modal-overlay" class="delete-modal-overlay" onclick="closeDeleteModal()">
+      <div class="delete-modal" onclick="event.stopPropagation()">
+        <div class="delete-icon"><i class="fas fa-trash-alt"></i></div>
+        <h3>حذف الرسالة</h3>
+        <p>هل أنت متأكد من حذف هذه الرسالة؟ لا يمكن التراجع عن هذا الإجراء.</p>
+        <div class="delete-modal-buttons">
+          <button class="cancel-delete-btn" onclick="closeDeleteModal()">إلغاء</button>
+          <button class="confirm-delete-btn" id="confirm-delete-btn" onclick="confirmDelete()">حذف</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -595,6 +1016,9 @@ textarea:focus { border-color: var(--accent); }
 
     <div class="input-row">
       <input type="file" id="media-input" style="display:none" accept="image/*,video/*,audio/*">
+      <input type="file" id="media-input-image" style="display:none" accept="image/*">
+      <input type="file" id="media-input-video" style="display:none" accept="video/*">
+      <input type="file" id="media-input-audio" style="display:none" accept="audio/*">
       
       <button type="button" class="action-btn" id="attach-btn">
         <i class="fas fa-paperclip" style="font-size:16px"></i>
@@ -602,6 +1026,7 @@ textarea:focus { border-color: var(--accent); }
 
       <div id="recording-ui">
         <div class="rec-dot"></div>
+        <div class="rec-live-bars" id="rec-live-bars"></div>
         <div class="rec-time" id="rec-timer">0:00</div>
         <div class="cancel-rec" id="cancel-rec-btn">إلغاء</div>
       </div>
@@ -612,12 +1037,43 @@ textarea:focus { border-color: var(--accent); }
         <i class="fas fa-microphone" style="font-size:16px"></i>
       </button>
 
-            <button type="submit" class="send-btn" id="send-btn" style="display:none">
-              <i class="fas fa-paper-plane"></i>
-            </button>
+      <button type="submit" class="action-btn send-btn" id="send-btn" style="display:none">
+        <i class="fas fa-paper-plane" style="font-size:16px"></i>
+      </button>
     </div>
   </form>
 </div>
+
+<!-- Attachment Options Modal -->
+<div id="attach-modal-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;backdrop-filter:blur(4px);" onclick="closeAttachModal()">
+  <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:20px 20px 0 0;padding:20px 16px 28px;animation:slideUp 0.3s ease;" onclick="event.stopPropagation()">
+    <div style="width:40px;height:4px;background:#4b5563;border-radius:4px;margin:0 auto 18px;"></div>
+    <h3 style="color:#fff;text-align:center;font-size:16px;margin-bottom:18px;font-weight:600;">إرفاق ملف</h3>
+    <div style="display:flex;justify-content:center;gap:24px;">
+      <button onclick="pickAttachment('image')" style="display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:12px 18px;border-radius:16px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#60a5fa);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(59,130,246,0.4);">
+          <i class="fas fa-image" style="color:#fff;font-size:22px;"></i>
+        </div>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:500;">صورة</span>
+      </button>
+      <button onclick="pickAttachment('video')" style="display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:12px 18px;border-radius:16px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#ec4899,#f472b6);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(236,72,153,0.4);">
+          <i class="fas fa-video" style="color:#fff;font-size:22px;"></i>
+        </div>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:500;">فيديو</span>
+      </button>
+      <button onclick="pickAttachment('audio')" style="display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:12px 18px;border-radius:16px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(16,185,129,0.4);">
+          <i class="fas fa-microphone" style="color:#fff;font-size:22px;"></i>
+        </div>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:500;">صوت</span>
+      </button>
+    </div>
+  </div>
+</div>
+<style>
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+</style>
 
 <script>
 // --- Config & State ---
@@ -634,6 +1090,11 @@ let recTimerInterval = null;
 let audioWaveSurfers = {}; // Stores { id: WaveSurferInstance }
 let composerWaveSurfer = null;
 let activeLongPressMsgId = null;
+let recAudioContext = null;
+let recAnalyser = null;
+let recAnimFrame = null;
+let recLiveBarsEl = null;
+let activeContextMsg = null; // stores full msg object for context menu
 
 // DOM Elements
 const messagesEl = document.getElementById('messages');
@@ -645,7 +1106,8 @@ const mediaInput = document.getElementById('media-input');
 const replyContainer = document.getElementById('reply-container');
 const recordingUi = document.getElementById('recording-ui');
 const filePreviewArea = document.getElementById('file-preview-area');
-const reactionMenu = document.getElementById('reaction-menu');
+const contextMenu = document.getElementById('context-menu');
+const contextOverlay = document.getElementById('context-menu-overlay');
 
 const VERIFIED_ICON = `<img src="https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;">`;
 
@@ -674,20 +1136,9 @@ async function init() {
     toggleSendButton();
   });
 
-  // Hide Reaction Menu on click elsewhere
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.reaction-menu') && activeLongPressMsgId) {
-       reactionMenu.style.display = 'none';
-       activeLongPressMsgId = null;
-    }
-  });
-  
-  // Handle Scroll to hide menu
+  // Handle Scroll to hide context menu
   messagesEl.addEventListener('scroll', () => {
-    if(reactionMenu.style.display === 'flex') {
-        reactionMenu.style.display = 'none';
-        activeLongPressMsgId = null;
-    }
+    closeContextMenu();
   });
 
   // Close Image Overlay on ESC
@@ -713,6 +1164,37 @@ async function fetchProfile() {
       } else {
          document.getElementById('header-status').textContent = 'غير متصل';
       }
+
+      // Story-based avatar border coloring
+      const avatarDot = document.querySelector('.avatar-with-dot');
+      if (avatarDot) {
+        if (data.has_story) {
+          avatarDot.classList.add('has-story');
+          avatarDot.classList.remove('no-story');
+          // تحقق من حالة المشاهدة
+          if (data.story_viewed) {
+            avatarDot.classList.add('viewed');
+          } else {
+            avatarDot.classList.remove('viewed');
+            // تطبيق لون مخصص إن وجد
+            if (data.story_color) {
+              const cm = data.story_color.match(/#[0-9a-fA-F]{6}/g);
+              if (cm && cm.length >= 2) {
+                avatarDot.style.setProperty('--c1', cm[0]);
+                avatarDot.style.setProperty('--c2', cm[1]);
+              }
+            }
+          }
+          // Click on blue circle -> go to story
+          avatarDot.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/stories?userId=${otherId}`; };
+        } else {
+          avatarDot.classList.add('no-story');
+          avatarDot.classList.remove('has-story');
+          avatarDot.classList.remove('viewed');
+          // Click on gray circle -> go to profile
+          avatarDot.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/profile?userId=${otherId}`; };
+        }
+      }
     }
   } catch(e) {}
 }
@@ -726,7 +1208,7 @@ async function loadMessages(initial = false) {
     if(!data.ok) return;
 
     // Detect if content changed to avoid heavy processing
-    const currentHash = JSON.stringify(data.messages.map(m => m.messageId + (m.reaction || '')));
+    const currentHash = JSON.stringify(data.messages.map(m => m.messageId + (m.reaction || '') + (m.content || '') + (m.is_deleted ? 'd' : '') + (m.is_edited ? 'e' : '')));
     if (currentHash === lastMessagesHash) return; 
     lastMessagesHash = currentHash;
 
@@ -741,21 +1223,40 @@ async function loadMessages(initial = false) {
             const msgNode = createMsgElement(msg);
             messagesEl.appendChild(msgNode);
         } else {
-            // Update existing message (e.g. Reactions changed)
+            // Update existing message (e.g. Reactions, edits, deletes)
+            const bubble = existingMsg.querySelector('.msg');
+            
+            // Handle deleted message
+            if (msg.is_deleted && !existingMsg.classList.contains('msg-was-deleted')) {
+                existingMsg.classList.add('msg-was-deleted');
+                const newNode = createMsgElement(msg);
+                existingMsg.replaceWith(newNode);
+                return;
+            }
+            
+            // Handle edited message - rebuild if content changed
+            if (msg.is_edited) {
+                const contentEl = bubble.querySelector('.msg-content-text');
+                if (contentEl && contentEl.textContent !== msg.content) {
+                    const newNode = createMsgElement(msg);
+                    existingMsg.replaceWith(newNode);
+                    return;
+                }
+            }
+            
+            // Update reactions
             const existingBadge = existingMsg.querySelector('.msg-reaction-badge');
             if(msg.reaction) {
                 if(existingBadge) {
                    if(existingBadge.textContent !== msg.reaction) existingBadge.textContent = msg.reaction;
                 } else {
-                   const bubble = existingMsg.querySelector('.msg');
-                   bubble.style.marginBottom = "8px"; 
-                   const badge = document.createElement('div');
-                   badge.className = 'msg-reaction-badge';
-                   badge.textContent = msg.reaction;
-                   badge.style.cursor = 'pointer';
-                   badge.title = 'اضغط لإزالة التفاعل';
-                   badge.addEventListener('click', (e) => { e.stopPropagation(); removeReaction(msg.messageId, badge); });
-                   bubble.appendChild(badge);
+                   if(bubble) {
+                     bubble.style.marginBottom = "8px"; 
+                     const badge = document.createElement('div');
+                     badge.className = 'msg-reaction-badge';
+                     badge.textContent = msg.reaction;
+                     bubble.appendChild(badge);
+                   }
                 }
             } else if(existingBadge) {
                 existingBadge.remove();
@@ -803,7 +1304,20 @@ function createMsgElement(msg) {
   
   const bubble = document.createElement('div');
   bubble.className = 'msg';
-  handleMessageInteractions(bubble, msg.messageId);
+
+  // --- Handle deleted message ---
+  if (msg.is_deleted) {
+    bubble.innerHTML = `<div class="msg-deleted"><i class="fas fa-ban"></i> تم حذف هذه الرسالة</div>`;
+    const time = new Date(msg.timestamp).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
+    bubble.innerHTML += `<div class="msg-meta">${time}</div>`;
+    inner.appendChild(bubble);
+    wrapper.appendChild(inner);
+    wrapper.setAttribute('data-msg-id', msg.messageId);
+    wrapper.classList.add('msg-was-deleted');
+    return wrapper;
+  }
+
+  handleMessageInteractions(bubble, msg);
 
   // Reply Context
   if (msg.replied_to_id) {
@@ -838,6 +1352,9 @@ function createMsgElement(msg) {
            <button class="audio-play-btn" onclick="playAudio('${url}', '${audioId}', this)">
              <i class="fas fa-play" style="font-size:14px"></i>
            </button>
+           <div class="audio-live-bars">
+             <div class="audio-live-bar"></div><div class="audio-live-bar"></div><div class="audio-live-bar"></div><div class="audio-live-bar"></div><div class="audio-live-bar"></div>
+           </div>
            <div id="${audioId}" class="audio-waveform-container"></div>
            <div class="audio-time">...</div>
          </div>
@@ -848,25 +1365,20 @@ function createMsgElement(msg) {
   }
   
   if (msg.content) {
-    contentHtml += `<div style="margin-top:${msg.media?'6px':'0'}" dir="auto">${formatAndEscapeContent(msg.content)}</div>`;
+    contentHtml += `<div class="msg-content-text" style="margin-top:${msg.media?'6px':'0'}">${escapeHtml(msg.content)}</div>`;
   }
   
   // Meta
   const time = new Date(msg.timestamp).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
   const check = isMe ? (msg.is_read ? '<i class="fas fa-check-double" style="color:#6ee7b7"></i>' : '<i class="fas fa-check"></i>') : '';
-  contentHtml += `<div class="msg-meta">${time} ${check}</div>`;
+  const editedLabel = msg.is_edited ? '<span class="msg-edited-label">تم التعديل</span>' : '';
+  contentHtml += `<div class="msg-meta">${editedLabel} ${time} ${check}</div>`;
 
   if (msg.reaction) {
     bubble.style.marginBottom = "8px"; 
     const badge = document.createElement('div');
     badge.className = 'msg-reaction-badge';
     badge.textContent = msg.reaction;
-    badge.style.cursor = 'pointer';
-    badge.title = 'اضغط لإزالة التفاعل';
-    badge.addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeReaction(msg.messageId, badge);
-    });
     bubble.appendChild(badge);
   }
 
@@ -898,27 +1410,29 @@ function closeImageModal(e) {
   }, 300);
 }
 
-// --- Interactions: Double Tap & Long Press ---
-function handleMessageInteractions(element, messageId) {
+// --- Interactions: Double Tap, Long Press & Right Click (mobile + desktop) ---
+function handleMessageInteractions(element, msg) {
   let touchStartTime = 0;
   let longPressTimer = null;
   let lastTap = 0;
 
+  // Double-tap for heart reaction
   element.addEventListener('click', (e) => {
     if(e.target.closest('button') || e.target.closest('img')) return;
     
     const now = Date.now();
     if (now - lastTap < 300) {
-      sendReaction('♥️', messageId);
+      sendReaction('♥️', msg.messageId);
       createHeartAnimation(element);
     }
     lastTap = now;
   });
 
+  // Long press (mobile)
   element.addEventListener('touchstart', (e) => {
     touchStartTime = Date.now();
     longPressTimer = setTimeout(() => {
-      showReactionMenu(element, messageId);
+      showContextMenu(element, msg);
     }, 500); 
   }, {passive: true});
 
@@ -930,37 +1444,59 @@ function handleMessageInteractions(element, messageId) {
   
   element.addEventListener('touchmove', () => clearTimeout(longPressTimer)); 
 
+  // Right-click (desktop)
   element.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    showReactionMenu(element, messageId);
+    showContextMenu(element, msg);
   });
 }
 
-function showReactionMenu(element, messageId) {
-  activeLongPressMsgId = messageId;
+function showContextMenu(element, msg) {
+  const isMe = msg.senderId === myId;
+  activeLongPressMsgId = msg.messageId;
+  activeContextMsg = msg;
+  
+  // Show/hide edit & delete based on ownership
+  const editBtn = document.getElementById('ctx-edit');
+  const deleteBtn = document.getElementById('ctx-delete');
+  const copyBtn = document.getElementById('ctx-copy');
+  
+  editBtn.style.display = (isMe && msg.content && !msg.is_deleted) ? 'flex' : 'none';
+  deleteBtn.style.display = (isMe && !msg.is_deleted) ? 'flex' : 'none';
+  copyBtn.style.display = (msg.content && !msg.is_deleted) ? 'flex' : 'none';
+  
   const rect = element.getBoundingClientRect();
   
-  reactionMenu.style.display = 'flex';
+  contextMenu.style.display = 'flex';
+  contextOverlay.classList.add('active');
   
-  const menuWidth = reactionMenu.offsetWidth;
-  const menuHeight = reactionMenu.offsetHeight;
+  const menuWidth = contextMenu.offsetWidth;
+  const menuHeight = contextMenu.offsetHeight;
   
   let top = rect.top - menuHeight - 10;
   let left = rect.left + (rect.width / 2) - (menuWidth / 2);
   
   if (top < 10) top = rect.bottom + 10;
+  if (top + menuHeight > window.innerHeight - 10) top = window.innerHeight - menuHeight - 10;
   if (left < 10) left = 10;
-  if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 10;
+  if (left + menuWidth > window.innerWidth - 10) left = window.innerWidth - menuWidth - 10;
   
-  reactionMenu.style.top = `${top}px`;
-  reactionMenu.style.left = `${left}px`;
+  contextMenu.style.top = `${top}px`;
+  contextMenu.style.left = `${left}px`;
   
   if(navigator.vibrate) navigator.vibrate(20);
 }
 
+function closeContextMenu() {
+  contextMenu.style.display = 'none';
+  contextOverlay.classList.remove('active');
+  activeLongPressMsgId = null;
+  activeContextMsg = null;
+}
+
 async function sendReaction(emoji, messageId = activeLongPressMsgId) {
   if (!messageId) return;
-  reactionMenu.style.display = 'none';
+  closeContextMenu();
 
   try {
     const msgEl = document.querySelector(`[data-msg-id="${messageId}"] .msg`);
@@ -982,19 +1518,160 @@ async function sendReaction(emoji, messageId = activeLongPressMsgId) {
   } catch (e) { console.error(e); }
 }
 
-async function removeReaction(messageId, badgeEl) {
-  if (!messageId) return;
-  try {
-    // Remove badge immediately for instant feedback
-    const bubble = badgeEl.closest('.msg');
-    badgeEl.remove();
-    if (bubble) bubble.style.marginBottom = '';
+// --- Context Menu Actions ---
+function contextReply() {
+  if (!activeContextMsg) return;
+  const msg = activeContextMsg;
+  closeContextMenu();
+  triggerReply(msg);
+}
 
-    await fetch(`/api/messages/${otherId}/reactions/${messageId}`, {
-      method: 'DELETE',
-      headers: {'Content-Type': 'application/json'}
+function contextCopy() {
+  if (!activeContextMsg || !activeContextMsg.content) return;
+  const text = activeContextMsg.content;
+  closeContextMenu();
+  
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('تم نسخ النص');
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  showToast('تم نسخ النص');
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(30,41,59,0.95);color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;z-index:10003;animation:menuPopIn 0.2s ease;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.1);';
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 1500);
+}
+
+// --- Edit Message ---
+let editingMessageId = null;
+
+function contextEdit() {
+  if (!activeContextMsg) return;
+  const msg = activeContextMsg;
+  editingMessageId = msg.messageId;
+  closeContextMenu();
+  
+  const editInput = document.getElementById('edit-msg-input');
+  editInput.value = msg.content || '';
+  document.getElementById('edit-modal-overlay').classList.add('active');
+  setTimeout(() => editInput.focus(), 100);
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal-overlay').classList.remove('active');
+  editingMessageId = null;
+}
+
+async function saveEdit() {
+  if (!editingMessageId) return;
+  const editInput = document.getElementById('edit-msg-input');
+  const newContent = editInput.value.trim();
+  if (!newContent) return;
+  
+  const saveBtn = document.getElementById('save-edit-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'جاري الحفظ...';
+  
+  try {
+    const res = await fetch(`/api/messages/${otherId}/${editingMessageId}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ content: newContent })
     });
-  } catch (e) { console.error('Error removing reaction', e); }
+    const data = await res.json();
+    if (data.ok) {
+      // Update locally immediately
+      const msgEl = document.querySelector(`[data-msg-id="${editingMessageId}"]`);
+      if (msgEl) {
+        const contentEl = msgEl.querySelector('.msg-content-text');
+        if (contentEl) contentEl.textContent = newContent;
+        // Add edited label if not present
+        const meta = msgEl.querySelector('.msg-meta');
+        if (meta && !meta.querySelector('.msg-edited-label')) {
+          meta.insertAdjacentHTML('afterbegin', '<span class="msg-edited-label">تم التعديل</span> ');
+        }
+      }
+      closeEditModal();
+      showToast('تم تعديل الرسالة');
+    } else {
+      showToast(data.error || 'فشل التعديل');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('خطأ في الاتصال');
+  }
+  
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'حفظ';
+}
+
+// --- Delete Message ---
+let deletingMessageId = null;
+
+function contextDelete() {
+  if (!activeContextMsg) return;
+  deletingMessageId = activeContextMsg.messageId;
+  closeContextMenu();
+  document.getElementById('delete-modal-overlay').classList.add('active');
+}
+
+function closeDeleteModal() {
+  document.getElementById('delete-modal-overlay').classList.remove('active');
+  deletingMessageId = null;
+}
+
+async function confirmDelete() {
+  if (!deletingMessageId) return;
+  
+  const btn = document.getElementById('confirm-delete-btn');
+  btn.disabled = true;
+  btn.textContent = 'جاري الحذف...';
+  
+  try {
+    const res = await fetch(`/api/messages/${otherId}/${deletingMessageId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Update locally immediately
+      const msgEl = document.querySelector(`[data-msg-id="${deletingMessageId}"]`);
+      if (msgEl) {
+        const bubble = msgEl.querySelector('.msg');
+        if (bubble) {
+          bubble.innerHTML = `<div class="msg-deleted"><i class="fas fa-ban"></i> تم حذف هذه الرسالة</div><div class="msg-meta">${new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'})}</div>`;
+        }
+        msgEl.classList.add('msg-was-deleted');
+      }
+      closeDeleteModal();
+      showToast('تم حذف الرسالة');
+    } else {
+      showToast(data.error || 'فشل الحذف');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('خطأ في الاتصال');
+  }
+  
+  btn.disabled = false;
+  btn.textContent = 'حذف';
 }
 
 function createHeartAnimation(element) {
@@ -1099,8 +1776,23 @@ function renderComposerPreview(file, type) {
 }
 
 // --- Attachments ---
-attachBtn.onclick = () => mediaInput.click();
-mediaInput.onchange = (e) => {
+const attachModalBg = document.getElementById('attach-modal-bg');
+const mediaInputImage = document.getElementById('media-input-image');
+const mediaInputVideo = document.getElementById('media-input-video');
+const mediaInputAudio = document.getElementById('media-input-audio');
+
+attachBtn.onclick = () => attachModalBg.style.display = 'block';
+
+function closeAttachModal() { attachModalBg.style.display = 'none'; }
+
+function pickAttachment(type) {
+  closeAttachModal();
+  if (type === 'image') mediaInputImage.click();
+  else if (type === 'video') mediaInputVideo.click();
+  else if (type === 'audio') mediaInputAudio.click();
+}
+
+function handleFileSelected(e) {
   const file = e.target.files[0];
   if (!file) return;
   uploadedFile = file;
@@ -1108,10 +1800,14 @@ mediaInput.onchange = (e) => {
   if(file.type.startsWith('image')) type = 'image';
   else if(file.type.startsWith('video')) type = 'video';
   else if(file.type.startsWith('audio')) type = 'audio';
-  
   renderComposerPreview(file, type);
   toggleSendButton();
-};
+}
+
+mediaInput.onchange = handleFileSelected;
+mediaInputImage.onchange = handleFileSelected;
+mediaInputVideo.onchange = handleFileSelected;
+mediaInputAudio.onchange = handleFileSelected;
 
 // --- Recording ---
 micBtn.onclick = () => { if (isRecording) stopRecording(); else startRecording(); };
@@ -1129,10 +1825,17 @@ function startRecording() {
     attachBtn.style.display = 'none';
     recordingUi.style.display = 'flex';
     
+    // Setup live audio visualizer
+    setupRecLiveVisualizer(stream);
+    
     let sec = 0;
+    const timerEl = document.getElementById('rec-timer');
     recTimerInterval = setInterval(() => {
       sec++;
-      document.getElementById('rec-timer').textContent = fmtTime(sec);
+      timerEl.textContent = fmtTime(sec);
+      // Pulse animation on timer
+      timerEl.style.transform = 'scale(1.1)';
+      setTimeout(() => { timerEl.style.transform = 'scale(1)'; }, 150);
     }, 1000);
 
     mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
@@ -1144,6 +1847,44 @@ function startRecording() {
        toggleSendButton();
     };
   }).catch(e => alert('Mic error'));
+}
+
+function setupRecLiveVisualizer(stream) {
+  try {
+    recAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    recAnalyser = recAudioContext.createAnalyser();
+    const source = recAudioContext.createMediaStreamSource(stream);
+    source.connect(recAnalyser);
+    recAnalyser.fftSize = 64;
+    
+    recLiveBarsEl = document.getElementById('rec-live-bars');
+    recLiveBarsEl.innerHTML = '';
+    const barCount = 20;
+    for (let i = 0; i < barCount; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'rec-live-bar';
+      bar.style.height = '3px';
+      recLiveBarsEl.appendChild(bar);
+    }
+    
+    const dataArray = new Uint8Array(recAnalyser.frequencyBinCount);
+    
+    function animateBars() {
+      if (!isRecording) return;
+      recAnalyser.getByteFrequencyData(dataArray);
+      const bars = recLiveBarsEl.children;
+      for (let i = 0; i < bars.length; i++) {
+        const dataIndex = Math.floor(i * dataArray.length / bars.length);
+        const value = dataArray[dataIndex] || 0;
+        const height = Math.max(3, (value / 255) * 24);
+        bars[i].style.height = height + 'px';
+      }
+      recAnimFrame = requestAnimationFrame(animateBars);
+    }
+    animateBars();
+  } catch(e) {
+    console.error('Audio visualizer error:', e);
+  }
 }
 
 function stopRecording() { if(mediaRecorder) mediaRecorder.stop(); }
@@ -1159,6 +1900,12 @@ function resetRecordingUI() {
   msgInput.style.display = 'block';
   micBtn.style.display = 'flex';
   attachBtn.style.display = 'flex';
+  
+  // Cleanup audio visualizer
+  if (recAnimFrame) { cancelAnimationFrame(recAnimFrame); recAnimFrame = null; }
+  if (recAudioContext) { recAudioContext.close().catch(()=>{}); recAudioContext = null; }
+  recAnalyser = null;
+  if (recLiveBarsEl) recLiveBarsEl.innerHTML = '';
 }
 
 function toggleSendButton() {
@@ -1215,14 +1962,29 @@ function playAudio(url, id, btn) {
   const ws = audioWaveSurfers[id];
   if(!ws) return;
   ws.playPause();
+  
+  const player = btn.closest('.msg-audio-player');
+  let liveBars = player ? player.querySelector('.audio-live-bars') : null;
+  
   if (ws.isPlaying()) {
       btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
+      if (liveBars) liveBars.classList.add('active');
   } else {
       btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+      if (liveBars) liveBars.classList.remove('active');
   }
   
-  ws.on('play', () => btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>');
-  ws.on('pause', () => btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>');
+  ws.on('play', () => {
+    btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
+    if (liveBars) liveBars.classList.add('active');
+  });
+  ws.on('pause', () => {
+    btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+    if (liveBars) liveBars.classList.remove('active');
+  });
+  ws.on('finish', () => {
+    if (liveBars) liveBars.classList.remove('active');
+  });
 }
 
 // --- Helpers ---
@@ -1316,13 +2078,13 @@ function triggerReply(msg) {
   const senderName = isMe ? 'أنت' : document.getElementById('header-name').textContent;
   let preview = msg.content;
   if(!preview && msg.media) {
-     if(msg.media.type.startsWith('image')) preview = '📷 صورة';
-     else if(msg.media.type.startsWith('video')) preview = '🎥 فيديو';
-     else if(msg.media.type.startsWith('audio') || msg.media.url.endsWith('.webm')) preview = '🎤 تسجيل صوتي';
+     if(msg.media.type.startsWith('image')) preview = '<i class="fas fa-image" style="color:#60a5fa;margin-left:4px;"></i> صورة';
+     else if(msg.media.type.startsWith('video')) preview = '<i class="fas fa-video" style="color:#f472b6;margin-left:4px;"></i> فيديو';
+     else if(msg.media.type.startsWith('audio') || msg.media.url.endsWith('.webm')) preview = '<i class="fas fa-microphone" style="color:#34d399;margin-left:4px;"></i> تسجيل صوتي';
   }
   replyData = { id: msg.messageId, sender: senderName, content: preview };
   document.getElementById('reply-to-name').textContent = senderName;
-  document.getElementById('reply-to-text').textContent = preview;
+  document.getElementById('reply-to-text').innerHTML = preview;
   replyContainer.style.display = 'flex';
   msgInput.focus();
 }
