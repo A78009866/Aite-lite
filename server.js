@@ -1172,7 +1172,7 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
 });
 
 
-// حذف تفاعل (إذا أردت دعم إزالته لاحقًا)
+// حذف تفاعل من رسالة
 app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { otherId, messageId } = req.params;
@@ -1180,16 +1180,20 @@ app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (re
   const chatId = [userId, otherId].sort().join('_');
 
   try {
-    const reactionRef = db.ref(`messages/${chatId}/messages/${messageId}/reaction_from/${userId}`);
-    const snap = await reactionRef.once('value');
+    // المسار المتوافق مع طريقة حفظ التفاعل في POST
+    const messageRef = db.ref(`messages/${chatId}/${messageId}`);
+    const snap = await messageRef.once('value');
     if (!snap.exists()) {
+      return res.status(404).json({ ok: false, error: 'Message not found' });
+    }
+
+    const msgData = snap.val();
+    if (!msgData.reaction) {
       return res.status(404).json({ ok: false, error: 'No reaction found' });
     }
 
-    await reactionRef.remove();
-
-    // يمكنك تحديث حقل reaction إذا كنت تجمع التفاعلات
-    // هنا فقط نزيله من المستخدم
+    // إزالة حقل التفاعل من الرسالة
+    await messageRef.update({ reaction: null });
 
     res.json({ ok: true });
   } catch (error) {

@@ -186,7 +186,7 @@
         if (u.is_friend) {
           btnHtml = `<a href="/chat?contactId=${u.id}" class="action-btn message">مراسلة</a>`;
         } else if (u.request_received) {
-          btnHtml = `<span class="action-btn">طلب وارد</span>`;
+          btnHtml = `<button class="btn-accept" data-id="${u.id}" data-action="accept"><i class="fas fa-user-check" style="margin-left:4px"></i>قبول</button> <button class="btn-reject" data-id="${u.id}" data-action="reject"><i class="fas fa-times" style="margin-left:4px"></i>رفض</button>`;
         } else if (u.request_sent) {
           btnHtml = `<button class="action-btn" data-id="${u.id}" data-action="cancel">إلغاء الطلب</button>`;
         } else {
@@ -231,6 +231,22 @@
               if (r.ok && j.ok) { loadAllUsers(); updateFriendReqBadge(); showToast('تم إلغاء الطلب.', { type: 'success' }); }
               else { showToast('فشل الإلغاء', { type: 'error' }); loadAllUsers(); }
             } catch (err) { showToast('خطأ', { type: 'error' }); loadAllUsers(); }
+          } else if (action === 'accept') {
+            e.currentTarget.disabled = true;
+            try {
+              const r = await fetch('/api/friends/accept', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadAllUsers(); loadRequests(); updateFriendReqBadge(); showToast('تمت الموافقة — أصبح هذا المستخدم صديقك.', { type: 'success' }); }
+              else { showToast('فشل في القبول', { type: 'error' }); loadAllUsers(); }
+            } catch (err) { showToast('خطأ في الشبكة', { type: 'error' }); loadAllUsers(); }
+          } else if (action === 'reject') {
+            e.currentTarget.disabled = true;
+            try {
+              const r = await fetch('/api/friends/reject', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadAllUsers(); loadRequests(); updateFriendReqBadge(); showToast('تم رفض الطلب.', { type: 'success' }); }
+              else { showToast('فشل في الرفض', { type: 'error' }); loadAllUsers(); }
+            } catch (err) { showToast('خطأ في الشبكة', { type: 'error' }); loadAllUsers(); }
           }
         });
       });

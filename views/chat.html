@@ -969,6 +969,7 @@ textarea:focus { border-color: var(--accent); }
         <button class="menu-action" id="ctx-reply" onclick="contextReply()"><i class="fas fa-reply"></i> رد</button>
         <button class="menu-action" id="ctx-copy" onclick="contextCopy()"><i class="fas fa-copy"></i> نسخ النص</button>
         <div class="menu-separator"></div>
+        <button class="menu-action" id="ctx-remove-reaction" onclick="contextRemoveReaction()" style="display:none"><i class="fas fa-heart-broken"></i> إزالة التفاعل</button>
         <button class="menu-action" id="ctx-edit" onclick="contextEdit()" style="display:none"><i class="fas fa-pen"></i> تعديل</button>
         <button class="menu-action danger" id="ctx-delete" onclick="contextDelete()" style="display:none"><i class="fas fa-trash-alt"></i> حذف</button>
       </div>
@@ -1365,7 +1366,7 @@ function createMsgElement(msg) {
   }
   
   if (msg.content) {
-    contentHtml += `<div class="msg-content-text" style="margin-top:${msg.media?'6px':'0'}">${escapeHtml(msg.content)}</div>`;
+    contentHtml += `<div class="msg-content-text" style="margin-top:${msg.media?'6px':'0'}">${formatAndEscapeContent(msg.content)}</div>`;
   }
   
   // Meta
@@ -1461,9 +1462,11 @@ function showContextMenu(element, msg) {
   const deleteBtn = document.getElementById('ctx-delete');
   const copyBtn = document.getElementById('ctx-copy');
   
+  const removeReactionBtn = document.getElementById('ctx-remove-reaction');
   editBtn.style.display = (isMe && msg.content && !msg.is_deleted) ? 'flex' : 'none';
   deleteBtn.style.display = (isMe && !msg.is_deleted) ? 'flex' : 'none';
   copyBtn.style.display = (msg.content && !msg.is_deleted) ? 'flex' : 'none';
+  removeReactionBtn.style.display = msg.reaction ? 'flex' : 'none';
   
   const rect = element.getBoundingClientRect();
   
@@ -1524,6 +1527,20 @@ function contextReply() {
   const msg = activeContextMsg;
   closeContextMenu();
   triggerReply(msg);
+}
+
+async function contextRemoveReaction() {
+  if (!activeContextMsg) return;
+  const messageId = activeContextMsg.messageId;
+  closeContextMenu();
+  try {
+    const msgEl = document.querySelector(`[data-msg-id="${messageId}"] .msg`);
+    if (msgEl) {
+      const badge = msgEl.querySelector('.msg-reaction-badge');
+      if (badge) badge.remove();
+    }
+    await fetch(`/api/messages/${otherId}/reactions/${messageId}`, { method: 'DELETE' });
+  } catch (e) { console.error(e); }
 }
 
 function contextCopy() {
