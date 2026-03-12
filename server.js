@@ -39,8 +39,8 @@ const storage = new CloudinaryStorage({
       folderName = 'profile_pics';
     } else if (file.fieldname === 'cover_photo') {
       folderName = 'cover_photos';
-    } else if (file.fieldname === 'story_media' || file.fieldname === 'story_audio') {
-      folderName = 'stories';
+    } else if (file.fieldname === 'family_image') {
+      folderName = 'families';
     } else if (url.includes('/messages/send')) {
       folderName = 'chat_media';
     } else if (url.includes('/api/posts/create')) {
@@ -186,9 +186,6 @@ app.get('/register', (req, res) => { res.sendFile(path.join(__dirname, 'views', 
 app.get('/reels', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'reels.html')); });
 app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_reel.html')); });
 
-// Stories page
-app.get('/stories', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'stories.html')); });
-
 // Notifications page
 app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
 
@@ -203,6 +200,16 @@ app.get('/admin', requireAuth, requireAdmin, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'admin.html'));
 });
 
+// ---------------- Family Pages (جديد) ----------------
+// صفحة إنشاء العائلة (frontend file ستوفره لاحقاً)
+app.get('/create-family', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'create_family.html'));
+});
+
+// صفحة عرض العائلة (frontend file ستوفره لاحقاً)
+app.get('/family/:familyId', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'family.html'));
+});
 app.get('/search', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'search.html'));
 });
@@ -525,7 +532,41 @@ async function areFriends(userA, userB) {
   return snap.exists();
 }
 
+// ---------------- Helper: Family Utilities (جديد) ----------------
+function generateFamilyKey() {
+  // shorter key for ease of typing in UI, but you may increase length
+  return crypto.randomBytes(4).toString('hex'); // 8 hex chars
+}
 
+function hashFamilyKey(plainKey) {
+  const salt = process.env.FAMILY_KEY_SALT || process.env.SESSION_SECRET || 'fam-salt-default';
+  return crypto.createHmac('sha256', salt).update(String(plainKey)).digest('hex');
+}
+
+async function isFamilyMember(familyId, userId) {
+  if (!familyId || !userId) return false;
+  try {
+    const snap = await db.ref(`families/${familyId}/members/${userId}`).once('value');
+    return snap.exists();
+  } catch (e) {
+    return false;
+  }
+}
+
+// middleware: ensure user is member of the family
+async function requireFamilyMember(req, res, next) {
+  const userId = req.session.userId;
+  const familyId = req.params.familyId || req.body.familyId;
+  if (!familyId) return res.status(400).json({ ok: false, error: 'familyId required' });
+  try {
+    const member = await isFamilyMember(familyId, userId);
+    if (!member) return res.status(403).json({ ok: false, error: 'You are not a member of this family' });
+    next();
+  } catch (e) {
+    console.error('requireFamilyMember error', e);
+    res.status(500).json({ ok: false });
+  }
+}
 
 // ---------------- Helper: Normalize stored comments ----------------
 function normalizeStoredComment(val) {
@@ -621,289 +662,768 @@ app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (re
   }
 });
 
-// ---------------- API: Stories (القصص) ----------------
+// ---------------- API: Family Endpoints (جديد) ----------------
 
-// 1. إنشاء قصة جديدة (صورة/فيديو + نص + موسيقى اختيارية)
-app.post('/api/stories/create', requireAuth, upload.fields([{ name: 'story_media', maxCount: 1 }, { name: 'story_audio', maxCount: 1 }]), async (req, res) => {
+// Create a family (multipart: family_image)
+app.post('/api/families/create', requireAuth, upload.single('family_image'), async (req, res) => {
   const userId = req.session.userId;
-  const text = req.body.text ? req.body.text.trim() : '';
-  
-  if (!req.files || !req.files.story_media) {
-    return res.status(400).json({ ok: false, error: 'يجب رفع صورة أو فيديو للقصة.' });
-  }
-
-  const mediaFile = req.files.story_media[0];
-  const audioFile = req.files.story_audio ? req.files.story_audio[0] : null;
-
-  let mediaType = mediaFile.mimetype.startsWith('video/') ? 'video' : 'image';
+  const { name } = req.body;
+  if (!name || name.trim().length === 0) return res.status(400).json({ ok: false, error: 'Family name required' });
 
   try {
-    const newStoryRef = db.ref(`stories`).push();
-    const storyId = newStoryRef.key;
-    const timestamp = admin.database.ServerValue.TIMESTAMP;
+    const newRef = db.ref('families').push();
+    const familyId = newRef.key;
+    const createdAt = admin.database.ServerValue.TIMESTAMP;
 
-    const storyColor = req.body.story_color ? req.body.story_color.trim() : '';
+    // generate key and store hashed version
+    const plainKey = generateFamilyKey();
+    const keyHash = hashFamilyKey(plainKey);
 
-    const storyData = {
-      id: storyId,
-      userId: userId,
-      mediaUrl: mediaFile.path,
-      mediaType: mediaType,
-      audioUrl: audioFile ? audioFile.path : null, // الموسيقى الخلفية
-      text: text,
-      story_color: storyColor, // لون القصة المتدرج
-      timestamp: timestamp,
-      expiresAt: Date.now() + (24 * 60 * 60 * 1000) // تنتهي بعد 24 ساعة
+    const imageUrl = (req.file && req.file.path) ? req.file.path : '';
+
+    const familyData = {
+      familyId,
+      name: name.trim(),
+      imageUrl,
+      creatorId: userId,
+      keyHash,
+      createdAt,
+      membersCount: 1
     };
 
-    await newStoryRef.set(storyData);
-    res.json({ ok: true, storyId });
+    // members map
+    const members = {};
+    members[userId] = { role: 'owner', joinedAt: createdAt };
+
+    await newRef.set({ ...familyData, members, keyPlain: plainKey }); // store keyPlain only at creation time
+
+    // add membership index for quick lookup
+    await db.ref(`memberships/${userId}/${familyId}`).set(true);
+
+    res.json({ ok: true, familyId, key: plainKey, family: { familyId, name: familyData.name, imageUrl: familyData.imageUrl } });
   } catch (error) {
-    console.error('Error creating story:', error);
-    res.status(500).json({ ok: false, error: 'فشل في رفع القصة.' });
+    console.error('Error creating family:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create family' });
   }
 });
 
-// 2. جلب القصص النشطة (أقل من 24 ساعة) وتجميعها بالمستخدم
-app.get('/api/stories', requireAuth, async (req, res) => {
-  try {
-    const storiesSnap = await db.ref('stories').once('value');
-    const storiesData = storiesSnap.val() || {};
-    const now = Date.now();
-    
-    let activeStories = Object.values(storiesData).filter(s => s.expiresAt > now);
-
-    // تجميع القصص حسب المستخدم
-    const groupedStories = {};
-    const userIds = [...new Set(activeStories.map(s => s.userId))];
-    
-    // جلب بيانات المستخدمين
-    const profilesSnap = await db.ref('profiles').once('value');
-    const profiles = profilesSnap.val() || {};
-
-    // جلب المشاهدات لتحديد حالة viewed
-    const currentUserId = req.session.userId;
-    const viewsSnap = await db.ref('story_views').once('value');
-    const allViews = viewsSnap.val() || {};
-
-    activeStories.forEach(story => {
-      if (!groupedStories[story.userId]) {
-        const user = profiles[story.userId] || {};
-        groupedStories[story.userId] = {
-          userId: story.userId,
-          username: user.username || 'مستخدم',
-          profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/150',
-          is_verified: !!user.is_verified,
-          is_online: !!user.is_online,
-          items: []
-        };
-      }
-      // إضافة حالة المشاهدة ولون القصة
-      const storyViews = allViews[story.id] || {};
-      story.viewed = !!storyViews[currentUserId];
-      groupedStories[story.userId].items.push(story);
-    });
-
-    // ترتيب القصص داخل كل مستخدم حسب الوقت
-    Object.values(groupedStories).forEach(group => {
-      group.items.sort((a, b) => a.timestamp - b.timestamp);
-    });
-
-    // جعل قصص المستخدم الحالي (إن وجدت) في البداية
-    let finalArray = Object.values(groupedStories);
-    finalArray.sort((a, b) => {
-      if (a.userId === currentUserId) return -1;
-      if (b.userId === currentUserId) return 1;
-      return b.items[b.items.length-1].timestamp - a.items[a.items.length-1].timestamp; // الأحدث أولاً
-    });
-
-    res.json({ ok: true, storiesGroups: finalArray });
-  } catch (error) {
-    console.error('Error fetching stories:', error);
-    res.status(500).json({ ok: false, error: 'فشل جلب القصص' });
-  }
-});
-
-// 3. حذف قصة
-app.delete('/api/stories/:storyId', requireAuth, async (req, res) => {
+// Get families where current user is a member (to show next to "create family" card)
+app.get('/api/families/my', requireAuth, async (req, res) => {
   const userId = req.session.userId;
-  const { storyId } = req.params;
+  try {
+    const familiesSnap = await db.ref('families').once('value');
+    const familiesObj = familiesSnap.val() || {};
+    const myFamilies = [];
+
+    Object.keys(familiesObj).forEach(fid => {
+      const f = familiesObj[fid];
+      if (f && f.members && f.members[userId]) {
+        myFamilies.push({
+          familyId: fid,
+          name: f.name,
+          imageUrl: f.imageUrl || '',
+          membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+          creatorId: f.creatorId
+        });
+      }
+    });
+
+    res.json({ ok: true, families: myFamilies });
+  } catch (error) {
+    console.error('Error fetching my families:', error);
+    res.status(500).json({ ok: false, error: 'Failed to fetch families' });
+  }
+});
+
+// New: Get all families (with is_member flag for current user)
+app.get('/api/families', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    const familiesSnap = await db.ref('families').once('value');
+    const familiesObj = familiesSnap.val() || {};
+    const all = Object.keys(familiesObj).map(fid => {
+      const f = familiesObj[fid] || {};
+      return {
+        familyId: fid,
+        name: f.name || '',
+        imageUrl: f.imageUrl || '',
+        creatorId: f.creatorId || '',
+        membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+        is_member: !!(f.members && f.members[userId])
+      };
+    });
+    res.json({ ok: true, families: all });
+  } catch (error) {
+    console.error('Error fetching all families:', error);
+    res.status(500).json({ ok: false, error: 'Failed to fetch families' });
+  }
+});
+
+// Join a family (provide key) - if key ok, add member
+app.post('/api/families/:familyId/join', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId } = req.params;
+  const { key } = req.body;
+
+  if (!familyId || !key) return res.status(400).json({ ok: false, error: 'familyId and key required' });
 
   try {
-    const storyRef = db.ref(`stories/${storyId}`);
-    const snap = await storyRef.once('value');
-    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'القصة غير موجودة' });
+    const familyRef = db.ref(`families/${familyId}`);
+    const snap = await familyRef.once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
 
-    const story = snap.val();
-    if (story.userId !== userId) return res.status(403).json({ ok: false, error: 'غير مصرح' });
+    const family = snap.val();
+    const storedHash = family.keyHash || '';
 
-    await storyRef.remove();
+    if (hashFamilyKey(key) !== storedHash) {
+      return res.status(403).json({ ok: false, error: 'Invalid family key' });
+    }
+
+    // add member
+    const ts = admin.database.ServerValue.TIMESTAMP;
+    await familyRef.child(`members/${userId}`).set({ role: 'member', joinedAt: ts });
+    // increment membersCount
+    await familyRef.child('membersCount').transaction(c => (c || 0) + 1);
+
+    // add membership index
+    await db.ref(`memberships/${userId}/${familyId}`).set(true);
+
+    res.json({ ok: true, message: 'Joined family' });
+  } catch (error) {
+    console.error('Error joining family:', error);
+    res.status(500).json({ ok: false, error: 'Failed to join family' });
+  }
+});
+
+// Get family info (public view). If user is member, include member info.
+app.get('/api/families/:familyId/info', requireAuth, async (req, res) => {
+  const { familyId } = req.params;
+  const userId = req.session.userId;
+  if (!familyId) return res.status(400).json({ ok: false });
+
+  try {
+    const snap = await db.ref(`families/${familyId}`).once('value');
+    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'Family not found' });
+
+    const f = snap.val();
+    const isMember = !!(f.members && f.members[userId]);
+
+    // Note: never return keyHash or plain key unless owner endpoint
+    const result = {
+      familyId,
+      name: f.name,
+      imageUrl: f.imageUrl || '',
+      creatorId: f.creatorId || '',
+      membersCount: f.membersCount || (f.members ? Object.keys(f.members).length : 0),
+      is_member: isMember
+    };
+
+    res.json({ ok: true, family: result });
+  } catch (error) {
+    console.error('Error getting family info:', error);
+    res.status(500).json({ ok: false, error: 'Failed to fetch family info' });
+  }
+});
+
+// ---------------- API: Family Posts ----------------
+
+// Create a post inside a family (only members)
+app.post('/api/families/:familyId/posts/create', requireAuth, requireFamilyMember, upload.single('media'), async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId } = req.params;
+  const content = req.body.content ? req.body.content.trim() : '';
+  let mediaUrl = null;
+  let mediaType = null;
+
+  if (content.length === 0 && !req.file) {
+    return res.status(400).json({ ok: false, error: 'المحتوى مطلوب.' });
+  }
+
+  if (req.file) {
+    mediaUrl = req.file.path;
+    const mimeType = req.file.mimetype || '';
+    if (mimeType.startsWith('image/')) mediaType = 'image';
+    else if (mimeType.startsWith('video/')) mediaType = 'video';
+    else if (mimeType.startsWith('audio/')) mediaType = 'audio';
+    else mediaType = 'raw';
+  }
+
+  try {
+    const newPostRef = db.ref(`family_posts/${familyId}`).push();
+    const postId = newPostRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const postData = {
+      postId: postId,
+      familyId: familyId,
+      userId: userId,
+      content: content,
+      timestamp: timestamp,
+      likes: 0,
+      commentsCount: 0,
+      media: mediaUrl ? { url: mediaUrl, type: mediaType } : null
+    };
+
+    await newPostRef.set(postData);
+
+    // increment family posts count (optional)
+    await db.ref(`families/${familyId}/postsCount`).transaction(c => (c || 0) + 1);
+
+    res.json({ ok: true, message: 'تم النشر داخل العائلة', postId: postId });
+  } catch (error) {
+    console.error('Error creating family post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء المنشور.' });
+  }
+});
+
+// Get family posts (only members)
+app.get('/api/families/:familyId/posts', requireAuth, requireFamilyMember, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const { familyId } = req.params;
+  try {
+    const postsSnap = await db.ref(`family_posts/${familyId}`)
+      .orderByChild('timestamp')
+      .limitToLast(50)
+      .once('value');
+
+    let posts = [];
+    postsSnap.forEach(childSnap => {
+      posts.push(childSnap.val());
+    });
+    posts.reverse();
+
+    // fetch users' profiles for the posts
+    const userIds = [...new Set(posts.map(p => p.userId))];
+    const profiles = {};
+    const defaultProfileUrl = DEFAULT_PROFILE_PIC_URL;
+
+    const profilePromises = userIds.map(userId => db.ref(`profiles/${userId}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    profileSnapshots.forEach((snap, index) => {
+      profiles[userIds[index]] = snap.val();
+    });
+
+    const likedStatuses = {};
+    const likePromises = posts.map(post => db.ref(`family_likes/${familyId}/${post.postId}/${currentUserId}`).once('value'));
+    const likeSnapshots = await Promise.all(likePromises);
+
+    likeSnapshots.forEach((snap, index) => {
+      likedStatuses[posts[index].postId] = snap.val() !== null;
+    });
+
+    const finalPosts = posts.map(post => ({
+      ...post,
+      commentsCount: post.commentsCount || 0,
+      is_liked: likedStatuses[post.postId] || false,
+      user: {
+        username: profiles[post.userId]?.username || 'مستخدم',
+        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl,
+        is_online: !!profiles[post.userId]?.is_online,
+        is_verified: !!profiles[post.userId]?.is_verified
+      }
+    }));
+
+    res.json({ ok: true, posts: finalPosts });
+
+  } catch (error) {
+    console.error('Error fetching family posts:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب منشورات العائلة.' });
+  }
+});
+
+// Delete family post (only author or family owner)
+app.delete('/api/families/:familyId/posts/:postId', requireAuth, requireFamilyMember, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId, postId } = req.params;
+
+  const postRef = db.ref(`family_posts/${familyId}/${postId}`);
+  const familyRef = db.ref(`families/${familyId}`);
+
+  try {
+    const postSnapshot = await postRef.once('value');
+    const postData = postSnapshot.val();
+
+    if (!postData) return res.status(404).json({ ok: false });
+
+    // check if user is author or family owner
+    const familySnap = await familyRef.once('value');
+    const familyData = familySnap.val() || {};
+
+    const isOwner = familyData.creatorId === userId;
+    const isAuthor = postData.userId === userId;
+
+    if (!isOwner && !isAuthor) return res.status(403).json({ ok: false });
+
+    await postRef.remove();
+    await db.ref(`families/${familyId}/postsCount`).transaction((c) => (c || 0) > 0 ? c - 1 : 0);
+
+    // also remove comments/likes related to family post
+    await db.ref(`family_comments/${familyId}/${postId}`).remove().catch(()=>{});
+    await db.ref(`family_likes/${familyId}/${postId}`).remove().catch(()=>{});
+
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ ok: false, error: 'فشل الحذف' });
+    console.error('Error deleting family post', error);
+    res.status(500).json({ ok: false });
   }
 });
 
-// 4. إعجاب بقصة (Like) + إرسال إشعار لصاحب القصة
-app.post('/api/stories/:storyId/like', requireAuth, async (req, res) => {
+// ---------------- New: Family post like/comment endpoints ----------------
+
+// Like/unlike a family post
+app.post('/api/families/:familyId/posts/:postId/like', requireAuth, requireFamilyMember, async (req, res) => {
   const userId = req.session.userId;
-  const { storyId } = req.params;
+  const { familyId, postId } = req.params;
+
+  if (!familyId || !postId) return res.status(400).json({ ok: false });
+
+  const postRef = db.ref(`family_posts/${familyId}/${postId}`);
+  const userLikeRef = db.ref(`family_likes/${familyId}/${postId}/${userId}`);
 
   try {
-    const storyRef = db.ref(`stories/${storyId}`);
-    const snap = await storyRef.once('value');
-    if (!snap.exists()) return res.status(404).json({ ok: false, error: 'القصة غير موجودة' });
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false });
 
-    const story = snap.val();
+    const likeSnapshot = await userLikeRef.once('value');
+    const isLiked = likeSnapshot.val();
+    let likesUpdate = 0;
+    let action = '';
 
-    // حفظ الإعجاب في قاعدة البيانات
-    await db.ref(`story_likes/${storyId}/${userId}`).set({
-      userId: userId,
-      timestamp: admin.database.ServerValue.TIMESTAMP
+    if (isLiked) {
+      await userLikeRef.remove();
+      likesUpdate = -1;
+      action = 'unliked';
+    } else {
+      await userLikeRef.set(admin.database.ServerValue.TIMESTAMP);
+      likesUpdate = 1;
+      action = 'liked';
+    }
+
+    let newLikesCount = 0;
+    await postRef.child('likes').transaction((currentCount) => {
+      newLikesCount = (currentCount || 0) + likesUpdate;
+      return newLikesCount < 0 ? 0 : newLikesCount;
     });
 
-    // إرسال إشعار لصاحب القصة (إذا لم يكن هو نفسه)
-    if (story.userId && story.userId !== userId) {
-      try {
+    // notify post owner for like
+    try {
+      const postData = postSnapshot.val();
+      if (action === 'liked' && postData.userId && postData.userId !== userId) {
         const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
         const fromProfile = fromProfileSnap.val() || {};
-        const notifRef = db.ref(`notifications/${story.userId}`).push();
+        const notifRef = db.ref(`notifications/${postData.userId}`).push();
         const notifData = {
           id: notifRef.key,
-          type: 'story_like',
+          type: 'family_post_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
           from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          storyId: storyId,
+          familyId,
+          postId,
           timestamp: admin.database.ServerValue.TIMESTAMP,
           is_read: false
         };
         await notifRef.set(notifData);
-      } catch (nerr) {
-        console.error('Failed to create story_like notification:', nerr);
       }
+    } catch (nerr) {
+      console.error('Failed to create family_post_like notification:', nerr);
     }
 
-    res.json({ ok: true, action: 'liked' });
+    res.json({ ok: true, action: action, newLikes: newLikesCount });
   } catch (error) {
-    console.error('Error liking story:', error);
-    res.status(500).json({ ok: false, error: 'فشل الإعجاب' });
+    console.error('Error toggling family post like:', error);
+    res.status(500).json({ ok: false });
   }
 });
 
-// 5. فحص حالة الإعجاب (Like Status)
-app.get('/api/stories/:storyId/like-status', requireAuth, async (req, res) => {
+// Comment on family post
+app.post('/api/families/:familyId/posts/:postId/comment', requireAuth, requireFamilyMember, async (req, res) => {
   const userId = req.session.userId;
-  const { storyId } = req.params;
+  const { familyId, postId } = req.params;
+  const { content } = req.body;
+
+  if (!postId || !content) return res.status(400).json({ ok: false, error: 'Missing postId or content' });
 
   try {
-    const snap = await db.ref(`story_likes/${storyId}/${userId}`).once('value');
-    res.json({ ok: true, liked: snap.exists() });
-  } catch (error) {
-    console.error('Error checking story like status:', error);
-    res.status(500).json({ ok: false, liked: false });
-  }
-});
+    const postRef = db.ref(`family_posts/${familyId}/${postId}`);
+    const postSnapshot = await postRef.once('value');
+    if (!postSnapshot.exists()) return res.status(404).json({ ok: false, error: 'Post not found' });
 
-// 6. إلغاء إعجاب بقصة (Unlike)
-app.post('/api/stories/:storyId/unlike', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const { storyId } = req.params;
+    const userSnapshot = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnapshot.val() || {};
 
-  try {
-    await db.ref(`story_likes/${storyId}/${userId}`).remove();
-    res.json({ ok: true, action: 'unliked' });
-  } catch (error) {
-    console.error('Error unliking story:', error);
-    res.status(500).json({ ok: false, error: 'فشل إلغاء الإعجاب' });
-  }
-});
+    const newCommentRef = db.ref(`family_comments/${familyId}/${postId}`).push();
+    const commentId = newCommentRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
 
-// 7. تسجيل مشاهدة قصة (View)
-app.post('/api/stories/:storyId/view', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const { storyId } = req.params;
-
-  try {
-    // تحقق من وجود القصة
-    const storySnap = await db.ref(`stories/${storyId}`).once('value');
-    if (!storySnap.exists()) return res.status(404).json({ ok: false, error: 'القصة غير موجودة' });
-
-    // تسجيل المشاهدة (لن تتكرر لنفس المستخدم)
-    await db.ref(`story_views/${storyId}/${userId}`).set({
+    const commentData = {
+      commentId: commentId,
+      postId: postId,
       userId: userId,
-      timestamp: admin.database.ServerValue.TIMESTAMP
+      content: content.trim(),
+      timestamp: timestamp,
+      user: {
+        userId: userId,
+        username: userData.username || 'مستخدم',
+        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      },
+      likes: 0,
+      repliesCount: 0
+    };
+
+    await newCommentRef.set(commentData);
+
+    // increment commentsCount on post
+    let newCommentsCount = 0;
+    await postRef.child('commentsCount').transaction((currentCount) => {
+      newCommentsCount = (currentCount || 0) + 1;
+      return newCommentsCount;
     });
 
-    res.json({ ok: true });
+    // create notification for post owner (if commenter !== owner)
+    try {
+      const postData = postSnapshot.val();
+      if (postData && postData.userId && postData.userId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${postData.userId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'family_post_comment',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          familyId,
+          postId,
+          commentId,
+          commentContent: commentData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create family_post_comment notification:', nerr);
+    }
+
+    // Read back the stored comment and return normalized
+    const savedSnap = await db.ref(`family_comments/${familyId}/${postId}`).child(commentId).once('value');
+    const savedVal = savedSnap.val() || commentData;
+    const normalized = normalizeStoredComment(savedVal);
+
+    res.json({ ok: true, comment: normalized, newComments: newCommentsCount });
+
   } catch (error) {
-    console.error('Error recording story view:', error);
-    res.status(500).json({ ok: false, error: 'فشل تسجيل المشاهدة' });
+    console.error('Error adding family comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إضافة التعليق.' });
   }
 });
 
-// 8. جلب عدد مشاهدات قصة (للعامة)
-app.get('/api/stories/:storyId/views-count', requireAuth, async (req, res) => {
-  const { storyId } = req.params;
+// Get comments for a family post (enriched)
+app.get('/api/families/:familyId/posts/:postId/comments', requireAuth, requireFamilyMember, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const { familyId, postId } = req.params;
+  try {
+    const commentsSnap = await db.ref(`family_comments/${familyId}/${postId}`)
+      .orderByChild('timestamp')
+      .once('value');
+
+    const comments = [];
+    commentsSnap.forEach(childSnap => {
+      const v = childSnap.val();
+      if (v) comments.push(v);
+    });
+
+    const enriched = await Promise.all(comments.map(async (c) => {
+      const normalized = normalizeStoredComment(c);
+      // likes count
+      let likesCount = 0;
+      try {
+        if (typeof c.likes === 'number') {
+          likesCount = c.likes;
+        } else {
+          const likesSnap = await db.ref(`family_comment_likes/${familyId}/${postId}/${normalized.commentId}`).once('value');
+          likesCount = countSnapshotChildren(likesSnap);
+        }
+      } catch (e) {
+        likesCount = normalized.likes || 0;
+      }
+
+      // did current user like?
+      let isLiked = false;
+      try {
+        const userLikeSnap = await db.ref(`family_comment_likes/${familyId}/${postId}/${normalized.commentId}/${currentUserId}`).once('value');
+        isLiked = userLikeSnap.exists();
+      } catch (e) {}
+
+      // replies count
+      let repliesCount = 0;
+      try {
+        if (typeof c.repliesCount === 'number') repliesCount = c.repliesCount;
+        else {
+          const repliesSnap = await db.ref(`family_comment_replies/${familyId}/${postId}/${normalized.commentId}`).once('value');
+          repliesCount = countSnapshotChildren(repliesSnap);
+        }
+      } catch (e) {
+        repliesCount = normalized.repliesCount || 0;
+      }
+
+      // recent replies
+      let recentReplies = [];
+      try {
+        const repliesSnap = await db.ref(`family_comment_replies/${familyId}/${postId}/${normalized.commentId}`)
+          .orderByChild('timestamp')
+          .limitToLast(5)
+          .once('value');
+        repliesSnap.forEach(r => recentReplies.push(r.val()));
+      } catch (e) { recentReplies = []; }
+
+      return {
+        ...normalized,
+        likes: likesCount,
+        is_liked: isLiked,
+        repliesCount: repliesCount,
+        recentReplies: recentReplies
+      };
+    }));
+
+    res.json({ ok: true, comments: enriched });
+  } catch (error) {
+    console.error('Error fetching family comments:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
+  }
+});
+
+// --- SSE stream for family post comments (اضف هذا المقطع في server.js بعد endpoints التعليقات الخاصة بالعائلة) ---
+app.get('/api/families/:familyId/posts/:postId/comments/stream', requireAuth, requireFamilyMember, async (req, res) => {
+  const { familyId, postId } = req.params;
+  if (!familyId || !postId) return res.status(400).end();
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
+  });
+  res.write('\n');
+
+  const commentsRef = db.ref(`family_comments/${familyId}/${postId}`);
 
   try {
-    const viewsSnap = await db.ref(`story_views/${storyId}`).once('value');
-    const viewsCount = viewsSnap.exists() ? Object.keys(viewsSnap.val()).length : 0;
-    res.json({ ok: true, viewsCount });
-  } catch (error) {
-    console.error('Error fetching views count:', error);
-    res.status(500).json({ ok: false, viewsCount: 0 });
+    // initial snapshot
+    const snap = await commentsRef.orderByChild('timestamp').once('value');
+    const items = [];
+    let lastTs = 0;
+    snap.forEach(child => {
+      const v = child.val();
+      const normalized = normalizeStoredComment(v);
+      items.push(normalized);
+      if (normalized.timestamp && Number(normalized.timestamp) > lastTs) lastTs = Number(normalized.timestamp);
+    });
+
+    // helper sseSend is defined later in the file (function hoisting allows usage)
+    sseSend(res, 'comments_snapshot', items);
+
+    const addedQuery = (lastTs > 0) ? commentsRef.orderByChild('timestamp').startAt(lastTs + 1) : commentsRef.orderByChild('timestamp');
+
+    const onChildAdded = (child) => {
+      const v = child.val();
+      const normalized = normalizeStoredComment(v);
+      if (normalized.timestamp && normalized.timestamp <= lastTs) return;
+      sseSend(res, 'comment_added', normalized);
+      if (normalized.timestamp && Number(normalized.timestamp) > lastTs) lastTs = Number(normalized.timestamp);
+    };
+
+    const onChildChanged = (child) => {
+      const v = child.val();
+      const normalized = normalizeStoredComment(v);
+      sseSend(res, 'comment_changed', normalized);
+    };
+
+    const onChildRemoved = (child) => {
+      const key = child.key || (child.val() && (child.val().commentId || child.val().id));
+      sseSend(res, 'comment_removed', { commentId: key });
+    };
+
+    addedQuery.on('child_added', onChildAdded);
+    commentsRef.on('child_changed', onChildChanged);
+    commentsRef.on('child_removed', onChildRemoved);
+
+    req.on('close', () => {
+      try {
+        addedQuery.off('child_added', onChildAdded);
+        commentsRef.off('child_changed', onChildChanged);
+        commentsRef.off('child_removed', onChildRemoved);
+      } catch (e) { /* ignore */ }
+      res.end();
+    });
+
+  } catch (err) {
+    console.error('SSE family comments stream error:', err);
+    res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
+    res.end();
   }
 });
 
-// 9. جلب قائمة المشاهدين (لصاحب القصة فقط)
-app.get('/api/stories/:storyId/viewers', requireAuth, async (req, res) => {
+// ---------------- New: Family post like/comment endpoints continued (comment likes/replies etc.) ----------------
+
+// Like/unlike a family comment
+app.post('/api/families/:familyId/posts/:postId/comments/:commentId/like', requireAuth, requireFamilyMember, async (req, res) => {
   const userId = req.session.userId;
-  const { storyId } = req.params;
+  const { familyId, postId, commentId } = req.params;
+  if (!familyId || !postId || !commentId) return res.status(400).json({ ok: false, error: 'Missing identifiers' });
+
+  const likeRef = db.ref(`family_comment_likes/${familyId}/${postId}/${commentId}/${userId}`);
+  const commentRef = db.ref(`family_comments/${familyId}/${postId}/${commentId}`);
 
   try {
-    // تحقق أن المستخدم هو صاحب القصة
-    const storySnap = await db.ref(`stories/${storyId}`).once('value');
-    if (!storySnap.exists()) return res.status(404).json({ ok: false, error: 'القصة غير موجودة' });
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
 
-    const story = storySnap.val();
-    if (story.userId !== userId) {
-      return res.status(403).json({ ok: false, error: 'غير مصرح - فقط صاحب القصة يمكنه رؤية المشاهدين' });
+    const likeSnap = await likeRef.once('value');
+    let isLiked = likeSnap.exists();
+    let delta = 0;
+
+    if (isLiked) {
+      await likeRef.remove();
+      delta = -1;
+      isLiked = false;
+    } else {
+      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
+      delta = 1;
+      isLiked = true;
     }
 
-    // جلب المشاهدات
-    const viewsSnap = await db.ref(`story_views/${storyId}`).once('value');
-    const viewsData = viewsSnap.val() || {};
+    // Update likes count on comment atomically
+    let newLikesCount = 0;
+    await commentRef.child('likes').transaction((current) => {
+      newLikesCount = (current || 0) + delta;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
 
-    // جلب الإعجابات
-    const likesSnap = await db.ref(`story_likes/${storyId}`).once('value');
-    const likesData = likesSnap.val() || {};
-
-    // جلب بيانات البروفايلات
-    const viewerIds = Object.keys(viewsData);
-    const viewers = [];
-
-    for (const viewerId of viewerIds) {
-      const profileSnap = await db.ref(`profiles/${viewerId}`).once('value');
-      const profile = profileSnap.val() || {};
-
-      viewers.push({
-        userId: viewerId,
-        username: profile.username || 'مستخدم',
-        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-        is_verified: !!profile.is_verified,
-        hasLiked: !!likesData[viewerId],
-        viewedAt: viewsData[viewerId].timestamp || 0
-      });
+    // notify comment owner when liked by another user
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
+      if (delta === 1 && commentOwnerId && commentOwnerId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'family_comment_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          familyId,
+          postId,
+          commentId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create family comment_like notification:', nerr);
     }
 
-    // ترتيب حسب الأحدث
-    viewers.sort((a, b) => b.viewedAt - a.viewedAt);
+    res.json({ ok: true, is_liked: isLiked, likes: newLikesCount });
 
-    res.json({ ok: true, viewers, viewsCount: viewers.length });
   } catch (error) {
-    console.error('Error fetching story viewers:', error);
-    res.status(500).json({ ok: false, error: 'فشل جلب المشاهدين' });
+    console.error('Error toggling family comment like:', error);
+    res.status(500).json({ ok: false, error: 'Failed to toggle comment like' });
+  }
+});
+
+// Reply to a family comment
+app.post('/api/families/:familyId/posts/:postId/comments/:commentId/reply', requireAuth, requireFamilyMember, async (req, res) => {
+  const userId = req.session.userId;
+  const { familyId, postId, commentId } = req.params;
+  const { content } = req.body;
+  if (!familyId || !postId || !commentId || !content) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`family_comments/${familyId}/${postId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const userSnap = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnap.val() || {};
+
+    const replyRef = db.ref(`family_comment_replies/${familyId}/${postId}/${commentId}`).push();
+    const replyId = replyRef.key;
+    const timestamp = admin.database.ServerValue.TIMESTAMP;
+
+    const replyData = {
+      id: replyId,
+      postId,
+      commentId,
+      userId,
+      username: userData.username || 'مستخدم',
+      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      content: content.trim(),
+      timestamp: timestamp
+    };
+
+    await replyRef.set(replyData);
+
+    // increment repliesCount on comment
+    let newRepliesCount = 0;
+    await commentRef.child('repliesCount').transaction((current) => {
+      newRepliesCount = (current || 0) + 1;
+      return newRepliesCount;
+    });
+
+    // notify original commenter (if not replying to self)
+    try {
+      const commentVal = commentSnap.val();
+      const commentOwnerId = (commentVal.user && commentVal.user.userId) ? commentVal.user.userId : (commentVal.userId || '');
+      if (commentOwnerId && commentOwnerId !== userId) {
+        const notifRef = db.ref(`notifications/${commentOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'family_comment_reply',
+          from_user_id: userId,
+          from_username: userData.username || 'مستخدم',
+          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          familyId,
+          postId,
+          commentId,
+          replyId,
+          replyContent: replyData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+      }
+    } catch (nerr) {
+      console.error('Failed to create family comment_reply notification:', nerr);
+    }
+
+    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+
+  } catch (error) {
+    console.error('Error creating family reply:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create reply' });
+  }
+});
+
+// Get replies for a family comment
+app.get('/api/families/:familyId/posts/:postId/comments/:commentId/replies', requireAuth, requireFamilyMember, async (req, res) => {
+  const { familyId, postId, commentId } = req.params;
+  try {
+    const snap = await db.ref(`family_comment_replies/${familyId}/${postId}/${commentId}`)
+      .orderByChild('timestamp')
+      .once('value');
+    const replies = [];
+    snap.forEach(child => {
+      replies.push(child.val());
+    });
+    res.json({ ok: true, replies: replies });
+  } catch (error) {
+    console.error('Error fetching family replies:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
   }
 });
 
@@ -1180,16 +1700,14 @@ app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (re
   const chatId = [userId, otherId].sort().join('_');
 
   try {
-    const reactionRef = db.ref(`messages/${chatId}/messages/${messageId}/reaction_from/${userId}`);
-    const snap = await reactionRef.once('value');
-    if (!snap.exists()) {
-      return res.status(404).json({ ok: false, error: 'No reaction found' });
+    const messageRef = db.ref(`messages/${chatId}/${messageId}`);
+    const messageSnap = await messageRef.once('value');
+    if (!messageSnap.exists()) {
+      return res.status(404).json({ ok: false, error: 'Message not found' });
     }
 
-    await reactionRef.remove();
-
-    // يمكنك تحديث حقل reaction إذا كنت تجمع التفاعلات
-    // هنا فقط نزيله من المستخدم
+    // إزالة حقل التفاعل من الرسالة مباشرة
+    await messageRef.update({ reaction: null });
 
     res.json({ ok: true });
   } catch (error) {
@@ -1197,89 +1715,6 @@ app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (re
     res.status(500).json({ ok: false });
   }
 });
-
-// ---------------- API: Delete Message ----------------
-app.delete('/api/messages/:otherId/:messageId', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const { otherId, messageId } = req.params;
-
-  const chatId = [userId, otherId].sort().join('_');
-
-  try {
-    const messageRef = db.ref(`messages/${chatId}/${messageId}`);
-    const messageSnap = await messageRef.once('value');
-
-    if (!messageSnap.exists()) {
-      return res.status(404).json({ ok: false, error: 'الرسالة غير موجودة' });
-    }
-
-    const message = messageSnap.val();
-
-    // فقط المرسل يمكنه حذف رسالته
-    if (message.senderId !== userId) {
-      return res.status(403).json({ ok: false, error: 'لا يمكنك حذف رسالة شخص آخر' });
-    }
-
-    // حذف الرسالة بالكامل أو تحويلها إلى "تم حذف هذه الرسالة"
-    await messageRef.update({
-      content: '',
-      media: null,
-      is_deleted: true,
-      deleted_at: admin.database.ServerValue.TIMESTAMP
-    });
-
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Delete message error:', error);
-    res.status(500).json({ ok: false, error: 'فشل حذف الرسالة' });
-  }
-});
-
-// ---------------- API: Edit Message ----------------
-app.put('/api/messages/:otherId/:messageId', requireAuth, async (req, res) => {
-  const userId = req.session.userId;
-  const { otherId, messageId } = req.params;
-  const { content } = req.body;
-
-  if (!content || !content.trim()) {
-    return res.status(400).json({ ok: false, error: 'محتوى الرسالة مطلوب' });
-  }
-
-  const chatId = [userId, otherId].sort().join('_');
-
-  try {
-    const messageRef = db.ref(`messages/${chatId}/${messageId}`);
-    const messageSnap = await messageRef.once('value');
-
-    if (!messageSnap.exists()) {
-      return res.status(404).json({ ok: false, error: 'الرسالة غير موجودة' });
-    }
-
-    const message = messageSnap.val();
-
-    // فقط المرسل يمكنه تعديل رسالته
-    if (message.senderId !== userId) {
-      return res.status(403).json({ ok: false, error: 'لا يمكنك تعديل رسالة شخص آخر' });
-    }
-
-    // لا يمكن تعديل رسالة محذوفة
-    if (message.is_deleted) {
-      return res.status(400).json({ ok: false, error: 'لا يمكن تعديل رسالة محذوفة' });
-    }
-
-    await messageRef.update({
-      content: content.trim(),
-      is_edited: true,
-      edited_at: admin.database.ServerValue.TIMESTAMP
-    });
-
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Edit message error:', error);
-    res.status(500).json({ ok: false, error: 'فشل تعديل الرسالة' });
-  }
-});
-
 // ---------------- API: Users & Profile ----------------
 // /api/users -> returns friends only
 app.get('/api/users', requireAuth, async (req, res) => {
@@ -1296,25 +1731,6 @@ app.get('/api/users', requireAuth, async (req, res) => {
     const allChatsSnap = await db.ref(`chats/${currentUserId}`).once('value');
     const allChats = allChatsSnap.val() || {};
 
-    // Check which friends have active stories + viewed status + story color
-    const now = Date.now();
-    const storiesSnap = await db.ref('stories').once('value');
-    const allStories = storiesSnap.val() || {};
-    const usersWithStories = new Set();
-    const userStoryColors = {};
-    const userStoryIds = {};
-    Object.values(allStories).forEach(story => {
-      if (story.expiresAt > now) {
-        usersWithStories.add(story.userId);
-        if (!userStoryColors[story.userId] && story.story_color) userStoryColors[story.userId] = story.story_color;
-        if (!userStoryIds[story.userId]) userStoryIds[story.userId] = [];
-        userStoryIds[story.userId].push(story.id);
-      }
-    });
-
-    const viewsSnap = await db.ref('story_views').once('value');
-    const allViews = viewsSnap.val() || {};
-
     const usersList = profiles.map((user) => {
       const contactId = user.id;
       const chatSummary = allChats[contactId] || {};
@@ -1323,16 +1739,8 @@ app.get('/api/users', requireAuth, async (req, res) => {
         lastMessage = {
           content: chatSummary.last_message_content,
           timestamp: chatSummary.last_message_timestamp,
-          senderId: chatSummary.last_message_sender_id,
-          is_read: !!chatSummary.last_message_is_read
+          senderId: chatSummary.last_message_sender_id
         };
-      }
-      let storyViewed = false;
-      if (usersWithStories.has(user.id) && userStoryIds[user.id]) {
-        storyViewed = userStoryIds[user.id].every(sid => {
-          const sv = allViews[sid] || {};
-          return !!sv[currentUserId];
-        });
       }
       return {
         id: user.id,
@@ -1341,11 +1749,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
         profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40',
         last_message: lastMessage,
         unread_count: chatSummary.unread_count || 0,
-        is_online: !!user.is_online,
-        is_verified: !!user.is_verified,
-        has_story: usersWithStories.has(user.id),
-        story_viewed: storyViewed,
-        story_color: userStoryColors[user.id] || ''
+        is_online: !!user.is_online
       };
     });
 
@@ -1608,7 +2012,6 @@ app.get('/api/profile', requireAuth, async (req, res) => {
     let isFriend = false;
     let requestSent = false;
     let requestReceived = false;
-    let hasStory = false;
     try {
       if (!isOwner) {
         const friendSnap = await db.ref(`friends/${currentUserId}/${requestedUserId}`).once('value');
@@ -1620,28 +2023,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       }
     } catch (e) { /* ignore */ }
 
-    // Check if user has active stories + viewed status + story color
-    let storyViewed = false;
-    let storyColor = '';
-    try {
-      const storiesSnap = await db.ref('stories').orderByChild('userId').equalTo(requestedUserId).once('value');
-      const now = Date.now();
-      const viewsSnap = await db.ref('story_views').once('value');
-      const allViews = viewsSnap.val() || {};
-      let allViewedFlag = true;
-      storiesSnap.forEach(child => {
-        const s = child.val();
-        if (s.expiresAt > now) {
-          hasStory = true;
-          if (!storyColor && s.story_color) storyColor = s.story_color;
-          const sv = allViews[s.id] || {};
-          if (!sv[req.session.userId]) allViewedFlag = false;
-        }
-      });
-      if (hasStory) storyViewed = allViewedFlag;
-    } catch (e) { /* ignore */ }
-
-    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor });
+    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -1653,30 +2035,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
     const profileSnap = await db.ref('profiles').child(userId).once('value');
     const profile = profileSnap.val();
     if (!profile) return res.status(404).json({ ok: false });
-
-    // Check if user has active stories + viewed status + story color
-    let hasStory = false;
-    let storyViewed = false;
-    let storyColor = '';
-    try {
-      const storiesSnap = await db.ref('stories').orderByChild('userId').equalTo(userId).once('value');
-      const now = Date.now();
-      const viewsSnap = await db.ref('story_views').once('value');
-      const allViews = viewsSnap.val() || {};
-      let allViewedFlag = true;
-      storiesSnap.forEach(child => {
-        const s = child.val();
-        if (s.expiresAt > now) {
-          hasStory = true;
-          if (!storyColor && s.story_color) storyColor = s.story_color;
-          const sv = allViews[s.id] || {};
-          if (!sv[req.session.userId]) allViewedFlag = false;
-        }
-      });
-      if (hasStory) storyViewed = allViewedFlag;
-    } catch (e) { /* ignore */ }
-
-    res.json({ ...profile, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor });
+    res.json(profile);
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -2397,6 +2756,8 @@ app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, r
     const reelId = newReelRef.key;
     const timestamp = admin.database.ServerValue.TIMESTAMP;
 
+    const bgColor = req.body.bgColor ? req.body.bgColor.trim() : '';
+
     const reelData = {
       reelId: reelId,
       userId: userId,
@@ -2407,6 +2768,7 @@ app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, r
       videoUrl: req.file.path,
       mimeType: req.file.mimetype
     };
+    if (bgColor) reelData.bgColor = bgColor;
 
     await newReelRef.set(reelData);
     res.json({ ok: true, reelId: reelId });
@@ -3495,26 +3857,6 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
       const profilePromises = friendIds.map(id => profilesRef.child(id).once('value'));
       const profileSnapshots = await Promise.all(profilePromises);
       
-      // Check which friends have active stories + viewed status + story color
-      const now = Date.now();
-      const storiesSnap = await db.ref('stories').once('value');
-      const allStoriesData = storiesSnap.val() || {};
-      const usersWithStories = new Set();
-      const userStoryColors = {};
-      const userStoryIds = {};
-      Object.values(allStoriesData).forEach(story => {
-        if (story.expiresAt > now) {
-          usersWithStories.add(story.userId);
-          if (!userStoryColors[story.userId] && story.story_color) userStoryColors[story.userId] = story.story_color;
-          if (!userStoryIds[story.userId]) userStoryIds[story.userId] = [];
-          userStoryIds[story.userId].push(story.id);
-        }
-      });
-
-      // جلب المشاهدات لتحديد حالة viewed
-      const viewsSnap = await db.ref('story_views').once('value');
-      const allViews = viewsSnap.val() || {};
-
       const usersList = [];
       
       profileSnapshots.forEach(snap => {
@@ -3527,18 +3869,8 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 lastMessage = {
                     content: chatSummary.last_message_content,
                     timestamp: chatSummary.last_message_timestamp,
-                    senderId: chatSummary.last_message_sender_id,
-                    is_read: !!chatSummary.last_message_is_read
+                    senderId: chatSummary.last_message_sender_id
                 };
-            }
-
-            // تحديد حالة المشاهدة
-            let storyViewed = false;
-            if (usersWithStories.has(user.id) && userStoryIds[user.id]) {
-              storyViewed = userStoryIds[user.id].every(sid => {
-                const sv = allViews[sid] || {};
-                return !!sv[currentUserId];
-              });
             }
 
             usersList.push({
@@ -3549,10 +3881,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 is_verified: !!user.is_verified,
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0,
-                is_online: !!user.is_online,
-                has_story: usersWithStories.has(user.id),
-                story_viewed: storyViewed,
-                story_color: userStoryColors[user.id] || ''
+                is_online: !!user.is_online
             });
         }
       });
