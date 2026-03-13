@@ -1020,7 +1020,15 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
 
 // استبدل هذا الجزء بالكامل في ملف server.js
 
-app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, res) => {
+app.post('/api/messages/send', (req, res, next) => {
+  // If content-type is JSON, skip multer (direct Cloudinary URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  // Otherwise use multer for file upload (backward compatibility)
+  upload.array('media')(req, res, next);
+}, requireAuth, async (req, res) => {
   try {
     const senderId = req.session.userId;
     
@@ -1031,7 +1039,7 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
     if (contact_id) contact_id = String(contact_id).replace(/['\"]+/g, '').trim();
 
     const content = req.body.content || '';
-    const reply_to_id = req.body.replied_to_id || null; // لاحظ: الاسم في chat.html هو replied_to_id
+    const reply_to_id = req.body.replied_to_id || null;
     const reply_to_sender = req.body.replied_to_sender || null;
     const reply_to_content = req.body.replied_to_content || null;
     
@@ -1042,8 +1050,18 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
       return res.status(400).json({ ok: false, error: 'Target user ID is missing' });
     }
 
-    // إذا لم يكن هناك نص ولا ملفات، نعتبرها رسالة فارغة
-    if (!content.trim() && files.length === 0) {
+    // دعم روابط Cloudinary المباشرة (من chat.html الجديد)
+    let mediaObject = null;
+    if (req.body.mediaUrl) {
+      mediaObject = {
+        url: req.body.mediaUrl,
+        type: req.body.mediaType || 'file',
+        filename: req.body.mediaFilename || 'media'
+      };
+    }
+
+    // إذا لم يكن هناك نص ولا ملفات ولا رابط مباشر، نعتبرها رسالة فارغة
+    if (!content.trim() && files.length === 0 && !mediaObject) {
        return res.status(400).json({ ok: false, error: 'لا يمكن إرسال رسالة فارغة' });
     }
 
@@ -1052,11 +1070,9 @@ app.post('/api/messages/send', upload.array('media'), requireAuth, async (req, r
     const messageRef = db.ref(`messages/${chatRoomId}`).push();
     const messageId = messageRef.key;
 
-    // === التصحيح هنا: إعداد كائن media ليتوافق مع chat.html ===
-    let mediaObject = null;
-    
-    if (files.length > 0) {
-      const file = files[0]; // نأخذ الملف الأول لأن chat.html يدعم عرض ملف واحد لكل رسالة
+    // === إعداد كائن media: أولاً من الرابط المباشر، ثم من الملف المرفوع ===
+    if (!mediaObject && files.length > 0) {
+      const file = files[0];
       let type = 'file';
       
       if (file.mimetype.startsWith('image/')) type = 'image';
@@ -1799,23 +1815,32 @@ app.post('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res)
 // ---------------- API: Posts ----------------
 
 // Create post
-app.post('/api/posts/create', requireAuth, upload.single('media'), async (req, res) => {
+app.post('/api/posts/create', requireAuth, (req, res, next) => {
+  // If content-type is JSON, skip multer (direct Cloudinary URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  // Otherwise use multer for file upload (backward compatibility)
+  upload.single('media')(req, res, next);
+}, async (req, res) => {
   const userId = req.session.userId;
   const content = req.body.content ? req.body.content.trim() : '';
-  let mediaUrl = null;
-  let mediaType = null;
+  let mediaUrl = req.body.mediaUrl || null;
+  let mediaType = req.body.mediaType || null;
 
-  if (content.length === 0 && !req.file) {
-    return res.status(400).json({ ok: false, error: 'المحتوى مطلوب.' });
-  }
-
-  if (req.file) {
+  // If files were uploaded via multer (backward compatibility)
+  if (!mediaUrl && req.file) {
     mediaUrl = req.file.path;
     const mimeType = req.file.mimetype || '';
     if (mimeType.startsWith('image/')) mediaType = 'image';
     else if (mimeType.startsWith('video/')) mediaType = 'video';
     else if (mimeType.startsWith('audio/')) mediaType = 'audio';
     else mediaType = 'raw';
+  }
+
+  if (content.length === 0 && !mediaUrl) {
+    return res.status(400).json({ ok: false, error: 'المحتوى مطلوب.' });
   }
 
   try {
@@ -2429,11 +2454,28 @@ app.get('/api/posts/:postId/comments/stream', requireAuth, async (req, res) => {
 // ---------------- API: Reels Implementation ----------------
 
 // إنشاء ريل جديد
-app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, res) => {
+app.post('/api/reels/create', requireAuth, (req, res, next) => {
+  // If content-type is JSON, skip multer (direct Cloudinary URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  // Otherwise use multer for file upload (backward compatibility)
+  upload.single('media')(req, res, next);
+}, async (req, res) => {
   const userId = req.session.userId;
   const description = req.body.description ? req.body.description.trim() : '';
-  
-  if (!req.file) {
+
+  let videoUrl = req.body.videoUrl || null;
+  let mimeType = req.body.mimeType || 'video/mp4';
+
+  // If file was uploaded via multer (backward compatibility)
+  if (!videoUrl && req.file) {
+    videoUrl = req.file.path;
+    mimeType = req.file.mimetype;
+  }
+
+  if (!videoUrl) {
     return res.status(400).json({ ok: false, error: 'الفيديو مطلوب.' });
   }
 
@@ -2449,8 +2491,8 @@ app.post('/api/reels/create', requireAuth, upload.single('media'), async (req, r
       timestamp: timestamp,
       likes: 0,
       commentsCount: 0,
-      videoUrl: req.file.path,
-      mimeType: req.file.mimetype
+      videoUrl: videoUrl,
+      mimeType: mimeType
     };
 
     await newReelRef.set(reelData);
