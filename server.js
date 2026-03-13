@@ -147,9 +147,6 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// ---------------- Lang.js (i18n) ----------------
-app.get('/lang.js', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'lang.js')); });
-
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
 
