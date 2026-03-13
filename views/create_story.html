@@ -417,18 +417,25 @@
         if (selectedStoryColor) formData.append('story_color', selectedStoryColor);
         try {
             var res = await fetch('/api/stories/create', { method: 'POST', body: formData, credentials: 'same-origin' });
-            var data = await res.json();
+            var data;
+            var contentType = res.headers.get('content-type') || '';
+            if (contentType.indexOf('application/json') !== -1) {
+                data = await res.json();
+            } else {
+                var text = await res.text();
+                data = { ok: false, error: 'استجابة غير متوقعة من الخادم (HTTP ' + res.status + ')' };
+            }
             if (res.ok && data.ok) {
                 showToast("تم نشر القصة بنجاح!");
                 setTimeout(function() { window.location.href = '/chat_list'; }, 800);
             } else {
-                errorMessage.textContent = data.error || "فشل النشر";
+                errorMessage.textContent = data.error || "فشل النشر (HTTP " + res.status + ")";
                 errorMessage.style.display = 'block';
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
             }
         } catch (e) {
-            errorMessage.textContent = "خطأ في الاتصال بالسيرفر";
+            errorMessage.textContent = "خطأ في الاتصال بالسيرفر: " + (e.message || e);
             errorMessage.style.display = 'block';
             btn.disabled = false;
             btn.innerHTML = originalHtml;
