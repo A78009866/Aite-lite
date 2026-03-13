@@ -406,6 +406,32 @@
         startRecordingBtn.addEventListener('click', startRecording);
         stopRecordingBtn.addEventListener('click', stopRecording);
 
+        // رفع ملف مباشرة إلى Cloudinary باستخدام توقيع من السيرفر
+        async function uploadToCloudinary(file, resourceType) {
+            var signRes = await fetch('/api/cloudinary/sign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }),
+                credentials: 'same-origin'
+            });
+            var signData = await signRes.json();
+            if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+
+            var fd = new FormData();
+            fd.append('file', file);
+            fd.append('api_key', signData.api_key);
+            fd.append('timestamp', signData.timestamp);
+            fd.append('signature', signData.signature);
+            fd.append('folder', signData.folder);
+
+            var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+            var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
+            var uploadData = await uploadRes.json();
+
+            if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف إلى Cloudinary');
+            return uploadData.secure_url;
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             submitBtn.disabled = true;
@@ -413,17 +439,36 @@
             loadingIndicator.classList.remove('hidden');
             errorMessage.classList.add('hidden');
 
-            const formData = new FormData();
-            formData.append('content', postContent.value.trim());
+            const content = postContent.value.trim();
+            let mediaUrl = null;
+            let mediaType = null;
 
-            if (mediaFile.files.length > 0) {
-                formData.append('media', mediaFile.files[0]);
-            } 
-            
             try {
+                // رفع الملف مباشرة إلى Cloudinary (يتجاوز حد حجم Vercel)
+                if (mediaFile.files.length > 0) {
+                    const file = mediaFile.files[0];
+                    const mimeType = file.type || '';
+                    let resourceType = 'auto';
+                    if (mimeType.startsWith('image/')) { resourceType = 'image'; mediaType = 'image'; }
+                    else if (mimeType.startsWith('video/')) { resourceType = 'video'; mediaType = 'video'; }
+                    else if (mimeType.startsWith('audio/')) { resourceType = 'video'; mediaType = 'audio'; }
+                    else { resourceType = 'auto'; mediaType = 'raw'; }
+
+                    submitBtnText.textContent = 'جاري رفع الملف...';
+                    mediaUrl = await uploadToCloudinary(file, resourceType);
+                }
+
+                // إرسال الروابط فقط إلى السيرفر (JSON صغير، بدون ملف)
+                submitBtnText.textContent = 'جاري النشر...';
                 const response = await fetch(form.action, {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: content,
+                        mediaUrl: mediaUrl,
+                        mediaType: mediaType
+                    }),
+                    credentials: 'same-origin'
                 });
                 
                 const result = await response.json();
@@ -439,7 +484,7 @@
                 }
             } catch (error) {
                 console.error('Error:', error);
-                errorMessage.textContent = 'فشل الاتصال.';
+                errorMessage.textContent = 'خطأ: ' + (error.message || 'فشل الاتصال.');
                 errorMessage.classList.remove('hidden');
                 submitBtn.disabled = false;
                 submitBtnText.textContent = 'نشر';

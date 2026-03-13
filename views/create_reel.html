@@ -108,6 +108,32 @@
     }
   }
 
+  // رفع ملف مباشرة إلى Cloudinary باستخدام توقيع من السيرفر
+  async function uploadToCloudinary(file, resourceType) {
+    var signRes = await fetch('/api/cloudinary/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: 'reels', resource_type: resourceType }),
+      credentials: 'same-origin'
+    });
+    var signData = await signRes.json();
+    if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('api_key', signData.api_key);
+    fd.append('timestamp', signData.timestamp);
+    fd.append('signature', signData.signature);
+    fd.append('folder', signData.folder);
+
+    var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+    var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
+    var uploadData = await uploadRes.json();
+
+    if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف إلى Cloudinary');
+    return uploadData.secure_url;
+  }
+
   publishBtn.addEventListener('click', async () => {
     if (!selectedFile) {
       alert('يرجى اختيار فيديو أولاً!');
@@ -116,20 +142,27 @@
 
     setLoading(true);
 
-    const formData = new FormData();
-    formData.append('media', selectedFile);
-    formData.append('description', descInput.value);
-
     try {
+      // رفع الفيديو مباشرة إلى Cloudinary (يتجاوز حد حجم Vercel)
+      publishBtn.querySelector('span').textContent = 'جاري رفع الفيديو...';
+      const videoUrl = await uploadToCloudinary(selectedFile, 'video');
+
+      // إرسال الرابط فقط إلى السيرفر (JSON صغير، بدون ملف)
+      publishBtn.querySelector('span').textContent = 'جاري النشر...';
       const response = await fetch('/api/reels/create', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoUrl: videoUrl,
+          description: descInput.value,
+          mimeType: selectedFile.type || 'video/mp4'
+        }),
+        credentials: 'same-origin'
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // تم النشر بنجاح -> توجيه إلى صفحة الريلز مع الـ ID للريل الجديد
         window.location.href = `/reels?r=${data.reelId}`;
       } else {
         alert(data.error || 'حدث خطأ أثناء الرفع');
@@ -137,7 +170,7 @@
       }
     } catch (error) {
       console.error(error);
-      alert('خطأ في الاتصال بالسيرفر');
+      alert('خطأ: ' + (error.message || 'خطأ في الاتصال بالسيرفر'));
       setLoading(false);
     }
   });
