@@ -2076,11 +2076,12 @@ textarea:focus { border-color: var(--accent); }
     <div id="context-menu-overlay" class="context-menu-overlay" onclick="closeContextMenu()"></div>
     <div id="context-menu" class="context-menu">
       <div class="reactions-row">
-        <div class="reaction-item" onclick="sendReaction('😂')" title="ضحك"><i class="fas fa-face-laugh-squint" style="color:#f59e0b;font-size:22px;"></i></div>
-        <div class="reaction-item" onclick="sendReaction('♥️')" title="حب"><i class="fas fa-heart" style="color:#ef4444;font-size:22px;"></i></div>
-        <div class="reaction-item" onclick="sendReaction('😢')" title="حزن"><i class="fas fa-face-sad-tear" style="color:#60a5fa;font-size:22px;"></i></div>
-        <div class="reaction-item" onclick="sendReaction('😡')" title="غضب"><i class="fas fa-face-angry" style="color:#dc2626;font-size:22px;"></i></div>
-        <div class="reaction-item" onclick="sendReaction('👍')" title="إعجاب"><i class="fas fa-thumbs-up" style="color:#3b82f6;font-size:22px;"></i></div>
+        <div class="reaction-item" onclick="sendReaction('😂')" title="ضحك">😂</div>
+        <div class="reaction-item" onclick="sendReaction('❤️')" title="حب">❤️</div>
+        <div class="reaction-item" onclick="sendReaction('😢')" title="حزن">😢</div>
+        <div class="reaction-item" onclick="sendReaction('😡')" title="غضب">😡</div>
+        <div class="reaction-item" onclick="sendReaction('👍')" title="إعجاب">👍</div>
+        <div class="reaction-item reaction-plus-btn" onclick="openEmojiPicker()" title="المزيد">+</div>
       </div>
       <div class="menu-actions">
         <button class="menu-action" id="ctx-reply" onclick="contextReply()"><i class="fas fa-reply"></i> رد</button>
@@ -2189,8 +2190,44 @@ textarea:focus { border-color: var(--accent); }
     </div>
   </div>
 </div>
+<!-- Emoji Picker Modal -->
+<div id="emoji-picker-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10005;backdrop-filter:blur(4px);" onclick="closeEmojiPicker()">
+  <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(15,23,42,0.95);backdrop-filter:blur(16px);border-radius:20px 20px 0 0;padding:16px 12px 28px;animation:slideUp 0.3s ease;max-height:60vh;display:flex;flex-direction:column;" onclick="event.stopPropagation()">
+    <div style="width:40px;height:4px;background:#4b5563;border-radius:4px;margin:0 auto 12px;"></div>
+    <h3 style="color:#fff;text-align:center;font-size:16px;margin-bottom:12px;font-weight:600;">اختر تفاعل</h3>
+    <div id="emoji-picker-grid" style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px;overflow-y:auto;padding:8px 4px;max-height:45vh;"></div>
+  </div>
+</div>
 <style>
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.reaction-plus-btn {
+  font-size: 22px !important;
+  color: #94a3b8;
+  background: rgba(255,255,255,0.08);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1;
+}
+.reaction-plus-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+#emoji-picker-grid .emoji-pick-item {
+  font-size: 28px;
+  text-align: center;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 10px;
+  transition: background 0.15s, transform 0.15s;
+  user-select: none;
+  line-height: 1.2;
+}
+#emoji-picker-grid .emoji-pick-item:hover { background: rgba(255,255,255,0.1); transform: scale(1.2); }
+#emoji-picker-grid .emoji-pick-item:active { transform: scale(0.9); }
+.msg-reaction-badge.clickable { cursor: pointer; transition: transform 0.15s, background 0.15s; }
+.msg-reaction-badge.clickable:hover { transform: scale(1.15); background: #334155; }
 </style>
 
 <script>
@@ -2228,6 +2265,46 @@ const contextMenu = document.getElementById('context-menu');
 const contextOverlay = document.getElementById('context-menu-overlay');
 
 const VERIFIED_ICON = `<img src="https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;">`;
+
+// --- Emoji Picker ---
+const ALL_EMOJIS = [
+  '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
+  '😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🫡',
+  '🤐','🤨','😐','😑','😶','🫠','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴',
+  '😷','🤒','🤕','🤢','🤮','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐',
+  '😕','🫤','😟','🙁','😮','😯','😲','😳','🥺','🥹','😦','😧','😨','😰','😥','😢',
+  '😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀',
+  '💩','🤡','👹','👺','👻','👽','👾','🤖','😺','😸','😹','😻','😼','😽','🙀','😿','😾',
+  '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','💕','💞','💓','💗',
+  '💖','💘','💝','💟','♥️','💋','💯','💢','💥','💫','💦','💨','🕳️','💤',
+  '👋','🤚','🖐️','✋','🖖','🫱','🫲','🫳','🫴','👌','🤌','🤏','✌️','🤞','🫰','🤟',
+  '🤘','🤙','👈','👉','👆','🖕','👇','☝️','🫵','👍','👎','✊','👊','🤛','🤜','👏',
+  '🙌','🫶','👐','🤲','🤝','🙏','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🧠','🫀',
+  '🔥','⭐','🌟','✨','💫','🎉','🎊','🎈','🎁','🏆','🥇','🥈','🥉','⚽','🏀','🎮',
+  '🎵','🎶','🎤','🎧','🎸','🎹','🎺','🎻','🥁','🎬','🎨','🎭','🎪','🎫','🎟️',
+  '🍕','🍔','🍟','🌭','🍿','🧂','🥚','🍳','🧇','🥞','🧈','🍞','🥐','🥨','🧀','🥗',
+  '🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','☕','🍵',
+  '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐻‍❄️','🐨','🐯','🦁','🐮','🐷','🐸','🐵',
+  '🌸','🌺','🌻','🌹','🌷','🌼','💐','🌾','🍀','🍁','🍂','🍃','🌿','☘️','🪴','🌵'
+];
+
+function openEmojiPicker() {
+  closeContextMenu();
+  const grid = document.getElementById('emoji-picker-grid');
+  if (!grid.children.length) {
+    grid.innerHTML = ALL_EMOJIS.map(e => `<div class="emoji-pick-item" onclick="pickEmoji('${e}')">${e}</div>`).join('');
+  }
+  document.getElementById('emoji-picker-overlay').style.display = 'block';
+}
+
+function closeEmojiPicker() {
+  document.getElementById('emoji-picker-overlay').style.display = 'none';
+}
+
+function pickEmoji(emoji) {
+  closeEmojiPicker();
+  sendReaction(emoji);
+}
 
 // --- Init ---
 async function init() {
@@ -2371,8 +2448,9 @@ async function loadMessages(initial = false) {
                    if(bubble) {
                      bubble.style.marginBottom = "8px"; 
                      const badge = document.createElement('div');
-                     badge.className = 'msg-reaction-badge';
+                     badge.className = 'msg-reaction-badge clickable';
                      badge.textContent = msg.reaction;
+                     badge.onclick = function(e) { e.stopPropagation(); showReactionRemoveOption(msg.messageId, this); };
                      bubble.appendChild(badge);
                    }
                 }
@@ -2495,8 +2573,9 @@ function createMsgElement(msg) {
   if (msg.reaction) {
     bubble.style.marginBottom = "8px"; 
     const badge = document.createElement('div');
-    badge.className = 'msg-reaction-badge';
+    badge.className = 'msg-reaction-badge clickable';
     badge.textContent = msg.reaction;
+    badge.onclick = function(e) { e.stopPropagation(); showReactionRemoveOption(msg.messageId, this); };
     bubble.appendChild(badge);
   }
 
@@ -2624,10 +2703,11 @@ async function sendReaction(emoji, messageId = activeLongPressMsgId) {
         let badge = msgEl.querySelector('.msg-reaction-badge');
         if(!badge) {
             badge = document.createElement('div');
-            badge.className = 'msg-reaction-badge';
+            badge.className = 'msg-reaction-badge clickable';
             msgEl.appendChild(badge);
         }
         badge.textContent = emoji;
+        badge.onclick = function(e) { e.stopPropagation(); showReactionRemoveOption(messageId, this); };
     }
 
     await fetch(`/api/messages/${otherId}/reactions/${messageId}`, {
@@ -2658,6 +2738,39 @@ async function contextRemoveReaction() {
     }
     await fetch(`/api/messages/${otherId}/reactions/${messageId}`, { method: 'DELETE' });
   } catch (e) { console.error(e); }
+}
+
+// عرض خيار إزالة التفاعل عند الضغط على شارة التفاعل
+function showReactionRemoveOption(messageId, badgeEl) {
+  // إزالة أي نافذة سابقة
+  document.querySelectorAll('.reaction-remove-popup').forEach(p => p.remove());
+  
+  const popup = document.createElement('div');
+  popup.className = 'reaction-remove-popup';
+  popup.innerHTML = '<i class="fas fa-trash-alt" style="margin-left:6px;font-size:12px;"></i> إزالة التفاعل';
+  popup.style.cssText = 'position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:rgba(15,23,42,0.95);backdrop-filter:blur(12px);color:#f87171;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;z-index:10006;border:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 16px rgba(0,0,0,0.4);animation:menuPopIn 0.2s ease;display:flex;align-items:center;';
+  
+  popup.onclick = async function(e) {
+    e.stopPropagation();
+    popup.remove();
+    try {
+      badgeEl.remove();
+      await fetch(`/api/messages/${otherId}/reactions/${messageId}`, { method: 'DELETE' });
+    } catch(err) { console.error(err); }
+  };
+  
+  // وضع النافذة بجانب الشارة
+  badgeEl.style.position = 'relative';
+  badgeEl.appendChild(popup);
+  
+  // إغلاق عند الضغط خارج النافذة
+  const closePopup = (e) => {
+    if (!popup.contains(e.target) && e.target !== badgeEl) {
+      popup.remove();
+      document.removeEventListener('click', closePopup);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closePopup), 10);
 }
 
 function contextCopy() {
