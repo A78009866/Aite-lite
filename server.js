@@ -85,8 +85,8 @@ const port = process.env.PORT || 3000;
 
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+app.use(express.json({ limit: '500mb' }));
 
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
@@ -188,6 +188,7 @@ app.get('/create-reel', requireAuth, (req, res) => { res.sendFile(path.join(__di
 
 // Stories page
 app.get('/stories', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'stories.html')); });
+app.get('/create-story', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'create_story.html')); });
 
 // Notifications page
 app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
