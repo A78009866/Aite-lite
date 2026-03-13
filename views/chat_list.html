@@ -848,14 +848,13 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
 
-        // 2. linkify (simple)
+        // 2. linkify with beautiful style
         const urlRegex = /(https?:\/\/[^\s'"]+)/g;
         const replaced = escapedText.replace(urlRegex, function(url) {
-            // ensure href is attribute-escaped
-            const href = escapeAttr(url);
-            const visible = escapeHtml(url);
-            // stopPropagation added to prevent parent click handlers (media viewer / navigation) from triggering
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 hover:underline transition" dir="ltr" onclick="event.stopPropagation()">${visible}</a>`;
+            var cleanUrl = url.replace(/&amp;/g, '&');
+            var displayUrl = cleanUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+            if (displayUrl.length > 40) displayUrl = displayUrl.substring(0, 37) + '...';
+            return '<a href="' + escapeAttr(cleanUrl) + '" target="_blank" rel="noopener noreferrer" dir="ltr" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:5px;background:rgba(14,165,233,0.12);border:1px solid rgba(14,165,233,0.25);border-radius:8px;padding:4px 10px;margin:3px 0;color:#7dd3fc;font-size:13px;text-decoration:none;max-width:100%;word-break:break-all;transition:all 0.2s;"><i class="fas fa-link" style="font-size:11px;opacity:0.7;flex-shrink:0;"></i>' + escapeHtml(displayUrl) + '</a>';
         });
 
         return replaced;

@@ -1840,7 +1840,7 @@ async function fetchAndDisplayProfile() {
             profileUsernameEl.innerHTML = `@${data.username}` + (data.is_verified ? ` <img src="${VERIFIED_IMG_URL}" class="verified-badge-img list" alt="موثق" title="موثق">` : '');
 
             document.getElementById('profileFullName').textContent = data.full_name || 'لا يوجد اسم كامل';
-            document.getElementById('profileBio').textContent = data.bio || '';
+            document.getElementById('profileBio').innerHTML = formatAndEscapeContent(data.bio || '');
             document.getElementById('pageTitle').textContent = `Aite - @${data.username}`;
 
             setUserOnlineUI(data.id, !!data.is_online, data.last_seen);
@@ -2099,10 +2099,13 @@ function escapeAttr(s) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
-    // 2. تحويل الروابط إلى عناصر قابلة للنقر
+    // 2. تحويل الروابط إلى عناصر قابلة للنقر مع تصميم جميل
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     return escapedText.replace(urlRegex, function(url) {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 hover:underline transition" dir="ltr" style="display:inline-block; max-width:100%; word-break:break-all;" onclick="event.stopPropagation()">${url}</a>`;
+        var cleanUrl = url.replace(/&amp;/g, '&');
+        var displayUrl = cleanUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        if (displayUrl.length > 40) displayUrl = displayUrl.substring(0, 37) + '...';
+        return '<a href="' + cleanUrl + '" target="_blank" rel="noopener noreferrer" dir="ltr" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:5px;background:rgba(14,165,233,0.12);border:1px solid rgba(14,165,233,0.25);border-radius:8px;padding:4px 10px;margin:3px 0;color:#7dd3fc;font-size:13px;text-decoration:none;max-width:100%;word-break:break-all;transition:all 0.2s;"><i class="fas fa-link" style="font-size:11px;opacity:0.7;flex-shrink:0;"></i>' + displayUrl + '</a>';
     });
 }
 
