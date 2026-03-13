@@ -117,17 +117,11 @@
       z-index: 35;
     }
 
-    .comments-sheet {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: #111; border-radius: 16px 16px 0 0;
-      height: 60vh; transform: translateY(100%);
-      transition: transform 0.3s ease-out; z-index: 50;
-      display: flex; flex-direction: column;
-    }
-    .comments-sheet.open { transform: translateY(0); }
     .overlay-backdrop {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(5px);
       z-index: 40; display: none;
+      transition: opacity 0.3s;
     }
     .overlay-backdrop.open { display: block; }
 
@@ -152,11 +146,26 @@
       vertical-align: middle;
     }
 
-    /* comment UI */
+    /* --- Comments Modal (Bottom Sheet) - same as post.html --- */
+    .glass-comment-modal-content {
+      background-color: #18191a;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
+      display: flex; flex-direction: column;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 75vh; border-radius: 20px 20px 0 0;
+      transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 50;
+    }
+    .glass-comment-modal-content.open { transform: translateY(0); }
+    .glass-modal-bg { background-color: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); transition: opacity 0.3s; }
+    .modal-handle { width: 40px; height: 4px; background-color: rgba(255,255,255,0.3); border-radius: 2px; margin: 12px auto 8px auto; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+
+    /* ---- Comment Styles (same as post.html) ---- */
     .comment-item {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
       padding: 14px;
       border-radius: 14px;
       background: rgba(25, 25, 30, 0.7);
@@ -166,8 +175,6 @@
     .comment-item:hover {
       background: rgba(30, 30, 35, 0.85);
     }
-    .comment-item img { width:36px; height:36px; border-radius:999px; object-fit:cover; flex-shrink:0; }
-    .comment-body { flex:1; }
     .comment-actions {
       display: flex;
       gap: 6px;
@@ -190,24 +197,25 @@
     .comment-actions button:hover {
       background: rgba(255,255,255,0.08);
     }
-    .comment-actions button.text-red-400 {
+    .comment-actions button.liked-btn {
       color: #f87171;
       background: rgba(239,68,68,0.1);
       border-color: rgba(239,68,68,0.2);
     }
-    .small-avatar { width:28px; height:28px; border-radius:999px; object-fit:cover; }
     .reply-item {
+      margin-right: 36px;
       margin-top: 8px;
-      padding: 10px 12px;
       background: rgba(15, 15, 20, 0.6);
+      padding: 10px 12px;
       border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-right: 3px solid #3b82f6;
     }
+    .small-avatar { width: 28px; height: 28px; border-radius: 999px; object-fit: cover; }
     .like-count { font-weight: 700; font-size: 12px; }
-    .comments-sheet .verified-badge-img,
-    .comment-item .verified-badge-img,
-    .comments-sheet .verified-placeholder img.verified-badge-img {
+
+    .glass-comment-modal-content .verified-badge-img,
+    .comment-item .verified-badge-img {
       width: 12px;
       height: 12px;
       margin-left: 6px;
@@ -233,16 +241,40 @@
   </div>
 
   <div id="backdrop" class="overlay-backdrop"></div>
-  <div id="commentsSheet" class="comments-sheet border-t border-gray-800">
-    <div class="p-3 border-b border-gray-800 flex justify-between items-center">
-      <h3 class="font-bold text-sm">التعليقات</h3>
-      <button id="closeComments" class="text-gray-400 p-2"><i class="fas fa-times"></i></button>
-    </div>
-    <div id="commentsList" class="flex-1 overflow-y-auto p-4 space-y-4 pb-20"></div>
-    <div class="p-3 border-t border-gray-800 flex items-center gap-2 bg-black/90 backdrop-blur-md absolute bottom-0 w-full">
-      <input type="text" id="commentInput" placeholder="أضف تعليقاً..." 
-             class="flex-1 bg-[#1a1a1a] text-white text-sm rounded-full px-4 py-2.5 outline-none border border-gray-700/50 focus:border-blue-500/50 transition">
-      <button id="sendCommentBtn" class="w-9 h-9 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center transition flex-shrink-0"><i class="fas fa-arrow-up text-sm"></i></button>
+
+  <!-- Comments Modal (Bottom Sheet) - same design as post.html -->
+  <div id="commentModal" class="hidden fixed inset-0 z-[70] flex items-end md:items-center justify-center glass-modal-bg transition-opacity duration-300">
+    <div id="commentModalContent" class="glass-comment-modal-content w-full md:w-auto" onclick="event.stopPropagation()">
+      
+      <div class="w-full flex justify-center" onclick="closeCommentsSheet()">
+        <div class="modal-handle"></div>
+      </div>
+
+      <div class="flex justify-between items-center px-4 pb-2 pt-2 border-b border-gray-800">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          التعليقات 
+          <span id="commentCountBadge" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">0</span>
+        </h3>
+        <button class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300 hover:text-white" onclick="closeCommentsSheet()">
+          <i class="fas fa-times text-sm"></i>
+        </button>
+      </div>
+      
+      <div id="commentsList" class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#18191a] min-h-0">
+      </div>
+
+      <div class="p-3 border-t border-gray-800 bg-[#18191a]">
+        <div id="commentError" class="text-red-500 text-xs text-center mb-2 hidden"></div>
+        <div class="flex items-center gap-2 bg-[#242526] p-1.5 rounded-3xl border border-gray-700">
+          <img id="myCurrentAvatar" src="https://via.placeholder.com/40" class="w-8 h-8 rounded-full object-cover border border-gray-600 ml-1">
+          <input type="text" id="commentInput" placeholder="أضف تعليقاً..." 
+                 class="flex-grow bg-transparent text-white text-sm px-2 focus:outline-none" 
+                 dir="rtl" autocomplete="off">
+          <button id="sendCommentBtn" class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition w-9 h-9 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-arrow-up text-sm"></i>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -250,6 +282,7 @@
 
 <script>
   const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png";
+  const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
 
   let swiperInstance = null;
   let currentReelsData = [];
@@ -259,12 +292,20 @@
 
   document.addEventListener('DOMContentLoaded', loadReels);
 
+  // Fetch user info for avatar in comment input
+  fetch('/api/profile').then(r=>r.json()).then(d=> { 
+    if(d.ok) { 
+      currentUserId = d.id; 
+      document.getElementById('myCurrentAvatar').src = d.profile_picture_url || DEFAULT_AVATAR;
+    }
+  }).catch(()=>{});
+
   async function loadReels() {
     try {
       const res = await fetch('/api/reels/feed', { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
       const data = await res.json();
-      currentUserId = data.currentUserId || null;
+      currentUserId = data.currentUserId || currentUserId || null;
       
       if(data.ok && data.reels && data.reels.length > 0) {
         currentReelsData = data.reels;
@@ -301,7 +342,7 @@
       const poster = reel.thumbnailUrl || BLACK_POSTER;
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
-        <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-cover" playsinline preload="metadata" webkit-playsinline></video>
+        <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-contain" playsinline preload="metadata" webkit-playsinline></video>
         <i class="fas fa-heart big-heart" id="bigHeart-${reel.reelId}"></i>
         <div class="play-btn" id="playBtn-${reel.reelId}"><i class="fas fa-play"></i></div>
         <div class="video-progress" id="progress-${reel.reelId}">
@@ -501,18 +542,20 @@
     try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST', credentials: 'include' }); } catch(e) { console.error('like error', e); }
   }
 
-  // Comments sheet
+  // --- COMMENTS SYSTEM (Bottom Sheet - same design as post.html) ---
+
   const backdrop = document.getElementById('backdrop');
-  const sheet = document.getElementById('commentsSheet');
   const commentsList = document.getElementById('commentsList');
 
   window.openComments = async function(reelId) {
     currentReelIdForComments = reelId;
-    backdrop.classList.add('open');
-    sheet.classList.add('open');
+    const modal = document.getElementById('commentModal');
+    const content = document.getElementById('commentModalContent');
+    modal.classList.remove('hidden');
+    setTimeout(() => content.classList.add('open'), 10);
     if(swiperInstance) swiperInstance.allowTouchMove = false;
 
-    commentsList.innerHTML = '<div class="text-center mt-5"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
+    commentsList.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>';
     try {
       await fetchAndRenderReelComments(reelId);
     } catch(e) {
@@ -522,90 +565,138 @@
   };
 
   function closeCommentsSheet() {
-    backdrop.classList.remove('open');
-    sheet.classList.remove('open');
-    if(swiperInstance) swiperInstance.allowTouchMove = true;
-    currentReelIdForComments = null;
-    commentsList.innerHTML = '';
-    document.getElementById('commentInput').value = '';
+    const modal = document.getElementById('commentModal');
+    const content = document.getElementById('commentModalContent');
+    content.classList.remove('open');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      if(swiperInstance) swiperInstance.allowTouchMove = true;
+      currentReelIdForComments = null;
+      commentsList.innerHTML = '';
+      document.getElementById('commentInput').value = '';
+    }, 300);
   }
 
+  // Close when clicking backdrop area of modal
+  document.getElementById('commentModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCommentsSheet();
+  });
+
   async function fetchAndRenderReelComments(reelId) {
-    commentsList.innerHTML = '<div class="text-center mt-5"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
+    commentsList.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>';
     try {
       const res = await fetch(`/api/reels/${reelId}/comments`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch comments: ' + res.status);
       const data = await res.json();
       if (!data.ok) throw new Error('Invalid response');
 
-      renderComments(data.comments || []);
+      const comments = data.comments || [];
+      document.getElementById('commentCountBadge').innerText = comments.length;
       const countEl = document.getElementById(`commentCount-${reelId}`);
-      if (countEl) countEl.textContent = (data.comments || []).length;
+      if (countEl) countEl.textContent = comments.length;
+
+      if(comments.length === 0) {
+        commentsList.innerHTML = '<p class="text-center text-gray-500 py-10">لا توجد تعليقات بعد.</p>';
+      } else {
+        commentsList.innerHTML = comments.map(c => createCommentHtml(c, reelId)).join('');
+        updateCommentBadges(comments);
+      }
     } catch (e) {
       console.error(e);
       commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
     }
   }
 
-  function renderComments(comments) {
-    commentsList.innerHTML = '';
-    if(!comments || comments.length === 0) {
-      commentsList.innerHTML = '<div class="text-center text-gray-500 text-sm mt-10">كن أول من يعلق!</div>';
-      return;
+  function createCommentHtml(c, reelId) {
+    const likeIcon = c.is_liked ? 'fas' : 'far';
+    const likedClass = c.is_liked ? 'liked-btn' : '';
+    const commentId = c.commentId || c.id;
+    
+    // Badge placeholder
+    const badgePlace = `<span class="badge-container" data-uid="${c.user ? c.user.userId : (c.userId || c.userID || '')}"></span>`;
+    
+    const commentDate = new Date(c.timestamp).toLocaleString('ar-EG', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    const avatarUrl = (c.user ? c.user.profile_picture_url : c.profile_picture_url) || DEFAULT_AVATAR;
+    const username = c.user ? c.user.username : c.username;
+    const userId = c.user ? c.user.userId : (c.userId || c.userID || '');
+
+    // Replies
+    let repliesHtml = '';
+    if(c.recentReplies && c.recentReplies.length > 0) {
+      repliesHtml = c.recentReplies.map(r => `
+        <div class="reply-item">
+          <div class="flex items-start gap-2">
+            <img src="${escapeHtml(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0">
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-bold text-white">${escapeHtml(r.username)}</div>
+                <div class="text-[10px] text-gray-500">${r.timestamp ? new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+              </div>
+              <div class="text-sm text-gray-200 mt-1">${formatAndEscapeContent(r.content)}</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
     }
 
-    commentsList.innerHTML = comments.map(c => `
-      <div class="comment-item" data-comment-id="${escapeAttr(c.id)}">
-        <img src="${escapeHtml(c.profile_picture_url || 'https://via.placeholder.com/40')}" alt="${escapeHtml(c.username)}">
-        <div class="comment-body">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="font-bold text-sm">${escapeHtml(c.username)} <span class="verified-placeholder" data-user-id="${escapeAttr(c.userId || c.userID || c.userId || '')}"></span></div>
-              <div class="text-[11px] text-gray-400">${new Date(c.timestamp).toLocaleTimeString()}</div>
-            </div>
-          </div>
-          <div class="mt-2 text-sm text-gray-200">${formatAndEscapeContent(c.content)}</div>
-          <div class="comment-actions">
-            <button class="flex items-center gap-2 text-gray-300" onclick="toggleReelCommentLike('${escapeAttr(currentReelIdForComments)}','${escapeAttr(c.id)}', this)">
-              <i class="${c.is_liked ? 'fas fa-heart text-red-400' : 'far fa-heart'}"></i>
-              <span id="reel-comment-like-count-${escapeAttr(c.id)}" class="text-xs">${c.likes || 0}</span>
-            </button>
-
-            <button class="flex items-center gap-2 text-gray-300" onclick="toggleReplyBox('${escapeAttr(c.id)}')">
-              <i class="fas fa-reply"></i>
-              <span class="text-xs">رد</span>
-            </button>
-
-            <button class="flex items-center gap-2 text-gray-300 ${ (c.repliesCount||0) > (c.recentReplies ? c.recentReplies.length : 0) ? '' : 'hidden' }" onclick="fetchAndShowAllRepliesReel('${escapeAttr(currentReelIdForComments)}','${escapeAttr(c.id)}', this)">
-              <i class="fas fa-angle-down"></i>
-              <span class="text-xs">عرض الردود (${c.repliesCount || 0})</span>
-            </button>
-          </div>
-
-          <div id="replies-container-${escapeAttr(c.id)}" class="mt-3">
-            ${(c.recentReplies && c.recentReplies.length > 0) ? c.recentReplies.map(r => `
-              <div class="reply-item flex items-start gap-2">
-                <img src="${escapeHtml(r.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar" alt="${escapeHtml(r.username)}">
-                <div>
-                  <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                  <div class="text-sm text-gray-200 mt-1">${formatAndEscapeContent(r.content)}</div>
+    return `
+      <div class="comment-item" id="comment-${escapeAttr(commentId)}">
+        <div class="flex items-start gap-3">
+          <img src="${escapeHtml(avatarUrl)}" class="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer" onclick="window.location.href='/profile?userId=${escapeAttr(userId)}'">
+          <div class="flex-1">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="text-sm font-bold text-white">
+                  ${escapeHtml(username)} ${badgePlace}
                 </div>
+                <div class="text-xs text-gray-500">${commentDate}</div>
               </div>
-            `).join('') : ''}
-          </div>
+            </div>
+            <div class="text-sm text-gray-200 mt-2">${formatAndEscapeContent(c.content)}</div>
+            
+            <div class="comment-actions">
+              <button class="${likedClass}" onclick="toggleReelCommentLike('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', this)">
+                <i class="${likeIcon} fa-heart"></i>
+                <span class="like-count" id="reel-comment-like-count-${escapeAttr(commentId)}">${c.likes || 0}</span>
+              </button>
+              <button onclick="document.getElementById('reply-box-${escapeAttr(commentId)}').classList.toggle('hidden')">
+                <i class="fas fa-reply"></i>
+                <span class="text-xs">رد</span>
+              </button>
+            </div>
 
-          <div id="reply-box-${escapeAttr(c.id)}" class="mt-2 hidden">
-            <div class="flex items-center gap-2">
-              <input id="reply-input-${escapeAttr(c.id)}" class="flex-1 bg-[#222] text-white text-sm rounded-full px-3 py-2 outline-none" placeholder="أضف رد..." />
-              <button class="px-3 py-1 bg-blue-600 rounded-md" onclick="postReelReply('${escapeAttr(currentReelIdForComments)}','${escapeAttr(c.id)}')"><i class="fas fa-paper-plane"></i></button>
+            <div id="reply-box-${escapeAttr(commentId)}" class="hidden mt-3">
+              <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl border border-gray-700/50">
+                <input type="text" id="reply-input-${escapeAttr(commentId)}" placeholder="اكتب رداً..." class="flex-1 bg-transparent text-sm text-white outline-none px-1">
+                <button onclick="postReelReply('${escapeAttr(reelId)}', '${escapeAttr(commentId)}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg transition flex items-center gap-1"><i class="fas fa-paper-plane text-[10px]"></i> إرسال</button>
+              </div>
+            </div>
+
+            <div id="replies-container-${escapeAttr(commentId)}" class="mt-2 space-y-1">
+              ${repliesHtml}
             </div>
           </div>
-
         </div>
       </div>
-    `).join('');
+    `;
+  }
 
-    updateVerifiedBadges();
+  async function updateCommentBadges(comments) {
+    const userIds = [...new Set(comments.map(c => c.user ? c.user.userId : (c.userId || c.userID || '')).filter(Boolean))];
+    for (let uid of userIds) {
+      try {
+        const r = await fetch(`/api/profile?userId=${uid}`);
+        const u = await r.json();
+        if (u.ok && u.is_verified) {
+          document.querySelectorAll(`.badge-container[data-uid="${uid}"]`).forEach(el => {
+            el.innerHTML = `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">`;
+          });
+        }
+      } catch(e){}
+    }
   }
 
   async function toggleReelCommentLike(reelId, commentId, btnEl) {
@@ -619,11 +710,11 @@
         if (countEl) countEl.textContent = data.likes;
         const icon = btnEl.querySelector('i');
         if (data.is_liked) {
-          icon.classList.remove('far'); icon.classList.add('fas', 'text-red-400');
-          btnEl.classList.add('text-red-400');
+          btnEl.classList.add('liked-btn');
+          if (icon) { icon.classList.remove('far'); icon.classList.add('fas'); }
         } else {
-          icon.classList.remove('fas', 'text-red-400'); icon.classList.add('far');
-          btnEl.classList.remove('text-red-400');
+          btnEl.classList.remove('liked-btn');
+          if (icon) { icon.classList.remove('fas'); icon.classList.add('far'); }
         }
       } else {
         console.warn('Failed to like comment', data);
@@ -633,14 +724,6 @@
     } finally {
       btnEl.disabled = false;
     }
-  }
-
-  function toggleReplyBox(commentId) {
-    const box = document.getElementById(`reply-box-${commentId}`);
-    if (!box) return;
-    box.classList.toggle('hidden');
-    const input = document.getElementById(`reply-input-${commentId}`);
-    if (input && !box.classList.contains('hidden')) input.focus();
   }
 
   async function postReelReply(reelId, commentId) {
@@ -670,38 +753,7 @@
     }
   }
 
-  async function fetchAndShowAllRepliesReel(reelId, commentId, triggerBtn) {
-    if (!reelId || !commentId) return;
-    triggerBtn.disabled = true;
-    try {
-      const res = await fetch(`/api/reels/${reelId}/comments/${commentId}/replies`, { credentials: 'include' });
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        const container = document.getElementById(`replies-container-${commentId}`);
-        if (container) {
-          container.innerHTML = data.replies.map(r => `
-            <div class="reply-item flex items-start gap-2">
-              <img src="${escapeHtml(r.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar" alt="${escapeHtml(r.username)}">
-              <div>
-                <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                <div class="text-sm text-gray-200 mt-1">${formatAndEscapeContent(r.content)}</div>
-              </div>
-            </div>
-          `).join('');
-        }
-      } else {
-        console.warn('Failed to fetch replies', data);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      triggerBtn.disabled = false;
-    }
-  }
-
-  backdrop.addEventListener('click', closeCommentsSheet);
-  document.getElementById('closeComments').addEventListener('click', closeCommentsSheet);
-  
+  // Send comment button
   document.getElementById('sendCommentBtn').addEventListener('click', async () => {
     const input = document.getElementById('commentInput');
     const content = input.value.trim();
@@ -717,6 +769,14 @@
       if (!res.ok) throw new Error('Failed to post comment: ' + res.status);
       await fetchAndRenderReelComments(currentReelIdForComments);
     } catch(e) { console.error('send comment error', e); alert('فشل الإرسال'); }
+  });
+
+  // Enter key to send comment
+  document.getElementById('commentInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('sendCommentBtn').click();
+    }
   });
 
   window.shareReel = function(reelId) {
