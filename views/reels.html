@@ -153,12 +153,58 @@
     }
 
     /* comment UI */
-    .comment-item { display:flex; gap:10px; align-items:flex-start; }
-    .comment-item img { width:36px; height:36px; border-radius:999px; object-fit:cover; }
+    .comment-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(25, 25, 30, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.2s;
+    }
+    .comment-item:hover {
+      background: rgba(30, 30, 35, 0.85);
+    }
+    .comment-item img { width:36px; height:36px; border-radius:999px; object-fit:cover; flex-shrink:0; }
     .comment-body { flex:1; }
-    .comment-actions { display:flex; gap:10px; align-items:center; margin-top:6px; }
-    .small-avatar { width:28px;height:28px;border-radius:999px;object-fit:cover; }
-    .reply-item { margin-top:8px; padding:8px; background:#0f1112; border-radius:10px; }
+    .comment-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .comment-actions button {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      color: #9ca3af;
+    }
+    .comment-actions button:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    .comment-actions button.text-red-400 {
+      color: #f87171;
+      background: rgba(239,68,68,0.1);
+      border-color: rgba(239,68,68,0.2);
+    }
+    .small-avatar { width:28px; height:28px; border-radius:999px; object-fit:cover; }
+    .reply-item {
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: rgba(15, 15, 20, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-right: 3px solid #3b82f6;
+    }
+    .like-count { font-weight: 700; font-size: 12px; }
     .comments-sheet .verified-badge-img,
     .comment-item .verified-badge-img,
     .comments-sheet .verified-placeholder img.verified-badge-img {
@@ -193,10 +239,10 @@
       <button id="closeComments" class="text-gray-400 p-2"><i class="fas fa-times"></i></button>
     </div>
     <div id="commentsList" class="flex-1 overflow-y-auto p-4 space-y-4 pb-20"></div>
-    <div class="p-3 border-t border-gray-800 flex items-center gap-2 bg-black absolute bottom-0 w-full">
+    <div class="p-3 border-t border-gray-800 flex items-center gap-2 bg-black/90 backdrop-blur-md absolute bottom-0 w-full">
       <input type="text" id="commentInput" placeholder="أضف تعليقاً..." 
-             class="flex-1 bg-[#222] text-white text-sm rounded-full px-4 py-2 outline-none">
-      <button id="sendCommentBtn" class="text-blue-500 font-bold text-sm px-3">نشر</button>
+             class="flex-1 bg-[#1a1a1a] text-white text-sm rounded-full px-4 py-2.5 outline-none border border-gray-700/50 focus:border-blue-500/50 transition">
+      <button id="sendCommentBtn" class="w-9 h-9 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center transition flex-shrink-0"><i class="fas fa-arrow-up text-sm"></i></button>
     </div>
   </div>
 
@@ -518,7 +564,7 @@
               <div class="text-[11px] text-gray-400">${new Date(c.timestamp).toLocaleTimeString()}</div>
             </div>
           </div>
-          <div class="mt-2 text-sm text-gray-200">${escapeHtml(c.content)}</div>
+          <div class="mt-2 text-sm text-gray-200">${formatAndEscapeContent(c.content)}</div>
           <div class="comment-actions">
             <button class="flex items-center gap-2 text-gray-300" onclick="toggleReelCommentLike('${escapeAttr(currentReelIdForComments)}','${escapeAttr(c.id)}', this)">
               <i class="${c.is_liked ? 'fas fa-heart text-red-400' : 'far fa-heart'}"></i>
@@ -542,7 +588,7 @@
                 <img src="${escapeHtml(r.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar" alt="${escapeHtml(r.username)}">
                 <div>
                   <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                  <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                  <div class="text-sm text-gray-200 mt-1">${formatAndEscapeContent(r.content)}</div>
                 </div>
               </div>
             `).join('') : ''}
@@ -638,7 +684,7 @@
               <img src="${escapeHtml(r.profile_picture_url || 'https://via.placeholder.com/40')}" class="small-avatar" alt="${escapeHtml(r.username)}">
               <div>
                 <div class="text-xs text-gray-300 font-bold">${escapeHtml(r.username)}</div>
-                <div class="text-sm text-gray-200">${escapeHtml(r.content)}</div>
+                <div class="text-sm text-gray-200 mt-1">${formatAndEscapeContent(r.content)}</div>
               </div>
             </div>
           `).join('');

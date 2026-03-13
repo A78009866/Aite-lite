@@ -118,6 +118,56 @@
         
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+
+        /* ---- Comment Styles ---- */
+        .comment-item {
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(25, 25, 30, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: background 0.2s;
+        }
+        .comment-item:hover {
+            background: rgba(30, 30, 35, 0.85);
+        }
+        .comment-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-top: 8px;
+        }
+        .comment-actions button {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            color: #9ca3af;
+        }
+        .comment-actions button:hover {
+            background: rgba(255,255,255,0.08);
+        }
+        .comment-actions button.liked-btn {
+            color: #f87171;
+            background: rgba(239,68,68,0.1);
+            border-color: rgba(239,68,68,0.2);
+        }
+        .reply-item {
+            margin-right: 36px;
+            margin-top: 8px;
+            background: rgba(15, 15, 20, 0.6);
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-right: 3px solid #3b82f6;
+        }
+        .small-avatar { width: 28px; height: 28px; border-radius: 999px; object-fit: cover; }
+        .like-count { font-weight: 700; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -630,54 +680,71 @@
         }
 
         function createCommentHtml(c, pid) {
-            const isLiked = c.is_liked ? 'fas text-red-500' : 'far text-gray-400';
-            const likeClass = c.is_liked ? 'text-red-500' : 'text-gray-400';
+            const likeIcon = c.is_liked ? 'fas' : 'far';
+            const likedClass = c.is_liked ? 'liked-btn' : '';
             
             // Badge placeholder
             const badgePlace = `<span class="badge-container" data-uid="${c.user.userId}"></span>`;
             
+            const commentDate = new Date(c.timestamp).toLocaleString('ar-EG', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
             // Replies
             let repliesHtml = '';
             if(c.recentReplies && c.recentReplies.length > 0) {
                 repliesHtml = c.recentReplies.map(r => `
-                    <div class="mt-2 mr-8 bg-white/5 p-2 rounded-lg flex gap-2">
-                        <img src="${r.profile_picture_url || DEFAULT_AVATAR}" class="w-5 h-5 rounded-full">
-                        <div>
-                            <span class="text-xs font-bold text-gray-300">${r.username}</span>
-                            <span class="text-xs text-gray-400 block">${formatAndEscapeContent(r.content)}</span>
+                    <div class="reply-item">
+                        <div class="flex items-start gap-2">
+                            <img src="${r.profile_picture_url || DEFAULT_AVATAR}" class="small-avatar flex-shrink-0">
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-xs font-bold text-white">${r.username}</div>
+                                    <div class="text-[10px] text-gray-500">${r.timestamp ? new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                                </div>
+                                <div class="text-sm text-gray-200 mt-1">${formatAndEscapeContent(r.content)}</div>
+                            </div>
                         </div>
                     </div>
                 `).join('');
             }
 
             return `
-                <div class="p-2 bg-[#242526] rounded-xl border border-gray-800" id="comment-${c.commentId}">
-                    <div class="flex gap-3">
-                        <img src="${c.user.profile_picture_url}" class="w-8 h-8 rounded-full object-cover shrink-0" onclick="window.location.href='/profile?userId=${c.user.userId}'">
-                        <div class="flex-grow">
-                            <div class="flex justify-between items-start">
-                                <div class="text-sm font-bold text-white">
-                                    ${c.user.username} ${badgePlace}
+                <div class="comment-item" id="comment-${c.commentId}">
+                    <div class="flex items-start gap-3">
+                        <img src="${c.user.profile_picture_url || DEFAULT_AVATAR}" class="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer" onclick="window.location.href='/profile?userId=${c.user.userId}'">
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-white">
+                                        ${c.user.username} ${badgePlace}
+                                    </div>
+                                    <div class="text-xs text-gray-500">${commentDate}</div>
                                 </div>
-                                <div class="text-[10px] text-gray-500">${new Date(c.timestamp).toLocaleDateString()}</div>
                             </div>
-                            <div class="text-gray-300 text-sm mt-1">${formatAndEscapeContent(c.content)}</div>
+                            <div class="text-sm text-gray-200 mt-2">${formatAndEscapeContent(c.content)}</div>
                             
-                            <div class="flex items-center gap-4 mt-2">
-                                <button class="${likeClass} flex items-center gap-1 text-xs" onclick="toggleCommentLike('${pid}', '${c.commentId}', this)">
-                                    <i class="${isLiked} fa-heart"></i> <span class="count">${c.likes || 0}</span>
+                            <div class="comment-actions">
+                                <button class="${likedClass}" onclick="toggleCommentLike('${pid}', '${c.commentId}', this)">
+                                    <i class="${likeIcon} fa-heart"></i>
+                                    <span class="like-count" id="comment-like-count-${c.commentId}">${c.likes || 0}</span>
                                 </button>
-                                <button class="text-gray-400 text-xs flex items-center gap-1" onclick="document.getElementById('reply-box-${c.commentId}').classList.toggle('hidden')">
-                                    <i class="fas fa-reply"></i> رد
+                                <button onclick="document.getElementById('reply-box-${c.commentId}').classList.toggle('hidden')">
+                                    <i class="fas fa-reply"></i>
+                                    <span class="text-xs">رد</span>
                                 </button>
                             </div>
 
-                            <div id="reply-box-${c.commentId}" class="hidden mt-2 flex gap-2">
-                                <input type="text" id="reply-input-${c.commentId}" placeholder="اكتب رداً..." class="bg-[#111] text-xs text-white rounded p-1.5 flex-grow border border-gray-700 focus:outline-none">
-                                <button onclick="submitReply('${pid}', '${c.commentId}')" class="text-blue-400 text-xs px-2">إرسال</button>
+                            <div id="reply-box-${c.commentId}" class="hidden mt-3">
+                                <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl border border-gray-700/50">
+                                    <input type="text" id="reply-input-${c.commentId}" placeholder="اكتب رداً..." class="flex-1 bg-transparent text-sm text-white outline-none px-1">
+                                    <button onclick="submitReply('${pid}', '${c.commentId}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg transition flex items-center gap-1"><i class="fas fa-paper-plane text-[10px]"></i> إرسال</button>
+                                </div>
                             </div>
 
-                            ${repliesHtml}
+                            <div id="replies-container-${c.commentId}" class="mt-2 space-y-1">
+                                ${repliesHtml}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -701,22 +768,27 @@
 
         // Comment Actions
         async function toggleCommentLike(pid, cid, btn) {
-            const icon = btn.querySelector('i');
-            const countSpan = btn.querySelector('.count');
-            let count = parseInt(countSpan.textContent);
-            
-            // Optimistic UI
-            if (icon.classList.contains('fas')) {
-                icon.className = 'far fa-heart';
-                btn.className = 'text-gray-400 flex items-center gap-1 text-xs';
-                countSpan.textContent = Math.max(0, count - 1);
-            } else {
-                icon.className = 'fas fa-heart';
-                btn.className = 'text-red-500 flex items-center gap-1 text-xs';
-                countSpan.textContent = count + 1;
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/posts/${pid}/comments/${cid}/like`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const countEl = document.getElementById(`comment-like-count-${cid}`);
+                    if (countEl) countEl.textContent = data.likes;
+                    const icon = btn.querySelector('i');
+                    if (data.is_liked) {
+                        btn.classList.add('liked-btn');
+                        if (icon) { icon.classList.remove('far'); icon.classList.add('fas'); }
+                    } else {
+                        btn.classList.remove('liked-btn');
+                        if (icon) { icon.classList.remove('fas'); icon.classList.add('far'); }
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btn.disabled = false;
             }
-            
-            await fetch(`/api/posts/${pid}/comments/${cid}/like`, { method: 'POST' });
         }
 
         async function submitReply(pid, cid) {
