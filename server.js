@@ -1301,12 +1301,44 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
 
     const message = messageSnap.val();
 
-
-
     // [مهم] حفظ التفاعل داخل كائن الرسالة مباشرة باستخدام update
     await messageRef.update({
       reaction: reaction
     });
+
+    // إرسال إشعار لصاحب الرسالة عند التفاعل (إذا لم يكن هو نفسه)
+    const messageSenderId = message.senderId;
+    if (messageSenderId && messageSenderId !== userId) {
+      try {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        
+        // حفظ الإشعار في قاعدة البيانات
+        const notifRef = db.ref(`notifications/${messageSenderId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'message_reaction',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          reaction: reaction,
+          messageId: messageId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+        
+        // إرسال إشعار Push للجهاز
+        sendPushNotification(
+          messageSenderId,
+          `${fromProfile.username || 'شخص ما'}`,
+          `تفاعل ${reaction} على رسالتك`,
+          { type: 'message_reaction', url: `https://aite-lite.vercel.app/chat?id=${userId}` }
+        );
+      } catch (nerr) {
+        console.error('Failed to create message_reaction notification:', nerr);
+      }
+    }
 
     res.json({ ok: true });
   } catch (error) {
