@@ -88,9 +88,6 @@ app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 app.use(express.json({ limit: '500mb' }));
 
-// Serve static assets from views folder (CSS, icons, images, etc.)
-app.use('/static', express.static(path.join(__dirname, 'views')));
-
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
   credentials: true,
