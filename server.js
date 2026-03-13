@@ -625,7 +625,12 @@ app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (re
 // ---------------- API: Stories (القصص) ----------------
 
 // 1. إنشاء قصة جديدة (صورة/فيديو + نص + موسيقى اختيارية)
-app.post('/api/stories/create', requireAuth, upload.fields([{ name: 'story_media', maxCount: 1 }, { name: 'story_audio', maxCount: 1 }]), async (req, res) => {
+app.post('/api/stories/create', requireAuth, (req, res, next) => {
+  // Increase timeout for large file uploads (5 minutes)
+  req.setTimeout(300000);
+  res.setTimeout(300000);
+  next();
+}, upload.fields([{ name: 'story_media', maxCount: 1 }, { name: 'story_audio', maxCount: 1 }]), async (req, res) => {
   const userId = req.session.userId;
   const text = req.body.text ? req.body.text.trim() : '';
   
@@ -3123,7 +3128,18 @@ app.delete('/api/families/:familyId', requireAuth, async (req, res) => {
 });
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) return res.status(413).json({ ok: false, error: err.message });
+  console.error('Global error handler:', err && err.message ? err.message : err);
+  if (err instanceof multer.MulterError) {
+    return res.status(413).json({ ok: false, error: 'خطأ في رفع الملف: ' + err.message });
+  }
+  // Catch Cloudinary and other upload errors
+  if (err && (err.message || '').toLowerCase().includes('upload')) {
+    return res.status(500).json({ ok: false, error: 'فشل في رفع الملف إلى الخادم.' });
+  }
+  // Generic catch-all: always return JSON for API routes
+  if (req.path && req.path.startsWith('/api/')) {
+    return res.status(500).json({ ok: false, error: err && err.message ? err.message : 'حدث خطأ في الخادم' });
+  }
   next(err);
 });
 
