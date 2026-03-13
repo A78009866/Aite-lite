@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>إنشاء حساب جديد — Aite</title>
+    <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/46/1000084215-removebg-preview.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #000000;
+            background-image:
+                radial-gradient(circle at 80% 10%, rgba(57, 130, 247, 0.12) 0%, transparent 25%),
+                radial-gradient(circle at 20% 90%, rgba(255, 60, 100, 0.08) 0%, transparent 25%);
+            color: #e4e6eb;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: rgba(20, 20, 20, 0.65);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #3982f7;
+            box-shadow: 0 0 10px rgba(57, 130, 247, 0.2);
+            outline: none;
+        }
+
+        .glow-btn {
+            background: linear-gradient(135deg, #3982f7 0%, #2a61b8 100%);
+            box-shadow: 0 4px 15px rgba(57, 130, 247, 0.4);
+            transition: all 0.3s ease;
+        }
+        .glow-btn:hover:not(:disabled) {
+            box-shadow: 0 6px 20px rgba(57, 130, 247, 0.6);
+            transform: translateY(-2px);
+        }
+        .glow-btn:disabled { background: #444; cursor: not-allowed; opacity: 0.8; }
+
+        .images-upload-wrapper { position: relative; width: 100%; height: 200px; margin-bottom: 20px; }
+        .cover-upload-area {
+            width: 100%; height: 140px; border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03); border: 2px dashed rgba(255, 255, 255, 0.15);
+            position: absolute; top: 0; left: 0; overflow: hidden; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+        }
+        .profile-upload-area {
+            width: 110px; height: 110px; border-radius: 50%;
+            background: #1a1a1a; border: 4px solid rgba(30, 30, 30, 0.8);
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            cursor: pointer; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center; z-index: 10;
+        }
+        .preview-img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; display: none; }
+        .error-box { background: rgba(255,0,0,0.08); border: 1px solid rgba(255,0,0,0.12); padding: 10px; border-radius: 8px; color: #ffdddd; display: none; }
+    
+    /* ===== DESKTOP RESPONSIVE ===== */
+    @media (min-width: 768px) {
+        body {
+            background-size: cover;
+        }
+        .glass-card {
+            max-width: 480px;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .glass-card {
+            max-width: 520px;
+            padding: 2.5rem 3rem !important;
+        }
+    }
+
+</style>
+</head>
+<body class="flex flex-col justify-center items-center min-h-screen p-5">
+
+    <div class="text-center mb-6">
+        <a class="text-4xl font-bold text-white hover:text-gray-200 no-underline flex items-center justify-center gap-3" href="#">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" class="h-14 w-14 rounded-xl object-cover shadow-lg shadow-blue-500/20" alt="شعار Aite">
+            Aite
+        </a>
+    </div>
+
+    <div class="glass-card p-8 rounded-2xl w-full max-w-md">
+        <h2 class="text-center mb-4 text-2xl font-bold text-white">إنشاء حساب جديد</h2>
+
+        <div id="errorBox" class="error-box mb-4"></div>
+
+        <form method="POST" action="/register" enctype="multipart/form-data" id="registrationForm">
+            <div class="images-upload-wrapper">
+                <div class="cover-upload-area" onclick="document.getElementById('id_cover_photo').click()">
+                    <img id="coverPreviewImg" class="preview-img" alt="cover">
+                    <div id="coverPlaceholder" class="text-center text-white/40 pointer-events-none">
+                        <i class="fas fa-image text-2xl mb-1"></i><div class="text-xs">غلاف</div>
+                    </div>
+                </div>
+                <input type="file" name="cover_photo" id="id_cover_photo" class="hidden" accept="image/*" onchange="previewImage(this, 'coverPreviewImg', 'coverPlaceholder')">
+
+                <div class="profile-upload-area" onclick="document.getElementById('id_profile_picture').click()">
+                    <img id="profilePreviewImg" class="preview-img rounded-full" alt="profile">
+                    <div id="profilePlaceholder" class="text-center text-white/40 pointer-events-none">
+                        <i class="fas fa-camera text-xl"></i>
+                    </div>
+                </div>
+                <input type="file" name="profile_picture" id="id_profile_picture" class="hidden" accept="image/*" onchange="previewImage(this, 'profilePreviewImg', 'profilePlaceholder')">
+            </div>
+
+            <div class="space-y-5">
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-300">الاسم الكامل</label>
+                    <input type="text" name="full_name" id="id_fullname" class="glass-input w-full p-3 rounded-xl" required placeholder="الاسم الكامل">
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-300">اسم المستخدم</label>
+                    <input type="text" name="username" id="id_username" class="glass-input w-full p-3 rounded-xl" required placeholder="username">
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-300">كلمة المرور</label>
+                    <div class="relative">
+                        <input type="password" name="password" id="id_password" class="glass-input w-full p-3 rounded-xl pl-10" required placeholder="********">
+                        <i class="fas fa-eye toggle-password text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer hover:text-white transition-colors" onclick="togglePass('id_password', this)"></i>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn" class="glow-btn w-full p-3 mt-6 rounded-xl text-white font-bold flex justify-center items-center gap-2">
+                <span id="btnText">إنشاء حساب</span>
+                <i id="btnSpinner" class="fas fa-spinner fa-spin hidden"></i>
+            </button>
+        </form>
+
+        <div class="text-center mt-6 text-sm text-gray-400">
+            لديك حساب بالفعل؟ <a href="/login" class="text-[#3982f7] font-semibold hover:text-white transition-colors">تسجيل الدخول</a>
+        </div>
+    </div>
+
+    <script>
+        // معاينة الصور
+        function previewImage(input, imgId, placeholderId) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById(imgId).src = e.target.result;
+                    document.getElementById(imgId).style.display = 'block';
+                    document.getElementById(placeholderId).style.display = 'none';
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // إظهار/إخفاء كلمة المرور
+        function togglePass(inputId, icon) {
+            const input = document.getElementById(inputId);
+            if (input.type === "password") {
+                input.type = "text";
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+                icon.style.color = "#3982f7"; // تلوين الأيقونة عند الإظهار
+            } else {
+                input.type = "password";
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+                icon.style.color = ""; // إعادة اللون الطبيعي
+            }
+        }
+
+        // مفتاح التخزين الموحد
+        const REG_STORAGE_KEY = 'aite_accounts_secure_v2';
+        const DEFAULT_PROFILE_IMG = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
+        
+        function loadAccounts() { try { return JSON.parse(localStorage.getItem(REG_STORAGE_KEY) || '[]'); } catch (e) { return []; } }
+        function saveAccounts(list) { localStorage.setItem(REG_STORAGE_KEY, JSON.stringify(list)); }
+
+        const form = document.getElementById('registrationForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        const errorBox = document.getElementById('errorBox');
+
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            // reset error
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+
+            const username = (document.getElementById('id_username').value || '').trim();
+            const fullname = (document.getElementById('id_fullname').value || '').trim() || username;
+            const password = document.getElementById('id_password').value;
+
+            // client-side quick validations to give instant clear messages
+            if (!username) {
+                showError('اسم المستخدم مطلوب.');
+                return;
+            }
+            if (/\s/.test(username)) {
+                showError('لا يجب أن يحتوي اسم المستخدم على مسافات.');
+                return;
+            }
+            if (!/^[A-Za-z0-9._-]{3,32}$/.test(username)) {
+                showError('اسم المستخدم يجب أن يتكون من أحرف وأرقام ونقاط أو _ أو - وطوله بين 3 و 32.');
+                return;
+            }
+            if (!password || password.length < 6) {
+                showError('كلمة المرور قصيرة؛ يجب أن تكون 6 أحرف على الأقل.');
+                return;
+            }
+
+            // visual loading
+            submitBtn.disabled = true;
+            btnText.textContent = 'جاري التسجيل...';
+            btnSpinner.classList.remove('hidden');
+
+            try {
+                const formData = new FormData(form);
+
+                const resp = await fetch('/register', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const data = await resp.json().catch(() => ({ ok: false, error: 'فشل في الاتصال بالخادم' }));
+
+                if (data && data.ok) {
+                    // save to local storage only AFTER server confirmed registration
+                    const encryptedPass = btoa(password);
+                    const profilePic = data.profile_picture_url || DEFAULT_PROFILE_IMG;
+
+                    let accounts = loadAccounts().filter(a => a.username !== username);
+                    
+                    accounts.unshift({
+                        username: username,
+                        full_name: data.full_name || fullname,
+                        auth_token: encryptedPass,
+                        profile_picture_url: profilePic
+                    });
+
+                    saveAccounts(accounts.slice(0, 8));
+
+                    // Redirect to chat_list or provided redirect
+                    window.location.href = data.redirect || '/chat_list';
+                    return;
+                } else {
+                    const message = (data && data.error) ? data.error : 'فشل في التسجيل';
+                    showError(message);
+                }
+            } catch (err) {
+                console.error('Registration request failed:', err);
+                showError('فشل في الاتصال بالخادم. حاول مرة أخرى.');
+            } finally {
+                submitBtn.disabled = false;
+                btnText.textContent = 'إنشاء حساب';
+                btnSpinner.classList.add('hidden');
+            }
+        });
+
+        function showError(msg) {
+            errorBox.style.display = 'block';
+            errorBox.textContent = msg;
+        }
+    </script>
+</body>
+</html>
