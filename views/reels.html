@@ -265,7 +265,11 @@
 
       <div class="p-3 border-t border-gray-800 bg-[#18191a]">
         <div id="commentError" class="text-red-500 text-xs text-center mb-2 hidden"></div>
-        <div class="flex items-center gap-2 bg-[#242526] p-1.5 rounded-3xl border border-gray-700">
+        <div id="replyIndicator" class="hidden flex items-center justify-between mb-2 px-2 py-1.5 bg-[#242526] rounded-xl border border-blue-500/30">
+          <span class="text-xs text-blue-400"><i class="fas fa-reply ml-1"></i> الرد على <span id="replyToName" class="font-bold"></span></span>
+          <button onclick="cancelReply()" class="text-gray-400 hover:text-white text-xs p-1"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="flex items-center gap-2 bg-[#242526] p-1.5 rounded-3xl border border-gray-700" id="commentInputWrapper">
           <img id="myCurrentAvatar" src="https://via.placeholder.com/40" class="w-8 h-8 rounded-full object-cover border border-gray-600 ml-1">
           <input type="text" id="commentInput" placeholder="أضف تعليقاً..." 
                  class="flex-grow bg-transparent text-white text-sm px-2 focus:outline-none" 
@@ -288,6 +292,8 @@
   let currentReelsData = [];
   let currentUserId = null;
   let currentReelIdForComments = null;
+  let replyingToCommentId = null;
+  let replyingToUsername = null;
   const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>');
 
   document.addEventListener('DOMContentLoaded', loadReels);
@@ -574,6 +580,7 @@
       currentReelIdForComments = null;
       commentsList.innerHTML = '';
       document.getElementById('commentInput').value = '';
+      cancelReply();
     }, 300);
   }
 
@@ -662,17 +669,10 @@
                 <i class="${likeIcon} fa-heart"></i>
                 <span class="like-count" id="reel-comment-like-count-${escapeAttr(commentId)}">${c.likes || 0}</span>
               </button>
-              <button onclick="document.getElementById('reply-box-${escapeAttr(commentId)}').classList.toggle('hidden')">
+              <button onclick="setReplyMode('${escapeAttr(commentId)}', '${escapeHtml(username)}')">
                 <i class="fas fa-reply"></i>
                 <span class="text-xs">رد</span>
               </button>
-            </div>
-
-            <div id="reply-box-${escapeAttr(commentId)}" class="hidden mt-3">
-              <div class="flex items-center gap-2 bg-[#111] p-2 rounded-xl border border-gray-700/50">
-                <input type="text" id="reply-input-${escapeAttr(commentId)}" placeholder="اكتب رداً..." class="flex-1 bg-transparent text-sm text-white outline-none px-1">
-                <button onclick="postReelReply('${escapeAttr(reelId)}', '${escapeAttr(commentId)}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg transition flex items-center gap-1"><i class="fas fa-paper-plane text-[10px]"></i> إرسال</button>
-              </div>
             </div>
 
             <div id="replies-container-${escapeAttr(commentId)}" class="mt-2 space-y-1">
@@ -726,39 +726,63 @@
     }
   }
 
-  async function postReelReply(reelId, commentId) {
-    const input = document.getElementById(`reply-input-${commentId}`);
-    if (!input) return;
-    const content = input.value.trim();
-    if (!content) return;
-    input.disabled = true;
-    try {
-      const res = await fetch(`/api/reels/${reelId}/comments/${commentId}/reply`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
-      });
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        await fetchAndRenderReelComments(reelId);
-      } else {
-        alert(data.error || 'فشل في إرسال الرد');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('فشل في الاتصال');
-    } finally {
-      input.disabled = false;
-    }
+  function setReplyMode(commentId, username) {
+    replyingToCommentId = commentId;
+    replyingToUsername = username;
+    const indicator = document.getElementById('replyIndicator');
+    const nameEl = document.getElementById('replyToName');
+    const input = document.getElementById('commentInput');
+    const wrapper = document.getElementById('commentInputWrapper');
+    indicator.classList.remove('hidden');
+    nameEl.textContent = username;
+    input.placeholder = 'اكتب رداً...';
+    wrapper.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+    input.focus();
   }
 
-  // Send comment button
+  function cancelReply() {
+    replyingToCommentId = null;
+    replyingToUsername = null;
+    const indicator = document.getElementById('replyIndicator');
+    const input = document.getElementById('commentInput');
+    const wrapper = document.getElementById('commentInputWrapper');
+    indicator.classList.add('hidden');
+    input.placeholder = 'أضف تعليقاً...';
+    wrapper.style.borderColor = '';
+  }
+
+  // Send comment or reply button
   document.getElementById('sendCommentBtn').addEventListener('click', async () => {
     const input = document.getElementById('commentInput');
     const content = input.value.trim();
     if(!content || !currentReelIdForComments) return;
     input.value = '';
+
+    // If replying to a comment
+    if (replyingToCommentId) {
+      const commentId = replyingToCommentId;
+      cancelReply();
+      try {
+        const res = await fetch(`/api/reels/${currentReelIdForComments}/comments/${commentId}/reply`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          await fetchAndRenderReelComments(currentReelIdForComments);
+        } else {
+          alert(data.error || 'فشل في إرسال الرد');
+        }
+      } catch (e) {
+        console.error(e);
+        alert('فشل في الاتصال');
+      }
+      return;
+    }
+
+    // Normal comment
     try {
       const res = await fetch(`/api/reels/${currentReelIdForComments}/comment`, {
         method: 'POST',
