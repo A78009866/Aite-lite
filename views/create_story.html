@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <title>إنشاء قصة جديدة - Aite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="https://res.cloudinary.com/duixjs8az/image/upload/v1765127215/post_media/1765127215249-trimer.jpg" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: #000000;
+            color: #e4e6eb;
+            font-family: 'Tajawal', sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        /* Glass panel */
+        .glass-panel {
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+        }
+
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            min-height: 220px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255, 255, 255, 0.02);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .upload-area:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .upload-area.has-media {
+            border-color: rgba(59, 130, 246, 0.4);
+            background: rgba(0, 0, 0, 0.3);
+            min-height: 280px;
+        }
+
+        /* Section cards */
+        .section-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+        .section-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Color picker */
+        .story-color-opt {
+            transition: all 0.2s ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .story-color-opt:hover {
+            transform: scale(1.15);
+        }
+        .story-color-opt.selected {
+            border-color: #fff !important;
+            transform: scale(1.15);
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
+        }
+
+        /* Submit button */
+        .submit-btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            color: #fff;
+            border: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+        }
+        .submit-btn:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Text input */
+        .glass-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            background: rgba(0, 0, 0, 0.6);
+            border-color: rgba(255, 255, 255, 0.25);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+        }
+        .glass-input::placeholder {
+            color: #555;
+        }
+
+        /* Music search results scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background-color: #333; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background-color: transparent; }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 30px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 14px;
+            z-index: 2000;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.25s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .toast.show { opacity: 1; }
+
+        /* Spin animation for disc icon */
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow { animation: spin-slow 3s linear infinite; }
+
+        /* Media preview */
+        .media-preview-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+        }
+        .media-preview-wrapper img,
+        .media-preview-wrapper video {
+            width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            display: block;
+        }
+        .remove-media-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(239, 68, 68, 0.8);
+            backdrop-filter: blur(8px);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            z-index: 5;
+        }
+        .remove-media-btn:hover {
+            background: rgba(239, 68, 68, 1);
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-start justify-center p-4 pt-6 pb-10">
+
+    <div class="glass-panel p-6 sm:p-8 rounded-[2rem] w-full max-w-lg relative z-10">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+            <a href="/chat_list" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/5 transition duration-300" title="العودة">
+                <i class="fas fa-arrow-right text-lg"></i>
+            </a>
+            <h1 class="text-xl font-bold text-white tracking-wide flex items-center gap-2">
+                <i class="fas fa-plus-circle text-blue-400"></i>
+                قصة جديدة
+            </h1>
+            <div class="w-10"></div>
+        </div>
+
+        <!-- Upload Area -->
+        <div id="uploadArea" class="upload-area mb-5" onclick="document.getElementById('storyMediaInput').click()">
+            <div id="uploadPlaceholder" class="text-center py-6">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                    <i class="fas fa-camera text-2xl text-gray-400"></i>
+                </div>
+                <p class="text-white font-bold text-base mb-1">اختر صورة أو فيديو</p>
+                <p class="text-gray-500 text-xs">اضغط هنا لاختيار ملف من جهازك</p>
+            </div>
+            <div id="mediaPreviewContainer" class="hidden w-full">
+                <div class="media-preview-wrapper">
+                    <img id="storyImagePreview" class="hidden">
+                    <video id="storyVideoPreview" class="hidden" muted loop playsinline></video>
+                    <button type="button" onclick="event.stopPropagation(); clearStoryMedia()" class="remove-media-btn">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <input type="file" id="storyMediaInput" accept="image/*,video/*" class="hidden" onchange="previewStoryMedia(this)">
+
+        <!-- Text Input -->
+        <div class="mb-5">
+            <input type="text" id="storyTextInput" placeholder="أضف تعليقاً على القصة..." 
+                   class="glass-input w-full rounded-2xl py-3.5 px-5 text-sm">
+        </div>
+
+        <!-- Music Section -->
+        <div class="section-card mb-5">
+            <div class="flex items-center gap-2 mb-4 text-white">
+                <i class="fas fa-music text-blue-400 text-lg"></i>
+                <h3 class="font-bold text-sm">أضف موسيقى</h3>
+            </div>
+
+            <div class="mb-3">
+                <input type="text" id="musicSearchInput" oninput="debounceSearch(this.value)" 
+                       placeholder="ابحث عن أغنية أو فنان..." 
+                       class="glass-input w-full rounded-xl px-4 py-2.5 text-sm">
+            </div>
+
+            <!-- Selected Track UI -->
+            <div id="selectedTrackUI" class="hidden items-center justify-between bg-gradient-to-r from-green-500/20 to-emerald-600/20 border border-green-500/40 rounded-xl p-3 mb-3">
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <i class="fas fa-compact-disc text-green-400 animate-spin-slow"></i>
+                    <span id="selectedTrackName" class="text-white text-sm font-bold truncate px-1"></span>
+                </div>
+                <button onclick="clearSelectedTrack()" class="text-white hover:text-red-400 px-2 transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Search Results -->
+            <div id="musicSearchResults" class="max-h-44 overflow-y-auto flex flex-col gap-2 rounded-xl custom-scroll"></div>
+        </div>
+
+        <!-- Color Picker Section -->
+        <div class="section-card mb-6">
+            <div class="flex items-center gap-2 mb-4 text-white">
+                <i class="fas fa-palette text-purple-400 text-lg"></i>
+                <h3 class="font-bold text-sm">لون الدائرة</h3>
+            </div>
+            <div id="storyColorPicker" class="flex flex-wrap justify-center gap-3">
+                <button type="button" onclick="selectStoryColor('')" class="story-color-opt selected w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);" data-color="" title="افتراضي">
+                    <i class="fas fa-check text-white text-xs"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #f093fb 0%, #f5576c 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #f093fb 0%, #f5576c 100%);" data-color="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" title="وردي">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);" data-color="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)" title="أخضر فاتح">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #fa709a 0%, #fee140 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #fa709a 0%, #fee140 100%);" data-color="linear-gradient(135deg, #fa709a 0%, #fee140 100%)" title="برتقالي">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);" data-color="linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)" title="بنفسجي">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #f6d365 0%, #fda085 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #f6d365 0%, #fda085 100%);" data-color="linear-gradient(135deg, #f6d365 0%, #fda085 100%)" title="ذهبي">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #667eea 0%, #764ba2 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);" data-color="linear-gradient(135deg, #667eea 0%, #764ba2 100%)" title="نيلي">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #ff0844 0%, #ffb199 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #ff0844 0%, #ffb199 100%);" data-color="linear-gradient(135deg, #ff0844 0%, #ffb199 100%)" title="أحمر فاتح">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #ef4444 0%, #dc2626 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #ef4444 0%, #dc2626 100%);" data-color="linear-gradient(135deg, #ef4444 0%, #dc2626 100%)" title="أحمر">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #22c55e 0%, #16a34a 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #22c55e 0%, #16a34a 100%);" data-color="linear-gradient(135deg, #22c55e 0%, #16a34a 100%)" title="أخضر">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #1f2937 0%, #111827 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #1f2937 0%, #111827 100%);" data-color="linear-gradient(135deg, #1f2937 0%, #111827 100%)" title="أسود">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+                <button type="button" onclick="selectStoryColor('linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)')" class="story-color-opt w-9 h-9 rounded-full border-2 border-white/30" style="background:linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);" data-color="linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)" title="رمادي">
+                    <i class="fas fa-check text-white text-xs hidden"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="text-red-400 bg-red-900/10 border border-red-900/20 rounded-xl p-3 mb-4 text-center text-sm hidden"></div>
+
+        <!-- Submit Button -->
+        <button id="submitStoryBtn" onclick="submitStory(this)" class="submit-btn w-full rounded-2xl py-4 font-bold text-base flex items-center justify-center gap-2">
+            <i class="fas fa-paper-plane text-sm"></i>
+            <span>نشر القصة</span>
+        </button>
+
+    </div>
+
+    <!-- Toast -->
+    <div id="toastEl" class="toast"></div>
+
+<script>
+    // --- Variables ---
+    let selectedStoryColor = '';
+    let selectedAudioBlob = null;
+    let previewAudio = new Audio();
+    let currentPlayingUrl = '';
+    let searchTimeout;
+
+    // --- Toast ---
+    function showToast(msg) {
+        const t = document.getElementById('toastEl');
+        if (!t) return;
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // --- Color Picker ---
+    function selectStoryColor(color) {
+        selectedStoryColor = color;
+        document.querySelectorAll('.story-color-opt').forEach(btn => {
+            const icon = btn.querySelector('.fa-check');
+            if (btn.getAttribute('data-color') === color) {
+                btn.classList.add('selected');
+                if (icon) icon.classList.remove('hidden');
+            } else {
+                btn.classList.remove('selected');
+                if (icon) icon.classList.add('hidden');
+            }
+        });
+    }
+
+    // --- Media Preview ---
+    function previewStoryMedia(input) {
+        const container = document.getElementById('mediaPreviewContainer');
+        const imgEl = document.getElementById('storyImagePreview');
+        const vidEl = document.getElementById('storyVideoPreview');
+        const placeholder = document.getElementById('uploadPlaceholder');
+        const uploadArea = document.getElementById('uploadArea');
+        
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const url = URL.createObjectURL(file);
+            
+            container.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+            uploadArea.classList.add('has-media');
+            
+            if (file.type.startsWith('video/')) {
+                imgEl.classList.add('hidden');
+                vidEl.classList.remove('hidden');
+                vidEl.src = url;
+                vidEl.play().catch(() => {});
+            } else {
+                vidEl.classList.add('hidden');
+                vidEl.pause();
+                imgEl.classList.remove('hidden');
+                imgEl.src = url;
+            }
+        }
+    }
+
+    function clearStoryMedia() {
+        const input = document.getElementById('storyMediaInput');
+        const container = document.getElementById('mediaPreviewContainer');
+        const placeholder = document.getElementById('uploadPlaceholder');
+        const uploadArea = document.getElementById('uploadArea');
+        const vidEl = document.getElementById('storyVideoPreview');
+        
+        input.value = '';
+        container.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        uploadArea.classList.remove('has-media');
+        vidEl.pause();
+        vidEl.src = '';
+    }
+
+    // --- Music Search (iTunes API) ---
+    function debounceSearch(query) {
+        clearTimeout(searchTimeout);
+        const resultsDiv = document.getElementById('musicSearchResults');
+        
+        if (!query.trim()) {
+            resultsDiv.innerHTML = '';
+            return;
+        }
+
+        resultsDiv.innerHTML = '<div class="text-white text-center py-3"><i class="fas fa-circle-notch fa-spin text-xl"></i> جاري البحث...</div>';
+        
+        searchTimeout = setTimeout(() => {
+            executeMusicSearch(query);
+        }, 600);
+    }
+
+    async function executeMusicSearch(query) {
+        const resultsDiv = document.getElementById('musicSearchResults');
+        try {
+            const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=10`);
+            const data = await res.json();
+            
+            resultsDiv.innerHTML = '';
+            if (data.results.length === 0) {
+                resultsDiv.innerHTML = '<div class="text-gray-400 text-center py-2 text-sm">لا توجد نتائج</div>';
+                return;
+            }
+            
+            data.results.forEach(track => {
+                if (!track.previewUrl) return;
+                
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between bg-black/40 p-2.5 rounded-xl hover:bg-white/10 transition border border-white/5";
+                div.innerHTML = `
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <button onclick="togglePreviewPlay('${track.previewUrl}', this, event)" class="preview-play-btn w-8 h-8 flex-shrink-0 bg-white/15 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition">
+                            <i class="fas fa-play text-xs"></i>
+                        </button>
+                        <img src="${track.artworkUrl30 || track.artworkUrl60}" class="w-9 h-9 rounded-lg shadow-md">
+                        <div class="flex flex-col overflow-hidden">
+                            <span class="text-white text-xs font-bold truncate w-28">${track.trackName}</span>
+                            <span class="text-gray-400 text-xs truncate w-28">${track.artistName}</span>
+                        </div>
+                    </div>
+                    <button onclick="selectTrack('${track.previewUrl}', '${track.trackName.replace(/'/g, "\\'")}', event)" class="bg-white text-black rounded-full px-3.5 py-1 text-xs font-bold shrink-0 hover:bg-gray-200 active:scale-95 transition-transform">دمج</button>
+                `;
+                resultsDiv.appendChild(div);
+            });
+        } catch (e) {
+            resultsDiv.innerHTML = '<div class="text-red-400 text-center py-2 text-sm">حدث خطأ في جلب الموسيقى</div>';
+        }
+    }
+
+    function togglePreviewPlay(url, btnElement, event) {
+        event.stopPropagation();
+        document.querySelectorAll('.preview-play-btn').forEach(btn => {
+            btn.innerHTML = '<i class="fas fa-play text-xs"></i>';
+        });
+
+        if (currentPlayingUrl === url && !previewAudio.paused) {
+            previewAudio.pause();
+            btnElement.innerHTML = '<i class="fas fa-play text-xs"></i>';
+        } else {
+            previewAudio.src = url;
+            previewAudio.play();
+            currentPlayingUrl = url;
+            btnElement.innerHTML = '<i class="fas fa-pause text-xs"></i>';
+        }
+    }
+
+    async function selectTrack(previewUrl, trackName, event) {
+        if (event) event.stopPropagation();
+        previewAudio.pause();
+        
+        document.getElementById('musicSearchResults').innerHTML = '';
+        document.getElementById('musicSearchInput').value = '';
+        
+        document.getElementById('selectedTrackName').textContent = trackName;
+        document.getElementById('selectedTrackUI').classList.remove('hidden');
+        document.getElementById('selectedTrackUI').classList.add('flex');
+        
+        try {
+            const res = await fetch(previewUrl);
+            selectedAudioBlob = await res.blob();
+        } catch (e) {
+            showToast("تعذر تحميل المقطع الصوتي");
+            clearSelectedTrack();
+        }
+    }
+
+    function clearSelectedTrack() {
+        selectedAudioBlob = null;
+        document.getElementById('selectedTrackUI').classList.add('hidden');
+        document.getElementById('selectedTrackUI').classList.remove('flex');
+    }
+
+    // --- Submit Story ---
+    async function submitStory(btn) {
+        const mediaInput = document.getElementById('storyMediaInput');
+        const textInput = document.getElementById('storyTextInput');
+        const errorMessage = document.getElementById('errorMessage');
+
+        errorMessage.classList.add('hidden');
+
+        if (!mediaInput.files[0]) {
+            errorMessage.textContent = "يجب اختيار صورة أو فيديو للقصة!";
+            errorMessage.classList.remove('hidden');
+            return;
+        }
+
+        btn.disabled = true;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
+
+        const formData = new FormData();
+        formData.append('story_media', mediaInput.files[0]);
+        
+        if (selectedAudioBlob) {
+            const audioFile = new File([selectedAudioBlob], "story_music.m4a", { type: selectedAudioBlob.type || "audio/mp4" });
+            formData.append('story_audio', audioFile);
+        }
+        
+        formData.append('text', textInput.value);
+        if (selectedStoryColor) formData.append('story_color', selectedStoryColor);
+
+        try {
+            const res = await fetch('/api/stories/create', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                showToast("تم نشر القصة بنجاح!");
+                setTimeout(() => {
+                    window.location.href = '/chat_list';
+                }, 800);
+            } else {
+                errorMessage.textContent = data.error || "فشل النشر";
+                errorMessage.classList.remove('hidden');
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        } catch (e) {
+            errorMessage.textContent = "خطأ في الاتصال بالسيرفر";
+            errorMessage.classList.remove('hidden');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+</script>
+</body>
+</html>
