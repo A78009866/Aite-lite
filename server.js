@@ -624,42 +624,77 @@ app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (re
 
 // ---------------- API: Stories (القصص) ----------------
 
-// 1. إنشاء قصة جديدة (صورة/فيديو + نص + موسيقى اختيارية)
+// API: توقيع رفع مباشر إلى Cloudinary (لتجاوز حد Vercel 4.5MB)
+app.post('/api/cloudinary/sign', requireAuth, (req, res) => {
+  try {
+    const timestamp = Math.round(Date.now() / 1000);
+    const folder = req.body.folder || 'stories';
+    const resourceType = req.body.resource_type || 'auto';
+    const paramsToSign = { timestamp: timestamp, folder: folder };
+    const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET);
+    res.json({
+      ok: true,
+      timestamp: timestamp,
+      signature: signature,
+      folder: folder,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME
+    });
+  } catch (error) {
+    console.error('Error signing cloudinary upload:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء توقيع الرفع' });
+  }
+});
+
+// 1. إنشاء قصة جديدة (تقبل روابط Cloudinary مباشرة أو رفع ملفات)
 app.post('/api/stories/create', requireAuth, (req, res, next) => {
-  // Increase timeout for large file uploads (5 minutes)
+  // If content-type is JSON, skip multer (direct Cloudinary URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  // Otherwise use multer for file upload (backward compatibility)
   req.setTimeout(300000);
   res.setTimeout(300000);
-  next();
-}, upload.fields([{ name: 'story_media', maxCount: 1 }, { name: 'story_audio', maxCount: 1 }]), async (req, res) => {
+  upload.fields([{ name: 'story_media', maxCount: 1 }, { name: 'story_audio', maxCount: 1 }])(req, res, next);
+}, async (req, res) => {
   const userId = req.session.userId;
-  const text = req.body.text ? req.body.text.trim() : '';
-  
-  if (!req.files || !req.files.story_media) {
-    return res.status(400).json({ ok: false, error: 'يجب رفع صورة أو فيديو للقصة.' });
+  const text = (req.body.text || '').trim();
+  const storyColor = (req.body.story_color || '').trim();
+
+  let mediaUrl = req.body.mediaUrl || null;
+  let mediaType = req.body.mediaType || null;
+  let audioUrl = req.body.audioUrl || null;
+
+  // If files were uploaded via multer (backward compatibility)
+  if (!mediaUrl && req.files && req.files.story_media) {
+    const mediaFile = req.files.story_media[0];
+    mediaUrl = mediaFile.path;
+    mediaType = mediaFile.mimetype.startsWith('video/') ? 'video' : 'image';
+    if (req.files.story_audio) {
+      audioUrl = req.files.story_audio[0].path;
+    }
   }
 
-  const mediaFile = req.files.story_media[0];
-  const audioFile = req.files.story_audio ? req.files.story_audio[0] : null;
-
-  let mediaType = mediaFile.mimetype.startsWith('video/') ? 'video' : 'image';
+  if (!mediaUrl) {
+    return res.status(400).json({ ok: false, error: 'يجب رفع صورة أو فيديو للقصة.' });
+  }
 
   try {
     const newStoryRef = db.ref(`stories`).push();
     const storyId = newStoryRef.key;
     const timestamp = admin.database.ServerValue.TIMESTAMP;
 
-    const storyColor = req.body.story_color ? req.body.story_color.trim() : '';
-
     const storyData = {
       id: storyId,
       userId: userId,
-      mediaUrl: mediaFile.path,
-      mediaType: mediaType,
-      audioUrl: audioFile ? audioFile.path : null, // الموسيقى الخلفية
+      mediaUrl: mediaUrl,
+      mediaType: mediaType || 'image',
+      audioUrl: audioUrl,
       text: text,
-      story_color: storyColor, // لون القصة المتدرج
+      story_color: storyColor,
       timestamp: timestamp,
-      expiresAt: Date.now() + (24 * 60 * 60 * 1000) // تنتهي بعد 24 ساعة
+      expiresAt: Date.now() + (24 * 60 * 60 * 1000)
     };
 
     await newStoryRef.set(storyData);
