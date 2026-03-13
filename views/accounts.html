@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>حساباتك — Aite</title>
+    <title data-i18n-page-title="accounts_title">حساباتك — Aite</title>
     <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/46/1000084215-removebg-preview.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>(function(){var l=localStorage.getItem("aite-lang")||"ar";var r=l==="ar";document.documentElement.setAttribute("lang",l);document.documentElement.setAttribute("dir",r?"rtl":"ltr")})()</script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -59,7 +60,7 @@
              class="w-20 h-20 rounded-2xl object-cover mx-auto mb-4 border border-white/10 shadow-lg shadow-blue-500/20" 
              alt="Aite Logo">
         <h1 class="text-4xl font-bold tracking-wider text-white">Aite</h1>
-        <p class="text-gray-400 text-sm mt-2">اختر حساباً للمتابعة</p>
+        <p class="text-gray-400 text-sm mt-2" data-i18n="accounts_choose">اختر حساباً للمتابعة</p>
     </div>
 
     <div class="w-full max-w-[400px] px-4 space-y-4" id="accountsListWrapper"></div>
@@ -69,14 +70,15 @@
             <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
                 <i class="fas fa-plus text-sm"></i>
             </div>
-            <span>تسجيل الدخول بحساب آخر</span>
+            <span data-i18n="accounts_login_other">تسجيل الدخول بحساب آخر</span>
         </a>
         
         <div class="text-center mt-8">
-            <a href="/register" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">إنشاء حساب جديد</a>
+            <a href="/register" class="text-sm text-blue-400 hover:text-blue-300 transition-colors" data-i18n="accounts_create_new">إنشاء حساب جديد</a>
         </div>
     </div>
 
+    <script src="/lang.js"></script>
     <script>
         const STORAGE_KEY = 'aite_accounts_secure_v2';
         const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
@@ -92,7 +94,8 @@
         function removeAccount(e, username) {
             e.stopPropagation(); 
             e.preventDefault();
-            if(confirm('هل أنت متأكد من إزالة @' + username + ' من الجهاز؟')) {
+            var msg = AiteLang.t('accounts_confirm_remove').replace('{username}', username);
+            if(confirm(msg)) {
                 let accounts = loadAccounts();
                 accounts = accounts.filter(acc => acc.username !== username);
                 saveAccounts(accounts);
@@ -105,36 +108,28 @@
             const account = accounts.find(a => a.username === username);
 
             if (account && account.auth_token) {
-                // محاكاة عملية الدخول الآمن
                 try {
-                    // فك تشفير كلمة المرور المخزنة
                     const decodedPass = atob(account.auth_token);
                     
-                    // إنشاء نموذج (Form) ديناميكي لإرسال البيانات للسيرفر
-                    // هذا يضمن إنشاء جلسة (Session) في السيرفر
                     const form = document.createElement('form');
                     form.method = 'POST';
                     form.action = '/login';
                     form.style.display = 'none';
 
-                    // حقل اسم المستخدم
                     const userField = document.createElement('input');
                     userField.type = 'hidden';
                     userField.name = 'username';
                     userField.value = username;
                     form.appendChild(userField);
 
-                    // حقل كلمة المرور
                     const passField = document.createElement('input');
                     passField.type = 'hidden';
                     passField.name = 'password';
                     passField.value = decodedPass;
                     form.appendChild(passField);
 
-                    // إضافة النموذج للصفحة وإرساله
                     document.body.appendChild(form);
                     
-                    // تأثير بسيط للانتظار
                     document.body.style.opacity = '0.5';
                     document.body.style.cursor = 'wait';
                     
@@ -155,7 +150,7 @@
             container.innerHTML = '';
 
             if (accounts.length === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500 py-4">لا توجد حسابات محفوظة</p>';
+                container.innerHTML = '<p class="text-center text-gray-500 py-4">' + AiteLang.t('accounts_no_saved') + '</p>';
                 return;
             }
 
@@ -191,19 +186,15 @@
         }
 
         document.addEventListener('DOMContentLoaded', renderAccounts);
-        // Global Function لاستقبال التوكن من الأندرويد
-window.receiveAndroidToken = function(token) {
-    console.log("Received FCM Token from Android:", token);
-    
-    // إرسال التوكن إلى السيرفر لحفظه في قاعدة البيانات للمستخدم الحالي
-    fetch('/api/save-fcm-token', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ token: token })
-    }).catch(err => console.error("Error saving token", err));
-};
+        // Global Function for Android FCM token
+        window.receiveAndroidToken = function(token) {
+            console.log("Received FCM Token from Android:", token);
+            fetch('/api/save-fcm-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token })
+            }).catch(err => console.error("Error saving token", err));
+        };
     </script>
 </body>
 </html>
