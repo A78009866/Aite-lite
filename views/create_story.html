@@ -395,6 +395,34 @@
         document.getElementById('selectedTrackUI').style.display = 'none';
     }
 
+    // رفع ملف مباشرة إلى Cloudinary باستخدام توقيع من السيرفر
+    async function uploadToCloudinary(file, resourceType) {
+        // 1. Get signature from server
+        var signRes = await fetch('/api/cloudinary/sign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: 'stories', resource_type: resourceType }),
+            credentials: 'same-origin'
+        });
+        var signData = await signRes.json();
+        if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+
+        // 2. Upload directly to Cloudinary
+        var fd = new FormData();
+        fd.append('file', file);
+        fd.append('api_key', signData.api_key);
+        fd.append('timestamp', signData.timestamp);
+        fd.append('signature', signData.signature);
+        fd.append('folder', signData.folder);
+
+        var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+        var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
+        var uploadData = await uploadRes.json();
+
+        if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف إلى Cloudinary');
+        return uploadData.secure_url;
+    }
+
     async function submitStory(btn) {
         var textInput = document.getElementById('storyTextInput');
         var errorMessage = document.getElementById('errorMessage');
@@ -406,25 +434,46 @@
         }
         btn.disabled = true;
         var originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
-        var formData = new FormData();
-        formData.append('story_media', selectedMediaFile);
-        if (selectedAudioBlob) {
-            var audioFile = new File([selectedAudioBlob], "story_music.m4a", { type: selectedAudioBlob.type || "audio/mp4" });
-            formData.append('story_audio', audioFile);
-        }
-        formData.append('text', textInput.value);
-        if (selectedStoryColor) formData.append('story_color', selectedStoryColor);
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الملف...';
+
         try {
-            var res = await fetch('/api/stories/create', { method: 'POST', body: formData, credentials: 'same-origin' });
+            // Step 1: Upload media directly to Cloudinary
+            var mediaResourceType = selectedMediaType === 'video' ? 'video' : 'image';
+            var mediaUrl = await uploadToCloudinary(selectedMediaFile, mediaResourceType);
+
+            // Step 2: Upload audio if selected
+            var audioUrl = null;
+            if (selectedAudioBlob) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الموسيقى...';
+                audioUrl = await uploadToCloudinary(
+                    new File([selectedAudioBlob], "story_music.m4a", { type: selectedAudioBlob.type || "audio/mp4" }),
+                    'video'
+                );
+            }
+
+            // Step 3: Send URLs to server (small JSON, no file - bypasses Vercel limit)
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
+            var res = await fetch('/api/stories/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mediaUrl: mediaUrl,
+                    mediaType: selectedMediaType,
+                    audioUrl: audioUrl,
+                    text: textInput.value,
+                    story_color: selectedStoryColor
+                }),
+                credentials: 'same-origin'
+            });
+
             var data;
             var contentType = res.headers.get('content-type') || '';
             if (contentType.indexOf('application/json') !== -1) {
                 data = await res.json();
             } else {
-                var text = await res.text();
                 data = { ok: false, error: 'استجابة غير متوقعة من الخادم (HTTP ' + res.status + ')' };
             }
+
             if (res.ok && data.ok) {
                 showToast("تم نشر القصة بنجاح!");
                 setTimeout(function() { window.location.href = '/chat_list'; }, 800);
@@ -435,7 +484,7 @@
                 btn.innerHTML = originalHtml;
             }
         } catch (e) {
-            errorMessage.textContent = "خطأ في الاتصال بالسيرفر: " + (e.message || e);
+            errorMessage.textContent = "خطأ: " + (e.message || e);
             errorMessage.style.display = 'block';
             btn.disabled = false;
             btn.innerHTML = originalHtml;
