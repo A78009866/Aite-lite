@@ -1184,7 +1184,7 @@ app.post('/api/messages/send', (req, res, next) => {
     let previewText = content;
     if (!content && mediaObject) {
       const type = mediaObject.type;
-      previewText = type === 'image' ? '📷 صورة' : type === 'video' ? '🎥 فيديو' : type === 'audio' ? '🎤 رسالة صوتية' : '📎 ملف مرفق';
+      previewText = type === 'image' ? 'صورة' : type === 'video' ? 'فيديو' : type === 'audio' ? 'رسالة صوتية' : 'ملف مرفق';
     }
 
     // 3. تحديث قائمة المحادثات (Chat List) للطرفين
