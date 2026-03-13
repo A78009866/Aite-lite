@@ -344,6 +344,80 @@ function clientWantsJson(req) {
   return (req.xhr) || (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1);
 }
 
+// ---------------- FCM Push Notifications Helper ----------------
+// دالة مساعدة لإرسال إشعار Push للجهاز عبر FCM
+async function sendPushNotification(targetUserId, title, body, extraData = {}) {
+  try {
+    // جلب توكن FCM الخاص بالمستخدم من قاعدة البيانات
+    const tokenSnap = await db.ref(`fcm_tokens/${targetUserId}`).once('value');
+    const tokenData = tokenSnap.val();
+    if (!tokenData) return; // لا يوجد توكن مسجل لهذا المستخدم
+
+    const tokens = [];
+    if (typeof tokenData === 'string') {
+      tokens.push(tokenData);
+    } else if (typeof tokenData === 'object') {
+      // دعم تعدد الأجهزة: إذا كان المستخدم لديه أكثر من جهاز
+      Object.values(tokenData).forEach(t => {
+        if (t && typeof t === 'string') tokens.push(t);
+        else if (t && t.token) tokens.push(t.token);
+      });
+    }
+
+    if (tokens.length === 0) return;
+
+    // إرسال الإشعار لكل توكن
+    for (const token of tokens) {
+      try {
+        await admin.messaging().send({
+          token: token,
+          // إرسال كـ data فقط حتى يتم التعامل معه في onMessageReceived دائماً
+          data: {
+            title: String(title || 'إشعار جديد'),
+            body: String(body || ''),
+            url: String(extraData.url || ''),
+            type: String(extraData.type || 'general'),
+            click_action: 'OPEN_ACTIVITY'
+          },
+          // إعدادات أندرويد: أولوية عالية لضمان وصول الإشعار فوراً
+          android: {
+            priority: 'high',
+            ttl: 86400000, // صلاحية 24 ساعة
+          }
+        });
+      } catch (sendErr) {
+        // إذا كان التوكن غير صالح، نحذفه من قاعدة البيانات
+        if (sendErr.code === 'messaging/invalid-registration-token' ||
+            sendErr.code === 'messaging/registration-token-not-registered') {
+          console.log(`Removing invalid FCM token for user ${targetUserId}`);
+          await db.ref(`fcm_tokens/${targetUserId}`).remove();
+        } else {
+          console.error(`FCM send error for user ${targetUserId}:`, sendErr.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('sendPushNotification error:', err.message);
+  }
+}
+
+// ---------------- API: Save FCM Token ----------------
+// حفظ توكن FCM القادم من تطبيق الأندرويد
+app.post('/api/save-fcm-token', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { token } = req.body;
+
+  if (!token) return res.status(400).json({ ok: false, error: 'Token is required' });
+
+  try {
+    await db.ref(`fcm_tokens/${userId}`).set(token);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error saving FCM token:', error);
+    res.status(500).json({ ok: false, error: 'Failed to save token' });
+  }
+});
+
 // ---------------- Routes: Auth Logic ----------------
 app.post('/login', async (req, res) => {
   const { username } = req.body;
@@ -820,6 +894,8 @@ app.post('/api/stories/:storyId/like', requireAuth, async (req, res) => {
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للجهاز
+        sendPushNotification(story.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بقصتك ❤️', { type: 'story_like', url: `https://aite-lite.vercel.app/stories` });
       } catch (nerr) {
         console.error('Failed to create story_like notification:', nerr);
       }
@@ -1136,7 +1212,18 @@ app.post('/api/messages/send', (req, res, next) => {
 
     await db.ref().update(updates);
 
-    // 4. إرسال استجابة بنجاح
+    // 4. إرسال إشعار Push للمستقبل عند وصول رسالة جديدة
+    try {
+      const senderProfileSnap = await db.ref(`profiles/${senderId}`).once('value');
+      const senderProfile = senderProfileSnap.val() || {};
+      const senderName = senderProfile.username || 'شخص ما';
+      const pushBody = previewText || 'رسالة جديدة';
+      sendPushNotification(contact_id, senderName, pushBody, { type: 'new_message', url: `https://aite-lite.vercel.app/chat?id=${senderId}` });
+    } catch (pushErr) {
+      console.error('Failed to send message push notification:', pushErr);
+    }
+
+    // 5. إرسال استجابة بنجاح
     res.json({ ok: true, messageId, messageData: newMessage });
 
   } catch (error) {
@@ -1501,6 +1588,8 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
         is_read: false
       };
       await notifRef.set(notifData);
+      // إرسال إشعار Push لطلب الصداقة
+      sendPushNotification(to_id, `${fromProfile.username || 'شخص ما'}`, 'أرسل لك طلب صداقة 👋', { type: 'friend_request', url: `https://aite-lite.vercel.app/all_users` });
     } catch (nerr) {
       console.error('Failed to create friend_request notification:', nerr);
     }
@@ -1544,6 +1633,8 @@ app.post('/api/friends/accept', requireAuth, async (req, res) => {
         is_read: false
       };
       await notifRef.set(notifData);
+      // إرسال إشعار Push لقبول الصداقة
+      sendPushNotification(from_id, `${fromProfile.username || 'شخص ما'}`, 'قبل طلب صداقتك ✅', { type: 'friend_accept', url: `https://aite-lite.vercel.app/profile/${toId}` });
     } catch (nerr) {
       console.error('Failed to create friend_accept notification:', nerr);
     }
@@ -2037,6 +2128,8 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للإعجاب بالمنشور
+        sendPushNotification(postData.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بمنشورك ❤️', { type: 'post_like', url: `https://aite-lite.vercel.app/post?id=${postId}` });
       }
     } catch (nerr) {
       console.error('Failed to create post_like notification:', nerr);
@@ -2115,6 +2208,8 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للتعليق على المنشور
+        sendPushNotification(postData.userId, `${fromProfile.username || 'شخص ما'}`, `علق على منشورك: ${commentData.content.substring(0, 50)}`, { type: 'post_comment', url: `https://aite-lite.vercel.app/post?id=${postId}` });
       }
     } catch (nerr) {
       console.error('Failed to create post_comment notification:', nerr);
@@ -2188,6 +2283,8 @@ app.post('/api/posts/:postId/comments/:commentId/like', requireAuth, async (req,
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للإعجاب بالتعليق
+        sendPushNotification(commentOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بتعليقك ❤️', { type: 'comment_like', url: `https://aite-lite.vercel.app/post?id=${postId}` });
       }
     } catch (nerr) {
       console.error('Failed to create comment_like notification:', nerr);
@@ -2262,6 +2359,8 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للرد على التعليق
+        sendPushNotification(commentOwnerId, `${userData.username || 'شخص ما'}`, `رد على تعليقك: ${replyData.content.substring(0, 50)}`, { type: 'comment_reply', url: `https://aite-lite.vercel.app/post?id=${postId}` });
       }
     } catch (nerr) {
       console.error('Failed to create comment_reply notification:', nerr);
@@ -2616,6 +2715,8 @@ app.post('/api/reels/:reelId/like', requireAuth, async (req, res) => {
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للإعجاب بالريل
+        sendPushNotification(updatedReel.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بالريل الخاص بك ❤️', { type: 'reel_like', url: `https://aite-lite.vercel.app/reels` });
       }
     } catch (nerr) {
       console.error('Failed to create reel_like notification:', nerr);
@@ -2675,6 +2776,8 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للتعليق على الريل
+        sendPushNotification(reel.userId, `${fromProfile.username || 'شخص ما'}`, `علق على الريل الخاص بك: ${commentData.content.substring(0, 50)}`, { type: 'reel_comment', url: `https://aite-lite.vercel.app/reels` });
       }
     } catch (nerr) {
       console.error('Failed to create reel_comment notification:', nerr);
@@ -2742,6 +2845,8 @@ app.post('/api/reels/:reelId/comments/:commentId/like', requireAuth, async (req,
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للإعجاب بتعليق الريل
+        sendPushNotification(commentOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بتعليقك ❤️', { type: 'comment_like', url: `https://aite-lite.vercel.app/reels` });
       }
     } catch (nerr) {
       console.error('Failed to create reels comment_like notification:', nerr);
@@ -2814,6 +2919,8 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
           is_read: false
         };
         await notifRef.set(notifData);
+        // إرسال إشعار Push للرد على تعليق الريل
+        sendPushNotification(commentOwnerId, `${userData.username || 'شخص ما'}`, `رد على تعليقك: ${replyData.content.substring(0, 50)}`, { type: 'comment_reply', url: `https://aite-lite.vercel.app/reels` });
       }
     } catch (nerr) {
       console.error('Failed to create reels comment_reply notification:', nerr);
