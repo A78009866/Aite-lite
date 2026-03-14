@@ -2508,6 +2508,122 @@ app.get('/api/friends', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- API: Friends of a specific user (for profile friends section) ----------------
+app.get('/api/friends/user/:userId', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const requestedUserId = req.params.userId;
+  try {
+    const friendsSnap = await db.ref(`friends/${requestedUserId}`).once('value');
+    const friendsObj = friendsSnap.val() || {};
+    const friendIds = Object.keys(friendsObj);
+    if (friendIds.length === 0) return res.json({ ok: true, friends: [], total: 0 });
+
+    const profilePromises = friendIds.map(id => db.ref(`profiles/${id}`).once('value'));
+    const profileSnapshots = await Promise.all(profilePromises);
+
+    // Check which of these friends are also friends with the current user
+    const myFriendsSnap = await db.ref(`friends/${currentUserId}`).once('value');
+    const myFriendsObj = myFriendsSnap.val() || {};
+    const myFriendIds = new Set(Object.keys(myFriendsObj));
+
+    // Check friend request statuses
+    const friendsList = await Promise.all(profileSnapshots.map(async (snap, idx) => {
+      const p = snap.val() || {};
+      const fId = friendIds[idx];
+      const isMutual = myFriendIds.has(fId);
+      let requestSent = false;
+      let requestReceived = false;
+      if (!isMutual && fId !== currentUserId) {
+        const outgoing = await db.ref(`friend_requests/${fId}/${currentUserId}`).once('value');
+        const incoming = await db.ref(`friend_requests/${currentUserId}/${fId}`).once('value');
+        requestSent = outgoing.exists();
+        requestReceived = incoming.exists();
+      }
+      return {
+        id: fId,
+        username: p.username || 'مستخدم',
+        full_name: p.full_name || '',
+        profile_picture_url: p.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_online: !!p.is_online,
+        is_mutual: isMutual,
+        is_me: fId === currentUserId,
+        request_sent: requestSent,
+        request_received: requestReceived
+      };
+    }));
+
+    res.json({ ok: true, friends: friendsList, total: friendIds.length });
+  } catch (error) {
+    console.error('Error fetching user friends:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب قائمة الأصدقاء.' });
+  }
+});
+
+// ---------------- API: Discover Users (friends-of-friends priority) ----------------
+app.get('/api/discover-users', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  try {
+    // Get current user's friends
+    const myFriendsSnap = await db.ref(`friends/${currentUserId}`).once('value');
+    const myFriendsObj = myFriendsSnap.val() || {};
+    const myFriendIds = new Set(Object.keys(myFriendsObj));
+
+    // Get blocked users (both directions)
+    const blockedByMe = await getBlockedUserIds(currentUserId);
+    const blockedMe = await getBlockedByUserIds(currentUserId);
+    const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
+
+    // Get friends-of-friends
+    const fofScores = {}; // userId -> number of mutual friends
+    for (const friendId of myFriendIds) {
+      const fofSnap = await db.ref(`friends/${friendId}`).once('value');
+      const fofObj = fofSnap.val() || {};
+      for (const fofId of Object.keys(fofObj)) {
+        if (fofId !== currentUserId && !myFriendIds.has(fofId) && !allBlockedIds.has(fofId)) {
+          fofScores[fofId] = (fofScores[fofId] || 0) + 1;
+        }
+      }
+    }
+
+    // Get all profiles
+    const profilesSnap = await db.ref('profiles').once('value');
+    const profiles = profilesSnap.val() || {};
+
+    // Build candidates list (exclude self, friends, blocked)
+    const candidates = [];
+    for (const [uid, profile] of Object.entries(profiles)) {
+      if (uid === currentUserId || myFriendIds.has(uid) || allBlockedIds.has(uid)) continue;
+      candidates.push({
+        id: uid,
+        username: profile.username || 'مستخدم',
+        full_name: profile.full_name || '',
+        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_online: !!profile.is_online,
+        mutual_friends_count: fofScores[uid] || 0
+      });
+    }
+
+    // Sort: friends-of-friends first (by mutual count desc), then random
+    candidates.sort((a, b) => {
+      if (b.mutual_friends_count !== a.mutual_friends_count) return b.mutual_friends_count - a.mutual_friends_count;
+      return Math.random() - 0.5;
+    });
+
+    // Check friend request statuses for top candidates
+    const topCandidates = candidates.slice(0, 20);
+    const result = await Promise.all(topCandidates.map(async (u) => {
+      const outgoing = await db.ref(`friend_requests/${u.id}/${currentUserId}`).once('value');
+      const incoming = await db.ref(`friend_requests/${currentUserId}/${u.id}`).once('value');
+      return { ...u, request_sent: outgoing.exists(), request_received: incoming.exists() };
+    }));
+
+    res.json({ ok: true, users: result });
+  } catch (error) {
+    console.error('Error in /api/discover-users:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب المستخدمين.' });
+  }
+});
+
 // ---------------- API: Profile ----------------
 app.get('/api/profile', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
@@ -2792,7 +2908,7 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
   }
 });
 
-// Get posts (feed)
+// Get posts (feed) - Smart Feed Algorithm
 app.get('/api/posts', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
@@ -2801,9 +2917,14 @@ app.get('/api/posts', requireAuth, async (req, res) => {
     const blockedMe = await getBlockedByUserIds(currentUserId);
     const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
 
+    // Get current user's friends for ranking
+    const myFriendsSnap = await db.ref(`friends/${currentUserId}`).once('value');
+    const myFriendsObj = myFriendsSnap.val() || {};
+    const myFriendIds = new Set(Object.keys(myFriendsObj));
+
     const postsSnap = await db.ref('posts')
       .orderByChild('timestamp')
-      .limitToLast(50)
+      .limitToLast(100)
       .once('value');
 
     let posts = [];
@@ -2814,7 +2935,6 @@ app.get('/api/posts', requireAuth, async (req, res) => {
         posts.push(post);
       }
     });
-    posts.reverse();
 
     const userIds = [...new Set(posts.map(p => p.userId))];
     const profiles = {};
@@ -2835,17 +2955,62 @@ app.get('/api/posts', requireAuth, async (req, res) => {
       likedStatuses[posts[index].postId] = snap.val() !== null;
     });
 
-    const finalPosts = posts.map(post => ({
-      ...post,
-      commentsCount: post.commentsCount || 0,
-      is_liked: likedStatuses[post.postId] || false,
-      user: {
-        username: profiles[post.userId]?.username || 'مستخدم',
-        profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl,
-        is_online: !!profiles[post.userId]?.is_online,
-        is_verified: !!profiles[post.userId]?.is_verified
+    // Smart Feed Algorithm: score each post
+    const now = Date.now();
+    const ONE_HOUR = 3600000;
+
+    const scoredPosts = posts.map(post => {
+      let score = 0;
+      const ageHours = Math.max(1, (now - (post.timestamp || now)) / ONE_HOUR);
+
+      // Engagement score: likes + comments*2
+      const engagement = (post.likes || 0) + (post.commentsCount || 0) * 2;
+      score += engagement * 10;
+
+      // Recency bonus: newer posts get higher score (decay over time)
+      score += Math.max(0, 500 / Math.pow(ageHours, 0.6));
+
+      // Friend bonus: posts from friends get significant boost
+      if (myFriendIds.has(post.userId)) {
+        score += 300;
       }
-    }));
+
+      // Own posts get a small boost
+      if (post.userId === currentUserId) {
+        score += 200;
+      }
+
+      // Media bonus: posts with media are more engaging
+      if (post.media) {
+        score += 50;
+      }
+
+      // Small random factor to add variety (0-30)
+      score += Math.random() * 30;
+
+      return { ...post, _score: score };
+    });
+
+    // Sort by score descending
+    scoredPosts.sort((a, b) => b._score - a._score);
+
+    // Take top 50
+    const topPosts = scoredPosts.slice(0, 50);
+
+    const finalPosts = topPosts.map(post => {
+      const { _score, ...cleanPost } = post;
+      return {
+        ...cleanPost,
+        commentsCount: post.commentsCount || 0,
+        is_liked: likedStatuses[post.postId] || false,
+        user: {
+          username: profiles[post.userId]?.username || 'مستخدم',
+          profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl,
+          is_online: !!profiles[post.userId]?.is_online,
+          is_verified: !!profiles[post.userId]?.is_verified
+        }
+      };
+    });
 
     res.json({ ok: true, posts: finalPosts });
 

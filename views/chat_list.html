@@ -415,6 +415,105 @@
           border-width: 1.5px;
         }
 
+        /* Discover Users Section */
+        .discover-scroll {
+          display: flex;
+          gap: 12px;
+          overflow-x: auto;
+          padding: 4px 0;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .discover-scroll::-webkit-scrollbar { display: none; }
+        .discover-card {
+          flex: 0 0 130px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          padding: 14px 8px 12px;
+          border-radius: 16px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.06);
+          transition: all 0.25s ease;
+          cursor: pointer;
+        }
+        .discover-card:hover {
+          background: rgba(255,255,255,0.08);
+          transform: translateY(-3px);
+          border-color: rgba(59,130,246,0.3);
+        }
+        .discover-avatar {
+          position: relative;
+          display: inline-flex;
+          margin-bottom: 8px;
+        }
+        .discover-avatar img {
+          width: 60px;
+          height: 60px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #374151;
+        }
+        .discover-avatar .dc-online-dot {
+          position: absolute;
+          bottom: 2px;
+          right: 2px;
+          width: 12px;
+          height: 12px;
+          background: #22c55e;
+          border: 2px solid #1a1a2e;
+          border-radius: 999px;
+          box-shadow: 0 0 6px rgba(34,197,94,0.6);
+        }
+        .discover-name {
+          font-size: 12px;
+          color: #e5e7eb;
+          font-weight: 600;
+          max-width: 110px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .discover-mutual {
+          font-size: 10px;
+          color: #9ca3af;
+          margin-top: 2px;
+        }
+        .discover-action {
+          margin-top: 8px;
+          font-size: 11px;
+          padding: 5px 14px;
+          border-radius: 20px;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-weight: 600;
+          width: 100%;
+        }
+        .discover-action.dc-add-btn {
+          background: rgba(59,130,246,0.15);
+          color: #60a5fa;
+          border: 1px solid rgba(59,130,246,0.3);
+        }
+        .discover-action.dc-add-btn:hover {
+          background: rgba(59,130,246,0.3);
+        }
+        .discover-action.dc-sent-btn {
+          background: rgba(156,163,175,0.1);
+          color: #9ca3af;
+          border: 1px solid rgba(156,163,175,0.2);
+          cursor: default;
+        }
+        .discover-action.dc-accept-btn {
+          background: rgba(34,197,94,0.15);
+          color: #4ade80;
+          border: 1px solid rgba(34,197,94,0.3);
+        }
+        .discover-action.dc-accept-btn:hover {
+          background: rgba(34,197,94,0.3);
+        }
+
         /* VERIFIED BADGE */
         .verified-badge-img {
           display: inline-block;
@@ -2355,6 +2454,23 @@
                 </div>
         </div>
 
+        <!-- Discover Users Section -->
+        <div id="discoverUsersWrapper" class="max-w-xl mx-auto mt-4 px-4 hidden">
+            <div class="glass-post-card rounded-xl shadow-lg p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-white font-bold text-sm flex items-center gap-2">
+                        <i class="fas fa-user-plus text-blue-400"></i>
+                        <span>تعرّف على أشخاص جدد</span>
+                    </h3>
+                    <button onclick="fetchDiscoverUsers()" class="text-blue-400 hover:text-blue-300 text-xs font-medium transition">
+                        <i class="fas fa-sync-alt"></i> تحديث
+                    </button>
+                </div>
+                <div id="discoverUsersScroll" class="discover-scroll">
+                </div>
+            </div>
+        </div>
+
         <div id="postsFeed" class="max-w-xl mx-auto mt-6 space-y-4 px-4" style="padding-bottom:70px;">
         </div>
     </main>
@@ -3269,8 +3385,8 @@ function handleNotifClick(el) {
                 <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${escapeAttr(post.postId)}">
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center">
-                            <a href="/profile?userId=${escapeAttr(post.userId)}" class="avatar-with-dot" onclick="event.stopPropagation()">
-                                <img src="${profilePic}" alt="${safeUsername}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'">
+                            <a href="/profile?userId=${escapeAttr(post.userId)}" class="avatar-with-dot ml-3" onclick="event.stopPropagation()">
+                                <img src="${profilePic}" alt="${safeUsername}" class="w-10 h-10 rounded-full object-cover border border-gray-600 hover:ring-2 hover:ring-blue-400 transition duration-300" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'">
                                 ${onlineDotHtml}
                             </a>
                             <div>
@@ -4843,6 +4959,104 @@ function handleNotifClick(el) {
             }
         });
         
+        /* ----------------- Discover Users Section ----------------- */
+        async function fetchDiscoverUsers() {
+            const wrapper = document.getElementById('discoverUsersWrapper');
+            const scroll = document.getElementById('discoverUsersScroll');
+            if (!wrapper || !scroll) return;
+
+            try {
+                const res = await fetch('/api/discover-users', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!res.ok || !data.ok || !data.users || data.users.length === 0) {
+                    wrapper.classList.add('hidden');
+                    return;
+                }
+
+                wrapper.classList.remove('hidden');
+                scroll.innerHTML = data.users.map(u => {
+                    const onlineDot = u.is_online ? '<span class="dc-online-dot"></span>' : '';
+                    const mutualText = u.mutual_friends_count > 0 ? `<div class="discover-mutual">${u.mutual_friends_count} صديق مشترك</div>` : '';
+                    let actionBtn = '';
+                    if (u.request_sent) {
+                        actionBtn = `<span class="discover-action dc-sent-btn" id="dc-sent-${escapeAttr(u.id)}"><i class="fas fa-clock"></i> تم الإرسال</span>`;
+                    } else if (u.request_received) {
+                        actionBtn = `<button class="discover-action dc-accept-btn" id="dc-accept-${escapeAttr(u.id)}" onclick="event.stopPropagation(); acceptDiscoverRequest('${escapeAttr(u.id)}')"><i class="fas fa-check"></i> قبول</button>`;
+                    } else {
+                        actionBtn = `<button class="discover-action dc-add-btn" id="dc-add-${escapeAttr(u.id)}" onclick="event.stopPropagation(); sendDiscoverRequest('${escapeAttr(u.id)}')"><i class="fas fa-user-plus"></i> إضافة</button>`;
+                    }
+
+                    return `
+                        <div class="discover-card" onclick="window.location.href='/profile?userId=${escapeAttr(u.id)}'">
+                            <div class="discover-avatar">
+                                <img src="${escapeAttr(u.profile_picture_url)}" alt="${escapeHtml(u.username)}" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'">
+                                ${onlineDot}
+                            </div>
+                            <div class="discover-name">${escapeHtml(u.username)}</div>
+                            ${mutualText}
+                            ${actionBtn}
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('Error fetching discover users:', e);
+            }
+        }
+
+        async function sendDiscoverRequest(userId) {
+            const btn = document.getElementById('dc-add-' + userId);
+            if (!btn) return;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            try {
+                const r = await fetch('/api/friends/request', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to_id: userId })
+                });
+                const j = await r.json();
+                if (r.ok && j.ok) {
+                    btn.outerHTML = '<span class="discover-action dc-sent-btn"><i class="fas fa-clock"></i> تم الإرسال</span>';
+                    if (typeof showToast === 'function') showToast('تم إرسال طلب الصداقة.', { type: 'success' });
+                } else {
+                    btn.innerHTML = '<i class="fas fa-user-plus"></i> إضافة';
+                    btn.disabled = false;
+                    if (typeof showToast === 'function') showToast(j.error || 'فشل في إرسال الطلب.', { type: 'error' });
+                }
+            } catch (e) {
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> إضافة';
+                btn.disabled = false;
+                if (typeof showToast === 'function') showToast('خطأ في الاتصال.', { type: 'error' });
+            }
+        }
+
+        async function acceptDiscoverRequest(userId) {
+            const btn = document.getElementById('dc-accept-' + userId);
+            if (!btn) return;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            try {
+                const r = await fetch('/api/friends/accept', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ from_id: userId })
+                });
+                const j = await r.json();
+                if (r.ok && j.ok) {
+                    btn.outerHTML = '<span class="discover-action dc-sent-btn"><i class="fas fa-check"></i> أصدقاء</span>';
+                    if (typeof showToast === 'function') showToast('تم قبول طلب الصداقة!', { type: 'success' });
+                } else {
+                    btn.innerHTML = '<i class="fas fa-check"></i> قبول';
+                    btn.disabled = false;
+                    if (typeof showToast === 'function') showToast(j.error || 'فشل في قبول الطلب.', { type: 'error' });
+                }
+            } catch (e) {
+                btn.innerHTML = '<i class="fas fa-check"></i> قبول';
+                btn.disabled = false;
+                if (typeof showToast === 'function') showToast('خطأ في الاتصال.', { type: 'error' });
+            }
+        }
+
                 document.addEventListener('DOMContentLoaded', () => {
             // جلب بيانات البروفايل لتحديث الصورة العلوية
             fetch('/api/profile', { credentials: 'same-origin' })
@@ -4859,6 +5073,9 @@ function handleNotifClick(el) {
                         if (data.is_online && meDot) meDot.style.display = 'inline-block';
                     }
                 }).catch(err => console.error("Profile fetch error:", err));
+
+            // Fetch discover users
+            fetchDiscoverUsers();
 
             // تشغيل القصص أولاً، وبعد نجاحها أو فشلها يتم تحميل المنشورات
             if (typeof fetchAndDisplayStories === 'function') {

@@ -408,6 +408,107 @@
             border: 2px solid #242526;
         }
 
+        /* Activity status dot attached to profile picture in posts */
+        .avatar-with-dot {
+            position: relative;
+            display: inline-flex;
+            flex-shrink: 0;
+        }
+        .avatar-with-dot .online-dot {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 10px;
+            height: 10px;
+            background: #22c55e;
+            border: 2px solid #1a1a2e;
+            border-radius: 999px;
+            box-shadow: 0 0 6px rgba(34,197,94,0.6);
+            z-index: 10;
+        }
+
+        /* Friends section styles */
+        .friend-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 10px 6px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .friend-card:hover {
+            background: rgba(255,255,255,0.08);
+            transform: translateY(-2px);
+        }
+        .friend-card-avatar {
+            position: relative;
+            display: inline-flex;
+            margin-bottom: 6px;
+        }
+        .friend-card-avatar img {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #374151;
+        }
+        .friend-card-avatar .fc-online-dot {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            background: #22c55e;
+            border: 2px solid #1a1a2e;
+            border-radius: 999px;
+            box-shadow: 0 0 6px rgba(34,197,94,0.6);
+        }
+        .friend-card-name {
+            font-size: 11px;
+            color: #e5e7eb;
+            font-weight: 600;
+            max-width: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .friend-card-action {
+            margin-top: 6px;
+            font-size: 10px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+        .friend-card-action.msg-btn {
+            background: rgba(59,130,246,0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59,130,246,0.3);
+        }
+        .friend-card-action.msg-btn:hover {
+            background: rgba(59,130,246,0.3);
+        }
+        .friend-card-action.add-btn {
+            background: rgba(34,197,94,0.15);
+            color: #4ade80;
+            border: 1px solid rgba(34,197,94,0.3);
+        }
+        .friend-card-action.add-btn:hover {
+            background: rgba(34,197,94,0.3);
+        }
+        .friend-card-action.sent-btn {
+            background: rgba(156,163,175,0.1);
+            color: #9ca3af;
+            border: 1px solid rgba(156,163,175,0.2);
+            cursor: default;
+        }
+
         #profileStatus {
           display: block;
           margin-top: 6px;
@@ -2179,6 +2280,28 @@
                 </div>
             </div>
 
+            <!-- Friends Section -->
+            <div id="friendsSectionWrapper" class="mb-4 hidden">
+                <div class="glass-profile-card rounded-xl shadow-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-white font-bold text-base flex items-center gap-2">
+                            <i class="fas fa-user-friends text-blue-400"></i>
+                            <span>الأصدقاء</span>
+                            <span id="friendsTotalCount" class="text-gray-400 text-sm font-normal"></span>
+                        </h3>
+                        <button id="viewAllFriendsBtn" onclick="viewAllFriends()" class="text-blue-400 hover:text-blue-300 text-sm font-medium transition">
+                            عرض الكل <i class="fas fa-chevron-left mr-1"></i>
+                        </button>
+                    </div>
+                    <div id="friendsGrid" class="grid grid-cols-3 gap-3">
+                    </div>
+                    <div id="friendsEmpty" class="hidden text-center text-gray-500 py-4 text-sm">
+                        <i class="fas fa-users text-2xl mb-2 block opacity-50"></i>
+                        لا يوجد أصدقاء بعد
+                    </div>
+                </div>
+            </div>
+
             <div id="userPostsFeed" class="space-y-4">
                 <div class="text-center text-gray-500 p-8"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المنشورات...</div>
             </div>
@@ -2780,9 +2903,9 @@ function createPostCard(post) {
         <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
             <div class="flex items-start justify-between mb-3">
                 <div class="flex items-center">
-                    <a href="/profile?userId=${post.userId}" class="avatar-wrapper ml-3" data-user-id="${post.userId}">
-                        <img src="${escapeHtml(profilePic)}" alt="${escapeHtml(post.user.username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
-                        <span class="status-indicator small" style="display: ${dotDisplay};" title="متصل الآن"></span>
+                    <a href="/profile?userId=${post.userId}" class="avatar-with-dot ml-3" data-user-id="${post.userId}">
+                        <img src="${escapeHtml(profilePic)}" alt="${escapeHtml(post.user.username)}" class="w-10 h-10 rounded-full object-cover border border-gray-600">
+                        ${isOnline ? '<span class="online-dot online-dot-small" title="متصل الآن"></span>' : ''}
                     </a>
                     <div>
                         <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">@${post.user.username} ${verifiedBadgeHtml}</a>
@@ -3637,6 +3760,9 @@ async function fetchAndDisplayProfile() {
                     });
                 }
             }
+            // Fetch and display friends section
+            fetchAndDisplayFriendsSection(currentProfileId);
+
             await fetchAndDisplayUserPosts(currentProfileId);
         } else {
             document.getElementById('userPostsFeed').innerHTML = `<div class="text-center text-red-500 p-8">لم يتم العثور على المستخدم @${currentProfileId}</div>`;
@@ -3647,8 +3773,94 @@ async function fetchAndDisplayProfile() {
     }
 }
 
+/* ----------------- Friends Section ----------------- */
+async function fetchAndDisplayFriendsSection(profileUserId) {
+    const wrapper = document.getElementById('friendsSectionWrapper');
+    const grid = document.getElementById('friendsGrid');
+    const emptyMsg = document.getElementById('friendsEmpty');
+    const totalCount = document.getElementById('friendsTotalCount');
+    if (!wrapper || !grid) return;
 
+    try {
+        const res = await fetch(`/api/friends/user/${encodeURIComponent(profileUserId)}`, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (!res.ok || !data.ok) return;
 
+        wrapper.classList.remove('hidden');
+
+        if (data.friends.length === 0) {
+            grid.classList.add('hidden');
+            emptyMsg.classList.remove('hidden');
+            totalCount.textContent = '(0)';
+            return;
+        }
+
+        totalCount.textContent = `(${data.total})`;
+        grid.classList.remove('hidden');
+        emptyMsg.classList.add('hidden');
+
+        // Show max 6 friends in the grid
+        const displayFriends = data.friends.slice(0, 6);
+        grid.innerHTML = displayFriends.map(f => {
+            const onlineDot = f.is_online ? '<span class="fc-online-dot"></span>' : '';
+            let actionBtn = '';
+            if (f.is_me) {
+                actionBtn = '<span class="friend-card-action sent-btn">أنت</span>';
+            } else if (f.is_mutual) {
+                actionBtn = `<button class="friend-card-action msg-btn" onclick="event.stopPropagation(); window.location.href='/chat?contactId=${escapeAttr(f.id)}'"><i class="fas fa-comment-dots"></i> مراسلة</button>`;
+            } else if (f.request_sent) {
+                actionBtn = `<span class="friend-card-action sent-btn" id="fc-sent-${escapeAttr(f.id)}"><i class="fas fa-clock"></i> مرسل</span>`;
+            } else {
+                actionBtn = `<button class="friend-card-action add-btn" id="fc-add-${escapeAttr(f.id)}" onclick="event.stopPropagation(); sendFriendRequestFromCard('${escapeAttr(f.id)}')"><i class="fas fa-user-plus"></i> إضافة</button>`;
+            }
+
+            return `
+                <div class="friend-card" onclick="window.location.href='/profile?userId=${escapeAttr(f.id)}'">
+                    <div class="friend-card-avatar">
+                        <img src="${escapeAttr(f.profile_picture_url)}" alt="${escapeHtml(f.username)}" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_PROFILE_PIC_URL)}'">
+                        ${onlineDot}
+                    </div>
+                    <div class="friend-card-name">${escapeHtml(f.username)}</div>
+                    ${actionBtn}
+                </div>
+            `;
+        }).join('');
+
+    } catch (e) {
+        console.error('Error fetching friends section:', e);
+    }
+}
+
+async function sendFriendRequestFromCard(userId) {
+    const btn = document.getElementById('fc-add-' + userId);
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    try {
+        const r = await fetch('/api/friends/request', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to_id: userId })
+        });
+        const j = await r.json();
+        if (r.ok && j.ok) {
+            btn.outerHTML = '<span class="friend-card-action sent-btn"><i class="fas fa-clock"></i> مرسل</span>';
+            showToast('تم إرسال طلب الصداقة.', { type: 'success' });
+        } else {
+            btn.innerHTML = '<i class="fas fa-user-plus"></i> إضافة';
+            btn.disabled = false;
+            showToast(j.error || 'فشل في إرسال الطلب.', { type: 'error' });
+        }
+    } catch (e) {
+        btn.innerHTML = '<i class="fas fa-user-plus"></i> إضافة';
+        btn.disabled = false;
+        showToast('خطأ في الاتصال.', { type: 'error' });
+    }
+}
+
+function viewAllFriends() {
+    window.location.href = '/all_users';
+}
 
 /* ----------------- Presence & SSE ----------------- */
 
