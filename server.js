@@ -12,6 +12,8 @@ const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
 const cors = require('cors');
 const crypto = require('crypto');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
@@ -65,7 +67,7 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage: storage, fileFilter: fileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
 
 // Initialize Firebase Admin
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY || '{}');
@@ -85,8 +87,44 @@ const port = process.env.PORT || 3000;
 
 // ---------------- Middleware ----------------
 app.set('trust proxy', 1);
-app.use(express.urlencoded({ extended: true, limit: '500mb' }));
-app.use(express.json({ limit: '500mb' }));
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Disabled because app uses inline scripts/CDN
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
+
+// Rate limiting - general
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // 300 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many requests, please try again later.' }
+});
+app.use(generalLimiter);
+
+// Stricter rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // 15 attempts per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many login attempts, please try again later.' }
+});
+
+// Rate limiting for write operations
+const writeLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // 30 writes per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many requests, please slow down.' }
+});
+
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
@@ -95,6 +133,21 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Helper: validate allowed MIME types for file uploads
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
+const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac'];
+const ALL_ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_AUDIO_TYPES];
+
+// Multer file filter to restrict uploads
+function fileFilter(req, file, cb) {
+  if (ALL_ALLOWED_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('File type not allowed: ' + file.mimetype), false);
+  }
+}
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'a-firebase-secret-key-is-better',
@@ -194,7 +247,7 @@ app.get('/create-story', requireAuth, (req, res) => { res.sendFile(path.join(__d
 app.get('/notifications', requireAuth, (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notifications.html')); });
 
 // انقل هذا الجزء للأعلى قليلاً في ملف server.js
-app.get('/settings', (req, res) => {
+app.get('/settings', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'settings.html'));
 });
 
@@ -419,13 +472,31 @@ app.post('/api/save-fcm-token', requireAuth, async (req, res) => {
 });
 
 // ---------------- Routes: Auth Logic ----------------
-app.post('/login', async (req, res) => {
-  const { username } = req.body;
+app.post('/login', authLimiter, async (req, res) => {
+  const { username, password } = req.body;
   const wantsJson = clientWantsJson(req);
 
   try {
     if (!username) throw new Error('اسم المستخدم مطلوب');
+    if (!password) throw new Error('كلمة المرور مطلوبة');
     const email = `${username}@trimer.io`;
+
+    // Verify password via Firebase REST API
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) {
+      console.error('FIREBASE_WEB_API_KEY not configured');
+      throw new Error('Server misconfiguration');
+    }
+    const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
+    const verifyResp = await fetch(verifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: false })
+    });
+    if (!verifyResp.ok) {
+      throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة.');
+    }
+
     const userRecord = await firebaseAuth.getUserByEmail(email);
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
@@ -461,7 +532,7 @@ app.post('/login', async (req, res) => {
 });
 
 // استبدال مسار /register بالمعدّل: يرد JSON عند طلب AJAX، ويعطي رسائل خطأ واضحة
-app.post('/register', upload.fields([{ name: 'profile_picture' }, { name: 'cover_photo' }]), async (req, res) => {
+app.post('/register', authLimiter, upload.fields([{ name: 'profile_picture' }, { name: 'cover_photo' }]), async (req, res) => {
   const wantsJson = clientWantsJson(req);
   const { username, password, full_name } = req.body;
   let profile_picture_url = DEFAULT_PROFILE_PIC_URL;
@@ -778,7 +849,9 @@ app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (re
 app.post('/api/cloudinary/sign', requireAuth, (req, res) => {
   try {
     const timestamp = Math.round(Date.now() / 1000);
-    const folder = req.body.folder || 'stories';
+    const ALLOWED_FOLDERS = ['stories', 'post_media', 'profile_pictures', 'cover_photos', 'reels', 'chat_media'];
+    const rawFolder = String(req.body.folder || 'stories').replace(/[^a-zA-Z0-9_-]/g, '');
+    const folder = ALLOWED_FOLDERS.includes(rawFolder) ? rawFolder : 'stories';
     const resourceType = req.body.resource_type || 'auto';
     const paramsToSign = { timestamp: timestamp, folder: folder };
     const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET);
@@ -797,7 +870,7 @@ app.post('/api/cloudinary/sign', requireAuth, (req, res) => {
 });
 
 // 1. إنشاء قصة جديدة (تقبل روابط Cloudinary مباشرة أو رفع ملفات)
-app.post('/api/stories/create', requireAuth, (req, res, next) => {
+app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
   // If content-type is JSON, skip multer (direct Cloudinary URLs)
   const ct = req.headers['content-type'] || '';
   if (ct.indexOf('application/json') !== -1) {
@@ -858,6 +931,7 @@ app.post('/api/stories/create', requireAuth, (req, res, next) => {
 // 2. جلب القصص النشطة (أقل من 24 ساعة) وتجميعها بالمستخدم
 app.get('/api/stories', requireAuth, async (req, res) => {
   try {
+    const currentUserId = req.session.userId;
     const storiesSnap = await db.ref('stories').once('value');
     const storiesData = storiesSnap.val() || {};
     const now = Date.now();
@@ -879,7 +953,6 @@ app.get('/api/stories', requireAuth, async (req, res) => {
     const profiles = profilesSnap.val() || {};
 
     // جلب المشاهدات لتحديد حالة viewed
-    const currentUserId = req.session.userId;
     const viewsSnap = await db.ref('story_views').once('value');
     const allViews = viewsSnap.val() || {};
 
@@ -1204,7 +1277,7 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
 
 // استبدل هذا الجزء بالكامل في ملف server.js
 
-app.post('/api/messages/send', (req, res, next) => {
+app.post('/api/messages/send', writeLimiter, (req, res, next) => {
   // If content-type is JSON, skip multer (direct Cloudinary URLs)
   const ct = req.headers['content-type'] || '';
   if (ct.indexOf('application/json') !== -1) {
@@ -1644,7 +1717,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
 // ---------------------------------------------------
 // API: لجلب معلومات المستخدم (الصورة والاسم) عند تسجيل الدخول
 // ---------------------------------------------------
-app.get('/api/get-public-info', async (req, res) => {
+app.get('/api/get-public-info', requireAuth, async (req, res) => {
     try {
         const username = req.query.username;
         if (!username) return res.json({ found: false });
@@ -1782,13 +1855,26 @@ app.post('/api/friends/accept', requireAuth, async (req, res) => {
   }
 });
 // مسار حذف منشور (Post)
-app.delete('/api/posts/:id', async (req, res) => {
+app.delete('/api/posts/:id', requireAuth, async (req, res) => {
   try {
+    const userId = req.session.userId;
     const postId = req.params.id;
-    // هنا يتم الحذف من قاعدة البيانات الخاصة بك (Firebase كمثال)
-     await db.ref('posts').child(postId).remove(); 
+
+    // Check post exists and belongs to current user
+    const postSnap = await db.ref(`posts/${postId}`).once('value');
+    if (!postSnap.exists()) {
+      return res.status(404).json({ ok: false, error: 'المنشور غير موجود' });
+    }
+    const post = postSnap.val();
+    if (post.userId !== userId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا المنشور' });
+    }
+
+    await db.ref('posts').child(postId).remove();
     
-    console.log(`تم حذف المنشور: ${postId}`);
+    // Decrement user posts count
+    await db.ref(`profiles/${userId}/postsCount`).transaction((c) => Math.max((c || 1) - 1, 0));
+    
     res.json({ ok: true, message: "تم الحذف بنجاح" });
   } catch (error) {
     console.error("خطأ في الحذف:", error);
@@ -2095,7 +2181,7 @@ app.post('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res)
 // ---------------- API: Posts ----------------
 
 // Create post
-app.post('/api/posts/create', requireAuth, (req, res, next) => {
+app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
   // If content-type is JSON, skip multer (direct Cloudinary URLs)
   const ct = req.headers['content-type'] || '';
   if (ct.indexOf('application/json') !== -1) {
@@ -2695,7 +2781,7 @@ app.get('/api/posts/:postId/comments/stream', requireAuth, async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
-    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : corsOptions.origin[0],
   });
   res.write('\n');
 
@@ -2759,7 +2845,7 @@ app.get('/api/posts/:postId/comments/stream', requireAuth, async (req, res) => {
 // ---------------- API: Reels Implementation ----------------
 
 // إنشاء ريل جديد
-app.post('/api/reels/create', requireAuth, (req, res, next) => {
+app.post('/api/reels/create', requireAuth, writeLimiter, (req, res, next) => {
   // If content-type is JSON, skip multer (direct Cloudinary URLs)
   const ct = req.headers['content-type'] || '';
   if (ct.indexOf('application/json') !== -1) {
@@ -3532,9 +3618,13 @@ app.use((err, req, res, next) => {
   if (err && (err.message || '').toLowerCase().includes('upload')) {
     return res.status(500).json({ ok: false, error: 'فشل في رفع الملف إلى الخادم.' });
   }
-  // Generic catch-all: always return JSON for API routes
+  // File type not allowed error from multer fileFilter
+  if (err && err.message && err.message.startsWith('File type not allowed')) {
+    return res.status(400).json({ ok: false, error: 'نوع الملف غير مسموح به.' });
+  }
+  // Generic catch-all: always return JSON for API routes (hide internal details)
   if (req.path && req.path.startsWith('/api/')) {
-    return res.status(500).json({ ok: false, error: err && err.message ? err.message : 'حدث خطأ في الخادم' });
+    return res.status(500).json({ ok: false, error: 'حدث خطأ في الخادم' });
   }
   next(err);
 });
@@ -3542,7 +3632,7 @@ app.use((err, req, res, next) => {
 
 
 // 2. API لتغيير كلمة المرور
-app.post('/api/change-password', requireAuth, async (req, res) => {
+app.post('/api/change-password', requireAuth, authLimiter, async (req, res) => {
   const userId = req.session.userId;
   const { newPassword } = req.body;
 
@@ -3680,7 +3770,7 @@ app.get('/partials/families', requireAuth, async (req, res) => {
       const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : '';
       const badge = f.is_member ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
       return `
-        <div class="family-card" data-family-id="${f.familyId}" onclick="window.location.href='/family/${f.familyId}'">
+        <div class="family-card" data-family-id="${escapeHtml(f.familyId)}" onclick="window.location.href='/family/${escapeHtml(f.familyId)}'">
           <img src="${img || 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'}" alt="${escapeHtml(f.name)}" onerror="this.onerror=null;this.src='https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'">
           <div class="meta">
             <div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
@@ -3716,19 +3806,19 @@ app.get('/partials/posts', requireAuth, async (req, res) => {
       const username = user.username || 'مستخدم';
       const avatar = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
       html += `
-        <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
+        <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${escapeHtml(post.postId)}">
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center">
-              <a href="/profile?userId=${post.userId}" class="avatar-with-dot">
+              <a href="/profile?userId=${escapeHtml(post.userId)}" class="avatar-with-dot">
                 <img src="${avatar}" alt="${escapeHtml(username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600">
               </a>
               <div>
-                <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(username)}</a>
+                <a href="/profile?userId=${escapeHtml(post.userId)}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(username)}</a>
                 <p class="text-gray-400 text-xs">${new Date(post.timestamp || Date.now()).toLocaleString('ar-EG')}</p>
               </div>
             </div>
             <div>
-              <button class="text-gray-400 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button>
+              <button class="text-gray-400 post-menu-button" onclick="togglePostMenu('${escapeHtml(post.postId)}', '${escapeHtml(post.userId)}', event, this)"><i class="fas fa-ellipsis-v"></i></button>
             </div>
           </div>
           <p class="text-gray-200 whitespace-pre-wrap">${escapeHtml(post.content || '')}</p>
@@ -3779,7 +3869,7 @@ app.get('/partials/chat_content', requireAuth, async (req, res) => {
     html += families.map(f => {
       const img = f.imageUrl && f.imageUrl.length ? f.imageUrl : '';
       const badge = f.is_member ? `<span class="text-xs text-green-400 font-semibold">عضو</span>` : `<span class="text-xs text-yellow-300 font-semibold">مقفل</span>`;
-      return `<div class="family-card" data-family-id="${f.familyId}" onclick="window.location.href='/family/${f.familyId}'"><img src="${img || 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'}" alt="${escapeHtml(f.name)}" onerror="this.onerror=null;this.src='https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'"><div class="meta"><div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div><div class="count">${f.membersCount} عضو • ${badge}</div></div></div>` ;
+      return `<div class="family-card" data-family-id="${escapeHtml(f.familyId)}" onclick="window.location.href='/family/${escapeHtml(f.familyId)}'"><img src="${img || 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'}" alt="${escapeHtml(f.name)}" onerror="this.onerror=null;this.src='https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125'"><div class="meta"><div class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div><div class="count">${f.membersCount} عضو • ${badge}</div></div></div>` ;
     }).join('');
     html += `</div></div>`;
 
@@ -3789,7 +3879,7 @@ app.get('/partials/chat_content', requireAuth, async (req, res) => {
       const user = profiles[post.userId] || {};
       const username = user.username || 'مستخدم';
       const avatar = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
-      html += `<div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}"><div class="flex items-start justify-between mb-3"><div class="flex items-center"><a href="/profile?userId=${post.userId}" class="avatar-with-dot"><img src="${avatar}" alt="${escapeHtml(username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600"></a><div><a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(username)}</a><p class="text-gray-400 text-xs">${new Date(post.timestamp || Date.now()).toLocaleString('ar-EG')}</p></div></div><div><button class="text-gray-400 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button></div></div><p class="text-gray-200 whitespace-pre-wrap">${escapeHtml(post.content || '')}</p></div>`;
+      html += `<div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${escapeHtml(post.postId)}"><div class="flex items-start justify-between mb-3"><div class="flex items-center"><a href="/profile?userId=${escapeHtml(post.userId)}" class="avatar-with-dot"><img src="${avatar}" alt="${escapeHtml(username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600"></a><div><a href="/profile?userId=${escapeHtml(post.userId)}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(username)}</a><p class="text-gray-400 text-xs">${new Date(post.timestamp || Date.now()).toLocaleString('ar-EG')}</p></div></div><div><button class="text-gray-400 post-menu-button" onclick="togglePostMenu('${escapeHtml(post.postId)}', '${escapeHtml(post.userId)}', event, this)"><i class="fas fa-ellipsis-v"></i></button></div></div><p class="text-gray-200 whitespace-pre-wrap">${escapeHtml(post.content || '')}</p></div>`;
     });
     html += `</div>`;
 
@@ -3814,22 +3904,23 @@ app.use((err, req, res, next) => {
 // ============================================================
 // مسار جديد: جلب رسائل المحادثة (JSON) - يحل مشكلة التاريخ والصوت
 // ============================================================
-app.get('/api/messages/:chatId', async (req, res) => {
-  // التحقق من تسجيل الدخول
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'غير مصرح' });
-  }
-
+app.get('/api/messages/:chatId', requireAuth, async (req, res) => {
   const chatId = req.params.chatId;
   const currentUserId = req.session.userId;
 
-  try {
-    // 1. إعداد مرجع الرسائل
-    const messagesRef = admin.database().ref(`chats/${chatId}/messages`);
+  // Validate chatId format to prevent path traversal
+  if (!/^[A-Za-z0-9_-]+$/.test(chatId)) {
+    return res.status(400).json({ error: 'معرف المحادثة غير صالح' });
+  }
 
-    // 2. جلب الرسائل (التعديل الأساسي هنا)
-    // نستخدم limitToLast(1000) لجلب أرشيف كبير من الرسائل (القديم والجديد)
-    // يمكنك زيادة الرقم أو إزالته تماماً لجلب كل شيء، لكن 1000 رقم آمن للأداء
+  // Verify user is a participant in this chat
+  const parts = chatId.split('_');
+  if (!parts.includes(currentUserId)) {
+    return res.status(403).json({ error: 'غير مصرح لك بالوصول لهذه المحادثة' });
+  }
+
+  try {
+    const messagesRef = admin.database().ref(`chats/${chatId}/messages`);
     const snapshot = await messagesRef
       .orderByChild('timestamp')
       .limitToLast(1000) 
@@ -3837,28 +3928,23 @@ app.get('/api/messages/:chatId', async (req, res) => {
 
     const messages = [];
     snapshot.forEach(child => {
-      // تجميع الرسائل في مصفوفة
       messages.push({
         ...child.val(),
         messageId: child.key
       });
     });
 
-    // 3. جلب بيانات المستخدم الآخر (لعرض الاسم والصورة في الأعلى)
-    const parts = chatId.split('_');
-    // تحديد من هو الطرف الآخر بناءً على الـ ID
     const otherUserId = parts[0] === currentUserId ? parts[1] : parts[0];
     
     const userSnapshot = await admin.database().ref('users/' + otherUserId).once('value');
     const otherUserData = userSnapshot.val() || {};
 
-    // 4. إرسال البيانات كـ JSON
     res.json({
       messages: messages,
       currentUserId: currentUserId,
       otherUser: {
         username: otherUserData.username || 'مستخدم',
-        avatar: otherUserData.profilePic || DEFAULT_PROFILE_PIC_URL // تأكد أن هذا المتغير معرف لديك في أعلى الملف
+        avatar: otherUserData.profilePic || DEFAULT_PROFILE_PIC_URL
       }
     });
 
@@ -3879,7 +3965,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : corsOptions.origin[0],
   });
   res.write('\n');
 

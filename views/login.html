@@ -171,6 +171,14 @@
         const loginSpinner = document.getElementById('loginSpinner');
         const loginBtnText = document.getElementById('loginBtnText');
 
+        // Pre-fill username from URL params (for account switching)
+        const urlParams = new URLSearchParams(window.location.search);
+        const prefillUser = urlParams.get('username');
+        if (prefillUser) {
+            document.getElementById('id_username').value = prefillUser;
+            document.getElementById('id_password').focus();
+        }
+
         function loadAccounts() {
             try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (e) { return []; }
         }
@@ -236,14 +244,13 @@
                     // ignore - we will still save username
                 }
 
-                // save to localStorage AFTER successful server login
-                const encryptedPass = btoa(password);
+                // save account info to localStorage AFTER successful server login
+                // SECURITY: Never store passwords - only display info for account switching
                 let accounts = loadAccounts().filter(a => a.username !== username);
                 accounts.unshift({
                     username: username,
                     full_name: fullName,
-                    profile_picture_url: profilePic,
-                    auth_token: encryptedPass
+                    profile_picture_url: profilePic
                 });
                 saveAccounts(accounts.slice(0, 8));
 
