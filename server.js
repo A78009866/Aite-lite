@@ -593,6 +593,82 @@ app.post('/api/status/heartbeat', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- Block / Unblock API ----------------
+
+// Helper: check if userA has blocked userB
+async function isBlocked(blockerUserId, blockedUserId) {
+  if (!blockerUserId || !blockedUserId) return false;
+  const snap = await db.ref(`blocks/${blockerUserId}/${blockedUserId}`).once('value');
+  return snap.exists();
+}
+
+// Helper: get set of user IDs blocked by a given user
+async function getBlockedUserIds(userId) {
+  const snap = await db.ref(`blocks/${userId}`).once('value');
+  const val = snap.val();
+  return val ? new Set(Object.keys(val)) : new Set();
+}
+
+// Helper: get set of user IDs who have blocked a given user
+async function getBlockedByUserIds(userId) {
+  // We also store a reverse index at blocked_by/{blockedUserId}/{blockerUserId}
+  const snap = await db.ref(`blocked_by/${userId}`).once('value');
+  const val = snap.val();
+  return val ? new Set(Object.keys(val)) : new Set();
+}
+
+// Block a user
+app.post('/api/users/:userId/block', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const targetUserId = req.params.userId;
+  if (!targetUserId || targetUserId === currentUserId) {
+    return res.status(400).json({ ok: false, error: 'Invalid user' });
+  }
+  try {
+    await db.ref(`blocks/${currentUserId}/${targetUserId}`).set({
+      timestamp: admin.database.ServerValue.TIMESTAMP
+    });
+    // reverse index for quick lookup
+    await db.ref(`blocked_by/${targetUserId}/${currentUserId}`).set({
+      timestamp: admin.database.ServerValue.TIMESTAMP
+    });
+    res.json({ ok: true, message: 'User blocked' });
+  } catch (error) {
+    console.error('Error blocking user:', error);
+    res.status(500).json({ ok: false, error: 'Failed to block user' });
+  }
+});
+
+// Unblock a user
+app.post('/api/users/:userId/unblock', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const targetUserId = req.params.userId;
+  if (!targetUserId || targetUserId === currentUserId) {
+    return res.status(400).json({ ok: false, error: 'Invalid user' });
+  }
+  try {
+    await db.ref(`blocks/${currentUserId}/${targetUserId}`).remove();
+    await db.ref(`blocked_by/${targetUserId}/${currentUserId}`).remove();
+    res.json({ ok: true, message: 'User unblocked' });
+  } catch (error) {
+    console.error('Error unblocking user:', error);
+    res.status(500).json({ ok: false, error: 'Failed to unblock user' });
+  }
+});
+
+// Check block status between current user and target
+app.get('/api/users/:userId/block-status', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
+  const targetUserId = req.params.userId;
+  try {
+    const iBlockedThem = await isBlocked(currentUserId, targetUserId);
+    const theyBlockedMe = await isBlocked(targetUserId, currentUserId);
+    res.json({ ok: true, i_blocked: iBlockedThem, blocked_by: theyBlockedMe });
+  } catch (error) {
+    res.status(500).json({ ok: false });
+  }
+});
+
 // ---------------- Helper: Friend Utilities ----------------
 async function areFriends(userA, userB) {
   if (!userA || !userB) return false;
@@ -787,6 +863,12 @@ app.get('/api/stories', requireAuth, async (req, res) => {
     const now = Date.now();
     
     let activeStories = Object.values(storiesData).filter(s => s.expiresAt > now);
+
+    // Filter out stories from blocked users (both directions)
+    const blockedByMe = await getBlockedUserIds(currentUserId);
+    const blockedMe = await getBlockedByUserIds(currentUserId);
+    const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
+    activeStories = activeStories.filter(s => !allBlockedIds.has(s.userId));
 
     // تجميع القصص حسب المستخدم
     const groupedStories = {};
@@ -1048,10 +1130,36 @@ app.get('/api/chats', requireAuth, async (req, res) => {
       profiles[contactIds[index]] = snap.val();
     });
 
-    const finalChats = chats.map(chat => ({
-      ...chat,
-      contact_profile: profiles[chat.contact_id] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40', is_online: false }
-    }));
+    // Check block status for each chat contact
+    const blockedByMe = await getBlockedUserIds(userId);
+    const blockedMe = await getBlockedByUserIds(userId);
+
+    const finalChats = chats.map(chat => {
+      const contactId = chat.contact_id;
+      const iBlockedContact = blockedByMe.has(contactId);
+      const contactBlockedMe = blockedMe.has(contactId);
+      const isBlockRelation = iBlockedContact || contactBlockedMe;
+
+      let contactProfile = profiles[contactId] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40', is_online: false };
+
+      // If blocked, show default avatar and "Aite user"
+      if (isBlockRelation) {
+        contactProfile = {
+          ...contactProfile,
+          username: 'Aite user',
+          full_name: 'Aite user',
+          profile_picture_url: 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png',
+          is_online: false
+        };
+      }
+
+      return {
+        ...chat,
+        contact_profile: contactProfile,
+        i_blocked: iBlockedContact,
+        blocked_by: contactBlockedMe
+      };
+    });
 
     finalChats.sort((a, b) => b.last_message_timestamp - a.last_message_timestamp);
     res.json({ ok: true, chats: finalChats });
@@ -1789,6 +1897,8 @@ app.get('/api/profile', requireAuth, async (req, res) => {
     let requestSent = false;
     let requestReceived = false;
     let hasStory = false;
+    let iBlockedThem = false;
+    let theyBlockedMe = false;
     try {
       if (!isOwner) {
         const friendSnap = await db.ref(`friends/${currentUserId}/${requestedUserId}`).once('value');
@@ -1797,8 +1907,32 @@ app.get('/api/profile', requireAuth, async (req, res) => {
         requestSent = outgoing.exists();
         const incoming = await db.ref(`friend_requests/${currentUserId}/${requestedUserId}`).once('value');
         requestReceived = incoming.exists();
+        // Check block status
+        iBlockedThem = await isBlocked(currentUserId, requestedUserId);
+        theyBlockedMe = await isBlocked(requestedUserId, currentUserId);
       }
     } catch (e) { /* ignore */ }
+
+    // If blocked by the other user, return limited profile
+    if (theyBlockedMe) {
+      return res.json({
+        ok: true,
+        id: requestedUserId,
+        username: 'Aite user',
+        full_name: 'Aite user',
+        profile_picture_url: 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png',
+        bio: '',
+        is_owner: false,
+        is_friend: false,
+        request_sent: false,
+        request_received: false,
+        has_story: false,
+        story_viewed: false,
+        story_color: '',
+        i_blocked: iBlockedThem,
+        blocked_by: true
+      });
+    }
 
     // Check if user has active stories + viewed status + story color
     let storyViewed = false;
@@ -1821,7 +1955,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
       if (hasStory) storyViewed = allViewedFlag;
     } catch (e) { /* ignore */ }
 
-    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor });
+    res.json({ ok: true, ...profileData, is_owner: isOwner, is_friend: isFriend, request_sent: requestSent, request_received: requestReceived, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor, i_blocked: iBlockedThem, blocked_by: theyBlockedMe });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -1829,10 +1963,37 @@ app.get('/api/profile', requireAuth, async (req, res) => {
 
 app.get('/api/profile/:userId', requireAuth, async (req, res) => {
   const { userId } = req.params;
+  const currentUserId = req.session.userId;
   try {
     const profileSnap = await db.ref('profiles').child(userId).once('value');
     const profile = profileSnap.val();
     if (!profile) return res.status(404).json({ ok: false });
+
+    // Check block status
+    let iBlockedThem = false;
+    let theyBlockedMe = false;
+    try {
+      if (currentUserId !== userId) {
+        iBlockedThem = await isBlocked(currentUserId, userId);
+        theyBlockedMe = await isBlocked(userId, currentUserId);
+      }
+    } catch (e) { /* ignore */ }
+
+    // If blocked by this user, return limited profile
+    if (theyBlockedMe) {
+      return res.json({
+        id: userId,
+        username: 'Aite user',
+        full_name: 'Aite user',
+        profile_picture_url: 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png',
+        bio: '',
+        has_story: false,
+        story_viewed: false,
+        story_color: '',
+        i_blocked: iBlockedThem,
+        blocked_by: true
+      });
+    }
 
     // Check if user has active stories + viewed status + story color
     let hasStory = false;
@@ -1856,7 +2017,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
       if (hasStory) storyViewed = allViewedFlag;
     } catch (e) { /* ignore */ }
 
-    res.json({ ...profile, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor });
+    res.json({ ...profile, has_story: hasStory, story_viewed: storyViewed, story_color: storyColor, i_blocked: iBlockedThem, blocked_by: theyBlockedMe });
   } catch (error) {
     res.status(500).json({ ok: false });
   }
@@ -1994,6 +2155,11 @@ app.post('/api/posts/create', requireAuth, (req, res, next) => {
 app.get('/api/posts', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
+    // Get blocked user IDs (both directions)
+    const blockedByMe = await getBlockedUserIds(currentUserId);
+    const blockedMe = await getBlockedByUserIds(currentUserId);
+    const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
+
     const postsSnap = await db.ref('posts')
       .orderByChild('timestamp')
       .limitToLast(50)
@@ -2001,7 +2167,11 @@ app.get('/api/posts', requireAuth, async (req, res) => {
 
     let posts = [];
     postsSnap.forEach(childSnap => {
-      posts.push(childSnap.val());
+      const post = childSnap.val();
+      // Filter out posts from blocked users
+      if (!allBlockedIds.has(post.userId)) {
+        posts.push(post);
+      }
     });
     posts.reverse();
 
@@ -2052,6 +2222,14 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
   if (!requestedUserId) return res.status(400).json({ ok: false, error: 'userId required' });
 
   try {
+    // If either user has blocked the other, return empty posts
+    if (currentUserId !== requestedUserId) {
+      const iBlockedThem = await isBlocked(currentUserId, requestedUserId);
+      const theyBlockedMe = await isBlocked(requestedUserId, currentUserId);
+      if (iBlockedThem || theyBlockedMe) {
+        return res.json({ ok: true, posts: [] });
+      }
+    }
     const postsSnap = await db.ref('posts')
       .orderByChild('userId')
       .equalTo(requestedUserId)
@@ -2643,6 +2821,12 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
     });
 
     reels.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    // Filter out reels from blocked users
+    const blockedByMe = await getBlockedUserIds(currentUserId);
+    const blockedMe = await getBlockedByUserIds(currentUserId);
+    const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
+    reels = reels.filter(r => !allBlockedIds.has(r.userId));
 
     const finalReels = await Promise.all(reels.map(async (reel) => {
       const userSnap = await db.ref(`profiles/${reel.userId}`).once('value');

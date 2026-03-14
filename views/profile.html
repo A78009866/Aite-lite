@@ -1949,13 +1949,21 @@
                                 تعديل
                             </a>
 
-                            <!-- chatButton: will have green #1fd14f from CSS when shown -->
-                            <a id="chatButton"
+                            <!-- chatButton + block button row -->
+                            <div class="flex gap-2 items-center">
+                                <a id="chatButton"
    href="#"
-   class="action-btn message" style="display:none">
-    <i class="fas fa-comment-dots ml-2"></i>
+   class="action-btn message" style="display:none; font-size:0.85rem; padding:6px 14px;">
+    <i class="fas fa-comment-dots ml-1"></i>
     مراسلة
 </a>
+                                <button id="blockUserBtn" style="display:none; background:#dc2626; color:#fff; border:none; border-radius:8px; padding:6px 12px; cursor:pointer; font-size:0.85rem; transition:background 0.2s;" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                                <button id="unblockUserBtn" style="display:none; background:#f59e0b; color:#fff; border:none; border-radius:8px; padding:6px 14px; cursor:pointer; font-size:0.85rem; transition:background 0.2s;" onmouseover="this.style.background='#d97706'" onmouseout="this.style.background='#f59e0b'">
+                                    <i class="fas fa-ban ml-1"></i> إلغاء الحظر
+                                </button>
+                            </div>
 
                             <div id="friendActionContainer" class="flex gap-2">
                                 </div>
@@ -3282,18 +3290,62 @@ async function fetchAndDisplayProfile() {
             } else {
                 editProfileButton.classList.add('hidden');
 
-                // Update chatButton appearance to match all_users style when visible
-                if (data.is_friend) {
-                    if (chatButton) {
-                        chatButton.href = `/chat?contactId=${currentProfileId}`;
-                        chatButton.classList.remove('hidden');
-                        chatButton.style.display = 'inline-flex';
-                    }
+                // Block/unblock button logic
+                const blockBtn = document.getElementById('blockUserBtn');
+                const unblockBtn = document.getElementById('unblockUserBtn');
+
+                if (data.i_blocked) {
+                    // Current user has blocked this profile
+                    if (blockBtn) blockBtn.style.display = 'none';
+                    if (unblockBtn) unblockBtn.style.display = 'inline-flex';
+                    if (chatButton) { chatButton.classList.add('hidden'); chatButton.style.display = 'none'; }
+                } else if (data.blocked_by) {
+                    // This profile has blocked the current user
+                    if (blockBtn) blockBtn.style.display = 'none';
+                    if (unblockBtn) unblockBtn.style.display = 'none';
+                    if (chatButton) { chatButton.classList.add('hidden'); chatButton.style.display = 'none'; }
                 } else {
-                    if (chatButton) {
-                        chatButton.classList.add('hidden');
-                        chatButton.style.display = 'none';
+                    // Update chatButton appearance to match all_users style when visible
+                    if (data.is_friend) {
+                        if (chatButton) {
+                            chatButton.href = `/chat?contactId=${currentProfileId}`;
+                            chatButton.classList.remove('hidden');
+                            chatButton.style.display = 'inline-flex';
+                        }
+                        if (blockBtn) blockBtn.style.display = 'inline-flex';
+                    } else {
+                        if (chatButton) {
+                            chatButton.classList.add('hidden');
+                            chatButton.style.display = 'none';
+                        }
+                        // Show block button even if not friends
+                        if (blockBtn) blockBtn.style.display = 'inline-flex';
                     }
+                    if (unblockBtn) unblockBtn.style.display = 'none';
+                }
+
+                // Block button click handler
+                if (blockBtn) {
+                    blockBtn.onclick = async () => {
+                        try {
+                            const r = await fetch(`/api/users/${currentProfileId}/block`, { method: 'POST', credentials: 'same-origin' });
+                            const j = await r.json();
+                            if (r.ok && j.ok) { showToast('تم حظر المستخدم.', { type: 'success' }); fetchAndDisplayProfile(); }
+                            else { showToast('فشل في حظر المستخدم.', { type: 'error' }); }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); }
+                    };
+                }
+
+                // Unblock button click handler
+                if (unblockBtn) {
+                    unblockBtn.onclick = async () => {
+                        try {
+                            const r = await fetch(`/api/users/${currentProfileId}/unblock`, { method: 'POST', credentials: 'same-origin' });
+                            const j = await r.json();
+                            if (r.ok && j.ok) { showToast('تم إلغاء الحظر.', { type: 'success' }); fetchAndDisplayProfile(); }
+                            else { showToast('فشل في إلغاء الحظر.', { type: 'error' }); }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); }
+                    };
                 }
 
                 if (data.request_received) {
@@ -3513,6 +3565,14 @@ function escapeAttr(s) {
             link.classList.add('active');
         }
     });
+})();
+</script>
+
+<script>
+// Heartbeat - mark user as active
+(function(){
+  fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
+  setInterval(() => { fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{}); }, 30000);
 })();
 </script>
 

@@ -2108,6 +2108,9 @@ textarea:focus { border-color: var(--accent); }
         <div id="header-status" class="sub"></div>
       </div>
     </a>
+    <button id="block-btn-chat" title="حظر المستخدم" style="display:none; background:none; border:none; color:#ef4444; font-size:18px; cursor:pointer; padding:8px; margin-right:8px; transition:color 0.2s;" onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#ef4444'">
+      <i class="fas fa-ban"></i>
+    </button>
   </div>
 
   <div class="glass">
@@ -2158,6 +2161,14 @@ textarea:focus { border-color: var(--accent); }
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Blocked user banner -->
+  <div id="blocked-banner" style="display:none; text-align:center; padding:16px; background:rgba(15,23,42,0.95); border-top:1px solid rgba(255,255,255,0.1);">
+    <p style="color:#f87171; font-size:14px; margin-bottom:10px;"><i class="fas fa-ban" style="margin-left:6px;"></i> لقد قمت بحظر هذا المستخدم</p>
+    <button id="unblock-btn-chat" style="background:#f59e0b; color:#fff; border:none; border-radius:8px; padding:8px 20px; cursor:pointer; font-size:13px; font-weight:600; transition:background 0.2s;" onmouseover="this.style.background='#d97706'" onmouseout="this.style.background='#f59e0b'">
+      <i class="fas fa-ban" style="margin-left:4px;"></i> إلغاء الحظر
+    </button>
   </div>
 
   <form id="composer" class="composer" onsubmit="return false;">
@@ -2511,6 +2522,53 @@ function pickEmoji(emoji) {
   }
 }
 
+// --- Block/Unblock in Chat ---
+let chatBlocked = false; // true if current user blocked the other
+let chatBlockedBy = false; // true if other user blocked current user
+
+function updateBlockUI() {
+  const composer = document.getElementById('composer');
+  const blockedBanner = document.getElementById('blocked-banner');
+  const blockBtnChat = document.getElementById('block-btn-chat');
+
+  if (chatBlocked) {
+    // Current user blocked the other
+    if (composer) composer.style.display = 'none';
+    if (blockedBanner) blockedBanner.style.display = 'block';
+    if (blockBtnChat) blockBtnChat.style.display = 'none';
+  } else if (chatBlockedBy) {
+    // Other user blocked current user
+    if (composer) composer.style.display = 'none';
+    if (blockedBanner) blockedBanner.style.display = 'none';
+    if (blockBtnChat) blockBtnChat.style.display = 'none';
+  } else {
+    // No block
+    if (composer) composer.style.display = '';
+    if (blockedBanner) blockedBanner.style.display = 'none';
+    if (blockBtnChat) blockBtnChat.style.display = 'block';
+  }
+}
+
+async function checkBlockStatus() {
+  try {
+    const res = await fetch(`/api/users/${otherId}/block-status`);
+    const data = await res.json();
+    if (data.ok) {
+      chatBlocked = data.i_blocked;
+      chatBlockedBy = data.blocked_by;
+      updateBlockUI();
+
+      // If blocked, update header to show Aite user
+      if (chatBlocked || chatBlockedBy) {
+        document.getElementById('header-name').textContent = 'Aite user';
+        document.getElementById('header-avatar').src = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+        document.getElementById('header-online').style.display = 'none';
+        document.getElementById('header-status').textContent = '';
+      }
+    }
+  } catch (e) { console.error(e); }
+}
+
 // --- Init ---
 async function init() {
   if (!otherId) return window.location.href = '/chat_list';
@@ -2524,6 +2582,44 @@ async function init() {
 
   // Header Info
   fetchProfile();
+
+  // Check block status
+  await checkBlockStatus();
+
+  // Block button handler
+  const blockBtnChat = document.getElementById('block-btn-chat');
+  if (blockBtnChat) {
+    blockBtnChat.onclick = async () => {
+      try {
+        const r = await fetch(`/api/users/${otherId}/block`, { method: 'POST', credentials: 'same-origin' });
+        const j = await r.json();
+        if (r.ok && j.ok) {
+          chatBlocked = true;
+          updateBlockUI();
+          document.getElementById('header-name').textContent = 'Aite user';
+          document.getElementById('header-avatar').src = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+          document.getElementById('header-online').style.display = 'none';
+          document.getElementById('header-status').textContent = '';
+        }
+      } catch (e) { console.error(e); }
+    };
+  }
+
+  // Unblock button handler
+  const unblockBtnChat = document.getElementById('unblock-btn-chat');
+  if (unblockBtnChat) {
+    unblockBtnChat.onclick = async () => {
+      try {
+        const r = await fetch(`/api/users/${otherId}/unblock`, { method: 'POST', credentials: 'same-origin' });
+        const j = await r.json();
+        if (r.ok && j.ok) {
+          chatBlocked = false;
+          updateBlockUI();
+          fetchProfile(); // Re-fetch to show real profile
+        }
+      } catch (e) { console.error(e); }
+    };
+  }
 
   // Load Messages
   await loadMessages(true);
@@ -2553,16 +2649,25 @@ async function fetchProfile() {
     const res = await fetch(`/api/profile/${otherId}`);
     const data = await res.json();
     if(data) {
-      document.getElementById('header-name').innerHTML = escapeHtml(data.full_name || data.username) + (data.is_verified ? VERIFIED_ICON : '');
-      document.getElementById('header-avatar').src = data.profile_picture_url || 'https://via.placeholder.com/40';
-      document.getElementById('profile-link').href = `/profile?userId=${otherId}`;
-      if(data.is_online) {
-        document.getElementById('header-online').style.display = 'block';
-        const st = document.getElementById('header-status');
-        st.textContent = 'متصل الآن';
-        st.style.color = '#22c55e';
+      // Check if blocked - show Aite user
+      if (data.blocked_by || data.i_blocked) {
+        document.getElementById('header-name').textContent = 'Aite user';
+        document.getElementById('header-avatar').src = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+        document.getElementById('header-online').style.display = 'none';
+        document.getElementById('header-status').textContent = '';
+        document.getElementById('profile-link').href = `/profile?userId=${otherId}`;
       } else {
-         document.getElementById('header-status').textContent = 'غير متصل';
+        document.getElementById('header-name').innerHTML = escapeHtml(data.full_name || data.username) + (data.is_verified ? VERIFIED_ICON : '');
+        document.getElementById('header-avatar').src = data.profile_picture_url || 'https://via.placeholder.com/40';
+        document.getElementById('profile-link').href = `/profile?userId=${otherId}`;
+        if(data.is_online) {
+          document.getElementById('header-online').style.display = 'block';
+          const st = document.getElementById('header-status');
+          st.textContent = 'متصل الآن';
+          st.style.color = '#22c55e';
+        } else {
+           document.getElementById('header-status').textContent = 'غير متصل';
+        }
       }
 
       // Story-based avatar border coloring
@@ -3643,6 +3748,14 @@ init();
             link.classList.add('active');
         }
     });
+})();
+</script>
+
+<script>
+// Heartbeat - mark user as active
+(function(){
+  fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
+  setInterval(() => { fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{}); }, 30000);
 })();
 </script>
 
