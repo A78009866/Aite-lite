@@ -101,6 +101,28 @@
     </div>
   </div>
 
+  <!-- Password Change Modal -->
+  <div id="passwordModal" class="modal-overlay" style="display:none;" onclick="closePasswordModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(59,130,246,0.1);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+          <i class="fas fa-key" style="color:#60a5fa;font-size:22px;"></i>
+        </div>
+        <h3 style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;">تغيير كلمة المرور</h3>
+        <p style="font-size:13px;color:#9ca3af;">تغيير كلمة مرور <span id="passwordUsername" style="color:#60a5fa;font-weight:600;"></span></p>
+      </div>
+      <div style="margin-bottom:16px;">
+        <input type="password" id="newPasswordInput" placeholder="كلمة المرور الجديدة (6 أحرف على الأقل)" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e5e7eb;font-size:14px;outline:none;" onfocus="this.style.borderColor='rgba(59,130,246,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+        <div id="passwordError" style="display:none;color:#f87171;font-size:12px;margin-top:6px;"></div>
+        <div id="passwordSuccess" style="display:none;color:#22c55e;font-size:12px;margin-top:6px;"></div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="closePasswordModal()" style="flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#9ca3af;font-weight:600;cursor:pointer;font-size:14px;">إلغاء</button>
+        <button id="confirmPasswordBtn" onclick="confirmPasswordChange()" style="flex:1;padding:10px;border-radius:12px;border:none;background:rgba(59,130,246,0.8);color:#fff;font-weight:600;cursor:pointer;font-size:14px;">تغيير</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Delete Confirmation Modal -->
   <div id="deleteModal" class="modal-overlay" style="display:none;" onclick="closeDeleteModal()">
     <div class="modal-box" onclick="event.stopPropagation()">
@@ -205,6 +227,7 @@
           '</div>' +
           '<div class="flex items-center gap-2 flex-shrink-0 mr-2">' +
             verifyBtn +
+            '<button class="btn-action" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);" onclick="openPasswordModal(\'' + u.id + '\',\'' + escapeHtml(u.username||'') + '\')"><i class="fas fa-key"></i></button>' +
             '<button class="btn-action btn-del" onclick="openDeleteModal(\'' + u.id + '\',\'' + escapeHtml(u.username||'') + '\')"><i class="fas fa-trash-alt"></i></button>' +
           '</div>';
         usersContainer.appendChild(card);
@@ -261,6 +284,62 @@
         } else { alert('فشل الحذف: ' + (j.error||'')); }
       } catch(err) { console.error(err); alert('خطأ في الاتصال'); }
       finally { btn.disabled = false; btn.innerHTML = 'حذف نهائي'; }
+    }
+
+    var passwordTargetId = null;
+
+    function openPasswordModal(userId, username) {
+      passwordTargetId = userId;
+      document.getElementById('passwordUsername').textContent = username;
+      document.getElementById('newPasswordInput').value = '';
+      document.getElementById('passwordError').style.display = 'none';
+      document.getElementById('passwordSuccess').style.display = 'none';
+      document.getElementById('passwordModal').style.display = 'flex';
+      setTimeout(function(){ document.getElementById('newPasswordInput').focus(); }, 100);
+    }
+
+    function closePasswordModal() {
+      document.getElementById('passwordModal').style.display = 'none';
+      passwordTargetId = null;
+    }
+
+    async function confirmPasswordChange() {
+      if (!passwordTargetId) return;
+      var newPassword = document.getElementById('newPasswordInput').value;
+      var errorEl = document.getElementById('passwordError');
+      var successEl = document.getElementById('passwordSuccess');
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+      if (!newPassword || newPassword.length < 6) {
+        errorEl.textContent = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
+        errorEl.style.display = 'block';
+        return;
+      }
+      var btn = document.getElementById('confirmPasswordBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري التغيير...';
+      try {
+        var res = await fetch('/api/admin/users/' + encodeURIComponent(passwordTargetId) + '/change-password', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+          body: JSON.stringify({ newPassword: newPassword })
+        });
+        var j = await res.json();
+        if (res.ok && j.ok) {
+          successEl.textContent = 'تم تغيير كلمة المرور بنجاح';
+          successEl.style.display = 'block';
+          setTimeout(closePasswordModal, 1500);
+        } else {
+          errorEl.textContent = j.error || 'فشل تغيير كلمة المرور';
+          errorEl.style.display = 'block';
+        }
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = 'خطأ في الاتصال';
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'تغيير';
+      }
     }
 
     searchInput.addEventListener('input', renderUsers);

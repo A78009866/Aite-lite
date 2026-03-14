@@ -404,10 +404,10 @@
         <div class="absolute left-4 bottom-24 flex flex-col items-center gap-6 z-20 pointer-events-auto">
           <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="handleLike('${reel.reelId}')">
             <i class="${reel.is_liked ? 'fas text-red-500' : 'far text-white'} fa-heart text-3xl drop-shadow-md" id="likeIcon-${reel.reelId}"></i>
-            <span class="text-xs font-bold" id="likeCount-${reel.reelId}">${reel.likes}</span>
+            <span class="text-xs font-bold cursor-pointer" id="likeCount-${reel.reelId}" onclick="event.stopPropagation(); showLikesList('${reel.reelId}', 'reel')">${reel.likes}</span>
           </div>
           <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="openComments('${reel.reelId}')">
-            <i class="fas fa-comment-dots text-3xl text-white drop-shadow-md"></i>
+            <i class="fa-solid fa-comment text-3xl text-white drop-shadow-md"></i>
             <span class="text-xs font-bold" id="commentCount-${reel.reelId}">${reel.commentsCount}</span>
           </div>
           <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="shareReel('${reel.reelId}')">
@@ -928,8 +928,77 @@
 // Heartbeat - mark user as active
 (function(){
   fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
-  setInterval(() => { fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{}); }, 30000);
+  setInterval(() => { fetch("/api/status/heartbeat", { method: "POST", credentials: "same-origin" }).catch(()=>{}); }, 20000);
 })();
+</script>
+<!-- Likes List Modal -->
+<style>
+.likes-modal-overlay {
+    position: fixed; inset: 0; z-index: 80;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.likes-modal-overlay.open { opacity: 1; pointer-events: auto; }
+.likes-modal-box {
+    background: #1a1a1e; border-radius: 20px 20px 0 0;
+    width: 100%; max-width: 500px; max-height: 60vh;
+    display: flex; flex-direction: column;
+    transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+.likes-modal-overlay.open .likes-modal-box { transform: translateY(0); }
+.likes-modal-box .modal-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 12px auto 8px auto; }
+.likes-user-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    transition: background 0.15s; cursor: pointer; text-decoration: none; color: inherit;
+}
+.likes-user-item:hover { background: rgba(255,255,255,0.05); }
+.likes-user-item img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
+.likes-user-item .username { font-weight: 600; font-size: 14px; color: #fff; }
+@media (min-width: 768px) {
+    .likes-modal-box { border-radius: 16px; max-height: 50vh; margin-bottom: 10vh; }
+}
+</style>
+<div id="likesModal" class="likes-modal-overlay" onclick="closeLikesModal()">
+  <div class="likes-modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle" onclick="closeLikesModal()"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 16px 8px;border-bottom:1px solid rgba(255,255,255,0.08);">
+      <h3 style="font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;"><i class="fas fa-heart" style="color:#ef4444;"></i> الإعجابات</h3>
+      <button style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:#9ca3af;border:none;cursor:pointer;" onclick="closeLikesModal()"><i class="fas fa-times" style="font-size:12px;"></i></button>
+    </div>
+    <div id="likesListContent" style="flex-grow:1;overflow-y:auto;padding:8px;"></div>
+  </div>
+</div>
+<script>
+var VERIFIED_BADGE_URL = (typeof VERIFIED_IMG_URL !== 'undefined') ? VERIFIED_IMG_URL : '';
+async function showLikesList(id, type) {
+    var modal = document.getElementById('likesModal');
+    var content = document.getElementById('likesListContent');
+    modal.classList.add('open');
+    content.innerHTML = '<div style="display:flex;justify-content:center;padding:32px 0;"><i class="fas fa-spinner fa-spin" style="color:#f87171;font-size:20px;"></i></div>';
+    try {
+        var endpoint = type === 'reel' ? '/api/reels/' + encodeURIComponent(id) + '/likes' : '/api/posts/' + encodeURIComponent(id) + '/likes';
+        var res = await fetch(endpoint, { credentials: 'same-origin' });
+        var data = await res.json();
+        if (data.ok && data.users && data.users.length > 0) {
+            content.innerHTML = data.users.map(function(u) {
+                var badge = u.is_verified && VERIFIED_BADGE_URL ? ' <img src="' + VERIFIED_BADGE_URL + '" class="verified-badge-img" style="width:14px;height:14px;display:inline;vertical-align:middle;">' : '';
+                return '<a href="/profile?userId=' + encodeURIComponent(u.id) + '" class="likes-user-item">' +
+                    '<img src="' + (u.profile_picture_url || 'https://via.placeholder.com/40') + '" alt="' + u.username + '" onerror="this.src=\'https://via.placeholder.com/40\'">' +
+                    '<span class="username">' + u.username + badge + '</span></a>';
+            }).join('');
+        } else {
+            content.innerHTML = '<div style="text-align:center;color:#6b7280;padding:32px 0;"><i class="far fa-heart" style="font-size:24px;margin-bottom:8px;display:block;"></i><p style="font-size:14px;">لا توجد إعجابات بعد</p></div>';
+        }
+    } catch(e) {
+        console.error(e);
+        content.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">فشل في جلب الإعجابات</div>';
+    }
+}
+function closeLikesModal() {
+    document.getElementById('likesModal').classList.remove('open');
+}
 </script>
 </body>
 </html>

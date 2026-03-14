@@ -28,11 +28,43 @@
         }
 
         .glass-post-card {
-            background-color: rgba(20, 20, 20, 0.6);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: rgba(18, 18, 22, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .glass-post-card:hover {
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+
+        /* Likes Modal */
+        .likes-modal-overlay {
+            position: fixed; inset: 0; z-index: 80;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            display: flex; align-items: flex-end; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .likes-modal-overlay.open { opacity: 1; pointer-events: auto; }
+        .likes-modal-box {
+            background: #1a1a1e; border-radius: 20px 20px 0 0;
+            width: 100%; max-width: 500px; max-height: 60vh;
+            display: flex; flex-direction: column;
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .likes-modal-overlay.open .likes-modal-box { transform: translateY(0); }
+        .likes-modal-box .modal-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 12px auto 8px auto; }
+        .likes-user-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+            transition: background 0.15s; cursor: pointer; text-decoration: none; color: inherit;
+        }
+        .likes-user-item:hover { background: rgba(255,255,255,0.05); }
+        .likes-user-item img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
+        .likes-user-item .username { font-weight: 600; font-size: 14px; color: #fff; }
+        @media (min-width: 768px) {
+            .likes-modal-box { border-radius: 16px; max-height: 50vh; margin-bottom: 10vh; }
         }
 
         /* --- Video large display --- */
@@ -1740,9 +1772,9 @@
                     ${mediaContent}
 
                     <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
-                        <span id="likesCountDisplay"><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
+                        <span id="likesCountDisplay" class="cursor-pointer hover:text-red-400" onclick="showLikesList('${post.postId}', 'post')"><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
                         <span class="cursor-pointer hover:text-blue-400" onclick="handleComment('${post.postId}')">
-                            <i class="far fa-comment-dots ml-1"></i> <span id="commentsCountDisplay">${post.commentsCount}</span> تعليق
+                            <i class="fa-solid fa-comment ml-1"></i> <span id="commentsCountDisplay">${post.commentsCount}</span> تعليق
                         </span>
                     </div>
 
@@ -1754,13 +1786,13 @@
                         </button>
 
                         <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="handleComment('${post.postId}')">
-                            <i class="fas fa-comment-dots text-lg"></i>
+                            <i class="fa-solid fa-comment text-lg"></i>
                             <span class="text-sm font-medium">تعليق</span>
                         </button>
 
                         <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="copyPostLink('${post.postId}', event)">
-                            <i class="fas fa-link text-lg"></i>
-                            <span class="text-sm font-medium">نسخ</span>
+                            <i class="fas fa-share-nodes text-lg"></i>
+                            <span class="text-sm font-medium">مشاركة</span>
                         </button>
                     </div>
                 </div>
@@ -2182,8 +2214,50 @@
 // Heartbeat - mark user as active
 (function(){
   fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
-  setInterval(() => { fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{}); }, 30000);
+  setInterval(() => { fetch("/api/status/heartbeat", { method: "POST", credentials: "same-origin" }).catch(()=>{}); }, 20000);
 })();
+</script>
+
+<!-- Likes List Modal -->
+<div id="likesModal" class="likes-modal-overlay" onclick="closeLikesModal()">
+  <div class="likes-modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle" onclick="closeLikesModal()"></div>
+    <div class="flex justify-between items-center px-4 pb-2 pt-1 border-b border-gray-800">
+      <h3 class="text-base font-bold text-white flex items-center gap-2"><i class="fas fa-heart text-red-500"></i> الإعجابات</h3>
+      <button class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300 hover:text-white" onclick="closeLikesModal()"><i class="fas fa-times text-sm"></i></button>
+    </div>
+    <div id="likesListContent" class="flex-grow overflow-y-auto p-2 custom-scrollbar"></div>
+  </div>
+</div>
+<script>
+var VERIFIED_BADGE_URL = (typeof VERIFIED_IMG_URL !== 'undefined') ? VERIFIED_IMG_URL : '';
+async function showLikesList(id, type) {
+    var modal = document.getElementById('likesModal');
+    var content = document.getElementById('likesListContent');
+    modal.classList.add('open');
+    content.innerHTML = '<div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-red-400 text-xl"></i></div>';
+    try {
+        var endpoint = type === 'reel' ? '/api/reels/' + encodeURIComponent(id) + '/likes' : '/api/posts/' + encodeURIComponent(id) + '/likes';
+        var res = await fetch(endpoint, { credentials: 'same-origin' });
+        var data = await res.json();
+        if (data.ok && data.users && data.users.length > 0) {
+            content.innerHTML = data.users.map(function(u) {
+                var badge = u.is_verified && VERIFIED_BADGE_URL ? ' <img src="' + VERIFIED_BADGE_URL + '" class="verified-badge-img" style="width:14px;height:14px;display:inline;vertical-align:middle;">' : '';
+                return '<a href="/profile?userId=' + encodeURIComponent(u.id) + '" class="likes-user-item">' +
+                    '<img src="' + (u.profile_picture_url || 'https://via.placeholder.com/40') + '" alt="' + u.username + '" onerror="this.src=\'https://via.placeholder.com/40\'">' +
+                    '<span class="username">' + u.username + badge + '</span></a>';
+            }).join('');
+        } else {
+            content.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="far fa-heart text-3xl mb-2 block"></i><p class="text-sm">لا توجد إعجابات بعد</p></div>';
+        }
+    } catch(e) {
+        console.error(e);
+        content.innerHTML = '<div class="text-center text-red-400 py-4">فشل في جلب الإعجابات</div>';
+    }
+}
+function closeLikesModal() {
+    document.getElementById('likesModal').classList.remove('open');
+}
 </script>
 
 </body>

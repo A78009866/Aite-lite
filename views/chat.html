@@ -2876,21 +2876,51 @@ async function init() {
 
   // Load Messages
   await loadMessages(true);
-  setInterval(() => loadMessages(false), 3000);
+  setInterval(() => loadMessages(false), 1500);
 
-  // Poll typing status from other user
+  // Poll typing status from other user (fast 1s interval)
   setInterval(async () => {
     try {
       const r = await fetch(`/api/typing/${otherId}`);
       const d = await r.json();
       const indicator = document.getElementById('typing-indicator');
+      const headerStatus = document.getElementById('header-status');
       if (d.ok && d.typing) {
         indicator.style.display = 'block';
+        if (headerStatus) { headerStatus.textContent = 'يكتب...'; headerStatus.style.color = '#60a5fa'; }
+        // Auto-scroll so typing indicator is visible
+        const messagesEl = document.getElementById('messages');
+        if (messagesEl) { const atBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120; if (atBottom) indicator.scrollIntoView({ behavior: 'smooth', block: 'end' }); }
       } else {
         indicator.style.display = 'none';
+        // Restore online status text
+        if (headerStatus && headerStatus.textContent === 'يكتب...') {
+          const onlineDot = document.getElementById('header-online');
+          if (onlineDot && onlineDot.style.display !== 'none') { headerStatus.textContent = 'متصل الآن'; headerStatus.style.color = '#22c55e'; }
+          else { headerStatus.textContent = 'غير متصل'; headerStatus.style.color = ''; }
+        }
       }
     } catch(e) {}
-  }, 2000);
+  }, 1000);
+
+  // Poll online status of other user frequently (every 5s)
+  setInterval(async () => {
+    try {
+      const r = await fetch(`/api/profile/${otherId}`);
+      const d = await r.json();
+      if (d && !d.blocked_by && !d.i_blocked) {
+        const onlineDot = document.getElementById('header-online');
+        const headerStatus = document.getElementById('header-status');
+        if (d.is_online) {
+          if (onlineDot) onlineDot.style.display = 'block';
+          if (headerStatus && headerStatus.textContent !== 'يكتب...') { headerStatus.textContent = 'متصل الآن'; headerStatus.style.color = '#22c55e'; }
+        } else {
+          if (onlineDot) onlineDot.style.display = 'none';
+          if (headerStatus && headerStatus.textContent !== 'يكتب...') { headerStatus.textContent = 'غير متصل'; headerStatus.style.color = ''; }
+        }
+      }
+    } catch(e) {}
+  }, 5000);
 
   // Resize Textarea + Typing indicator send
   msgInput.addEventListener('input', function() {
@@ -3639,7 +3669,7 @@ function renderComposerPreview(file, type) {
       info.innerHTML = `<div class="preview-filename">${file.name}</div><div class="preview-sub">${(file.size/1024).toFixed(0)} KB</div>`;
       
       if(type==='image') wrapper.appendChild(img);
-      else wrapper.appendChild(document.createElement('div').innerHTML='<i class="fas fa-file text-white fa-2x"></i>');
+      else { var fileIcon = document.createElement('div'); fileIcon.innerHTML='<i class="fas fa-file" style="color:#fff;font-size:24px;"></i>'; wrapper.appendChild(fileIcon); }
       wrapper.appendChild(info);
       filePreviewArea.appendChild(wrapper);
   }
@@ -3894,29 +3924,43 @@ async function uploadToCloudinary(file) {
   if (file.type.startsWith('image')) resourceType = 'image';
   else if (file.type.startsWith('video')) resourceType = 'video';
   else if (file.type.startsWith('audio') || file.name.endsWith('.webm')) resourceType = 'video';
+  else resourceType = 'raw';
 
-  var signRes = await fetch('/api/cloudinary/sign', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder: 'chat_media', resource_type: resourceType }),
-    credentials: 'same-origin'
-  });
-  var signData = await signRes.json();
-  if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+  try {
+    var signRes = await fetch('/api/cloudinary/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: 'chat_media', resource_type: resourceType }),
+      credentials: 'same-origin'
+    });
+    if (!signRes.ok) throw new Error('فشل الاتصال بالخادم (HTTP ' + signRes.status + ')');
+    var signData = await signRes.json();
+    if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
 
-  var fd = new FormData();
-  fd.append('file', file);
-  fd.append('api_key', signData.api_key);
-  fd.append('timestamp', signData.timestamp);
-  fd.append('signature', signData.signature);
-  fd.append('folder', signData.folder);
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('api_key', signData.api_key);
+    fd.append('timestamp', signData.timestamp);
+    fd.append('signature', signData.signature);
+    fd.append('folder', signData.folder);
 
-  var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
-  var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
-  var uploadData = await uploadRes.json();
+    // For raw files, use 'auto' as the upload resource type
+    var uploadResourceType = (resourceType === 'raw') ? 'auto' : resourceType;
+    var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + uploadResourceType + '/upload';
+    var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
+    if (!uploadRes.ok) {
+      var errText = '';
+      try { var errJson = await uploadRes.json(); errText = (errJson.error && errJson.error.message) || 'خطأ في الرفع'; } catch(e) { errText = 'فشل رفع الملف (HTTP ' + uploadRes.status + ')'; }
+      throw new Error(errText);
+    }
+    var uploadData = await uploadRes.json();
 
-  if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف');
-  return { url: uploadData.secure_url, type: file.type };
+    if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف');
+    return { url: uploadData.secure_url, type: file.type };
+  } catch(err) {
+    console.error('Cloudinary upload error:', err);
+    throw err;
+  }
 }
 
 sendBtn.onclick = async () => {
@@ -4083,7 +4127,7 @@ init();
 // Heartbeat - mark user as active
 (function(){
   fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
-  setInterval(() => { fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{}); }, 30000);
+  setInterval(() => { fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{}); }, 20000);
 })();
 </script>
 
