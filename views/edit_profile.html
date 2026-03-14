@@ -1507,7 +1507,35 @@
         }
         
         /**
-         * التعامل مع إرسال النموذج (الذي يتضمن ملفات)
+         * رفع ملف مباشرة إلى Cloudinary (يتجاوز حد حجم السيرفر)
+         */
+        async function uploadToCloudinary(file, folder) {
+            var signRes = await fetch('/api/cloudinary/sign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ folder: folder })
+            });
+            var signData = await signRes.json();
+            if (!signData.ok) throw new Error('فشل في الحصول على توقيع الرفع');
+
+            var fd = new FormData();
+            fd.append('file', file);
+            fd.append('timestamp', signData.timestamp);
+            fd.append('signature', signData.signature);
+            fd.append('api_key', signData.api_key);
+            fd.append('folder', signData.folder);
+
+            var resourceType = file.type.startsWith('image/') ? 'image' : 'auto';
+            var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+            var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
+            var uploadData = await uploadRes.json();
+            if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف');
+            return uploadData.secure_url;
+        }
+
+        /**
+         * التعامل مع إرسال النموذج - رفع الصور مباشرة إلى Cloudinary
          */
         async function handleFormSubmission(event) {
             event.preventDefault();
@@ -1516,22 +1544,39 @@
             saveButton.disabled = true;
             saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';
 
-            // استخدام FormData للتعامل مع تحميل الملفات والحقول النصية معاً
-            const formData = new FormData(form);
-            
-            // تحقق من وجود ملفات، إذا لم توجد، لن يضيفها المتصفح إلى FormData
-            
             try {
-                // 💡 التعديل هنا: استخدام POST بدلاً من PUT لضمان عمل multer مع FormData
+                var bodyData = {
+                    full_name: document.getElementById('fullName').value,
+                    username: document.getElementById('username').value,
+                    bio: document.getElementById('bio').value
+                };
+
+                // رفع صورة البروفايل مباشرة إلى Cloudinary إذا تم اختيارها
+                var profilePicInput = document.getElementById('profilePicInput');
+                if (profilePicInput.files && profilePicInput.files[0]) {
+                    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع صورة البروفايل...';
+                    bodyData.profile_picture_url = await uploadToCloudinary(profilePicInput.files[0], 'profile_pics');
+                }
+
+                // رفع صورة الغلاف مباشرة إلى Cloudinary إذا تم اختيارها
+                var coverPhotoInput = document.getElementById('coverPhotoInput');
+                if (coverPhotoInput.files && coverPhotoInput.files[0]) {
+                    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع صورة الغلاف...';
+                    bodyData.cover_photo_url = await uploadToCloudinary(coverPhotoInput.files[0], 'cover_photos');
+                }
+
+                saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';
+
                 const response = await fetch('/api/profile/edit', {
-                    method: 'POST', // تم التعديل
-                    body: formData 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(bodyData)
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.ok) {
-                    // النجاح: توجيه المستخدم مرة أخرى إلى صفحة الملف الشخصي
                     window.location.href = '/profile';
                 } else {
                     errorMessage.textContent = result.error || 'فشل في حفظ التغييرات. تحقق من اسم المستخدم.';

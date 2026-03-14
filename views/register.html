@@ -176,6 +176,32 @@
             }
         }
 
+        // رفع ملف مباشرة إلى Cloudinary (يتجاوز حد حجم السيرفر)
+        async function uploadToCloudinary(file, folder) {
+            var signRes = await fetch('/api/cloudinary/sign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ folder: folder })
+            });
+            var signData = await signRes.json();
+            if (!signData.ok) throw new Error('فشل في الحصول على توقيع الرفع');
+
+            var fd = new FormData();
+            fd.append('file', file);
+            fd.append('timestamp', signData.timestamp);
+            fd.append('signature', signData.signature);
+            fd.append('api_key', signData.api_key);
+            fd.append('folder', signData.folder);
+
+            var resourceType = file.type.startsWith('image/') ? 'image' : 'auto';
+            var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+            var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
+            var uploadData = await uploadRes.json();
+            if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف');
+            return uploadData.secure_url;
+        }
+
         // مفتاح التخزين الموحد
         const REG_STORAGE_KEY = 'aite_accounts_secure_v2';
         const DEFAULT_PROFILE_IMG = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
@@ -224,22 +250,38 @@
             btnSpinner.classList.remove('hidden');
 
             try {
-                const formData = new FormData(form);
+                // رفع الصور مباشرة إلى Cloudinary (يتجاوز حد حجم السيرفر)
+                var bodyData = { username: username, password: password, full_name: fullname };
+
+                var profilePicInput = document.getElementById('id_profile_picture');
+                if (profilePicInput.files && profilePicInput.files[0]) {
+                    btnText.textContent = 'جاري رفع صورة البروفايل...';
+                    bodyData.profile_picture_url = await uploadToCloudinary(profilePicInput.files[0], 'profile_pics');
+                }
+
+                var coverPhotoInput = document.getElementById('id_cover_photo');
+                if (coverPhotoInput.files && coverPhotoInput.files[0]) {
+                    btnText.textContent = 'جاري رفع صورة الغلاف...';
+                    bodyData.cover_photo_url = await uploadToCloudinary(coverPhotoInput.files[0], 'cover_photos');
+                }
+
+                btnText.textContent = 'جاري التسجيل...';
 
                 const resp = await fetch('/register', {
                     method: 'POST',
-                    body: formData,
                     credentials: 'include',
                     headers: {
+                        'Content-Type': 'application/json',
                         'Accept': 'application/json'
-                    }
+                    },
+                    body: JSON.stringify(bodyData)
                 });
 
                 const data = await resp.json().catch(() => ({ ok: false, error: 'فشل في الاتصال بالخادم' }));
 
                 if (data && data.ok) {
-                    // save account info to local storage only AFTER server confirmed registration
-                    // SECURITY: Never store passwords - only display info for account switching
+                    // save account info + remember token to local storage AFTER server confirmed registration
+                    // SECURITY: Never store passwords - use server-generated remember token instead
                     const profilePic = data.profile_picture_url || DEFAULT_PROFILE_IMG;
 
                     let accounts = loadAccounts().filter(a => a.username !== username);
@@ -247,7 +289,8 @@
                     accounts.unshift({
                         username: username,
                         full_name: data.full_name || fullname,
-                        profile_picture_url: profilePic
+                        profile_picture_url: profilePic,
+                        remember_token: data.remember_token || ''
                     });
 
                     saveAccounts(accounts.slice(0, 8));

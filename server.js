@@ -67,7 +67,7 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: storage, fileFilter: fileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = multer({ storage: storage, fileFilter: fileFilter });
 
 // Initialize Firebase Admin
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY || '{}');
@@ -509,6 +509,9 @@ app.post('/login', authLimiter, async (req, res) => {
     });
 
     if (wantsJson) {
+      // Generate a remember token for auto-login
+      const rememberToken = await generateRememberToken(userRecord.uid);
+
       // return some public info for client to save locally AFTER successful login
       const profileSnap = await db.ref(`profiles/${userRecord.uid}`).once('value');
       const profile = profileSnap.val() || {};
@@ -517,7 +520,8 @@ app.post('/login', authLimiter, async (req, res) => {
         redirect: '/chat_list',
         username: profile.username || username,
         full_name: profile.full_name || username,
-        profile_picture_url: profile.profile_picture_url || profile.photoURL || DEFAULT_PROFILE_PIC_URL
+        profile_picture_url: profile.profile_picture_url || profile.photoURL || DEFAULT_PROFILE_PIC_URL,
+        remember_token: rememberToken
       });
     }
 
@@ -532,7 +536,14 @@ app.post('/login', authLimiter, async (req, res) => {
 });
 
 // استبدال مسار /register بالمعدّل: يرد JSON عند طلب AJAX، ويعطي رسائل خطأ واضحة
-app.post('/register', authLimiter, upload.fields([{ name: 'profile_picture' }, { name: 'cover_photo' }]), async (req, res) => {
+app.post('/register', authLimiter, (req, res, next) => {
+  // If content-type is JSON, skip multer (direct Cloudinary URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  upload.fields([{ name: 'profile_picture' }, { name: 'cover_photo' }])(req, res, next);
+}, async (req, res) => {
   const wantsJson = clientWantsJson(req);
   const { username, password, full_name } = req.body;
   let profile_picture_url = DEFAULT_PROFILE_PIC_URL;
@@ -563,7 +574,15 @@ app.post('/register', authLimiter, upload.fields([{ name: 'profile_picture' }, {
 
     const email = `${username}@trimer.io`;
 
-    // process uploaded files (if any)
+    // Support direct Cloudinary URLs (from client-side upload)
+    if (req.body.profile_picture_url) {
+      profile_picture_url = req.body.profile_picture_url;
+    }
+    if (req.body.cover_photo_url) {
+      cover_photo_url = req.body.cover_photo_url;
+    }
+
+    // process uploaded files via multer (backward compatibility)
     if (req.files) {
       if (req.files.profile_picture) profile_picture_url = req.files.profile_picture[0].path;
       if (req.files.cover_photo) cover_photo_url = req.files.cover_photo[0].path;
@@ -594,12 +613,16 @@ app.post('/register', authLimiter, upload.fields([{ name: 'profile_picture' }, {
     await req.session.save();
 
     if (wantsJson) {
+      // Generate a remember token for auto-login
+      const rememberToken = await generateRememberToken(userRecord.uid);
+
       return res.json({
         ok: true,
         redirect: '/chat_list',
         username: username,
         full_name: profileData.full_name,
-        profile_picture_url: profile_picture_url
+        profile_picture_url: profile_picture_url,
+        remember_token: rememberToken
       });
     }
 
@@ -647,6 +670,80 @@ app.get('/logout', async (req, res) => {
     // بعد تسجيل الخروج نوجّه المستخدم إلى صفحة الحسابات المحفوظة
     res.redirect('/accounts');
   });
+});
+
+// ---------------- Remember Token (Secure Auto-Login) ----------------
+// Generate a secure random token, store its hash in DB, return raw token to client
+async function generateRememberToken(userId) {
+  const rawToken = crypto.randomBytes(48).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const tokenId = crypto.randomBytes(8).toString('hex');
+  await db.ref(`remember_tokens/${userId}/${tokenId}`).set({
+    hash: tokenHash,
+    createdAt: admin.database.ServerValue.TIMESTAMP
+  });
+  // Return combined token: tokenId.rawToken
+  return `${tokenId}.${rawToken}`;
+}
+
+// Login with remember token
+app.post('/api/auth/login-with-token', authLimiter, async (req, res) => {
+  try {
+    const { username, remember_token } = req.body;
+    if (!username || !remember_token) {
+      return res.status(400).json({ ok: false, error: 'بيانات غير كاملة' });
+    }
+
+    // Parse token
+    const dotIndex = remember_token.indexOf('.');
+    if (dotIndex === -1) {
+      return res.status(401).json({ ok: false, error: 'توكن غير صالح' });
+    }
+    const tokenId = remember_token.substring(0, dotIndex);
+    const rawToken = remember_token.substring(dotIndex + 1);
+
+    // Look up user by username
+    const email = `${username}@trimer.io`;
+    let userRecord;
+    try {
+      userRecord = await firebaseAuth.getUserByEmail(email);
+    } catch (e) {
+      return res.status(401).json({ ok: false, error: 'المستخدم غير موجود' });
+    }
+
+    // Verify token
+    const tokenSnap = await db.ref(`remember_tokens/${userRecord.uid}/${tokenId}`).once('value');
+    if (!tokenSnap.exists()) {
+      return res.status(401).json({ ok: false, error: 'توكن غير صالح أو منتهي' });
+    }
+    const stored = tokenSnap.val();
+    const providedHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    if (providedHash !== stored.hash) {
+      // Invalid token - remove it (possible theft attempt)
+      await db.ref(`remember_tokens/${userRecord.uid}/${tokenId}`).remove();
+      return res.status(401).json({ ok: false, error: 'توكن غير صالح' });
+    }
+
+    // Token valid - rotate it (delete old, create new)
+    await db.ref(`remember_tokens/${userRecord.uid}/${tokenId}`).remove();
+    const newToken = await generateRememberToken(userRecord.uid);
+
+    // Create session
+    req.session.userId = userRecord.uid;
+    req.session.email = userRecord.email;
+    await req.session.save();
+
+    // Set online
+    await db.ref(`profiles/${userRecord.uid}`).update({
+      is_online: true,
+      last_seen: admin.database.ServerValue.TIMESTAMP
+    });
+
+    res.json({ ok: true, redirect: '/chat_list', remember_token: newToken });
+  } catch (error) {
+    console.error('Token login error:', error);
+    res.status(500).json({ ok: false, error: 'خطأ في الخادم' });
+  }
 });
 
 // ---------------- Active Status Heartbeat ----------------
@@ -846,10 +943,22 @@ app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (re
 // ---------------- API: Stories (القصص) ----------------
 
 // API: توقيع رفع مباشر إلى Cloudinary (لتجاوز حد Vercel 4.5MB)
-app.post('/api/cloudinary/sign', requireAuth, (req, res) => {
+// Allows unauthenticated access for registration-related folders only
+app.post('/api/cloudinary/sign', (req, res, next) => {
+  // Allow unauthenticated uploads for registration (profile_pics, cover_photos)
+  const folder = String(req.body.folder || '');
+  const UNAUTHENTICATED_FOLDERS = ['profile_pics', 'cover_photos'];
+  if (req.session && req.session.userId) {
+    return next(); // authenticated - allow all folders
+  }
+  if (UNAUTHENTICATED_FOLDERS.includes(folder)) {
+    return next(); // unauthenticated but allowed folder
+  }
+  return res.status(401).json({ ok: false, error: 'يجب تسجيل الدخول' });
+}, (req, res) => {
   try {
     const timestamp = Math.round(Date.now() / 1000);
-    const ALLOWED_FOLDERS = ['stories', 'post_media', 'profile_pictures', 'cover_photos', 'reels', 'chat_media'];
+    const ALLOWED_FOLDERS = ['stories', 'post_media', 'profile_pics', 'profile_pictures', 'cover_photos', 'reels', 'chat_media', 'general'];
     const rawFolder = String(req.body.folder || 'stories').replace(/[^a-zA-Z0-9_-]/g, '');
     const folder = ALLOWED_FOLDERS.includes(rawFolder) ? rawFolder : 'stories';
     const resourceType = req.body.resource_type || 'auto';
@@ -2109,13 +2218,20 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// Profile edit (supports multipart)
+// Profile edit (supports multipart and direct Cloudinary URLs)
 const uploadProfileFields = upload.fields([
   { name: 'profile_picture', maxCount: 1 },
   { name: 'cover_photo', maxCount: 1 }
 ]);
 
-app.post('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res) => {
+app.post('/api/profile/edit', requireAuth, (req, res, next) => {
+  // If content-type is JSON, skip multer (direct Cloudinary URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  uploadProfileFields(req, res, next);
+}, async (req, res) => {
   const userId = req.session.userId;
   const { full_name, username, bio } = req.body;
 
@@ -2158,6 +2274,15 @@ app.post('/api/profile/edit', requireAuth, uploadProfileFields, async (req, res)
       updates.email = newEmail;
     }
 
+    // Support direct Cloudinary URLs (from client-side upload)
+    if (req.body.profile_picture_url) {
+      updates.profile_picture_url = req.body.profile_picture_url;
+    }
+    if (req.body.cover_photo_url) {
+      updates.cover_photo_url = req.body.cover_photo_url;
+    }
+
+    // Support multer file upload (backward compatibility)
     if (req.files && req.files.profile_picture) {
       updates.profile_picture_url = req.files.profile_picture[0].path;
     }

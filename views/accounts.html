@@ -118,10 +118,59 @@
             }
         }
 
-        function handleAccountClick(username) {
-            // SECURITY: Redirect to login page with username pre-filled
-            // Passwords are never stored client-side
-            window.location.href = `/login?username=${encodeURIComponent(username)}`;
+        async function handleAccountClick(username) {
+            const accounts = loadAccounts();
+            const account = accounts.find(a => a.username === username);
+
+            if (account && account.remember_token) {
+                // Use secure remember token for auto-login
+                try {
+                    document.body.style.opacity = '0.5';
+                    document.body.style.cursor = 'wait';
+
+                    const resp = await fetch('/api/auth/login-with-token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ username: username, remember_token: account.remember_token })
+                    });
+
+                    const data = await resp.json().catch(() => ({ ok: false }));
+
+                    if (data.ok) {
+                        // Rotate token: update stored token with the new one from server
+                        if (data.remember_token) {
+                            let updatedAccounts = loadAccounts();
+                            const idx = updatedAccounts.findIndex(a => a.username === username);
+                            if (idx !== -1) {
+                                updatedAccounts[idx].remember_token = data.remember_token;
+                                saveAccounts(updatedAccounts);
+                            }
+                        }
+                        window.location.href = data.redirect || '/chat_list';
+                        return;
+                    }
+
+                    // Token invalid/expired - remove it and redirect to login
+                    let updatedAccounts = loadAccounts();
+                    const idx = updatedAccounts.findIndex(a => a.username === username);
+                    if (idx !== -1) {
+                        delete updatedAccounts[idx].remember_token;
+                        saveAccounts(updatedAccounts);
+                    }
+                    document.body.style.opacity = '1';
+                    document.body.style.cursor = '';
+                    window.location.href = `/login?username=${encodeURIComponent(username)}`;
+                } catch (e) {
+                    console.error('Auto-login error:', e);
+                    document.body.style.opacity = '1';
+                    document.body.style.cursor = '';
+                    window.location.href = `/login?username=${encodeURIComponent(username)}`;
+                }
+            } else {
+                // No remember token - redirect to login with username pre-filled
+                window.location.href = `/login?username=${encodeURIComponent(username)}`;
+            }
         }
 
         function renderAccounts() {
