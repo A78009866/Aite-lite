@@ -200,13 +200,6 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// ---------------- Service Worker ----------------
-app.get('/sw.js', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
-  res.setHeader('Service-Worker-Allowed', '/');
-  res.sendFile(path.join(__dirname, 'views', 'sw.js'));
-});
-
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
 

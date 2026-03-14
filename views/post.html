@@ -154,10 +154,16 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
 
         /* ---- Comment Styles ---- */
-        .comment-item {
-            padding: 14px;
-            border-radius: 14px;
-            background: rgba(25, 25, 30, 0.7);
+        /* Text overflow prevention */
+        .comment-item, .reply-item, .post-text, .post-content, .msg {
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .comment-item { 
+            padding: 14px; 
+            border-radius: 14px; 
+            background: rgba(25, 25, 30, 0.7); 
             border: 1px solid rgba(255, 255, 255, 0.08);
             transition: background 0.2s;
         }
@@ -266,58 +272,6 @@
         background-color: rgba(255, 255, 255, 0.97) !important;
         border-color: rgba(0, 0, 0, 0.1) !important;
         box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
-    }
-
-    /* --- Global Text Overflow Prevention --- */
-    .comment-item,
-    .reply-item,
-    .post-text,
-    .glass-post-card {
-        overflow-wrap: anywhere;
-        word-break: break-word;
-        min-width: 0;
-    }
-    .comment-item .text-sm,
-    .comment-item .text-xs,
-    .reply-item .text-sm,
-    .reply-item .text-xs {
-        overflow-wrap: anywhere;
-        word-break: break-word;
-    }
-
-    /* --- Likes/Reactions Modal (Light Mode) --- */
-    html[data-theme="light"] .likes-modal-overlay {
-        background: rgba(0,0,0,0.35) !important;
-    }
-    html[data-theme="light"] .likes-modal-box {
-        background: #ffffff !important;
-        border-top-color: rgba(0,0,0,0.1) !important;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
-    }
-    html[data-theme="light"] .likes-modal-box .modal-handle {
-        background: rgba(0,0,0,0.2) !important;
-    }
-    html[data-theme="light"] .likes-modal-box h3 {
-        color: #1c1e21 !important;
-    }
-    html[data-theme="light"] .likes-modal-box button {
-        background: rgba(0,0,0,0.05) !important;
-        color: #65676b !important;
-    }
-    html[data-theme="light"] .likes-modal-box button:hover {
-        color: #1c1e21 !important;
-    }
-    html[data-theme="light"] .likes-user-item:hover {
-        background: rgba(0,0,0,0.04) !important;
-    }
-    html[data-theme="light"] .likes-user-item img {
-        border-color: rgba(0,0,0,0.1) !important;
-    }
-    html[data-theme="light"] .likes-user-item .username {
-        color: #1c1e21 !important;
-    }
-    html[data-theme="light"] #likesListContent {
-        background: #ffffff !important;
     }
 
     /* --- Comment Modal (Bottom Sheet) --- */
@@ -468,6 +422,30 @@
         background: #ffffff !important;
         border-color: rgba(0, 0, 0, 0.1) !important;
         color: #1c1e21;
+    }
+
+    /* --- Likes Modal (Light Mode) --- */
+    html[data-theme="light"] .likes-modal-overlay {
+        background: rgba(0,0,0,0.35) !important;
+    }
+    html[data-theme="light"] .likes-modal-box {
+        background: #ffffff !important;
+        border-top-color: rgba(0,0,0,0.1) !important;
+    }
+    html[data-theme="light"] .likes-modal-box .modal-handle {
+        background: rgba(0,0,0,0.2) !important;
+    }
+    html[data-theme="light"] .likes-user-item:hover {
+        background: rgba(0,0,0,0.04) !important;
+    }
+    html[data-theme="light"] .likes-user-item .username {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .likes-user-item img {
+        border-color: rgba(0,0,0,0.1) !important;
+    }
+    html[data-theme="light"] #likesListContent {
+        color: #1c1e21 !important;
     }
 
     /* --- Toasts --- */
@@ -2118,10 +2096,10 @@
                 repliesHtml = c.recentReplies.map(r => `
                     <div class="reply-item">
                         <div class="flex items-start gap-2">
-                            <a href="/profile?userId=${encodeURIComponent(r.userId || '')}" onclick="event.stopPropagation()" class="flex-shrink-0"><img src="${r.profile_picture_url || DEFAULT_AVATAR}" class="small-avatar flex-shrink-0 hover:ring-2 hover:ring-blue-400 transition" style="cursor:pointer"></a>
+                            <img src="${r.profile_picture_url || DEFAULT_AVATAR}" class="small-avatar flex-shrink-0 cursor-pointer" onclick="window.location.href='/profile?userId=${r.userId || ''}'">
                             <div class="flex-1">
                                 <div class="flex items-center justify-between">
-                                    <a href="/profile?userId=${encodeURIComponent(r.userId || '')}" onclick="event.stopPropagation()" class="text-xs font-bold text-white hover:text-blue-400 transition" style="text-decoration:none;color:inherit">${r.username}</a>
+                                    <div class="text-xs font-bold text-white" style="cursor:pointer" onclick="window.location.href='/profile?userId=${r.userId || ''}'">${r.username}</div>
                                     <div class="text-[10px] text-gray-500">${r.timestamp ? new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
                                 </div>
                                 <div class="text-sm text-gray-200 mt-1">${formatAndEscapeContent(r.content)}</div>
@@ -2134,13 +2112,13 @@
             return `
                 <div class="comment-item" id="comment-${c.commentId}">
                     <div class="flex items-start gap-3">
-                        <a href="/profile?userId=${encodeURIComponent(c.user.userId)}" onclick="event.stopPropagation()" class="flex-shrink-0"><img src="${c.user.profile_picture_url || DEFAULT_AVATAR}" class="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-blue-400 transition"></a>
+                        <img src="${c.user.profile_picture_url || DEFAULT_AVATAR}" class="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer" onclick="window.location.href='/profile?userId=${c.user.userId}'">
                         <div class="flex-1">
                             <div class="flex items-center justify-between gap-2">
                                 <div>
-                                    <a href="/profile?userId=${encodeURIComponent(c.user.userId)}" onclick="event.stopPropagation()" class="text-sm font-bold text-white hover:text-blue-400 transition" style="text-decoration:none;color:inherit">
+                                    <div class="text-sm font-bold text-white" style="cursor:pointer" onclick="window.location.href='/profile?userId=${c.user.userId}'">
                                         ${c.user.username} ${badgePlace}
-                                    </a>
+                                    </div>
                                     <div class="text-xs text-gray-500">${commentDate}</div>
                                 </div>
                             </div>
@@ -2310,28 +2288,6 @@ async function showLikesList(id, type) {
 function closeLikesModal() {
     document.getElementById('likesModal').classList.remove('open');
 }
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(()=>{});
-}
-(function() {
-  var style = document.createElement('style');
-  style.textContent = '.page-transition-out{opacity:0;transform:translateY(8px);transition:opacity 0.18s ease,transform 0.18s ease}.page-transition-in{animation:pageIn 0.22s ease forwards}@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}';
-  document.head.appendChild(style);
-  document.body.classList.add('page-transition-in');
-  document.addEventListener('click', function(e) {
-    var link = e.target.closest('a[href]');
-    if (!link) return;
-    var href = link.getAttribute('href');
-    if (!href || href.startsWith('#') || href.startsWith('javascript') || href.startsWith('http') || link.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    e.preventDefault();
-    document.body.classList.remove('page-transition-in');
-    document.body.classList.add('page-transition-out');
-    setTimeout(function() { window.location.href = href; }, 180);
-  });
-})();
 </script>
 
 </body>

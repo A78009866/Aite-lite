@@ -155,7 +155,9 @@
         }
 
         /* Text overlay */
-        .story-text {
+            /* Text overflow prevention */
+        .story-text, .comment-item, .reply-item { word-break: break-word; overflow-wrap: break-word; }
+        .story-text { 
             position: absolute;
             bottom: 100px;
             left: 0;
@@ -560,13 +562,13 @@
 
     <!-- Header -->
     <div class="story-header">
-        <a id="storyProfileLink" href="#" class="user-info" style="text-decoration:none;color:inherit;" onclick="event.stopPropagation()">
+        <div class="user-info" id="storyUserInfo" style="cursor:pointer;">
             <div class="avatar-wrap">
-                <img id="storyAvatar" class="story-avatar-img" src="" alt="" style="cursor:pointer;transition:box-shadow 0.2s;">
+                <img id="storyAvatar" class="story-avatar-img" src="" alt="">
                 <span id="storyOnlineDot" class="online-dot"></span>
             </div>
-            <span id="storyUsername" style="cursor:pointer;"></span>
-        </a>
+            <span id="storyUsername"></span>
+        </div>
         <div class="actions">
             <button id="deleteBtn" class="delete-btn" style="display:none;" title="حذف القصة">
                 <i class="fas fa-trash-alt text-lg"></i>
@@ -939,7 +941,7 @@
                 const verifyBadge = v.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق">` : '';
                 const heartIcon = v.hasLiked ? '<i class="fas fa-heart viewer-liked"></i>' : '';
                 html += `
-                    <a href="/profile?userId=${encodeURIComponent(v.userId || '')}" class="viewer-item" style="text-decoration:none;color:inherit;">
+                    <a href="/profile?userId=${encodeURIComponent(v.userId || v.id || '')}" class="viewer-item" style="text-decoration:none;color:inherit;display:flex;">
                         <img class="viewer-avatar" src="${escapeAttr(v.profile_picture_url || DEFAULT_AVATAR)}" onerror="this.src='${DEFAULT_AVATAR}'" alt="">
                         <div class="viewer-info">
                             <div class="viewer-name">
@@ -1006,7 +1008,13 @@
         document.getElementById('storyAvatar').src = group.profile_picture_url || DEFAULT_AVATAR;
         document.getElementById('storyAvatar').onerror = function() { this.src = DEFAULT_AVATAR; };
         document.getElementById('storyUsername').textContent = group.username || 'مستخدم';
-        document.getElementById('storyProfileLink').href = '/profile?userId=' + encodeURIComponent(group.userId);
+
+        // Profile navigation on avatar/name click
+        const userInfoEl = document.getElementById('storyUserInfo');
+        userInfoEl.onclick = function(e) {
+            e.stopPropagation();
+            window.location.href = '/profile?userId=' + encodeURIComponent(group.userId);
+        };
 
         // Online status dot
         const onlineDot = document.getElementById('storyOnlineDot');
@@ -1297,28 +1305,6 @@
 (function(){
   fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
   setInterval(() => { fetch("/api/status/heartbeat", { method: "POST", credentials: "same-origin" }).catch(()=>{}); }, 20000);
-})();
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(()=>{});
-}
-(function() {
-  var style = document.createElement('style');
-  style.textContent = '.page-transition-out{opacity:0;transform:translateY(8px);transition:opacity 0.18s ease,transform 0.18s ease}.page-transition-in{animation:pageIn 0.22s ease forwards}@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}';
-  document.head.appendChild(style);
-  document.body.classList.add('page-transition-in');
-  document.addEventListener('click', function(e) {
-    var link = e.target.closest('a[href]');
-    if (!link) return;
-    var href = link.getAttribute('href');
-    if (!href || href.startsWith('#') || href.startsWith('javascript') || href.startsWith('http') || link.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    e.preventDefault();
-    document.body.classList.remove('page-transition-in');
-    document.body.classList.add('page-transition-out');
-    setTimeout(function() { window.location.href = href; }, 180);
-  });
 })();
 </script>
 

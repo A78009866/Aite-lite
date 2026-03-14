@@ -18,7 +18,7 @@
     .empty { text-align:center; color:#94a3b8; padding:40px 0; }
     .action-small { padding:6px 8px; font-size:12px; border-radius:8px; display:inline-flex; gap:6px; align-items:center; justify-content:center; background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); color:#e6eefb; cursor:pointer; }
     .notif-card-content { flex:1; min-width:0; }
-    .notif-title { font-size:14px; color:#e6eefb; overflow-wrap:anywhere; word-break:break-word; }
+    .notif-title { font-size:14px; color:#e6eefb; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
     .notif-time { font-size:12px; color:#9fb3c8; }
     .notif-target { margin-top:6px; color:#9fb3c8; font-size:13px; }
     .actions-dropdown {
@@ -1555,7 +1555,7 @@
 
       return `
         <div class="notification-card ${n.is_read ? '' : 'unread'}" ${dataAttrs}>
-          <a href="/profile?userId=${escapeHtml(n.from_user_id || '')}" onclick="event.stopPropagation()" class="flex-shrink-0"><img src="${escapeHtml(fromPic)}" class="notif-avatar" alt="" onerror="this.src='${DEFAULT_AVATAR}'" style="cursor:pointer;transition:box-shadow 0.2s;"></a>
+          <img src="${escapeHtml(fromPic)}" class="notif-avatar" alt="" onerror="this.src='${DEFAULT_AVATAR}'" onclick="event.stopPropagation(); if('${escapeHtml(n.from_user_id || '')}') window.location.href='/profile?userId=${encodeURIComponent(n.from_user_id || '')}';" style="cursor:pointer">
           <div class="notif-card-content">
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
               <div class="notif-title">${title}</div>
@@ -1751,28 +1751,6 @@
 (function(){
   fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
   setInterval(() => { fetch("/api/status/heartbeat", { method: "POST", credentials: "same-origin" }).catch(()=>{}); }, 20000);
-})();
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(()=>{});
-}
-(function() {
-  var style = document.createElement('style');
-  style.textContent = '.page-transition-out{opacity:0;transform:translateY(8px);transition:opacity 0.18s ease,transform 0.18s ease}.page-transition-in{animation:pageIn 0.22s ease forwards}@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}';
-  document.head.appendChild(style);
-  document.body.classList.add('page-transition-in');
-  document.addEventListener('click', function(e) {
-    var link = e.target.closest('a[href]');
-    if (!link) return;
-    var href = link.getAttribute('href');
-    if (!href || href.startsWith('#') || href.startsWith('javascript') || href.startsWith('http') || link.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    e.preventDefault();
-    document.body.classList.remove('page-transition-in');
-    document.body.classList.add('page-transition-out');
-    setTimeout(function() { window.location.href = href; }, 180);
-  });
 })();
 </script>
 
