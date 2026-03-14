@@ -3014,13 +3014,13 @@ function createPostCard(post) {
     if (post.media) {
         if (post.media.type === 'image') {
             mediaContent = `
-                <div class="mt-3 cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)">
-                    <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover rounded-lg">
+                <div class="cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)">
+                    <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0">
                 </div>`;
         } else if (post.media.type === 'video') {
             const poster = post.media.poster || post.media.thumbnail || 'https://via.placeholder.com/1200x675?text=Video';
             mediaContent = `
-                <div class="mt-3 relative w-full video-large rounded-lg overflow-hidden bg-black group">
+                <div class="relative w-full video-large overflow-hidden bg-black group" style="border-radius:0">
                     <video id="video-${post.postId}" src="${post.media.url}" class="w-full h-full object-cover" poster="${poster}" preload="metadata" onclick="toggleVideoPlay('${post.postId}', event)"></video>
                     <div id="play-overlay-${post.postId}" class="video-play-overlay" onclick="toggleVideoPlay('${post.postId}', event)">
                         <i class="fas fa-play"></i>
@@ -3031,7 +3031,7 @@ function createPostCard(post) {
                 </div>`;
         } else if (post.media.type === 'audio') {
             mediaContent = `
-                <div class="mt-3">
+                <div class="px-3 mt-1">
                     <div class="audio-play-wrapper">
                         <button id="audio-btn-${post.postId}" class="audio-play-button" onclick="toggleAudioPlay('${post.postId}')">
                             <i class="fas fa-play"></i>
@@ -3049,38 +3049,52 @@ function createPostCard(post) {
     const verifiedBadgeHtml = post.user && post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img" alt="موثق" title="موثق">` : '';
     const profilePic = post.user && post.user.profile_picture_url ? post.user.profile_picture_url : DEFAULT_PROFILE_PIC_URL;
 
+    const formattedContent = formatAndEscapeContent(post.content || '');
+
     return `
-        <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${post.postId}">
-            <div class="flex items-start justify-between mb-3">
+        <div class="glass-post-card rounded-xl shadow-lg overflow-hidden" data-post-id="${post.postId}">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-3 py-2">
                 <div class="flex items-center">
                     <a href="/profile?userId=${post.userId}" class="avatar-with-dot ml-3" data-user-id="${post.userId}">
-                        <img src="${escapeHtml(profilePic)}" alt="${escapeHtml(post.user.username)}" class="w-10 h-10 rounded-full object-cover border border-gray-600">
+                        <img src="${escapeHtml(profilePic)}" alt="${escapeHtml(post.user.username)}" class="w-9 h-9 rounded-full object-cover border-2 border-gray-600">
                         ${isOnline ? '<span class="online-dot online-dot-small" title="متصل الآن"></span>' : ''}
                     </a>
                     <div>
-                        <a href="/profile?userId=${post.userId}" class="text-white font-semibold hover:text-blue-400">@${post.user.username} ${verifiedBadgeHtml}</a>
-                        <p class="text-gray-400 text-xs">${formatTimestamp(post.timestamp)}</p>
+                        <a href="/profile?userId=${post.userId}" class="text-white font-bold text-sm hover:text-blue-400">@${post.user.username} ${verifiedBadgeHtml}</a>
+                        <p class="text-gray-500 text-xs">${formatTimestamp(post.timestamp)}</p>
                     </div>
                 </div>
                 ${/* always render menu button but bottom sheet will decide options */ ''}
                 <button class="text-gray-400 hover:text-white transition duration-300 post-menu-button" onclick="togglePostMenu('${post.postId}', '${post.userId}', event, this)"><i class="fas fa-ellipsis-v"></i></button>
             </div>
-            <div class="post-content mt-2">
-                <div class="post-text" dir="auto">${formatAndEscapeContent(post.content || '')}</div>
-            </div>
+
+            <!-- Media -->
             ${mediaContent}
-            <div class="flex justify-between items-center text-gray-400 text-sm mt-3 pb-2 border-b border-gray-700">
-                <span class="cursor-pointer hover:text-red-400 likes-count-display" onclick="showLikesList('${post.postId}', 'post')"><i class="fas fa-heart ml-1"></i> ${post.likes} إعجاب</span>
-                <span class="cursor-pointer hover:text-blue-400 comment-count-display" onclick="handleComment('${post.postId}')"><i class="fa-solid fa-comment ml-1"></i> ${post.commentsCount || 0} تعليق</span>
+
+            <!-- Action Bar (Instagram-style) -->
+            <div class="flex items-center justify-between px-3 py-2">
+                <div class="flex items-center gap-4">
+                    <button class="flex items-center gap-1 post-like-button transition duration-300 ${post.is_liked ? 'text-red-500' : 'text-gray-200 hover:text-red-400'}" data-is-liked="${post.is_liked}" onclick="handleLike('${post.postId}', this)">
+                        <i class="${likeIconClass} like-icon text-2xl"></i>
+                    </button>
+                    <span class="text-sm font-semibold text-gray-200 cursor-pointer likes-count-display" onclick="showLikesList('${post.postId}', 'post')">${post.likes}</span>
+
+                    <button class="flex items-center gap-1 text-gray-200 hover:text-blue-400 transition duration-300" onclick="handleComment('${post.postId}')">
+                        <i class="fa-regular fa-comment text-2xl"></i>
+                    </button>
+                    <span class="text-sm font-semibold text-gray-200 comment-count-display">${post.commentsCount || 0}</span>
+
+                    <button class="text-gray-200 hover:text-blue-400 transition duration-300" onclick="copyPostLink('${post.postId}', event)">
+                        <i class="fa-regular fa-paper-plane text-2xl"></i>
+                    </button>
+                </div>
             </div>
-            <div class="flex justify-around border-t border-gray-700 mt-3 pt-3">
-                <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button" data-is-liked="${post.is_liked}" onclick="handleLike('${post.postId}', this)">
-                    <i class="${likeIconClass} ml-2 like-icon"></i> إعجاب
-                </button>
-                <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center" onclick="handleComment('${post.postId}')">
-                    <i class="fa-solid fa-comment ml-2"></i> تعليق
-                </button>
-            </div>
+
+            <!-- Text Content -->
+            ${formattedContent ? `<div class="post-content px-3 pb-3">
+                <div class="post-text text-sm" dir="auto"><span class="font-bold text-white">@${escapeHtml(post.user.username)}</span> ${formattedContent}</div>
+            </div>` : ''}
         </div>
     `;
 }
