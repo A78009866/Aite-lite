@@ -3932,6 +3932,10 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
       const viewsSnap = await db.ref('story_views').once('value');
       const allViews = viewsSnap.val() || {};
 
+      // Check block status for each friend
+      const blockedByMe = await getBlockedUserIds(currentUserId);
+      const blockedMe = await getBlockedByUserIds(currentUserId);
+
       const usersList = [];
       
       profileSnapshots.forEach(snap => {
@@ -3958,18 +3962,25 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
               });
             }
 
+            // Check if blocked (either direction)
+            const iBlockedUser = blockedByMe.has(user.id);
+            const userBlockedMe = blockedMe.has(user.id);
+            const isBlockRelation = iBlockedUser || userBlockedMe;
+
             usersList.push({
                 id: user.id,
                 username: user.username,
-                full_name: user.full_name,
-                profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-                is_verified: !!user.is_verified,
+                full_name: isBlockRelation ? '' : (user.full_name || ''),
+                profile_picture_url: isBlockRelation ? 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png' : (user.profile_picture_url || DEFAULT_PROFILE_PIC_URL),
+                is_verified: isBlockRelation ? false : !!user.is_verified,
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0,
-                is_online: !!user.is_online,
-                has_story: usersWithStories.has(user.id),
-                story_viewed: storyViewed,
-                story_color: userStoryColors[user.id] || ''
+                is_online: isBlockRelation ? false : !!user.is_online,
+                has_story: isBlockRelation ? false : usersWithStories.has(user.id),
+                story_viewed: isBlockRelation ? false : storyViewed,
+                story_color: isBlockRelation ? '' : (userStoryColors[user.id] || ''),
+                i_blocked: iBlockedUser,
+                blocked_by: userBlockedMe
             });
         }
       });
