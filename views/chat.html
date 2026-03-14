@@ -2228,6 +2228,23 @@ textarea:focus { border-color: var(--accent); }
 
   <div class="glass">
     <div id="messages" class="messages"></div>
+    <!-- Typing Indicator -->
+    <div id="typing-indicator" style="display:none;padding:4px 16px 8px;direction:rtl;">
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(30,41,59,0.7);backdrop-filter:blur(8px);border-radius:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.06);">
+        <div class="typing-dots" style="display:flex;gap:3px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#60a5fa;animation:typingDot 1.2s infinite;animation-delay:0s;"></span>
+          <span style="width:6px;height:6px;border-radius:50%;background:#60a5fa;animation:typingDot 1.2s infinite;animation-delay:0.2s;"></span>
+          <span style="width:6px;height:6px;border-radius:50%;background:#60a5fa;animation:typingDot 1.2s infinite;animation-delay:0.4s;"></span>
+        </div>
+        <span style="color:#94a3b8;font-size:12px;">يكتب...</span>
+      </div>
+    </div>
+    <style>
+      @keyframes typingDot {
+        0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+        30% { opacity: 1; transform: translateY(-4px); }
+      }
+    </style>
     
     <!-- Context Menu Overlay -->
     <div id="context-menu-overlay" class="context-menu-overlay" onclick="closeContextMenu()"></div>
@@ -2576,6 +2593,78 @@ let recAnimFrame = null;
 let recLiveBarsEl = null;
 let activeContextMsg = null; // stores full msg object for context menu
 
+// --- Typing Indicator State ---
+let typingTimeout = null;
+let isTypingSent = false;
+let lastKnownMsgCount = 0;
+const originalPageTitle = document.title;
+let unreadNewMsgCount = 0;
+let titleBlinkInterval = null;
+
+// --- Notification Sound (base64 short beep) ---
+const notifSoundCtx = (function() {
+  try { return new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; }
+})();
+
+function playNotifSound() {
+  if (!notifSoundCtx) return;
+  try {
+    const osc = notifSoundCtx.createOscillator();
+    const gain = notifSoundCtx.createGain();
+    osc.connect(gain);
+    gain.connect(notifSoundCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, notifSoundCtx.currentTime);
+    gain.gain.setValueAtTime(0.3, notifSoundCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, notifSoundCtx.currentTime + 0.3);
+    osc.start(notifSoundCtx.currentTime);
+    osc.stop(notifSoundCtx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+// --- Browser Notification Permission ---
+function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function showBrowserNotification(senderName, messageText) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const notif = new Notification(senderName || 'رسالة جديدة', {
+      body: messageText || 'لديك رسالة جديدة',
+      icon: document.getElementById('header-avatar')?.src || '',
+      tag: 'chat-' + otherId,
+      silent: true
+    });
+    notif.onclick = function() { window.focus(); notif.close(); };
+    setTimeout(() => notif.close(), 5000);
+  } catch(e) {}
+}
+
+// --- Tab Title Badge ---
+function updateTabTitle() {
+  if (unreadNewMsgCount > 0 && document.hidden) {
+    document.title = '(' + unreadNewMsgCount + ') ' + originalPageTitle;
+    if (!titleBlinkInterval) {
+      titleBlinkInterval = setInterval(() => {
+        document.title = document.title.startsWith('(') ? originalPageTitle : '(' + unreadNewMsgCount + ') ' + originalPageTitle;
+      }, 1500);
+    }
+  } else {
+    document.title = originalPageTitle;
+    if (titleBlinkInterval) { clearInterval(titleBlinkInterval); titleBlinkInterval = null; }
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    unreadNewMsgCount = 0;
+    updateTabTitle();
+  }
+});
+
 // DOM Elements
 const messagesEl = document.getElementById('messages');
 const msgInput = document.getElementById('msg-input');
@@ -2782,15 +2871,51 @@ async function init() {
     };
   }
 
+  // Request notification permission
+  requestNotifPermission();
+
   // Load Messages
   await loadMessages(true);
   setInterval(() => loadMessages(false), 3000);
 
-  // Resize Textarea
+  // Poll typing status from other user
+  setInterval(async () => {
+    try {
+      const r = await fetch(`/api/typing/${otherId}`);
+      const d = await r.json();
+      const indicator = document.getElementById('typing-indicator');
+      if (d.ok && d.typing) {
+        indicator.style.display = 'block';
+      } else {
+        indicator.style.display = 'none';
+      }
+    } catch(e) {}
+  }, 2000);
+
+  // Resize Textarea + Typing indicator send
   msgInput.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 100) + 'px';
     toggleSendButton();
+
+    // Send typing status
+    if (!isTypingSent) {
+      isTypingSent = true;
+      fetch('/api/typing', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ contact_id: otherId, typing: true })
+      }).catch(() => {});
+    }
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      isTypingSent = false;
+      fetch('/api/typing', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ contact_id: otherId, typing: false })
+      }).catch(() => {});
+    }, 3000);
   });
 
   // Handle Scroll to hide context menu
@@ -2890,6 +3015,26 @@ async function loadMessages(initial = false) {
     const currentHash = JSON.stringify(data.messages.map(m => m.messageId + (m.reaction || '') + (m.content || '') + (m.is_deleted ? 'd' : '') + (m.is_edited ? 'e' : '')));
     if (currentHash === lastMessagesHash) return; 
     lastMessagesHash = currentHash;
+
+    // --- New message notification ---
+    const currentMsgCount = data.messages.length;
+    if (!initial && currentMsgCount > lastKnownMsgCount && lastKnownMsgCount > 0) {
+      // Find new messages from the other user
+      const newMsgs = data.messages.slice(lastKnownMsgCount);
+      const otherNewMsgs = newMsgs.filter(m => m.senderId !== myId);
+      if (otherNewMsgs.length > 0) {
+        playNotifSound();
+        const lastNew = otherNewMsgs[otherNewMsgs.length - 1];
+        const senderName = document.getElementById('header-name')?.textContent || 'رسالة جديدة';
+        const msgPreview = lastNew.content || (lastNew.media ? 'وسائط' : 'رسالة جديدة');
+        if (document.hidden) {
+          unreadNewMsgCount += otherNewMsgs.length;
+          updateTabTitle();
+          showBrowserNotification(senderName, msgPreview);
+        }
+      }
+    }
+    lastKnownMsgCount = currentMsgCount;
 
     const isAtBottom = messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 60;
     
@@ -3832,6 +3977,15 @@ sendBtn.onclick = async () => {
       
       replyData = null;
       replyContainer.style.display = 'none';
+      
+      // Clear typing status on send
+      isTypingSent = false;
+      clearTimeout(typingTimeout);
+      fetch('/api/typing', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ contact_id: otherId, typing: false })
+      }).catch(() => {});
       
       toggleSendButton();
     } else {

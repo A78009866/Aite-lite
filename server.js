@@ -890,6 +890,319 @@ function countSnapshotChildren(snap) {
   return c;
 }
 
+// ---------------- Cascading User Data Purge ----------------
+// Deletes ALL data associated with a user from Firebase
+async function purgeUserData(uid) {
+  const updates = {};
+
+  // 1. Direct user-keyed paths
+  updates[`profiles/${uid}`] = null;
+  updates[`chats/${uid}`] = null;
+  updates[`friends/${uid}`] = null;
+  updates[`notifications/${uid}`] = null;
+  updates[`friend_requests/${uid}`] = null;
+  updates[`blocks/${uid}`] = null;
+  updates[`blocked_by/${uid}`] = null;
+  updates[`remember_tokens/${uid}`] = null;
+  updates[`fcm_tokens/${uid}`] = null;
+  updates[`typing/${uid}`] = null;
+  updates[`memberships/${uid}`] = null;
+
+  // 2. Remove user from other users' friends lists
+  const friendsSnap = await db.ref(`friends/${uid}`).once('value');
+  const friendsData = friendsSnap.val() || {};
+  for (const friendId of Object.keys(friendsData)) {
+    updates[`friends/${friendId}/${uid}`] = null;
+  }
+
+  // 3. Remove user from other users' chats + delete shared messages
+  const chatsSnap = await db.ref(`chats/${uid}`).once('value');
+  const chatsData = chatsSnap.val() || {};
+  for (const contactId of Object.keys(chatsData)) {
+    updates[`chats/${contactId}/${uid}`] = null;
+    // Delete messages in both chat room directions
+    const chatRoom1 = [uid, contactId].sort().join('_');
+    updates[`messages/${chatRoom1}`] = null;
+  }
+
+  // 4. Remove friend requests involving this user (both directions)
+  const frSnap = await db.ref(`friend_requests/${uid}`).once('value');
+  const frData = frSnap.val() || {};
+  for (const fromId of Object.keys(frData)) {
+    updates[`friend_requests/${fromId}/${uid}`] = null;
+  }
+  // Also scan all friend_requests for outgoing requests from this user
+  const allFrSnap = await db.ref('friend_requests').once('value');
+  const allFrData = allFrSnap.val() || {};
+  for (const [targetId, requests] of Object.entries(allFrData)) {
+    if (requests && requests[uid]) {
+      updates[`friend_requests/${targetId}/${uid}`] = null;
+    }
+  }
+
+  // 5. Remove block references involving this user
+  const blocksSnap = await db.ref(`blocks/${uid}`).once('value');
+  const blocksData = blocksSnap.val() || {};
+  for (const blockedId of Object.keys(blocksData)) {
+    updates[`blocked_by/${blockedId}/${uid}`] = null;
+  }
+  const blockedBySnap = await db.ref(`blocked_by/${uid}`).once('value');
+  const blockedByData = blockedBySnap.val() || {};
+  for (const blockerId of Object.keys(blockedByData)) {
+    updates[`blocks/${blockerId}/${uid}`] = null;
+  }
+
+  // 6. Remove typing indicators referencing this user
+  const allTypingSnap = await db.ref('typing').once('value');
+  const allTypingData = allTypingSnap.val() || {};
+  for (const [recipientId, senders] of Object.entries(allTypingData)) {
+    if (senders && senders[uid]) {
+      updates[`typing/${recipientId}/${uid}`] = null;
+    }
+  }
+
+  // Apply the batch updates first
+  await db.ref().update(updates);
+
+  // 7. Delete user's posts and all related data (likes, comments, comment_likes, comment_replies)
+  const postsSnap = await db.ref('posts').orderByChild('userId').equalTo(uid).once('value');
+  const postsData = postsSnap.val() || {};
+  const postUpdates = {};
+  for (const postId of Object.keys(postsData)) {
+    postUpdates[`posts/${postId}`] = null;
+    postUpdates[`likes/${postId}`] = null;
+    postUpdates[`comments/${postId}`] = null;
+    postUpdates[`comment_likes/${postId}`] = null;
+    postUpdates[`comment_replies/${postId}`] = null;
+  }
+  if (Object.keys(postUpdates).length > 0) {
+    await db.ref().update(postUpdates);
+  }
+
+  // 8. Remove user's likes on OTHER users' posts
+  const allLikesSnap = await db.ref('likes').once('value');
+  const allLikesData = allLikesSnap.val() || {};
+  const likeUpdates = {};
+  for (const [postId, likers] of Object.entries(allLikesData)) {
+    if (likers && likers[uid]) {
+      likeUpdates[`likes/${postId}/${uid}`] = null;
+    }
+  }
+  if (Object.keys(likeUpdates).length > 0) {
+    await db.ref().update(likeUpdates);
+  }
+
+  // 9. Remove user's comments on OTHER users' posts
+  const allCommentsSnap = await db.ref('comments').once('value');
+  const allCommentsData = allCommentsSnap.val() || {};
+  const commentUpdates = {};
+  for (const [postId, comments] of Object.entries(allCommentsData)) {
+    if (!comments) continue;
+    for (const [commentId, comment] of Object.entries(comments)) {
+      if (comment && comment.userId === uid) {
+        commentUpdates[`comments/${postId}/${commentId}`] = null;
+        commentUpdates[`comment_likes/${postId}/${commentId}`] = null;
+        commentUpdates[`comment_replies/${postId}/${commentId}`] = null;
+      }
+    }
+  }
+  if (Object.keys(commentUpdates).length > 0) {
+    await db.ref().update(commentUpdates);
+  }
+
+  // 10. Remove user's comment likes on other posts
+  const allCommentLikesSnap = await db.ref('comment_likes').once('value');
+  const allCommentLikesData = allCommentLikesSnap.val() || {};
+  const clUpdates = {};
+  for (const [postId, comments] of Object.entries(allCommentLikesData)) {
+    if (!comments) continue;
+    for (const [commentId, likers] of Object.entries(comments)) {
+      if (likers && likers[uid]) {
+        clUpdates[`comment_likes/${postId}/${commentId}/${uid}`] = null;
+      }
+    }
+  }
+  if (Object.keys(clUpdates).length > 0) {
+    await db.ref().update(clUpdates);
+  }
+
+  // 11. Remove user's comment replies on other posts
+  const allRepliesSnap = await db.ref('comment_replies').once('value');
+  const allRepliesData = allRepliesSnap.val() || {};
+  const replyUpdates = {};
+  for (const [postId, comments] of Object.entries(allRepliesData)) {
+    if (!comments) continue;
+    for (const [commentId, replies] of Object.entries(comments)) {
+      if (!replies) continue;
+      for (const [replyId, reply] of Object.entries(replies)) {
+        if (reply && reply.userId === uid) {
+          replyUpdates[`comment_replies/${postId}/${commentId}/${replyId}`] = null;
+        }
+      }
+    }
+  }
+  if (Object.keys(replyUpdates).length > 0) {
+    await db.ref().update(replyUpdates);
+  }
+
+  // 12. Delete user's reels and all related data
+  const reelsSnap = await db.ref('reels').orderByChild('userId').equalTo(uid).once('value');
+  const reelsData = reelsSnap.val() || {};
+  const reelUpdates = {};
+  for (const reelId of Object.keys(reelsData)) {
+    reelUpdates[`reels/${reelId}`] = null;
+    reelUpdates[`reels_likes/${reelId}`] = null;
+    reelUpdates[`reels_comments/${reelId}`] = null;
+    reelUpdates[`reels_comment_likes/${reelId}`] = null;
+    reelUpdates[`reels_comment_replies/${reelId}`] = null;
+  }
+  if (Object.keys(reelUpdates).length > 0) {
+    await db.ref().update(reelUpdates);
+  }
+
+  // 13. Remove user's likes on OTHER reels
+  const allReelLikesSnap = await db.ref('reels_likes').once('value');
+  const allReelLikesData = allReelLikesSnap.val() || {};
+  const rlUpdates = {};
+  for (const [reelId, likers] of Object.entries(allReelLikesData)) {
+    if (likers && likers[uid]) {
+      rlUpdates[`reels_likes/${reelId}/${uid}`] = null;
+    }
+  }
+  if (Object.keys(rlUpdates).length > 0) {
+    await db.ref().update(rlUpdates);
+  }
+
+  // 14. Remove user's comments on OTHER reels
+  const allReelCommentsSnap = await db.ref('reels_comments').once('value');
+  const allReelCommentsData = allReelCommentsSnap.val() || {};
+  const rcUpdates = {};
+  for (const [reelId, comments] of Object.entries(allReelCommentsData)) {
+    if (!comments) continue;
+    for (const [commentId, comment] of Object.entries(comments)) {
+      if (comment && comment.userId === uid) {
+        rcUpdates[`reels_comments/${reelId}/${commentId}`] = null;
+        rcUpdates[`reels_comment_likes/${reelId}/${commentId}`] = null;
+        rcUpdates[`reels_comment_replies/${reelId}/${commentId}`] = null;
+      }
+    }
+  }
+  if (Object.keys(rcUpdates).length > 0) {
+    await db.ref().update(rcUpdates);
+  }
+
+  // 15. Remove user's reel comment likes
+  const allReelCLSnap = await db.ref('reels_comment_likes').once('value');
+  const allReelCLData = allReelCLSnap.val() || {};
+  const rclUpdates = {};
+  for (const [reelId, comments] of Object.entries(allReelCLData)) {
+    if (!comments) continue;
+    for (const [commentId, likers] of Object.entries(comments)) {
+      if (likers && likers[uid]) {
+        rclUpdates[`reels_comment_likes/${reelId}/${commentId}/${uid}`] = null;
+      }
+    }
+  }
+  if (Object.keys(rclUpdates).length > 0) {
+    await db.ref().update(rclUpdates);
+  }
+
+  // 16. Remove user's reel comment replies
+  const allReelRepliesSnap = await db.ref('reels_comment_replies').once('value');
+  const allReelRepliesData = allReelRepliesSnap.val() || {};
+  const rcrUpdates = {};
+  for (const [reelId, comments] of Object.entries(allReelRepliesData)) {
+    if (!comments) continue;
+    for (const [commentId, replies] of Object.entries(comments)) {
+      if (!replies) continue;
+      for (const [replyId, reply] of Object.entries(replies)) {
+        if (reply && reply.userId === uid) {
+          rcrUpdates[`reels_comment_replies/${reelId}/${commentId}/${replyId}`] = null;
+        }
+      }
+    }
+  }
+  if (Object.keys(rcrUpdates).length > 0) {
+    await db.ref().update(rcrUpdates);
+  }
+
+  // 17. Delete user's stories and related data
+  const storiesSnap = await db.ref('stories').orderByChild('userId').equalTo(uid).once('value');
+  const storiesData = storiesSnap.val() || {};
+  const storyUpdates = {};
+  for (const storyId of Object.keys(storiesData)) {
+    storyUpdates[`stories/${storyId}`] = null;
+    storyUpdates[`story_likes/${storyId}`] = null;
+    storyUpdates[`story_views/${storyId}`] = null;
+  }
+  if (Object.keys(storyUpdates).length > 0) {
+    await db.ref().update(storyUpdates);
+  }
+
+  // 18. Remove user's story likes/views on OTHER stories
+  const allStoryLikesSnap = await db.ref('story_likes').once('value');
+  const allStoryLikesData = allStoryLikesSnap.val() || {};
+  const slUpdates = {};
+  for (const [storyId, likers] of Object.entries(allStoryLikesData)) {
+    if (likers && likers[uid]) {
+      slUpdates[`story_likes/${storyId}/${uid}`] = null;
+    }
+  }
+  if (Object.keys(slUpdates).length > 0) {
+    await db.ref().update(slUpdates);
+  }
+
+  const allStoryViewsSnap = await db.ref('story_views').once('value');
+  const allStoryViewsData = allStoryViewsSnap.val() || {};
+  const svUpdates = {};
+  for (const [storyId, viewers] of Object.entries(allStoryViewsData)) {
+    if (viewers && viewers[uid]) {
+      svUpdates[`story_views/${storyId}/${uid}`] = null;
+    }
+  }
+  if (Object.keys(svUpdates).length > 0) {
+    await db.ref().update(svUpdates);
+  }
+
+  // 19. Delete families owned by user and related data
+  const familiesSnap = await db.ref('families').once('value');
+  const familiesData = familiesSnap.val() || {};
+  const famUpdates = {};
+  for (const [familyId, family] of Object.entries(familiesData)) {
+    if (family && family.ownerId === uid) {
+      famUpdates[`families/${familyId}`] = null;
+      famUpdates[`family_posts/${familyId}`] = null;
+      famUpdates[`family_comments/${familyId}`] = null;
+      famUpdates[`family_likes/${familyId}`] = null;
+    }
+    // Also remove user from family members
+    if (family && family.members && family.members[uid]) {
+      famUpdates[`families/${familyId}/members/${uid}`] = null;
+    }
+  }
+  if (Object.keys(famUpdates).length > 0) {
+    await db.ref().update(famUpdates);
+  }
+
+  // 20. Clean notifications referencing this user from other users
+  const allNotifsSnap = await db.ref('notifications').once('value');
+  const allNotifsData = allNotifsSnap.val() || {};
+  const notifUpdates = {};
+  for (const [ownerId, notifs] of Object.entries(allNotifsData)) {
+    if (!notifs) continue;
+    for (const [notifId, notif] of Object.entries(notifs)) {
+      if (notif && notif.from === uid) {
+        notifUpdates[`notifications/${ownerId}/${notifId}`] = null;
+      }
+    }
+  }
+  if (Object.keys(notifUpdates).length > 0) {
+    await db.ref().update(notifUpdates);
+  }
+
+  console.log(`[purgeUserData] All data purged for user: ${uid}`);
+}
+
 // ---------------- API: Admin endpoints (جديد) ----------------
 
 // Get all users (only admin)
@@ -937,6 +1250,43 @@ app.post('/api/admin/users/:userId/verify', requireAuth, requireAdmin, async (re
   } catch (error) {
     console.error('Error updating verification:', error);
     res.status(500).json({ ok: false, error: 'فشل في تحديث حالة التحقق.' });
+  }
+});
+
+// Admin: Delete a user account (cascading delete)
+app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  if (!userId) return res.status(400).json({ ok: false, error: 'userId required' });
+
+  // Prevent admin from deleting themselves
+  if (userId === req.session.userId) {
+    return res.status(400).json({ ok: false, error: 'لا يمكنك حذف حسابك من هنا' });
+  }
+
+  try {
+    // Check user exists
+    const profileSnap = await db.ref(`profiles/${userId}`).once('value');
+    if (!profileSnap.exists()) {
+      return res.status(404).json({ ok: false, error: 'المستخدم غير موجود' });
+    }
+    const profile = profileSnap.val();
+    const username = profile.username || 'unknown';
+
+    // Delete from Firebase Auth
+    try {
+      await admin.auth().deleteUser(userId);
+    } catch (authErr) {
+      console.error('Firebase Auth delete error (may already be deleted):', authErr.code);
+    }
+
+    // Cascade delete all user data
+    await purgeUserData(userId);
+
+    console.log(`[Admin] User ${username} (${userId}) deleted by admin ${req.session.userId}`);
+    res.json({ ok: true, message: `تم حذف حساب ${username} وجميع بياناته` });
+  } catch (error) {
+    console.error('Admin delete user error:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف المستخدم' });
   }
 });
 
@@ -1381,6 +1731,69 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ ok: false, error: 'Error fetching messages.' });
+  }
+});
+
+// --- Typing Indicator APIs ---
+
+// Set typing status
+app.post('/api/typing', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { contact_id, typing } = req.body;
+  if (!contact_id) return res.status(400).json({ ok: false, error: 'contact_id required' });
+  try {
+    const typingRef = db.ref(`typing/${contact_id}/${userId}`);
+    if (typing) {
+      await typingRef.set({ typing: true, timestamp: Date.now() });
+    } else {
+      await typingRef.remove();
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Typing status error:', e);
+    res.status(500).json({ ok: false, error: 'Failed to update typing status' });
+  }
+});
+
+// Get typing status for a contact (is contact typing to me?)
+app.get('/api/typing/:contactId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const contactId = req.params.contactId;
+  try {
+    const typingSnap = await db.ref(`typing/${userId}/${contactId}`).once('value');
+    const data = typingSnap.val();
+    const isTyping = !!(data && data.typing && (Date.now() - data.timestamp < 6000));
+    // Auto-clean stale typing entries
+    if (data && (Date.now() - data.timestamp >= 6000)) {
+      db.ref(`typing/${userId}/${contactId}`).remove().catch(() => {});
+    }
+    res.json({ ok: true, typing: isTyping });
+  } catch (e) {
+    console.error('Get typing status error:', e);
+    res.status(500).json({ ok: false, error: 'Failed to get typing status' });
+  }
+});
+
+// Get all typing statuses for current user (who is typing to me?)
+app.get('/api/typing', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  try {
+    const typingSnap = await db.ref(`typing/${userId}`).once('value');
+    const data = typingSnap.val() || {};
+    const now = Date.now();
+    const typingUsers = {};
+    for (const [contactId, info] of Object.entries(data)) {
+      if (info && info.typing && (now - info.timestamp < 6000)) {
+        typingUsers[contactId] = true;
+      } else {
+        // Clean stale entry
+        db.ref(`typing/${userId}/${contactId}`).remove().catch(() => {});
+      }
+    }
+    res.json({ ok: true, typing: typingUsers });
+  } catch (e) {
+    console.error('Get all typing error:', e);
+    res.status(500).json({ ok: false, error: 'Failed to get typing statuses' });
   }
 });
 
@@ -3824,23 +4237,15 @@ app.post('/api/account/delete', requireAuth, async (req, res) => {
       return res.status(403).json({ ok: false, error: 'كلمة المرور غير صحيحة.' });
     }
 
-    // 3. حذف المستخدم والموارد
+    // 3. حذف المستخدم والموارد (حذف شامل)
     try {
       await admin.auth().deleteUser(uid);
-
-      const updates = {};
-      updates[`profiles/${uid}`] = null;
-      updates[`chats/${uid}`] = null;
-      updates[`friends/${uid}`] = null;
-      updates[`notifications/${uid}`] = null;
+      await purgeUserData(uid);
       // تنظيف الجلسات المرتبطة
-      updates[`sessions/${req.sessionID}`] = null;
-
-      await db.ref().update(updates).catch(() => {});
+      await db.ref(`sessions/${req.sessionID}`).remove().catch(() => {});
 
       // 4. تدمير الجلسة وإرجاع اسم المستخدم المحذوف
       req.session.destroy(() => {
-        // نرسل اسم المستخدم هنا
         res.json({ ok: true, message: 'Account deleted', deletedUsername: usernameToDelete });
       });
 

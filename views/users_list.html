@@ -1775,6 +1775,59 @@
             }, 45000);
         }
 
+        // --- Typing indicator polling for chat list ---
+        let typingUsersMap = {};
+        function pollTypingStatuses() {
+            fetch('/api/typing').then(r => r.json()).then(d => {
+                if (d.ok) {
+                    typingUsersMap = d.typing || {};
+                    updateTypingIndicators();
+                }
+            }).catch(() => {});
+        }
+
+        function updateTypingIndicators() {
+            for (const [userId, isTyping] of Object.entries(typingUsersMap)) {
+                const card = document.getElementById(`user-${userId}`);
+                if (!card) continue;
+                let typingEl = card.querySelector('.typing-status');
+                if (isTyping) {
+                    if (!typingEl) {
+                        const msgArea = card.querySelector('.flex.justify-between.items-center.mt-1');
+                        if (msgArea) {
+                            const msgText = msgArea.querySelector('.flex.items-center.text-sm');
+                            if (msgText) {
+                                msgText.dataset.originalHtml = msgText.innerHTML;
+                                msgText.innerHTML = '<span class="typing-status" style="color:#60a5fa;font-size:13px;display:inline-flex;align-items:center;gap:4px;"><span style="display:flex;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:#60a5fa;animation:typingDotList 1.2s infinite;animation-delay:0s;"></span><span style="width:5px;height:5px;border-radius:50%;background:#60a5fa;animation:typingDotList 1.2s infinite;animation-delay:0.2s;"></span><span style="width:5px;height:5px;border-radius:50%;background:#60a5fa;animation:typingDotList 1.2s infinite;animation-delay:0.4s;"></span></span> يكتب...</span>';
+                            }
+                        }
+                    }
+                } else {
+                    if (typingEl) {
+                        const msgText = typingEl.closest('.flex.items-center.text-sm');
+                        if (msgText && msgText.dataset.originalHtml) {
+                            msgText.innerHTML = msgText.dataset.originalHtml;
+                            delete msgText.dataset.originalHtml;
+                        }
+                    }
+                }
+            }
+            // Also clear typing for users not in map
+            document.querySelectorAll('.typing-status').forEach(el => {
+                const card = el.closest('[id^="user-"]');
+                if (card) {
+                    const uid = card.id.replace('user-', '');
+                    if (!typingUsersMap[uid]) {
+                        const msgText = el.closest('.flex.items-center.text-sm');
+                        if (msgText && msgText.dataset.originalHtml) {
+                            msgText.innerHTML = msgText.dataset.originalHtml;
+                            delete msgText.dataset.originalHtml;
+                        }
+                    }
+                }
+            });
+        }
+
         function init() {
             // إرسال إشارة النشاط عند تحميل الصفحة
             fetch('/api/status/heartbeat', { method: 'POST' }).catch(()=>{});
@@ -1792,6 +1845,10 @@
                 const data = JSON.parse(e.data);
                 if (data.users) updateList(data.users);
             };
+
+            // Poll typing statuses every 2 seconds
+            pollTypingStatuses();
+            setInterval(pollTypingStatuses, 2000);
         }
 
         // إرسال نبض نشاط عند دخول المستخدم للصفحة
@@ -1804,6 +1861,12 @@
 
     </script>
 
+<style>
+@keyframes typingDotList {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+</style>
 
 <script>
 (function() {
