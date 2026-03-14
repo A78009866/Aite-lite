@@ -98,7 +98,7 @@ app.use(helmet({
 // Rate limiting - general
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // 300 requests per window
+  max: 1500, // 1500 requests per window (chat polling needs many requests)
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, error: 'Too many requests, please try again later.' }
@@ -2599,6 +2599,7 @@ app.get('/api/discover-users', requireAuth, async (req, res) => {
         full_name: profile.full_name || '',
         profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
         is_online: !!profile.is_online,
+        is_verified: !!profile.is_verified,
         mutual_friends_count: fofScores[uid] || 0
       });
     }
