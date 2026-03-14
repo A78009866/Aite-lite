@@ -3158,6 +3158,20 @@ function handleNotifClick(el) {
 
             ws.load(url);
 
+            ws._isReady = false;
+            ws._pendingPlay = false;
+            ws.on('ready', () => {
+                ws._isReady = true;
+                if (ws._pendingPlay) {
+                    ws._pendingPlay = false;
+                    try {
+                        const ctx = ws.backend && ws.backend.ac;
+                        if (ctx && ctx.state === 'suspended') ctx.resume();
+                    } catch(e){}
+                    ws.play();
+                }
+            });
+
             const playButton = container.closest('.glass-post-card').querySelector('.audio-play-button');
             if (playButton) {
                 playButton.onclick = () => {
@@ -3185,10 +3199,19 @@ function handleNotifClick(el) {
                     
                     if (ws.isPlaying()) {
                         ws.pause();
+                        ws._pendingPlay = false;
                         playButton.querySelector('i').classList.remove('fa-pause');
                         playButton.querySelector('i').classList.add('fa-play');
                     } else {
-                        ws.play();
+                        try {
+                            const ctx = ws.backend && ws.backend.ac;
+                            if (ctx && ctx.state === 'suspended') ctx.resume();
+                        } catch(e){}
+                        if (ws._isReady) {
+                            ws.play();
+                        } else {
+                            ws._pendingPlay = true;
+                        }
                         playButton.querySelector('i').classList.remove('fa-play');
                         playButton.querySelector('i').classList.add('fa-pause');
                         activeWaveSurfer = ws;
@@ -5275,9 +5298,18 @@ function handleNotifClick(el) {
             if (ws) {
                 if (ws.isPlaying()) {
                     ws.pause();
+                    if (ws._pendingPlay !== undefined) ws._pendingPlay = false;
                     if (btn) { btn.querySelector('i').classList.remove('fa-pause'); btn.querySelector('i').classList.add('fa-play'); }
                 } else {
-                    ws.play();
+                    try {
+                        const ctx = ws.backend && ws.backend.ac;
+                        if (ctx && ctx.state === 'suspended') ctx.resume();
+                    } catch(e){}
+                    if (ws._isReady) {
+                        ws.play();
+                    } else {
+                        ws._pendingPlay = true;
+                    }
                     if (btn) { btn.querySelector('i').classList.remove('fa-play'); btn.querySelector('i').classList.add('fa-pause'); }
                     activeWaveSurfer = ws;
                 }

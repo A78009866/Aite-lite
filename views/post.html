@@ -1858,6 +1858,20 @@
             ws.load(url);
             container.wsInstance = ws;
 
+            ws._isReady = false;
+            ws._pendingPlay = false;
+            ws.on('ready', () => {
+                ws._isReady = true;
+                if (ws._pendingPlay) {
+                    ws._pendingPlay = false;
+                    try {
+                        const ctx = ws.backend && ws.backend.ac;
+                        if (ctx && ctx.state === 'suspended') ctx.resume();
+                    } catch(e){}
+                    ws.play();
+                }
+            });
+
             ws.on('play', () => {
                 ws.setWaveColor('#6b7280');
                 ws.setProgressColor('#ffffff');
@@ -1900,8 +1914,17 @@
 
             if(ws.isPlaying()) {
                 ws.pause();
+                ws._pendingPlay = false;
             } else {
-                ws.play();
+                try {
+                    const ctx = ws.backend && ws.backend.ac;
+                    if (ctx && ctx.state === 'suspended') ctx.resume();
+                } catch(e){}
+                if (ws._isReady) {
+                    ws.play();
+                } else {
+                    ws._pendingPlay = true;
+                }
                 btn.innerHTML = '<i class="fas fa-pause"></i>';
                 activeWaveSurfer = ws;
             }

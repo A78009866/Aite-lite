@@ -2743,6 +2743,20 @@ function initializePostWaveSurfer(postId, url) {
 
     try { ws.load(url); } catch(e){}
 
+    ws._isReady = false;
+    ws._pendingPlay = false;
+    ws.on('ready', () => {
+        ws._isReady = true;
+        if (ws._pendingPlay) {
+            ws._pendingPlay = false;
+            try {
+                const ctx = ws.backend && ws.backend.ac;
+                if (ctx && ctx.state === 'suspended') ctx.resume();
+            } catch(e){}
+            ws.play();
+        }
+    });
+
     const postCard = container.closest('.glass-post-card');
     const playButton = postCard ? postCard.querySelector('.audio-play-button') : null;
 
@@ -2780,10 +2794,19 @@ function initializePostWaveSurfer(postId, url) {
 
             if (ws.isPlaying()) {
                 ws.pause();
+                ws._pendingPlay = false;
                 playButton.querySelector('i').classList.remove('fa-pause');
                 playButton.querySelector('i').classList.add('fa-play');
             } else {
-                ws.play();
+                try {
+                    const ctx = ws.backend && ws.backend.ac;
+                    if (ctx && ctx.state === 'suspended') ctx.resume();
+                } catch(e){}
+                if (ws._isReady) {
+                    ws.play();
+                } else {
+                    ws._pendingPlay = true;
+                }
                 playButton.querySelector('i').classList.remove('fa-play');
                 playButton.querySelector('i').classList.add('fa-pause');
                 activeWaveSurfer = ws;
@@ -2838,8 +2861,24 @@ function toggleAudioPlay(postId) {
     }
     const wavesurfer = audioWaveSurfers[postId];
     if (!wavesurfer) return;
-    if (wavesurfer.isPlaying()) wavesurfer.pause();
-    else wavesurfer.play();
+    const btn = document.getElementById(`audio-btn-${postId}`);
+    if (wavesurfer.isPlaying()) {
+        wavesurfer.pause();
+        if (wavesurfer._pendingPlay !== undefined) wavesurfer._pendingPlay = false;
+        if (btn) { btn.querySelector('i').classList.remove('fa-pause'); btn.querySelector('i').classList.add('fa-play'); }
+    } else {
+        try {
+            const ctx = wavesurfer.backend && wavesurfer.backend.ac;
+            if (ctx && ctx.state === 'suspended') ctx.resume();
+        } catch(e){}
+        if (wavesurfer._isReady) {
+            wavesurfer.play();
+        } else {
+            wavesurfer._pendingPlay = true;
+        }
+        if (btn) { btn.querySelector('i').classList.remove('fa-play'); btn.querySelector('i').classList.add('fa-pause'); }
+        activeWaveSurfer = wavesurfer;
+    }
 }
 
 /* ----------------- Video controls (same behavior/implementation as chat_list) ----------------- */
