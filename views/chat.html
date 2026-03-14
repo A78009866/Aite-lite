@@ -2253,69 +2253,72 @@ textarea:focus { border-color: var(--accent); }
 
   <div class="glass">
     <div id="messages" class="messages"></div>
-    <!-- Typing Indicator (Facebook-style bubble) -->
-    <div id="typing-indicator" class="typing-bubble-row" style="display:none;">
-      <div class="typing-bubble-avatar">
-        <img id="typing-avatar" src="https://via.placeholder.com/32" alt="">
-      </div>
-      <div class="typing-bubble">
-        <div class="typing-bubble-dots">
-          <span class="typing-dot"></span>
-          <span class="typing-dot"></span>
-          <span class="typing-dot"></span>
-        </div>
-      </div>
-    </div>
     <style>
+      /* Facebook-style Typing Indicator Bubble */
       .typing-bubble-row {
         display: flex;
         align-items: flex-end;
         gap: 8px;
-        padding: 6px 16px 10px;
+        padding: 4px 16px 10px;
         direction: rtl;
+        opacity: 0;
+        transform: translateY(8px) scale(0.95);
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        pointer-events: none;
+      }
+      .typing-bubble-row.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
       }
       .typing-bubble-avatar img {
         width: 28px;
         height: 28px;
         border-radius: 50%;
         object-fit: cover;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
       }
       .typing-bubble {
         background: var(--msg-incoming-bg);
         border-radius: 18px 18px 4px 18px;
-        padding: 12px 16px;
+        padding: 14px 18px;
         display: inline-flex;
         align-items: center;
-        min-width: 60px;
-        min-height: 20px;
+        min-width: 64px;
+        min-height: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        position: relative;
       }
       .typing-bubble-dots {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
       }
       .typing-dot {
-        width: 8px;
-        height: 8px;
+        width: 9px;
+        height: 9px;
         border-radius: 50%;
         background: #94a3b8;
-        animation: fbTypingDot 1.4s infinite ease-in-out;
+        animation: fbTypingBounce 1.4s infinite ease-in-out;
       }
       .typing-dot:nth-child(1) { animation-delay: 0s; }
       .typing-dot:nth-child(2) { animation-delay: 0.2s; }
       .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-      @keyframes fbTypingDot {
-        0%, 44%, 100% {
-          opacity: 0.4;
-          transform: scale(0.8);
+      @keyframes fbTypingBounce {
+        0%, 60%, 100% {
+          opacity: 0.35;
+          transform: translateY(0) scale(0.85);
         }
-        22% {
+        30% {
           opacity: 1;
-          transform: scale(1);
+          transform: translateY(-4px) scale(1);
         }
       }
       html[data-theme="light"] .typing-dot {
         background: #65676b;
+      }
+      html[data-theme="light"] .typing-bubble {
+        background: #e4e6eb;
       }
     </style>
     
@@ -2948,6 +2951,27 @@ async function init() {
   // Request notification permission
   requestNotifPermission();
 
+  // Create typing indicator inside messages container
+  (function() {
+    const typingRow = document.createElement('div');
+    typingRow.id = 'typing-indicator';
+    typingRow.className = 'typing-bubble-row';
+    typingRow.style.display = 'none';
+    typingRow.innerHTML = `
+      <div class="typing-bubble-avatar">
+        <img id="typing-avatar" src="https://via.placeholder.com/32" alt="">
+      </div>
+      <div class="typing-bubble">
+        <div class="typing-bubble-dots">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+      </div>
+    `;
+    messagesEl.appendChild(typingRow);
+  })();
+
   // Load Messages
   await loadMessages(true);
   setInterval(() => loadMessages(false), 1500);
@@ -2960,13 +2984,19 @@ async function init() {
       const indicator = document.getElementById('typing-indicator');
       const headerStatus = document.getElementById('header-status');
       if (d.ok && d.typing) {
-        indicator.style.display = 'block';
+        if (!indicator.classList.contains('visible')) {
+          indicator.style.display = 'flex';
+          // Force reflow for transition
+          void indicator.offsetHeight;
+          indicator.classList.add('visible');
+        }
         if (headerStatus) { headerStatus.textContent = 'يكتب...'; headerStatus.style.color = '#60a5fa'; }
         // Auto-scroll so typing indicator is visible
         const messagesEl = document.getElementById('messages');
-        if (messagesEl) { const atBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120; if (atBottom) indicator.scrollIntoView({ behavior: 'smooth', block: 'end' }); }
+        if (messagesEl) { const atBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120; if (atBottom) messagesEl.scrollTop = messagesEl.scrollHeight; }
       } else {
-        indicator.style.display = 'none';
+        indicator.classList.remove('visible');
+        setTimeout(() => { if (!indicator.classList.contains('visible')) indicator.style.display = 'none'; }, 300);
         // Restore online status text
         if (headerStatus && headerStatus.textContent === 'يكتب...') {
           const onlineDot = document.getElementById('header-online');
@@ -3149,9 +3179,14 @@ async function loadMessages(initial = false) {
         const existingMsg = document.querySelector(`[data-msg-id="${msg.messageId}"]`);
         
         if (!existingMsg) {
-            // New message: append it
+            // New message: insert before typing indicator to keep it at bottom
+            const typingEl = document.getElementById('typing-indicator');
             const msgNode = createMsgElement(msg);
-            messagesEl.appendChild(msgNode);
+            if (typingEl && typingEl.parentNode === messagesEl) {
+              messagesEl.insertBefore(msgNode, typingEl);
+            } else {
+              messagesEl.appendChild(msgNode);
+            }
         } else {
             // Update existing message (e.g. Reactions, edits, deletes)
             const bubble = existingMsg.querySelector('.msg');
