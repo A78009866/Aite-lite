@@ -2108,9 +2108,27 @@ textarea:focus { border-color: var(--accent); }
         <div id="header-status" class="sub"></div>
       </div>
     </a>
-    <button id="block-btn-chat" title="حظر المستخدم" style="display:none; background:none; border:none; color:#ef4444; font-size:18px; cursor:pointer; padding:8px; margin-right:8px; transition:color 0.2s;" onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#ef4444'">
-      <i class="fas fa-ban"></i>
-    </button>
+    <!-- 3-dot menu -->
+    <div id="chatMenuWrapper" style="position:relative; display:none;">
+      <button id="chatMenuBtn" style="background:rgba(255,255,255,0.1); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.15); color:#fff; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; margin-right:8px; transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.18)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+        <i class="fas fa-ellipsis-v"></i>
+      </button>
+      <div id="chatDropdown" style="display:none; position:absolute; left:0; top:40px; min-width:200px; background:rgba(15,23,42,0.85); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.12); border-radius:14px; overflow:hidden; z-index:999; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+        <a id="chatGoToProfile" href="#" style="display:flex; width:100%; padding:12px 16px; background:none; border:none; color:#e2e8f0; font-size:13px; cursor:pointer; align-items:center; gap:8px; transition:background 0.15s; text-decoration:none;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+          <i class="fas fa-user" style="font-size:14px; color:#94a3b8;"></i>
+          الانتقال للبروفايل
+        </a>
+        <div style="height:1px; background:rgba(255,255,255,0.08); margin:0 8px;"></div>
+        <button id="chatBlockBtn" style="width:100%; padding:12px 16px; background:none; border:none; color:#f87171; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; transition:background 0.15s; text-align:right;" onmouseover="this.style.background='rgba(239,68,68,0.12)'" onmouseout="this.style.background='none'">
+          <i class="fas fa-ban" style="font-size:14px;"></i>
+          حظر المستخدم
+        </button>
+        <button id="chatUnblockBtn" style="display:none; width:100%; padding:12px 16px; background:none; border:none; color:#f87171; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; transition:background 0.15s; text-align:right;" onmouseover="this.style.background='rgba(239,68,68,0.12)'" onmouseout="this.style.background='none'">
+          <i class="fas fa-unlock" style="font-size:14px;"></i>
+          إلغاء الحظر
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="glass">
@@ -2163,12 +2181,17 @@ textarea:focus { border-color: var(--accent); }
     </div>
   </div>
 
-  <!-- Blocked user banner -->
-  <div id="blocked-banner" style="display:none; text-align:center; padding:16px; background:rgba(15,23,42,0.95); border-top:1px solid rgba(255,255,255,0.1);">
+  <!-- Blocked user banner (I blocked them) -->
+  <div id="blocked-banner" style="display:none; text-align:center; padding:16px; background:rgba(239,68,68,0.08); backdrop-filter:blur(12px); border-top:1px solid rgba(239,68,68,0.2);">
     <p style="color:#f87171; font-size:14px; margin-bottom:10px;"><i class="fas fa-ban" style="margin-left:6px;"></i> لقد قمت بحظر هذا المستخدم</p>
-    <button id="unblock-btn-chat" style="background:#f59e0b; color:#fff; border:none; border-radius:8px; padding:8px 20px; cursor:pointer; font-size:13px; font-weight:600; transition:background 0.2s;" onmouseover="this.style.background='#d97706'" onmouseout="this.style.background='#f59e0b'">
-      <i class="fas fa-ban" style="margin-left:4px;"></i> إلغاء الحظر
+    <button id="unblock-btn-chat" style="background:rgba(239,68,68,0.15); backdrop-filter:blur(12px); border:1px solid rgba(239,68,68,0.3); color:#f87171; border-radius:10px; padding:8px 20px; cursor:pointer; font-size:13px; font-weight:600; transition:all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">
+      <i class="fas fa-unlock" style="margin-left:4px;"></i> إلغاء الحظر
     </button>
+  </div>
+
+  <!-- Blocked by other user banner -->
+  <div id="blocked-by-banner" style="display:none; text-align:center; padding:14px; background:rgba(239,68,68,0.06); backdrop-filter:blur(12px); border-top:1px solid rgba(239,68,68,0.15);">
+    <p style="color:#f87171; font-size:13px; margin:0;"><i class="fas fa-ban" style="margin-left:6px;"></i> لا يمكنك مراسلة هذا الحساب</p>
   </div>
 
   <form id="composer" class="composer" onsubmit="return false;">
@@ -2529,23 +2552,33 @@ let chatBlockedBy = false; // true if other user blocked current user
 function updateBlockUI() {
   const composer = document.getElementById('composer');
   const blockedBanner = document.getElementById('blocked-banner');
-  const blockBtnChat = document.getElementById('block-btn-chat');
+  const blockedByBanner = document.getElementById('blocked-by-banner');
+  const chatMenuWrapper = document.getElementById('chatMenuWrapper');
+  const chatBlockBtn = document.getElementById('chatBlockBtn');
+  const chatUnblockBtn = document.getElementById('chatUnblockBtn');
 
   if (chatBlocked) {
     // Current user blocked the other
     if (composer) composer.style.display = 'none';
     if (blockedBanner) blockedBanner.style.display = 'block';
-    if (blockBtnChat) blockBtnChat.style.display = 'none';
+    if (blockedByBanner) blockedByBanner.style.display = 'none';
+    if (chatMenuWrapper) chatMenuWrapper.style.display = 'block';
+    if (chatBlockBtn) chatBlockBtn.style.display = 'none';
+    if (chatUnblockBtn) chatUnblockBtn.style.display = 'flex';
   } else if (chatBlockedBy) {
     // Other user blocked current user
     if (composer) composer.style.display = 'none';
     if (blockedBanner) blockedBanner.style.display = 'none';
-    if (blockBtnChat) blockBtnChat.style.display = 'none';
+    if (blockedByBanner) blockedByBanner.style.display = 'block';
+    if (chatMenuWrapper) chatMenuWrapper.style.display = 'none';
   } else {
     // No block
     if (composer) composer.style.display = '';
     if (blockedBanner) blockedBanner.style.display = 'none';
-    if (blockBtnChat) blockBtnChat.style.display = 'block';
+    if (blockedByBanner) blockedByBanner.style.display = 'none';
+    if (chatMenuWrapper) chatMenuWrapper.style.display = 'block';
+    if (chatBlockBtn) chatBlockBtn.style.display = 'flex';
+    if (chatUnblockBtn) chatUnblockBtn.style.display = 'none';
   }
 }
 
@@ -2586,10 +2619,26 @@ async function init() {
   // Check block status
   await checkBlockStatus();
 
+  // 3-dot menu toggle
+  const chatMenuBtn = document.getElementById('chatMenuBtn');
+  const chatDropdown = document.getElementById('chatDropdown');
+  if (chatMenuBtn) {
+    chatMenuBtn.onclick = (e) => {
+      e.stopPropagation();
+      chatDropdown.style.display = chatDropdown.style.display === 'none' ? 'block' : 'none';
+    };
+  }
+  document.addEventListener('click', () => { if (chatDropdown) chatDropdown.style.display = 'none'; });
+
+  // Go to profile link
+  const chatGoToProfile = document.getElementById('chatGoToProfile');
+  if (chatGoToProfile) chatGoToProfile.href = `/profile?userId=${otherId}`;
+
   // Block button handler
-  const blockBtnChat = document.getElementById('block-btn-chat');
-  if (blockBtnChat) {
-    blockBtnChat.onclick = async () => {
+  const chatBlockBtn = document.getElementById('chatBlockBtn');
+  if (chatBlockBtn) {
+    chatBlockBtn.onclick = async () => {
+      chatDropdown.style.display = 'none';
       try {
         const r = await fetch(`/api/users/${otherId}/block`, { method: 'POST', credentials: 'same-origin' });
         const j = await r.json();
@@ -2605,7 +2654,24 @@ async function init() {
     };
   }
 
-  // Unblock button handler
+  // Unblock button handler (in menu)
+  const chatUnblockBtn = document.getElementById('chatUnblockBtn');
+  if (chatUnblockBtn) {
+    chatUnblockBtn.onclick = async () => {
+      chatDropdown.style.display = 'none';
+      try {
+        const r = await fetch(`/api/users/${otherId}/unblock`, { method: 'POST', credentials: 'same-origin' });
+        const j = await r.json();
+        if (r.ok && j.ok) {
+          chatBlocked = false;
+          updateBlockUI();
+          fetchProfile(); // Re-fetch to show real profile
+        }
+      } catch (e) { console.error(e); }
+    };
+  }
+
+  // Unblock button in banner
   const unblockBtnChat = document.getElementById('unblock-btn-chat');
   if (unblockBtnChat) {
     unblockBtnChat.onclick = async () => {
@@ -2615,7 +2681,7 @@ async function init() {
         if (r.ok && j.ok) {
           chatBlocked = false;
           updateBlockUI();
-          fetchProfile(); // Re-fetch to show real profile
+          fetchProfile();
         }
       } catch (e) { console.error(e); }
     };
