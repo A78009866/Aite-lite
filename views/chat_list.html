@@ -2462,9 +2462,7 @@
                         <i class="fas fa-user-plus text-blue-400"></i>
                         <span>تعرّف على أشخاص جدد</span>
                     </h3>
-                    <button onclick="fetchDiscoverUsers()" class="text-blue-400 hover:text-blue-300 text-xs font-medium transition">
-                        <i class="fas fa-sync-alt"></i> تحديث
-                    </button>
+                    <!-- refresh button removed -->
                 </div>
                 <div id="discoverUsersScroll" class="discover-scroll">
                 </div>
@@ -4959,7 +4957,7 @@ function handleNotifClick(el) {
             }
         });
         
-        /* ----------------- Discover Users Section ----------------- */
+        /* ----------------- Discover Users Section (Smart Categorization) ----------------- */
         async function fetchDiscoverUsers() {
             const wrapper = document.getElementById('discoverUsersWrapper');
             const scroll = document.getElementById('discoverUsersScroll');
@@ -4973,10 +4971,50 @@ function handleNotifClick(el) {
                     return;
                 }
 
+                // Smart categorization
+                const mutualFriends = []; // users with mutual friends
+                const requestReceived = []; // users who sent us a request
+                const requestSent = []; // users we already sent a request to
+                const noRequest = []; // users with no interaction
+
+                data.users.forEach(u => {
+                    if (u.request_received) {
+                        requestReceived.push(u);
+                    } else if (u.mutual_friends_count > 0 && !u.request_sent) {
+                        mutualFriends.push(u);
+                    } else if (u.request_sent) {
+                        requestSent.push(u);
+                    } else {
+                        noRequest.push(u);
+                    }
+                });
+
+                // Sort mutual friends by count descending
+                mutualFriends.sort((a, b) => (b.mutual_friends_count || 0) - (a.mutual_friends_count || 0));
+
+                // Build categorized list: received first, then mutual, then no request, then sent
+                const sorted = [...requestReceived, ...mutualFriends, ...noRequest, ...requestSent];
+
+                if (sorted.length === 0) {
+                    wrapper.classList.add('hidden');
+                    return;
+                }
+
                 wrapper.classList.remove('hidden');
-                scroll.innerHTML = data.users.map(u => {
+                scroll.innerHTML = sorted.map(u => {
                     const onlineDot = u.is_online ? '<span class="dc-online-dot"></span>' : '';
-                    const mutualText = u.mutual_friends_count > 0 ? `<div class="discover-mutual">${u.mutual_friends_count} صديق مشترك</div>` : '';
+                    // Smart category label
+                    let categoryLabel = '';
+                    if (u.request_received) {
+                        categoryLabel = `<div class="discover-mutual" style="color:#34d399;"><i class="fas fa-user-check" style="font-size:10px;margin-left:3px;"></i> أرسل لك طلب</div>`;
+                    } else if (u.mutual_friends_count > 0) {
+                        categoryLabel = `<div class="discover-mutual"><i class="fas fa-user-friends" style="font-size:10px;margin-left:3px;"></i> ${u.mutual_friends_count} صديق مشترك</div>`;
+                    } else if (u.request_sent) {
+                        categoryLabel = `<div class="discover-mutual" style="color:#fbbf24;"><i class="fas fa-clock" style="font-size:10px;margin-left:3px;"></i> طلب معلّق</div>`;
+                    } else {
+                        categoryLabel = `<div class="discover-mutual" style="color:#94a3b8;"><i class="fas fa-user" style="font-size:10px;margin-left:3px;"></i> مقترح لك</div>`;
+                    }
+
                     let actionBtn = '';
                     if (u.request_sent) {
                         actionBtn = `<span class="discover-action dc-sent-btn" id="dc-sent-${escapeAttr(u.id)}"><i class="fas fa-clock"></i> تم الإرسال</span>`;
@@ -4993,7 +5031,7 @@ function handleNotifClick(el) {
                                 ${onlineDot}
                             </div>
                             <div class="discover-name">${escapeHtml(u.username)}</div>
-                            ${mutualText}
+                            ${categoryLabel}
                             ${actionBtn}
                         </div>
                     `;

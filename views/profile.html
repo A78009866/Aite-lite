@@ -54,6 +54,67 @@
             box-shadow: 0 4px 24px rgba(0,0,0,0.4);
         }
 
+        /* All Friends Modal */
+        .friends-modal-overlay {
+            position: fixed; inset: 0; z-index: 80;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            display: flex; align-items: flex-end; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .friends-modal-overlay.open { opacity: 1; pointer-events: auto; }
+        .friends-modal-box {
+            background: #1a1a1e; border-radius: 20px 20px 0 0;
+            width: 100%; max-width: 500px; max-height: 70vh;
+            overflow-y: auto; transform: translateY(100%);
+            transition: transform 0.3s ease-out;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .friends-modal-overlay.open .friends-modal-box { transform: translateY(0); }
+        .friends-modal-box .modal-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 12px auto 8px auto; }
+        .friends-modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .friends-modal-header h3 { font-size: 16px; font-weight: 700; color: #fff; margin: 0; }
+        .friends-modal-header .close-btn {
+            background: rgba(255,255,255,0.1); border: none; color: #fff;
+            width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+        .friends-modal-list { padding: 8px 0; }
+        .friends-modal-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+            cursor: pointer; transition: background 0.15s;
+        }
+        .friends-modal-item:hover { background: rgba(255,255,255,0.05); }
+        .friends-modal-item img {
+            width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+        }
+        .friends-modal-item .fm-info { flex: 1; min-width: 0; }
+        .friends-modal-item .fm-username { font-weight: 600; font-size: 14px; color: #fff; }
+        .friends-modal-item .fm-fullname { font-size: 12px; color: #94a3b8; }
+        .friends-modal-item .fm-action {
+            font-size: 12px; padding: 5px 12px; border-radius: 8px; border: none; cursor: pointer;
+            font-weight: 600; transition: all 0.15s;
+        }
+        .friends-modal-item .fm-msg-btn { background: rgba(59,130,246,0.2); color: #60a5fa; }
+        .friends-modal-item .fm-msg-btn:hover { background: rgba(59,130,246,0.35); }
+        .friends-modal-item .fm-add-btn { background: rgba(59,130,246,0.2); color: #60a5fa; }
+        .friends-modal-item .fm-add-btn:hover { background: rgba(59,130,246,0.35); }
+        .friends-modal-item .fm-sent-btn { background: rgba(255,255,255,0.08); color: #94a3b8; cursor: default; }
+        .friends-modal-item .fm-me-btn { background: rgba(255,255,255,0.08); color: #94a3b8; cursor: default; }
+        .friends-modal-empty {
+            text-align: center; padding: 32px 16px; color: #64748b; font-size: 14px;
+        }
+        @media (min-width: 768px) {
+            .friends-modal-box { border-radius: 16px; max-height: 60vh; margin-bottom: 10vh; }
+        }
+        html[data-theme="light"] .friends-modal-box { background: #fff; border-color: rgba(0,0,0,0.08); }
+        html[data-theme="light"] .friends-modal-header { border-color: rgba(0,0,0,0.08); }
+        html[data-theme="light"] .friends-modal-header h3 { color: #1c1e21; }
+        html[data-theme="light"] .friends-modal-item .fm-username { color: #1c1e21; }
+        html[data-theme="light"] .friends-modal-item:hover { background: rgba(0,0,0,0.04); }
+
         /* Likes Modal */
         .likes-modal-overlay {
             position: fixed; inset: 0; z-index: 80;
@@ -152,7 +213,7 @@
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 14px;
             overflow: hidden;
-            z-index: 999;
+            z-index: 9999;
             box-shadow: 0 8px 32px rgba(0,0,0,0.4);
         }
         .profile-dots-dropdown .dots-item {
@@ -2309,6 +2370,20 @@
         </div>
     </main>
 
+    <!-- All Friends Modal -->
+    <div id="friendsModalOverlay" class="friends-modal-overlay" onclick="closeFriendsModal()">
+        <div class="friends-modal-box" onclick="event.stopPropagation()">
+            <div class="modal-handle"></div>
+            <div class="friends-modal-header">
+                <h3><i class="fas fa-user-friends text-blue-400" style="margin-left:8px;"></i> جميع الأصدقاء <span id="friendsModalCount" style="color:#94a3b8;font-size:13px;font-weight:400;"></span></h3>
+                <button class="close-btn" onclick="closeFriendsModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="friendsModalList" class="friends-modal-list">
+                <div class="friends-modal-empty"><i class="fas fa-spinner fa-spin"></i></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Centered delete confirmation modal (glass) -->
     <div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-bg">
         <div class="bg-[#1f2937] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center" onclick="event.stopPropagation()">
@@ -3633,8 +3708,8 @@ async function fetchAndDisplayProfile() {
                 if (profileMenuBtn) {
                     profileMenuBtn.onclick = (e) => {
                         e.stopPropagation();
-                        const isVisible = dotsDropdown.style.display === 'block';
-                        dotsDropdown.style.display = isVisible ? 'none' : 'block';
+                        const isHidden = !dotsDropdown.style.display || dotsDropdown.style.display === 'none';
+                        dotsDropdown.style.display = isHidden ? 'block' : 'none';
                     };
                 }
                 // Close dropdown on outside click
@@ -3668,8 +3743,13 @@ async function fetchAndDisplayProfile() {
                     if (blockedByBanner) blockedByBanner.style.display = 'none';
                     if (chatActionsRow) chatActionsRow.style.display = 'flex';
                     if (unblockMainBtn) unblockMainBtn.style.display = 'none';
-                    if (profileMenuWrapper) profileMenuWrapper.style.display = 'block';
-                    if (blockBtn) blockBtn.style.display = 'flex';
+                    // Only show 3-dot menu if user is a friend
+                    if (data.is_friend) {
+                        if (profileMenuWrapper) profileMenuWrapper.style.display = 'block';
+                        if (blockBtn) blockBtn.style.display = 'flex';
+                    } else {
+                        if (profileMenuWrapper) profileMenuWrapper.style.display = 'none';
+                    }
                     // Update chatButton appearance
                     if (data.is_friend) {
                         if (chatButton) {
@@ -3858,8 +3938,85 @@ async function sendFriendRequestFromCard(userId) {
     }
 }
 
-function viewAllFriends() {
-    window.location.href = '/all_users';
+async function viewAllFriends() {
+    const overlay = document.getElementById('friendsModalOverlay');
+    const list = document.getElementById('friendsModalList');
+    const countEl = document.getElementById('friendsModalCount');
+    if (!overlay || !list) return;
+
+    overlay.classList.add('open');
+    list.innerHTML = '<div class="friends-modal-empty"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+
+    try {
+        const res = await fetch(`/api/friends/user/${encodeURIComponent(currentProfileId)}`, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (!res.ok || !data.ok || !data.friends || data.friends.length === 0) {
+            list.innerHTML = '<div class="friends-modal-empty"><i class="fas fa-users" style="font-size:24px;display:block;margin-bottom:8px;opacity:0.5;"></i> لا يوجد أصدقاء</div>';
+            if (countEl) countEl.textContent = '(0)';
+            return;
+        }
+
+        if (countEl) countEl.textContent = `(${data.total})`;
+
+        list.innerHTML = data.friends.map(f => {
+            let actionHtml = '';
+            if (f.is_me) {
+                actionHtml = '<span class="fm-action fm-me-btn">أنت</span>';
+            } else if (f.is_mutual) {
+                actionHtml = `<a href="/chat?contactId=${escapeAttr(f.id)}" class="fm-action fm-msg-btn" onclick="event.stopPropagation()"><i class="fas fa-comment-dots" style="margin-left:4px;"></i>مراسلة</a>`;
+            } else if (f.request_sent) {
+                actionHtml = '<span class="fm-action fm-sent-btn"><i class="fas fa-clock" style="margin-left:4px;"></i>تم الإرسال</span>';
+            } else {
+                actionHtml = `<button class="fm-action fm-add-btn" id="fm-add-${escapeAttr(f.id)}" onclick="event.stopPropagation(); sendFriendFromModal('${escapeAttr(f.id)}')"><i class="fas fa-user-plus" style="margin-left:4px;"></i>إضافة</button>`;
+            }
+            const onlineIndicator = f.is_online ? '<span style="display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;margin-right:6px;"></span>' : '';
+            return `
+                <div class="friends-modal-item" onclick="window.location.href='/profile?userId=${escapeAttr(f.id)}'">
+                    <img src="${escapeAttr(f.profile_picture_url || '/assets/default_profile_pic.png')}" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_PROFILE_PIC_URL)}'">
+                    <div class="fm-info">
+                        <div class="fm-username">${onlineIndicator}@${escapeHtml(f.username)}</div>
+                        <div class="fm-fullname">${escapeHtml(f.full_name || '')}</div>
+                    </div>
+                    <div>${actionHtml}</div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Error loading all friends:', e);
+        list.innerHTML = '<div class="friends-modal-empty">حدث خطأ في التحميل</div>';
+    }
+}
+
+function closeFriendsModal() {
+    const overlay = document.getElementById('friendsModalOverlay');
+    if (overlay) overlay.classList.remove('open');
+}
+
+async function sendFriendFromModal(userId) {
+    const btn = document.getElementById('fm-add-' + userId);
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    try {
+        const r = await fetch('/api/friends/request', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to_id: userId })
+        });
+        const j = await r.json();
+        if (r.ok && j.ok) {
+            btn.outerHTML = '<span class="fm-action fm-sent-btn"><i class="fas fa-clock" style="margin-left:4px;"></i>تم الإرسال</span>';
+            showToast('تم إرسال طلب الصداقة.', { type: 'success' });
+        } else {
+            btn.innerHTML = '<i class="fas fa-user-plus" style="margin-left:4px;"></i>إضافة';
+            btn.disabled = false;
+            showToast(j.error || 'فشل في إرسال الطلب.', { type: 'error' });
+        }
+    } catch (e) {
+        btn.innerHTML = '<i class="fas fa-user-plus" style="margin-left:4px;"></i>إضافة';
+        btn.disabled = false;
+        showToast('خطأ في الاتصال.', { type: 'error' });
+    }
 }
 
 /* ----------------- Presence & SSE ----------------- */
