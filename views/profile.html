@@ -759,11 +759,10 @@
         .option-btn:active { transform: translateY(1px); }
         .option-row { display:flex; gap:10px; margin-bottom:10px; }
 
-        /* --- Video large display (copied from chat_list) --- */
+        /* --- Video large display --- */
         .video-large {
             width: 100%;
-            height: 480px;
-            max-height: 72vh;
+            max-height: 80vh;
             border-radius: 12px;
             overflow: hidden;
             background: #000;
@@ -772,51 +771,143 @@
         }
         .video-large video {
             width: 100%;
-            height: 100%;
-            object-fit: cover; /* show video clearly and fill area */
+            max-height: 80vh;
+            object-fit: contain;
             display: block;
             background: #000;
             cursor: pointer;
         }
-        /* central overlay play (bigger, cleaner) */
         .video-play-overlay {
             position: absolute;
             inset: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15));
-            transition: opacity 0.18s;
+            background: rgba(0,0,0,0.25);
+            transition: opacity 0.25s;
             z-index: 30;
         }
-        .video-play-overlay i {
-            font-size: 54px;
-            color: rgba(255,255,255,0.94);
-            text-shadow: 0 6px 24px rgba(0,0,0,0.6);
+        .video-play-overlay .play-circle {
+            width: 68px; height: 68px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid rgba(255,255,255,0.25);
+            transition: transform 0.2s, background 0.2s;
+        }
+        .video-play-overlay .play-circle:hover { transform: scale(1.08); background: rgba(0,0,0,0.7); }
+        .video-play-overlay .play-circle i {
+            font-size: 28px;
+            color: #fff;
+            margin-left: 3px;
         }
         .video-play-overlay.hidden { opacity: 0; pointer-events: none; }
 
-        /* fullscreen button (small) */
-        .video-fs-btn {
-            position: absolute;
-            top: 10px;
-            left: 10px; /* left because dir=rtl; visually it's on top-left */
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            background: rgba(0,0,0,0.45);
-            border: 1px solid rgba(255,255,255,0.08);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            z-index: 40;
-            cursor: pointer;
+        /* --- Custom Video Controls Bar --- */
+        .video-controls-bar {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.85));
+            padding: 28px 12px 10px;
+            display: flex; flex-direction: column; gap: 6px;
+            z-index: 35; opacity: 0;
+            transition: opacity 0.25s;
         }
-        .video-fs-btn i { font-size: 14px; }
+        .video-large:hover .video-controls-bar,
+        .video-large.controls-visible .video-controls-bar { opacity: 1; }
+        .video-progress-wrapper {
+            width: 100%; height: 4px; background: rgba(255,255,255,0.2);
+            border-radius: 4px; cursor: pointer; position: relative;
+            transition: height 0.15s;
+        }
+        .video-progress-wrapper:hover { height: 6px; }
+        .video-progress-fill {
+            height: 100%; background: #fff; border-radius: 4px;
+            position: relative; transition: width 0.05s linear;
+        }
+        .video-progress-fill::after {
+            content: ''; position: absolute; right: -6px; top: 50%;
+            transform: translateY(-50%); width: 12px; height: 12px;
+            background: #fff; border-radius: 50%; opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .video-progress-wrapper:hover .video-progress-fill::after { opacity: 1; }
+        .video-controls-row {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .video-ctrl-btn {
+            background: none; border: none; color: #fff;
+            font-size: 16px; cursor: pointer; padding: 4px;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0.9; transition: opacity 0.15s, transform 0.15s;
+        }
+        .video-ctrl-btn:hover { opacity: 1; transform: scale(1.1); }
+        .video-time-display {
+            font-size: 11px; color: rgba(255,255,255,0.8);
+            font-feature-settings: 'tnum'; letter-spacing: 0.5px;
+            min-width: 70px; text-align: center;
+        }
+        .video-ctrl-spacer { flex: 1; }
 
-        /* hide the old controls bar to keep the UI minimal */
-        [id^="controls-bar-"] { display: none !important; }
+        /* --- Fullscreen Media Viewer (Image + Video) --- */
+        .media-viewer-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.96);
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .media-viewer-overlay.active { display: flex; opacity: 1; }
+        .media-viewer-overlay .mv-close {
+            position: absolute; top: 16px; left: 16px;
+            width: 42px; height: 42px; border-radius: 50%;
+            background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; font-size: 18px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10; transition: background 0.2s;
+        }
+        .media-viewer-overlay .mv-close:hover { background: rgba(255,255,255,0.25); }
+        .media-viewer-overlay img {
+            max-width: 95vw; max-height: 90vh;
+            object-fit: contain; border-radius: 8px;
+            transition: transform 0.25s;
+        }
+        .media-viewer-overlay video {
+            max-width: 95vw; max-height: 85vh;
+            object-fit: contain; border-radius: 8px;
+            background: #000;
+        }
+        .mv-video-wrapper {
+            position: relative; display: flex;
+            flex-direction: column; align-items: center;
+            gap: 10px; width: 95vw; max-width: 800px;
+        }
+        .mv-video-wrapper video {
+            width: 100%; max-height: 80vh;
+            border-radius: 12px;
+        }
+        .mv-video-controls {
+            display: flex; align-items: center; gap: 12px;
+            width: 100%; padding: 8px 0;
+        }
+        .mv-video-controls .mv-ctrl-btn {
+            background: none; border: none; color: #fff;
+            font-size: 20px; cursor: pointer; padding: 4px;
+            opacity: 0.9; transition: opacity 0.15s;
+        }
+        .mv-video-controls .mv-ctrl-btn:hover { opacity: 1; }
+        .mv-video-controls .mv-progress {
+            flex: 1; height: 4px; background: rgba(255,255,255,0.2);
+            border-radius: 4px; cursor: pointer; position: relative;
+        }
+        .mv-video-controls .mv-progress-fill {
+            height: 100%; background: #fff; border-radius: 4px;
+        }
+        .mv-video-controls .mv-time {
+            font-size: 12px; color: rgba(255,255,255,0.7);
+            font-feature-settings: 'tnum'; min-width: 70px;
+            text-align: center;
+        }
 
     
 
@@ -1805,7 +1896,10 @@
     html[data-theme="light"] .video-play-overlay i {
         color: rgba(255, 255, 255, 0.94) !important;
     }
-    html[data-theme="light"] .video-fs-btn {
+    html[data-theme="light"] .video-ctrl-btn {
+        color: #fff !important;
+    }
+    html[data-theme="light"] .video-controls-bar {
         color: #fff !important;
     }
     html[data-theme="light"] .play-btn i {
@@ -2434,14 +2528,12 @@
         </div>
     </div>
 
-    <div id="mediaViewerModal" class="fixed inset-0 z-[1000] hidden flex items-center justify-center bg-black/95" onclick="closeMediaViewer()">
-        <button class="absolute top-4 left-4 text-white text-2xl z-50 w-10 h-10 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition" onclick="closeMediaViewer()">
+    <!-- Enhanced Media Viewer -->
+    <div id="mediaViewerOverlay" class="media-viewer-overlay" onclick="closeMediaViewer(event)">
+        <button class="mv-close" onclick="closeMediaViewer(event)">
             <i class="fas fa-times"></i>
         </button>
-        <div class="w-full h-full flex items-center justify-center" onclick="event.stopPropagation()">
-            <img id="mediaViewerImage" src="" alt="Post Media" class="max-w-full max-h-full object-contain select-none hidden" style="max-height:100vh;max-width:100vw">
-            <video id="mediaViewerVideo" src="" controls class="max-w-full max-h-full object-contain hidden" style="max-height:100vh;max-width:100vw"></video>
-        </div>
+        <div id="mediaViewerContent" onclick="event.stopPropagation()"></div>
     </div>
 
     <!-- Post options bottom sheet (NEW - same behaviour as main feed) -->
@@ -2665,28 +2757,91 @@ confirmDeleteBtn.addEventListener('click', async () => {
     }
 });
 
-/* ---------------- Media viewer ---------------- */
+/* ---------------- Enhanced Media Viewer (Images + Videos) ---------------- */
 var _currentMediaUrl = '';
+var _mvVideo = null;
 
 function openMediaViewer(url, type, event) {
-    event.stopPropagation();
-    const modal = document.getElementById('mediaViewerModal');
-    const image = document.getElementById('mediaViewerImage');
-    const video = document.getElementById('mediaViewerVideo');
-    image.classList.add('hidden'); video.classList.add('hidden');
+    if(event) event.stopPropagation();
+    const overlay = document.getElementById('mediaViewerOverlay');
+    const content = document.getElementById('mediaViewerContent');
     _currentMediaUrl = url;
-    if (type === 'image') { image.src = url; image.classList.remove('hidden'); }
-    else if (type === 'video') { video.src = url; video.classList.remove('hidden'); video.play(); }
-    modal.classList.remove('hidden');
+
+    if(type === 'video') {
+        content.innerHTML = `
+            <div class="mv-video-wrapper">
+                <video id="mv-video" src="${url}" playsinline preload="auto" style="width:100%;max-height:80vh;border-radius:12px;background:#000;object-fit:contain;"></video>
+                <div class="mv-video-controls">
+                    <button class="mv-ctrl-btn" id="mv-play-btn" onclick="mvTogglePlay(event)"><i class="fas fa-play"></i></button>
+                    <div class="mv-progress" onclick="mvSeek(event)">
+                        <div class="mv-progress-fill" id="mv-progress-fill" style="width:0%"></div>
+                    </div>
+                    <span class="mv-time" id="mv-time">0:00 / 0:00</span>
+                    <button class="mv-ctrl-btn" onclick="mvFullscreen(event)" title="\u0645\u0644\u0621 \u0627\u0644\u0634\u0627\u0634\u0629"><i class="fas fa-expand"></i></button>
+                </div>
+            </div>`;
+        _mvVideo = document.getElementById('mv-video');
+        _mvVideo.ontimeupdate = mvUpdateProgress;
+        _mvVideo.onloadedmetadata = mvUpdateProgress;
+        _mvVideo.onended = () => {
+            document.getElementById('mv-play-btn').innerHTML = '<i class="fas fa-play"></i>';
+        };
+        setTimeout(() => { _mvVideo.play(); document.getElementById('mv-play-btn').innerHTML = '<i class="fas fa-pause"></i>'; }, 100);
+    } else {
+        content.innerHTML = `<img src="${url}" style="max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px;user-select:none;">`;
+        _mvVideo = null;
+    }
+
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => overlay.classList.add('active'));
     document.body.style.overflow = 'hidden';
 }
-function closeMediaViewer() {
-    const modal = document.getElementById('mediaViewerModal');
-    modal.classList.add('hidden');
-    const video = document.getElementById('mediaViewerVideo');
-    if (video) { video.pause(); video.currentTime = 0; video.src = ''; }
+
+function closeMediaViewer(e) {
+    if(e && (e.target.closest('.mv-video-wrapper') || e.target.tagName === 'IMG')) return;
+    const overlay = document.getElementById('mediaViewerOverlay');
+    overlay.classList.remove('active');
+    if(_mvVideo) { _mvVideo.pause(); _mvVideo = null; }
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        document.getElementById('mediaViewerContent').innerHTML = '';
+    }, 300);
     _currentMediaUrl = '';
     document.body.style.overflow = 'auto';
+}
+
+function mvTogglePlay(e) {
+    if(e) e.stopPropagation();
+    if(!_mvVideo) return;
+    const btn = document.getElementById('mv-play-btn');
+    if(_mvVideo.paused) { _mvVideo.play(); btn.innerHTML = '<i class="fas fa-pause"></i>'; }
+    else { _mvVideo.pause(); btn.innerHTML = '<i class="fas fa-play"></i>'; }
+}
+
+function mvUpdateProgress() {
+    if(!_mvVideo) return;
+    const pct = _mvVideo.duration ? (_mvVideo.currentTime / _mvVideo.duration * 100) : 0;
+    const fill = document.getElementById('mv-progress-fill');
+    if(fill) fill.style.width = pct + '%';
+    const t = document.getElementById('mv-time');
+    if(t) t.textContent = formatVideoTime(_mvVideo.currentTime) + ' / ' + formatVideoTime(_mvVideo.duration || 0);
+}
+
+function mvSeek(e) {
+    if(!_mvVideo) return;
+    e.stopPropagation();
+    const bar = e.currentTarget;
+    const rect = bar.getBoundingClientRect();
+    const clickX = document.documentElement.dir === 'rtl' ? rect.right - e.clientX : e.clientX - rect.left;
+    const pct = Math.max(0, Math.min(1, clickX / rect.width));
+    if(_mvVideo.duration) _mvVideo.currentTime = pct * _mvVideo.duration;
+}
+
+function mvFullscreen(e) {
+    if(e) e.stopPropagation();
+    if(!_mvVideo) return;
+    if(_mvVideo.requestFullscreen) _mvVideo.requestFullscreen();
+    else if(_mvVideo.webkitRequestFullscreen) _mvVideo.webkitRequestFullscreen();
 }
 
 /* ---------------- WaveSurfer helpers (audio posts) ---------------- */
@@ -2891,30 +3046,16 @@ function toggleAudioPlay(postId) {
 
 /* ----------------- Video controls (same behavior/implementation as chat_list) ----------------- */
 
-function toggleVideoPlay(postId, event) {
-    if (event && event.stopPropagation) event.stopPropagation();
-    const video = document.getElementById(`video-${postId}`);
-    const playOverlay = document.getElementById(`play-overlay-${postId}`);
+function toggleVideoPlay(id, event) {
+    if(event) event.stopPropagation();
+    const video = document.getElementById(`video-${id}`);
+    const overlay = document.getElementById(`play-overlay-${id}`);
+    const ctrlBtn = document.getElementById(`ctrl-play-${id}`);
+    const container = document.getElementById(`video-container-${id}`);
+    
+    if(!video) return;
 
-    if (!video) return;
-
-    // Pause any other active video
-    if (activeVideo && activeVideo !== video) {
-        const activePostId = activeVideo.id.split('-')[1];
-        const activePlayOverlay = document.getElementById(`play-overlay-${activePostId}`);
-        try { activeVideo.pause(); } catch(e){}
-        if (activePlayOverlay) activePlayOverlay.classList.remove('hidden');
-        // remove event listeners for previous active video
-        try {
-            activeVideo.removeEventListener('timeupdate', updateVideoProgress);
-            activeVideo.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
-            activeVideo.removeEventListener('ended', handleVideoEnd);
-        } catch(e){}
-        activeVideo = null;
-    }
-
-    // Pause any playing wave audio
-    if (activeWaveSurfer) {
+    if(activeWaveSurfer) {
         try { activeWaveSurfer.pause(); } catch(e){}
         const otherPostCard = activeWaveSurfer.container && activeWaveSurfer.container.closest ? activeWaveSurfer.container.closest('.glass-post-card') : null;
         if (otherPostCard) {
@@ -2923,97 +3064,69 @@ function toggleVideoPlay(postId, event) {
         }
         activeWaveSurfer = null;
     }
-    
-    if (video.paused) {
-        video.play().then(() => {
-            if (playOverlay) playOverlay.classList.add('hidden'); 
-            activeVideo = video;
-            video.addEventListener('timeupdate', updateVideoProgress);
-            video.addEventListener('loadedmetadata', updateVideoTimeDisplay);
-            video.addEventListener('ended', handleVideoEnd);
-        }).catch((err) => {
-            console.warn('Video play failed', err);
-        });
+    if(activeVideo && activeVideo !== video) {
+        activeVideo.pause();
+        const oldId = activeVideo.id.replace('video-','');
+        const oldOverlay = document.getElementById(`play-overlay-${oldId}`);
+        if(oldOverlay) oldOverlay.classList.remove('hidden');
+        const oldCtrl = document.getElementById(`ctrl-play-${oldId}`);
+        if(oldCtrl) oldCtrl.innerHTML = '<i class="fas fa-play"></i>';
+    }
+
+    if(video.paused) {
+        video.play();
+        overlay.classList.add('hidden');
+        if(ctrlBtn) ctrlBtn.innerHTML = '<i class="fas fa-pause"></i>';
+        if(container) container.classList.add('controls-visible');
+        activeVideo = video;
+        video.ontimeupdate = () => updateVideoProgress(id);
+        video.onloadedmetadata = () => updateVideoProgress(id);
+        video.onended = () => {
+            overlay.classList.remove('hidden');
+            if(ctrlBtn) ctrlBtn.innerHTML = '<i class="fas fa-play"></i>';
+            activeVideo = null;
+        };
+        clearTimeout(video._controlsTimer);
+        video._controlsTimer = setTimeout(() => {
+            if(container && !video.paused) container.classList.remove('controls-visible');
+        }, 3000);
     } else {
         video.pause();
-        if (playOverlay) playOverlay.classList.remove('hidden'); 
-        // remove event listeners when paused/stopped
-        video.removeEventListener('timeupdate', updateVideoProgress);
-        video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
-        video.removeEventListener('ended', handleVideoEnd);
+        overlay.classList.remove('hidden');
+        if(ctrlBtn) ctrlBtn.innerHTML = '<i class="fas fa-play"></i>';
+        if(container) container.classList.add('controls-visible');
         activeVideo = null;
     }
 }
 
-function updateVideoProgress(event) {
-    const video = event.target;
-    const postId = video.id.split('-')[1];
-    const progressBar = document.getElementById(`progress-bar-${postId}`);
-    const timeDisplay = document.getElementById(`time-display-${postId}`);
-
-    if (!video.duration || !progressBar || !timeDisplay) return;
-
-    const percent = (video.currentTime / video.duration) * 100;
-    progressBar.style.width = `${percent}%`;
-    timeDisplay.textContent = `${formatVideoTime(video.currentTime)} / ${formatVideoTime(video.duration)}`;
-}
-
-function updateVideoTimeDisplay(event) {
-    const video = event.target;
-    const postId = video.id.split('-')[1];
-    const timeDisplay = document.getElementById(`time-display-${postId}`);
-
-    if (timeDisplay && video.duration) {
-        timeDisplay.textContent = `0:00 / ${formatVideoTime(video.duration)}`;
+function updateVideoProgress(id) {
+    const video = document.getElementById(`video-${id}`);
+    const progress = document.getElementById(`progress-${id}`);
+    const timeEl = document.getElementById(`time-${id}`);
+    if(!video || !progress) return;
+    const pct = video.duration ? (video.currentTime / video.duration * 100) : 0;
+    progress.style.width = pct + '%';
+    if(timeEl) {
+        timeEl.textContent = formatVideoTime(video.currentTime) + ' / ' + formatVideoTime(video.duration || 0);
     }
 }
 
-function handleVideoEnd(event) {
-    const video = event.target;
-    const postId = video.id.split('-')[1];
-    const playOverlay = document.getElementById(`play-overlay-${postId}`);
-    
-    video.currentTime = 0;
-    if (playOverlay) playOverlay.classList.remove('hidden'); 
-    activeVideo = null;
-    
-    video.removeEventListener('timeupdate', updateVideoProgress);
-    video.removeEventListener('loadedmetadata', updateVideoTimeDisplay);
-    video.removeEventListener('ended', handleVideoEnd);
-}
-
-function formatVideoTime(seconds) {
-    if (isNaN(seconds)) return '0:00';
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-function seekVideo(postId, event) {
-    event.stopPropagation();
-    const bar = event.currentTarget || event.target;
+function seekVideo(id, e) {
+    e.stopPropagation();
+    const video = document.getElementById(`video-${id}`);
+    const bar = e.currentTarget;
     const rect = bar.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const percent = x / rect.width;
-    const video = document.getElementById(`video-${postId}`);
-    if (video && video.duration) {
-        video.currentTime = video.duration * percent;
-    }
+    const clickX = document.dir === 'rtl' || document.documentElement.dir === 'rtl'
+        ? rect.right - e.clientX : e.clientX - rect.left;
+    const pct = Math.max(0, Math.min(1, clickX / rect.width));
+    if(video.duration) video.currentTime = pct * video.duration;
 }
 
-function toggleFullscreen(postId, ev) {
-    if (ev && ev.stopPropagation) ev.stopPropagation();
-    const video = document.getElementById(`video-${postId}`);
-    if (!video) return;
-    // Prefer element fullscreen on container for chrome mobile compatibility
-    const container = video.closest('.video-large') || video;
-    if (container.requestFullscreen) {
-        container.requestFullscreen().catch(()=>{});
-    } else if (container.webkitRequestFullscreen) {
-        container.webkitRequestFullscreen().catch(()=>{});
-    } else if (video.requestFullscreen) {
-        video.requestFullscreen().catch(()=>{});
-    }
+function formatVideoTime(sec) {
+    if(!sec || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
 /* ----------------- Posts rendering (modified to use .video-large like chat_list) ----------------- */
@@ -3028,14 +3141,34 @@ function createPostCard(post) {
         } else if (post.media.type === 'video') {
             const poster = post.media.poster || post.media.thumbnail || 'https://via.placeholder.com/1200x675?text=Video';
             mediaContent = `
-                <div class="relative w-full video-large overflow-hidden bg-black group" style="border-radius:0">
-                    <video id="video-${post.postId}" src="${post.media.url}" class="w-full h-full object-cover" poster="${poster}" preload="metadata" onclick="toggleVideoPlay('${post.postId}', event)"></video>
+                <div class="relative w-full video-large overflow-hidden bg-black group" id="video-container-${post.postId}" style="border-radius:0">
+                    <video id="video-${post.postId}" src="${post.media.url}" 
+                           class="w-full h-full object-contain" 
+                           poster="${poster}" 
+                           preload="metadata"
+                           playsinline
+                           onclick="toggleVideoPlay('${post.postId}', event)">
+                    </video>
+                    
                     <div id="play-overlay-${post.postId}" class="video-play-overlay" onclick="toggleVideoPlay('${post.postId}', event)">
-                        <i class="fas fa-play"></i>
+                        <div class="play-circle"><i class="fas fa-play"></i></div>
                     </div>
-                    <button class="video-fs-btn" onclick="toggleFullscreen('${post.postId}', event)" title="تكبير">
-                      <i class="fas fa-expand"></i>
-                    </button>
+
+                    <div class="video-controls-bar" id="controls-${post.postId}">
+                        <div class="video-progress-wrapper" onclick="seekVideo('${post.postId}', event)">
+                            <div class="video-progress-fill" id="progress-${post.postId}" style="width:0%"></div>
+                        </div>
+                        <div class="video-controls-row">
+                            <button class="video-ctrl-btn" onclick="toggleVideoPlay('${post.postId}', event)" id="ctrl-play-${post.postId}">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <span class="video-time-display" id="time-${post.postId}">0:00 / 0:00</span>
+                            <div class="video-ctrl-spacer"></div>
+                            <button class="video-ctrl-btn" onclick="openMediaViewer('${post.media.url}', 'video', event)" title="\u0645\u0639\u0627\u064a\u0646\u0629">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>`;
         } else if (post.media.type === 'audio') {
             mediaContent = `
@@ -3859,28 +3992,42 @@ async function fetchAndDisplayProfile() {
                     }
                 }
 
-                // Block button click handler
+                // Block button click handler - instant UI update
                 if (blockBtn) {
                     blockBtn.onclick = async () => {
                         dotsDropdown.style.display = 'none';
+                        // Instant UI update before API response
+                        if (chatActionsRow) chatActionsRow.style.display = 'none';
+                        if (unblockMainBtn) unblockMainBtn.style.display = 'inline-flex';
+                        if (chatButton) { chatButton.classList.add('hidden'); chatButton.style.display = 'none'; }
+                        if (blockedByBanner) blockedByBanner.style.display = 'none';
+                        if (friendActionContainer) friendActionContainer.innerHTML = '';
+                        showToast('تم حظر المستخدم.', { type: 'success' });
                         try {
                             const r = await fetch(`/api/users/${currentProfileId}/block`, { method: 'POST', credentials: 'same-origin' });
                             const j = await r.json();
-                            if (r.ok && j.ok) { showToast('تم حظر المستخدم.', { type: 'success' }); fetchAndDisplayProfile(); }
-                            else { showToast('فشل في حظر المستخدم.', { type: 'error' }); }
-                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); }
+                            if (!r.ok || !j.ok) {
+                                showToast('فشل في حظر المستخدم.', { type: 'error' });
+                                fetchAndDisplayProfile(); // revert on failure
+                            }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); fetchAndDisplayProfile(); }
                     };
                 }
 
-                // Unblock main button click handler (replaces chat + dots)
+                // Unblock main button click handler - instant UI update
                 if (unblockMainBtn) {
                     unblockMainBtn.onclick = async () => {
+                        // Instant UI update
+                        if (unblockMainBtn) unblockMainBtn.style.display = 'none';
+                        if (chatActionsRow) chatActionsRow.style.display = 'flex';
+                        if (blockedByBanner) blockedByBanner.style.display = 'none';
+                        showToast('تم إلغاء الحظر.', { type: 'success' });
                         try {
                             const r = await fetch(`/api/users/${currentProfileId}/unblock`, { method: 'POST', credentials: 'same-origin' });
                             const j = await r.json();
-                            if (r.ok && j.ok) { showToast('تم إلغاء الحظر.', { type: 'success' }); fetchAndDisplayProfile(); }
-                            else { showToast('فشل في إلغاء الحظر.', { type: 'error' }); }
-                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); }
+                            if (r.ok && j.ok) { fetchAndDisplayProfile(); }
+                            else { showToast('فشل في إلغاء الحظر.', { type: 'error' }); fetchAndDisplayProfile(); }
+                        } catch (e) { showToast('خطأ في الشبكة', { type: 'error' }); fetchAndDisplayProfile(); }
                     };
                 }
 
@@ -4174,6 +4321,9 @@ function startStatusPolling() {
     });
 }
 
+let _profileBlockedBy = false;
+let _profileIBlocked = false;
+
 async function pollProfileStatus() {
     if (!currentProfileId) return;
     try {
@@ -4185,6 +4335,43 @@ async function pollProfileStatus() {
         }
     } catch (e) {
     }
+    // Poll block status for instant block detection
+    try {
+        const br = await fetch(`/api/users/${currentProfileId}/block-status`);
+        const bd = await br.json();
+        if (bd.ok) {
+            const wasBlockedBy = _profileBlockedBy;
+            const wasIBlocked = _profileIBlocked;
+            _profileBlockedBy = bd.blocked_by;
+            _profileIBlocked = bd.i_blocked;
+            if (wasBlockedBy !== _profileBlockedBy || wasIBlocked !== _profileIBlocked) {
+                // Block status changed - update UI instantly
+                const chatActionsRow = document.getElementById('chatActionsRow');
+                const unblockMainBtn = document.getElementById('unblockMainBtn');
+                const chatButton = document.getElementById('chatButton');
+                const blockedByBanner = document.getElementById('blockedByBanner');
+                const profileMenuWrapper = document.getElementById('profileMenuWrapper');
+                const friendActionContainer = document.getElementById('friendActionContainer');
+
+                if (_profileIBlocked) {
+                    if (chatActionsRow) chatActionsRow.style.display = 'none';
+                    if (unblockMainBtn) unblockMainBtn.style.display = 'inline-flex';
+                    if (chatButton) { chatButton.classList.add('hidden'); chatButton.style.display = 'none'; }
+                    if (blockedByBanner) blockedByBanner.style.display = 'none';
+                    if (friendActionContainer) friendActionContainer.innerHTML = '';
+                } else if (_profileBlockedBy) {
+                    if (chatActionsRow) chatActionsRow.style.display = 'none';
+                    if (unblockMainBtn) unblockMainBtn.style.display = 'none';
+                    if (chatButton) { chatButton.classList.add('hidden'); chatButton.style.display = 'none'; }
+                    if (blockedByBanner) blockedByBanner.style.display = 'block';
+                    if (friendActionContainer) friendActionContainer.innerHTML = '';
+                } else if (wasBlockedBy || wasIBlocked) {
+                    // Was blocked, now unblocked - refresh full profile
+                    fetchAndDisplayProfile();
+                }
+            }
+        }
+    } catch(e) {}
 }
 
 /* ----------------- Show More / Show Less for long text ----------------- */

@@ -70,8 +70,7 @@
         /* --- Video large display --- */
         .video-large {
             width: 100%;
-            height: 480px;
-            max-height: 72vh;
+            max-height: 80vh;
             border-radius: 12px;
             overflow: hidden;
             background: #000;
@@ -80,8 +79,8 @@
         }
         .video-large video {
             width: 100%;
-            height: 100%;
-            object-fit: cover;
+            max-height: 80vh;
+            object-fit: contain;
             display: block;
             background: #000;
             cursor: pointer;
@@ -92,23 +91,71 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15));
-            transition: opacity 0.18s;
+            background: rgba(0,0,0,0.25);
+            transition: opacity 0.25s;
             z-index: 30;
         }
-        .video-play-overlay i {
-            font-size: 54px;
-            color: rgba(255,255,255,0.94);
-            text-shadow: 0 6px 24px rgba(0,0,0,0.6);
+        .video-play-overlay .play-circle {
+            width: 68px; height: 68px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid rgba(255,255,255,0.25);
+            transition: transform 0.2s, background 0.2s;
+        }
+        .video-play-overlay .play-circle:hover { transform: scale(1.08); background: rgba(0,0,0,0.7); }
+        .video-play-overlay .play-circle i {
+            font-size: 28px;
+            color: #fff;
+            margin-left: 3px;
         }
         .video-play-overlay.hidden { opacity: 0; pointer-events: none; }
-        .video-fs-btn {
-            position: absolute; top: 10px; left: 10px;
-            width: 36px; height: 36px; border-radius: 8px;
-            background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.08);
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; z-index: 40; cursor: pointer;
+
+        /* --- Custom Video Controls Bar --- */
+        .video-controls-bar {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.85));
+            padding: 28px 12px 10px;
+            display: flex; flex-direction: column; gap: 6px;
+            z-index: 35; opacity: 0;
+            transition: opacity 0.25s;
         }
+        .video-large:hover .video-controls-bar,
+        .video-large.controls-visible .video-controls-bar { opacity: 1; }
+        .video-progress-wrapper {
+            width: 100%; height: 4px; background: rgba(255,255,255,0.2);
+            border-radius: 4px; cursor: pointer; position: relative;
+            transition: height 0.15s;
+        }
+        .video-progress-wrapper:hover { height: 6px; }
+        .video-progress-fill {
+            height: 100%; background: #fff; border-radius: 4px;
+            position: relative; transition: width 0.05s linear;
+        }
+        .video-progress-fill::after {
+            content: ''; position: absolute; right: -6px; top: 50%;
+            transform: translateY(-50%); width: 12px; height: 12px;
+            background: #fff; border-radius: 50%; opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .video-progress-wrapper:hover .video-progress-fill::after { opacity: 1; }
+        .video-controls-row {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .video-ctrl-btn {
+            background: none; border: none; color: #fff;
+            font-size: 16px; cursor: pointer; padding: 4px;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0.9; transition: opacity 0.15s, transform 0.15s;
+        }
+        .video-ctrl-btn:hover { opacity: 1; transform: scale(1.1); }
+        .video-time-display {
+            font-size: 11px; color: rgba(255,255,255,0.8);
+            font-feature-settings: 'tnum'; letter-spacing: 0.5px;
+            min-width: 70px; text-align: center;
+        }
+        .video-ctrl-spacer { flex: 1; }
 
         /* --- Audio Player --- */
         .waveform-post { height: 60px; background: #000000; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); overflow: hidden; }
@@ -149,6 +196,66 @@
         
         /* Media Viewer */
         .media-container { max-height: 80vh; width: auto; }
+
+        /* --- Fullscreen Media Viewer (Image + Video) --- */
+        .media-viewer-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.96);
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .media-viewer-overlay.active { display: flex; opacity: 1; }
+        .media-viewer-overlay .mv-close {
+            position: absolute; top: 16px; left: 16px;
+            width: 42px; height: 42px; border-radius: 50%;
+            background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; font-size: 18px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10; transition: background 0.2s;
+        }
+        .media-viewer-overlay .mv-close:hover { background: rgba(255,255,255,0.25); }
+        .media-viewer-overlay img {
+            max-width: 95vw; max-height: 90vh;
+            object-fit: contain; border-radius: 8px;
+            transition: transform 0.25s;
+        }
+        .media-viewer-overlay video {
+            max-width: 95vw; max-height: 85vh;
+            object-fit: contain; border-radius: 8px;
+            background: #000;
+        }
+        .mv-video-wrapper {
+            position: relative; display: flex;
+            flex-direction: column; align-items: center;
+            gap: 10px; width: 95vw; max-width: 800px;
+        }
+        .mv-video-wrapper video {
+            width: 100%; max-height: 80vh;
+            border-radius: 12px;
+        }
+        .mv-video-controls {
+            display: flex; align-items: center; gap: 12px;
+            width: 100%; padding: 8px 0;
+        }
+        .mv-video-controls .mv-ctrl-btn {
+            background: none; border: none; color: #fff;
+            font-size: 20px; cursor: pointer; padding: 4px;
+            opacity: 0.9; transition: opacity 0.15s;
+        }
+        .mv-video-controls .mv-ctrl-btn:hover { opacity: 1; }
+        .mv-video-controls .mv-progress {
+            flex: 1; height: 4px; background: rgba(255,255,255,0.2);
+            border-radius: 4px; cursor: pointer; position: relative;
+        }
+        .mv-video-controls .mv-progress-fill {
+            height: 100%; background: #fff; border-radius: 4px;
+        }
+        .mv-video-controls .mv-time {
+            font-size: 12px; color: rgba(255,255,255,0.7);
+            font-feature-settings: 'tnum'; min-width: 70px;
+            text-align: center;
+        }
         
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
@@ -1619,12 +1726,12 @@
         </div>
     </div>
 
-    <div id="mediaViewerModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/95" onclick="closeMediaViewer(event)">
-        <button class="absolute top-4 left-4 text-white text-2xl z-50 w-10 h-10 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition" onclick="closeMediaViewer(event)">
+    <!-- Enhanced Media Viewer -->
+    <div id="mediaViewerOverlay" class="media-viewer-overlay" onclick="closeMediaViewer(event)">
+        <button class="mv-close" onclick="closeMediaViewer(event)">
             <i class="fas fa-times"></i>
         </button>
-        <div id="mediaViewerContent" class="w-full h-full flex items-center justify-center" onclick="event.stopPropagation()">
-        </div>
+        <div id="mediaViewerContent" onclick="event.stopPropagation()"></div>
     </div>
 
     <div id="commentModal" class="hidden fixed inset-0 z-[70] flex items-end md:items-center justify-center glass-modal-bg transition-opacity duration-300">
@@ -1735,21 +1842,34 @@
                 } else if (post.media.type === 'video') {
                      const poster = post.media.poster || 'https://via.placeholder.com/1200x675?text=Video';
                      mediaContent = `
-                        <div class="relative w-full video-large overflow-hidden bg-black group" style="border-radius:0">
+                        <div class="relative w-full video-large overflow-hidden bg-black group" id="video-container-${post.postId}" style="border-radius:0">
                             <video id="video-${post.postId}" src="${post.media.url}" 
-                                   class="w-full h-full object-cover" 
+                                   class="w-full h-full object-contain" 
                                    poster="${poster}" 
                                    preload="metadata"
+                                   playsinline
                                    onclick="toggleVideoPlay('${post.postId}', event)">
                             </video>
                             
                             <div id="play-overlay-${post.postId}" class="video-play-overlay" onclick="toggleVideoPlay('${post.postId}', event)">
-                                <i class="fas fa-play"></i>
+                                <div class="play-circle"><i class="fas fa-play"></i></div>
                             </div>
 
-                            <button class="video-fs-btn" onclick="toggleFullscreen('${post.postId}', event)" title="تكبير">
-                              <i class="fas fa-expand"></i>
-                            </button>
+                            <div class="video-controls-bar" id="controls-${post.postId}">
+                                <div class="video-progress-wrapper" onclick="seekVideo('${post.postId}', event)">
+                                    <div class="video-progress-fill" id="progress-${post.postId}" style="width:0%"></div>
+                                </div>
+                                <div class="video-controls-row">
+                                    <button class="video-ctrl-btn" onclick="toggleVideoPlay('${post.postId}', event)" id="ctrl-play-${post.postId}">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <span class="video-time-display" id="time-${post.postId}">0:00 / 0:00</span>
+                                    <div class="video-ctrl-spacer"></div>
+                                    <button class="video-ctrl-btn" onclick="openMediaViewer('${post.media.url}', 'video', event)" title="معاينة">
+                                        <i class="fas fa-expand"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     `;
                 } else if (post.media.type === 'audio') {
@@ -1944,56 +2064,174 @@
             if(event) event.stopPropagation();
             const video = document.getElementById(`video-${id}`);
             const overlay = document.getElementById(`play-overlay-${id}`);
+            const ctrlBtn = document.getElementById(`ctrl-play-${id}`);
+            const container = document.getElementById(`video-container-${id}`);
             
             if(activeWaveSurfer) activeWaveSurfer.pause();
             if(activeVideo && activeVideo !== video) {
                 activeVideo.pause();
-                const oldId = activeVideo.id.split('-')[1];
-                document.getElementById(`play-overlay-${oldId}`).classList.remove('hidden');
+                const oldId = activeVideo.id.replace('video-','');
+                const oldOverlay = document.getElementById(`play-overlay-${oldId}`);
+                if(oldOverlay) oldOverlay.classList.remove('hidden');
+                const oldCtrl = document.getElementById(`ctrl-play-${oldId}`);
+                if(oldCtrl) oldCtrl.innerHTML = '<i class="fas fa-play"></i>';
             }
 
             if(video.paused) {
                 video.play();
                 overlay.classList.add('hidden');
+                if(ctrlBtn) ctrlBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                if(container) container.classList.add('controls-visible');
                 activeVideo = video;
+                // Update progress
+                video.ontimeupdate = () => updateVideoProgress(id);
+                video.onloadedmetadata = () => updateVideoProgress(id);
                 video.onended = () => {
                     overlay.classList.remove('hidden');
+                    if(ctrlBtn) ctrlBtn.innerHTML = '<i class="fas fa-play"></i>';
                     activeVideo = null;
                 };
+                // Auto-hide controls after 3s
+                clearTimeout(video._controlsTimer);
+                video._controlsTimer = setTimeout(() => {
+                    if(container && !video.paused) container.classList.remove('controls-visible');
+                }, 3000);
             } else {
                 video.pause();
                 overlay.classList.remove('hidden');
+                if(ctrlBtn) ctrlBtn.innerHTML = '<i class="fas fa-play"></i>';
+                if(container) container.classList.add('controls-visible');
                 activeVideo = null;
             }
         }
 
-        function toggleFullscreen(id, ev) {
-            if(ev) ev.stopPropagation();
+        function updateVideoProgress(id) {
             const video = document.getElementById(`video-${id}`);
-            const container = video.closest('.video-large');
-            if (container.requestFullscreen) container.requestFullscreen();
-            else if (video.requestFullscreen) video.requestFullscreen();
+            const progress = document.getElementById(`progress-${id}`);
+            const timeEl = document.getElementById(`time-${id}`);
+            if(!video || !progress) return;
+            const pct = video.duration ? (video.currentTime / video.duration * 100) : 0;
+            progress.style.width = pct + '%';
+            if(timeEl) {
+                timeEl.textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration || 0);
+            }
         }
 
-        // Media Viewer
+        function seekVideo(id, e) {
+            e.stopPropagation();
+            const video = document.getElementById(`video-${id}`);
+            const bar = e.currentTarget;
+            const rect = bar.getBoundingClientRect();
+            // RTL: compute from right
+            const clickX = document.dir === 'rtl' || document.documentElement.dir === 'rtl'
+                ? rect.right - e.clientX : e.clientX - rect.left;
+            const pct = Math.max(0, Math.min(1, clickX / rect.width));
+            if(video.duration) video.currentTime = pct * video.duration;
+        }
+
+        function formatTime(sec) {
+            if(!sec || isNaN(sec)) return '0:00';
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        // --- Enhanced Media Viewer (Images + Videos) ---
         var _currentMediaUrl = '';
+        var _mvVideo = null;
 
         function openMediaViewer(url, type, event) {
-            event.stopPropagation();
-            const modal = document.getElementById('mediaViewerModal');
+            if(event) event.stopPropagation();
+            const overlay = document.getElementById('mediaViewerOverlay');
             const content = document.getElementById('mediaViewerContent');
             _currentMediaUrl = url;
-            content.innerHTML = `<img src="${url}" class="max-w-full max-h-full object-contain select-none" style="max-height:100vh;max-width:100vw">`;
-            modal.classList.remove('hidden');
+
+            if(type === 'video') {
+                content.innerHTML = `
+                    <div class="mv-video-wrapper">
+                        <video id="mv-video" src="${url}" playsinline preload="auto" style="width:100%;max-height:80vh;border-radius:12px;background:#000;object-fit:contain;"></video>
+                        <div class="mv-video-controls">
+                            <button class="mv-ctrl-btn" id="mv-play-btn" onclick="mvTogglePlay(event)"><i class="fas fa-play"></i></button>
+                            <div class="mv-progress" onclick="mvSeek(event)">
+                                <div class="mv-progress-fill" id="mv-progress-fill" style="width:0%"></div>
+                            </div>
+                            <span class="mv-time" id="mv-time">0:00 / 0:00</span>
+                            <button class="mv-ctrl-btn" onclick="mvFullscreen(event)" title="ملء الشاشة"><i class="fas fa-expand"></i></button>
+                        </div>
+                    </div>`;
+                _mvVideo = document.getElementById('mv-video');
+                _mvVideo.ontimeupdate = mvUpdateProgress;
+                _mvVideo.onloadedmetadata = mvUpdateProgress;
+                _mvVideo.onended = () => {
+                    document.getElementById('mv-play-btn').innerHTML = '<i class="fas fa-play"></i>';
+                };
+                setTimeout(() => { _mvVideo.play(); document.getElementById('mv-play-btn').innerHTML = '<i class="fas fa-pause"></i>'; }, 100);
+            } else {
+                content.innerHTML = `<img src="${url}" style="max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px;user-select:none;">`;
+                _mvVideo = null;
+            }
+
+            overlay.style.display = 'flex';
+            requestAnimationFrame(() => overlay.classList.add('active'));
             document.body.style.overflow = 'hidden';
         }
+
         function closeMediaViewer(e) {
-            if(e && e.target.closest('#mediaViewerContent img')) return;
-            document.getElementById('mediaViewerModal').classList.add('hidden');
-            document.getElementById('mediaViewerContent').innerHTML = '';
+            if(e && (e.target.closest('.mv-video-wrapper') || e.target.tagName === 'IMG')) return;
+            const overlay = document.getElementById('mediaViewerOverlay');
+            overlay.classList.remove('active');
+            if(_mvVideo) { _mvVideo.pause(); _mvVideo = null; }
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.getElementById('mediaViewerContent').innerHTML = '';
+            }, 300);
             _currentMediaUrl = '';
             document.body.style.overflow = 'auto';
         }
+
+        function mvTogglePlay(e) {
+            if(e) e.stopPropagation();
+            if(!_mvVideo) return;
+            const btn = document.getElementById('mv-play-btn');
+            if(_mvVideo.paused) {
+                _mvVideo.play();
+                btn.innerHTML = '<i class="fas fa-pause"></i>';
+            } else {
+                _mvVideo.pause();
+                btn.innerHTML = '<i class="fas fa-play"></i>';
+            }
+        }
+
+        function mvUpdateProgress() {
+            if(!_mvVideo) return;
+            const pct = _mvVideo.duration ? (_mvVideo.currentTime / _mvVideo.duration * 100) : 0;
+            const fill = document.getElementById('mv-progress-fill');
+            if(fill) fill.style.width = pct + '%';
+            const t = document.getElementById('mv-time');
+            if(t) t.textContent = formatTime(_mvVideo.currentTime) + ' / ' + formatTime(_mvVideo.duration || 0);
+        }
+
+        function mvSeek(e) {
+            if(!_mvVideo) return;
+            e.stopPropagation();
+            const bar = e.currentTarget;
+            const rect = bar.getBoundingClientRect();
+            const clickX = document.documentElement.dir === 'rtl'
+                ? rect.right - e.clientX : e.clientX - rect.left;
+            const pct = Math.max(0, Math.min(1, clickX / rect.width));
+            if(_mvVideo.duration) _mvVideo.currentTime = pct * _mvVideo.duration;
+        }
+
+        function mvFullscreen(e) {
+            if(e) e.stopPropagation();
+            if(!_mvVideo) return;
+            if(_mvVideo.requestFullscreen) _mvVideo.requestFullscreen();
+            else if(_mvVideo.webkitRequestFullscreen) _mvVideo.webkitRequestFullscreen();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'Escape') closeMediaViewer(null);
+        });
 
         // Like Post
         async function handleLike(id, btn) {

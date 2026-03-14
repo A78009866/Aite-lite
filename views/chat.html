@@ -317,11 +317,78 @@ html, body {
   z-index: 1;
 }
 
-/* Media Styles */
+/* Media Styles - Separate from bubble */
+.msg-media-standalone {
+  margin-top: 4px;
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  max-width: 280px;
+}
+.msg-media-standalone img {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: pointer;
+  border-radius: 16px;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.msg-media-standalone img:active { opacity: 0.85; transform: scale(0.98); }
+
+.msg-media-standalone .chat-video-wrap {
+  position: relative;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.msg-media-standalone video {
+  width: 100%;
+  max-height: 320px;
+  display: block;
+  object-fit: contain;
+  background: #000;
+  border-radius: 16px;
+  cursor: pointer;
+}
+.msg-media-standalone .chat-video-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.2);
+  transition: opacity 0.2s;
+  cursor: pointer; z-index: 5;
+}
+.msg-media-standalone .chat-video-overlay.hidden { opacity: 0; pointer-events: none; }
+.msg-media-standalone .chat-video-play-circle {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255,255,255,0.2);
+  transition: transform 0.2s;
+}
+.msg-media-standalone .chat-video-play-circle:hover { transform: scale(1.08); }
+.msg-media-standalone .chat-video-play-circle i { color: #fff; font-size: 20px; margin-left: 2px; }
+.msg-media-standalone .chat-video-duration {
+  position: absolute; bottom: 8px; left: 8px;
+  background: rgba(0,0,0,0.6); color: #fff;
+  font-size: 11px; padding: 2px 8px; border-radius: 6px;
+  font-feature-settings: 'tnum'; backdrop-filter: blur(4px);
+  z-index: 6;
+}
+.msg-media-standalone .chat-video-fs-btn {
+  position: absolute; top: 8px; left: 8px;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(0,0,0,0.45); border: none;
+  color: #fff; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 6; transition: background 0.15s;
+}
+.msg-media-standalone .chat-video-fs-btn:hover { background: rgba(0,0,0,0.7); }
+
+/* Legacy classes kept for compatibility */
 .msg-image {
   max-width: 100%;
   height: auto;
-  border-radius: 10px;
+  border-radius: 16px;
   margin-top: 4px;
   display: block;
   cursor: pointer;
@@ -334,7 +401,7 @@ html, body {
   width: 260px;
   max-height: 300px;
   height: auto;
-  border-radius: 12px;
+  border-radius: 16px;
   margin-top: 4px;
   display: block;
   background: #000;
@@ -697,46 +764,69 @@ html, body {
   margin-left: 4px;
 }
 
-/* --- Full Screen Image Overlay --- */
-.img-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(0, 0, 0, 0.92);
-  backdrop-filter: blur(8px);
+/* --- Fullscreen Media Viewer (Image + Video) --- */
+.chat-media-viewer {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.96);
   z-index: 10000;
   display: none;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
-.img-overlay.active { display: flex; opacity: 1; }
-.img-overlay img {
-  max-width: 95%;
-  max-height: 90%;
-  border-radius: 8px;
+.chat-media-viewer.active { display: flex; opacity: 1; }
+.chat-media-viewer .cmv-close {
+  position: absolute; top: 16px; left: 16px;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 20px; cursor: pointer;
+  z-index: 10001; transition: background 0.2s;
+}
+.chat-media-viewer .cmv-close:hover { background: rgba(255,255,255,0.25); }
+.chat-media-viewer img {
+  max-width: 95vw; max-height: 90vh;
+  object-fit: contain; border-radius: 8px;
   box-shadow: 0 5px 30px rgba(0,0,0,0.5);
-  object-fit: contain;
-  transition: transform 0.2s;
+  user-select: none;
 }
-.img-close-btn {
-  position: absolute;
-  top: 20px;
-  left: 20px; /* RTL layout */
-  width: 44px;
-  height: 44px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 20px;
-  cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.2);
-  z-index: 10001;
+.chat-media-viewer video {
+  max-width: 95vw; max-height: 80vh;
+  object-fit: contain; border-radius: 12px;
+  background: #000;
 }
-.img-close-btn:active { background: rgba(255,255,255,0.3); }
+.cmv-video-wrapper {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px;
+  width: 95vw; max-width: 700px;
+}
+.cmv-video-wrapper video { width: 100%; max-height: 78vh; border-radius: 12px; }
+.cmv-controls {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 6px 0;
+}
+.cmv-controls .cmv-btn {
+  background: none; border: none; color: #fff;
+  font-size: 20px; cursor: pointer; padding: 4px;
+  opacity: 0.9; transition: opacity 0.15s;
+}
+.cmv-controls .cmv-btn:hover { opacity: 1; }
+.cmv-controls .cmv-progress {
+  flex: 1; height: 4px; background: rgba(255,255,255,0.2);
+  border-radius: 4px; cursor: pointer;
+}
+.cmv-controls .cmv-progress-fill {
+  height: 100%; background: #fff; border-radius: 4px;
+  transition: width 0.05s linear;
+}
+.cmv-controls .cmv-time {
+  font-size: 12px; color: rgba(255,255,255,0.7);
+  font-feature-settings: 'tnum'; min-width: 70px;
+  text-align: center;
+}
 
 /* --- Composer --- */
 .composer {
@@ -2206,11 +2296,12 @@ textarea:focus { border-color: var(--accent); }
 
 
 
-<div id="image-overlay" class="img-overlay" onclick="closeImageModal(event)">
-  <div class="img-close-btn" onclick="closeImageModal(event)">
+<!-- Enhanced Chat Media Viewer -->
+<div id="chat-media-viewer" class="chat-media-viewer" onclick="closeChatMediaViewer(event)">
+  <button class="cmv-close" onclick="closeChatMediaViewer(event)">
     <i class="fas fa-times"></i>
-  </div>
-  <img id="overlay-img" src="" alt="Full Preview" />
+  </button>
+  <div id="cmv-content" onclick="event.stopPropagation()"></div>
 </div>
 
 <div class="wrap">
@@ -3026,6 +3117,33 @@ async function init() {
     } catch(e) {}
   }, 10000);
 
+  // Poll block status every 3 seconds for instant block detection
+  setInterval(async () => {
+    try {
+      const res = await fetch(`/api/users/${otherId}/block-status`);
+      const data = await res.json();
+      if (data.ok) {
+        const wasBlocked = chatBlocked;
+        const wasBlockedBy = chatBlockedBy;
+        chatBlocked = data.i_blocked;
+        chatBlockedBy = data.blocked_by;
+        // Only update UI if status changed
+        if (wasBlocked !== chatBlocked || wasBlockedBy !== chatBlockedBy) {
+          updateBlockUI();
+          if (chatBlocked || chatBlockedBy) {
+            document.getElementById('header-name').textContent = 'Aite user';
+            document.getElementById('header-avatar').src = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+            document.getElementById('header-online').style.display = 'none';
+            document.getElementById('header-status').textContent = '';
+          } else {
+            // Unblocked - restore profile
+            fetchProfile();
+          }
+        }
+      }
+    } catch(e) {}
+  }, 3000);
+
   // Resize Textarea + Typing indicator send
   msgInput.addEventListener('input', function() {
     this.style.height = 'auto';
@@ -3057,9 +3175,9 @@ async function init() {
     closeContextMenu();
   });
 
-  // Close Image Overlay on ESC
+  // Close Media Viewer on ESC
   document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') closeImageModal();
+    if(e.key === 'Escape') closeChatMediaViewer(null);
   });
 }
 
@@ -3308,9 +3426,18 @@ function createMsgElement(msg) {
     const type = msg.media.type || '';
     
     if (type.startsWith('image')) {
-        contentHtml += `<img src="${url}" class="msg-image" onclick="openImageModal('${url}')">`;
+        contentHtml += `<div class="msg-media-standalone"><img src="${url}" onclick="openChatMediaViewer('${url}', 'image')"></div>`;
     } else if (type.startsWith('video')) {
-        contentHtml += `<video src="${url}" controls playsinline class="msg-video"></video>`;
+        const vidId = 'chatv-' + msg.messageId;
+        contentHtml += `<div class="msg-media-standalone">
+            <div class="chat-video-wrap">
+                <video id="${vidId}" src="${url}" playsinline preload="metadata" onclick="toggleChatVideo('${vidId}')"></video>
+                <div class="chat-video-overlay" id="overlay-${vidId}" onclick="toggleChatVideo('${vidId}')">
+                    <div class="chat-video-play-circle"><i class="fas fa-play"></i></div>
+                </div>
+                <button class="chat-video-fs-btn" onclick="openChatMediaViewer('${url}', 'video')" title="\u0645\u0639\u0627\u064a\u0646\u0629"><i class="fas fa-expand"></i></button>
+            </div>
+        </div>`;
     } else if (type.startsWith('audio') || url.endsWith('.webm') || url.endsWith('.mp3')) {
        const audioId = 'audio-' + msg.messageId;
        contentHtml += `
@@ -3358,24 +3485,111 @@ function createMsgElement(msg) {
   return wrapper;
 }
 
-// --- Image Lightbox Functions ---
-function openImageModal(src) {
-  const overlay = document.getElementById('image-overlay');
-  const img = document.getElementById('overlay-img');
-  img.src = src;
-  overlay.style.display = 'flex';
-  setTimeout(() => overlay.classList.add('active'), 10);
+// --- Chat Video Toggle Play ---
+var _activeChatVideo = null;
+function toggleChatVideo(vidId) {
+  const vid = document.getElementById(vidId);
+  const overlay = document.getElementById('overlay-' + vidId);
+  if(!vid) return;
+  if(_activeChatVideo && _activeChatVideo !== vid) {
+    _activeChatVideo.pause();
+    const oldOv = document.getElementById('overlay-' + _activeChatVideo.id);
+    if(oldOv) oldOv.classList.remove('hidden');
+  }
+  if(vid.paused) {
+    vid.play(); if(overlay) overlay.classList.add('hidden');
+    _activeChatVideo = vid;
+    vid.onended = () => { if(overlay) overlay.classList.remove('hidden'); _activeChatVideo = null; };
+  } else {
+    vid.pause(); if(overlay) overlay.classList.remove('hidden');
+    _activeChatVideo = null;
+  }
 }
 
-function closeImageModal(e) {
-  if(e && e.target.id === 'overlay-img') return;
-  const overlay = document.getElementById('image-overlay');
-  overlay.classList.remove('active');
-  setTimeout(() => {
-    overlay.style.display = 'none';
-    document.getElementById('overlay-img').src = '';
-  }, 300);
+// --- Enhanced Chat Media Viewer (Image + Video) ---
+var _cmvVideo = null;
+function openChatMediaViewer(url, type) {
+  const viewer = document.getElementById('chat-media-viewer');
+  const content = document.getElementById('cmv-content');
+  // Pause any playing chat video
+  if(_activeChatVideo) { _activeChatVideo.pause(); _activeChatVideo = null; }
+
+  if(type === 'video') {
+    content.innerHTML = `
+      <div class="cmv-video-wrapper">
+        <video id="cmv-video" src="${url}" playsinline preload="auto"></video>
+        <div class="cmv-controls">
+          <button class="cmv-btn" id="cmv-play-btn" onclick="cmvTogglePlay(event)"><i class="fas fa-play"></i></button>
+          <div class="cmv-progress" onclick="cmvSeek(event)">
+            <div class="cmv-progress-fill" id="cmv-progress-fill" style="width:0%"></div>
+          </div>
+          <span class="cmv-time" id="cmv-time">0:00 / 0:00</span>
+          <button class="cmv-btn" onclick="cmvFullscreen(event)" title="ملء الشاشة"><i class="fas fa-expand"></i></button>
+        </div>
+      </div>`;
+    _cmvVideo = document.getElementById('cmv-video');
+    _cmvVideo.ontimeupdate = cmvUpdateProgress;
+    _cmvVideo.onloadedmetadata = cmvUpdateProgress;
+    _cmvVideo.onended = () => { document.getElementById('cmv-play-btn').innerHTML = '<i class="fas fa-play"></i>'; };
+    setTimeout(() => { _cmvVideo.play(); document.getElementById('cmv-play-btn').innerHTML = '<i class="fas fa-pause"></i>'; }, 100);
+  } else {
+    content.innerHTML = `<img src="${url}" style="max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px;user-select:none;">`;
+    _cmvVideo = null;
+  }
+  viewer.style.display = 'flex';
+  requestAnimationFrame(() => viewer.classList.add('active'));
 }
+
+function closeChatMediaViewer(e) {
+  if(e && (e.target.closest('.cmv-video-wrapper') || e.target.tagName === 'IMG')) return;
+  const viewer = document.getElementById('chat-media-viewer');
+  viewer.classList.remove('active');
+  if(_cmvVideo) { _cmvVideo.pause(); _cmvVideo = null; }
+  setTimeout(() => { viewer.style.display = 'none'; document.getElementById('cmv-content').innerHTML = ''; }, 300);
+}
+
+function cmvTogglePlay(e) {
+  if(e) e.stopPropagation();
+  if(!_cmvVideo) return;
+  const btn = document.getElementById('cmv-play-btn');
+  if(_cmvVideo.paused) { _cmvVideo.play(); btn.innerHTML = '<i class="fas fa-pause"></i>'; }
+  else { _cmvVideo.pause(); btn.innerHTML = '<i class="fas fa-play"></i>'; }
+}
+
+function cmvUpdateProgress() {
+  if(!_cmvVideo) return;
+  const pct = _cmvVideo.duration ? (_cmvVideo.currentTime / _cmvVideo.duration * 100) : 0;
+  const fill = document.getElementById('cmv-progress-fill');
+  if(fill) fill.style.width = pct + '%';
+  const t = document.getElementById('cmv-time');
+  if(t) t.textContent = cmvFmtTime(_cmvVideo.currentTime) + ' / ' + cmvFmtTime(_cmvVideo.duration || 0);
+}
+
+function cmvFmtTime(sec) {
+  if(!sec || isNaN(sec)) return '0:00';
+  const m = Math.floor(sec/60), s = Math.floor(sec%60);
+  return m + ':' + (s<10?'0':'') + s;
+}
+
+function cmvSeek(e) {
+  if(!_cmvVideo) return;
+  e.stopPropagation();
+  const bar = e.currentTarget, rect = bar.getBoundingClientRect();
+  const clickX = document.documentElement.dir === 'rtl' ? rect.right - e.clientX : e.clientX - rect.left;
+  const pct = Math.max(0, Math.min(1, clickX / rect.width));
+  if(_cmvVideo.duration) _cmvVideo.currentTime = pct * _cmvVideo.duration;
+}
+
+function cmvFullscreen(e) {
+  if(e) e.stopPropagation();
+  if(!_cmvVideo) return;
+  if(_cmvVideo.requestFullscreen) _cmvVideo.requestFullscreen();
+  else if(_cmvVideo.webkitRequestFullscreen) _cmvVideo.webkitRequestFullscreen();
+}
+
+// Legacy compatibility
+function openImageModal(src) { openChatMediaViewer(src, 'image'); }
+function closeImageModal(e) { closeChatMediaViewer(e); }
 
 // --- Interactions: Double Tap, Long Press & Right Click (mobile + desktop) ---
 function handleMessageInteractions(element, msg) {
