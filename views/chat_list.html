@@ -606,6 +606,27 @@
             background: rgba(59, 130, 246, 0.1);
         }
 
+        /* --- Global Text Overflow Prevention --- */
+        .comment-item,
+        .reply-item,
+        .post-text,
+        .notif-title,
+        .notif-card-content,
+        .likes-user-item .username,
+        .glass-post-card,
+        .story-text {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            min-width: 0;
+        }
+        .comment-item .text-sm,
+        .comment-item .text-xs,
+        .reply-item .text-sm,
+        .reply-item .text-xs {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
         /* Post content: prevent long words from breaking layout and add show more/less behavior */
         .post-content { position: relative; }
         .post-text {
@@ -941,6 +962,44 @@
         background: #f8f9fa !important;
         border-color: rgba(0, 0, 0, 0.06) !important;
         border-right-color: #3b82f6 !important;
+    }
+
+    /* --- Likes/Reactions Modal (Light Mode) --- */
+    html[data-theme="light"] .likes-modal-overlay {
+        background: rgba(0,0,0,0.35) !important;
+    }
+    html[data-theme="light"] .likes-modal-box {
+        background: #ffffff !important;
+        border-top-color: rgba(0,0,0,0.1) !important;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
+    }
+    html[data-theme="light"] .likes-modal-box .modal-handle {
+        background: rgba(0,0,0,0.2) !important;
+    }
+    html[data-theme="light"] .likes-modal-box .border-gray-800 {
+        border-color: rgba(0,0,0,0.1) !important;
+    }
+    html[data-theme="light"] .likes-modal-box h3 {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .likes-modal-box button {
+        background: rgba(0,0,0,0.05) !important;
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .likes-modal-box button:hover {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .likes-user-item:hover {
+        background: rgba(0,0,0,0.04) !important;
+    }
+    html[data-theme="light"] .likes-user-item img {
+        border-color: rgba(0,0,0,0.1) !important;
+    }
+    html[data-theme="light"] .likes-user-item .username {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] #likesListContent {
+        background: #ffffff !important;
     }
 
     /* --- Bottom Navbar --- */
@@ -2445,10 +2504,10 @@
     <div id="storyProgressBars" class="flex gap-1 p-2 absolute top-0 left-0 right-0 z-50"></div>
     
     <div class="flex items-center justify-between p-4 absolute top-4 left-0 right-0 z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-        <div class="flex items-center gap-3 pointer-events-auto">
-            <img id="storyViewerAvatar" src="" class="w-10 h-10 rounded-full border border-white shadow-md">
-            <span id="storyViewerUsername" class="font-bold text-white drop-shadow-md text-lg"></span>
-        </div>
+        <a id="storyViewerProfileLink" href="#" class="flex items-center gap-3 pointer-events-auto text-decoration-none" onclick="event.stopPropagation()">
+            <img id="storyViewerAvatar" src="" class="w-10 h-10 rounded-full border border-white shadow-md cursor-pointer hover:ring-2 hover:ring-blue-400 transition">
+            <span id="storyViewerUsername" class="font-bold text-white drop-shadow-md text-lg cursor-pointer hover:text-blue-300 transition"></span>
+        </a>
         
         <div class="flex items-center gap-10 pointer-events-auto">
             <button id="deleteStoryBtn" onclick="handleDeleteClick(event)" class="text-white bg-black/50 hover:bg-red-600 rounded-full w-12 h-12 flex items-center justify-center hidden transition-all backdrop-blur-md shadow-lg" title="حذف القصة">
@@ -3407,11 +3466,11 @@ function handleNotifClick(el) {
             const repliesPreviewHtml = (comment.recentReplies && comment.recentReplies.length > 0) ? comment.recentReplies.map(r => `
                 <div class="reply-item">
                     <div class="flex items-start gap-2">
-                        <img src="${escapeAttr(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0" alt="${escapeHtml(r.username)}">
+                        <a href="/profile?userId=${escapeAttr(r.userId || '')}" onclick="event.stopPropagation()" class="flex-shrink-0"><img src="${escapeAttr(r.profile_picture_url || DEFAULT_AVATAR)}" class="small-avatar flex-shrink-0 hover:ring-2 hover:ring-blue-400 transition" alt="${escapeHtml(r.username)}"></a>
                         <div class="flex-1">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center">
-                                    <div class="text-xs font-bold text-white">${escapeHtml(r.username)}</div>
+                                    <a href="/profile?userId=${escapeAttr(r.userId || '')}" onclick="event.stopPropagation()" class="text-xs font-bold text-white hover:text-blue-400 transition no-underline">${escapeHtml(r.username)}</a>
                                     <span class="badge-container" data-badge-user-id="${escapeAttr(r.userId || '')}"></span>
                                 </div>
                                 <div class="text-xs text-gray-500">${new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -3425,13 +3484,13 @@ function handleNotifClick(el) {
             return `
                 <div class="comment-item" id="comment-${escapeAttr(comment.commentId)}" data-comment-id="${escapeAttr(comment.commentId)}">
                     <div class="flex items-start gap-3">
-                        <img src="${profilePic}" class="w-8 h-8 rounded-full flex-shrink-0" alt="${username}">
+                        <a href="/profile?userId=${escapeAttr(user.userId || comment.userId || '')}" onclick="event.stopPropagation()" class="flex-shrink-0"><img src="${profilePic}" class="w-8 h-8 rounded-full flex-shrink-0 hover:ring-2 hover:ring-blue-400 transition" alt="${username}"></a>
                         <div class="flex-1">
                             <div class="flex items-center justify-between gap-2">
                                 <div>
-                                    <div class="text-sm font-bold text-white">
+                                    <a href="/profile?userId=${escapeAttr(user.userId || comment.userId || '')}" onclick="event.stopPropagation()" class="text-sm font-bold text-white hover:text-blue-400 transition no-underline">
                                         ${username} ${verifiedPlaceholder}
-                                    </div>
+                                    </a>
                                     <div class="text-xs text-gray-500">${new Date(comment.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</div>
                                 </div>
                                 <div class="flex items-center gap-2 comment-actions">
@@ -3941,6 +4000,7 @@ function handleNotifClick(el) {
             
             document.getElementById('storyViewerUsername').textContent = group.username;
             document.getElementById('storyViewerAvatar').src = group.profile_picture_url || DEFAULT_AVATAR;
+            document.getElementById('storyViewerProfileLink').href = '/profile?userId=' + encodeURIComponent(group.userId);
             
             // إعادة ضبط زر الإعجاب مع كل قصة جديدة
             const likeIcon = document.getElementById('likeStoryIcon');
@@ -5157,6 +5217,38 @@ async function showLikesList(id, type) {
 function closeLikesModal() {
     document.getElementById('likesModal').classList.remove('open');
 }
+</script>
+
+<script>
+// --- Service Worker Registration ---
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    .then(reg => console.log('SW registered:', reg.scope))
+    .catch(err => console.warn('SW registration failed:', err));
+}
+
+// --- Smooth Page Transitions (SPA-like) ---
+(function() {
+  var style = document.createElement('style');
+  style.textContent = `
+    .page-transition-out { opacity:0; transform:translateY(8px); transition:opacity 0.18s ease, transform 0.18s ease; }
+    .page-transition-in  { animation: pageIn 0.22s ease forwards; }
+    @keyframes pageIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  `;
+  document.head.appendChild(style);
+  document.body.classList.add('page-transition-in');
+
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript') || href.startsWith('http') || link.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    document.body.classList.remove('page-transition-in');
+    document.body.classList.add('page-transition-out');
+    setTimeout(function() { window.location.href = href; }, 180);
+  });
+})();
 </script>
 
 </body>
