@@ -3525,6 +3525,7 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
 
 // ---------------- Get replies for a specific comment ----------------
 app.get('/api/posts/:postId/comments/:commentId/replies', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
   const { postId, commentId } = req.params;
   try {
     const snap = await db.ref(`comment_replies/${postId}/${commentId}`)
@@ -3534,10 +3535,304 @@ app.get('/api/posts/:postId/comments/:commentId/replies', requireAuth, async (re
     snap.forEach(child => {
       replies.push(child.val());
     });
-    res.json({ ok: true, replies: replies });
+    // Enrich replies with likes info
+    const enrichedReplies = await Promise.all(replies.map(async (r) => {
+      const replyId = r.id || r.replyId || '';
+      let likes = typeof r.likes === 'number' ? r.likes : 0;
+      let is_liked = false;
+      try {
+        const userLikeSnap = await db.ref(`reply_likes/${postId}/${commentId}/${replyId}/${currentUserId}`).once('value');
+        is_liked = userLikeSnap.exists();
+      } catch (e) {}
+      return { ...r, likes, is_liked };
+    }));
+    res.json({ ok: true, replies: enrichedReplies });
   } catch (error) {
     console.error('Error fetching replies:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
+  }
+});
+
+// ---------------- Like a reply (posts) ----------------
+app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { postId, commentId, replyId } = req.params;
+  if (!postId || !commentId || !replyId) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  const likeRef = db.ref(`reply_likes/${postId}/${commentId}/${replyId}/${userId}`);
+  const replyRef = db.ref(`comment_replies/${postId}/${commentId}/${replyId}`);
+
+  try {
+    const replySnap = await replyRef.once('value');
+    if (!replySnap.exists()) return res.status(404).json({ ok: false, error: 'Reply not found' });
+
+    const likeSnap = await likeRef.once('value');
+    let isLiked = likeSnap.exists();
+    let delta = 0;
+
+    if (isLiked) {
+      await likeRef.remove();
+      delta = -1;
+      isLiked = false;
+    } else {
+      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
+      delta = 1;
+      isLiked = true;
+    }
+
+    let newLikesCount = 0;
+    await replyRef.child('likes').transaction((current) => {
+      newLikesCount = (current || 0) + delta;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    // notify reply owner
+    try {
+      const replyVal = replySnap.val();
+      const replyOwnerId = replyVal.userId || '';
+      if (delta === 1 && replyOwnerId && replyOwnerId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${replyOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'reply_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: postId,
+          commentId: commentId,
+          replyId: replyId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+        sendPushNotification(replyOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بردك ❤️', { type: 'reply_like', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+      }
+    } catch (nerr) {
+      console.error('Failed to create reply_like notification:', nerr);
+    }
+
+    res.json({ ok: true, is_liked: isLiked, likes: newLikesCount });
+  } catch (error) {
+    console.error('Error toggling reply like:', error);
+    res.status(500).json({ ok: false, error: 'Failed to toggle reply like' });
+  }
+});
+
+// ---------------- Reply to a reply (nested reply - posts) ----------------
+app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { postId, commentId, replyId } = req.params;
+  const { content } = req.body;
+  if (!postId || !commentId || !replyId || !content) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const userSnap = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnap.val() || {};
+
+    // Store as a reply under the same comment (flat structure, but with replyToId and replyToUsername)
+    const parentReplySnap = await db.ref(`comment_replies/${postId}/${commentId}/${replyId}`).once('value');
+    const parentReply = parentReplySnap.val() || {};
+
+    const newReplyRef = db.ref(`comment_replies/${postId}/${commentId}`).push();
+    const newReplyId = newReplyRef.key;
+
+    const replyData = {
+      id: newReplyId,
+      postId,
+      commentId,
+      userId,
+      username: userData.username || 'مستخدم',
+      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      content: content.trim(),
+      timestamp: admin.database.ServerValue.TIMESTAMP,
+      likes: 0,
+      replyToId: replyId,
+      replyToUsername: parentReply.username || 'مستخدم'
+    };
+
+    await newReplyRef.set(replyData);
+
+    // increment repliesCount on comment
+    const commentRef = db.ref(`comments/${postId}/${commentId}`);
+    let newRepliesCount = 0;
+    await commentRef.child('repliesCount').transaction((current) => {
+      newRepliesCount = (current || 0) + 1;
+      return newRepliesCount;
+    });
+
+    // notify the parent reply owner
+    try {
+      const parentReplyOwnerId = parentReply.userId || '';
+      if (parentReplyOwnerId && parentReplyOwnerId !== userId) {
+        const notifRef = db.ref(`notifications/${parentReplyOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'reply_reply',
+          from_user_id: userId,
+          from_username: userData.username || 'مستخدم',
+          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId,
+          commentId,
+          replyId: newReplyId,
+          replyContent: replyData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+        sendPushNotification(parentReplyOwnerId, `${userData.username || 'شخص ما'}`, `رد على ردك: ${replyData.content.substring(0, 50)}`, { type: 'reply_reply', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+      }
+    } catch (nerr) {
+      console.error('Failed to create reply_reply notification:', nerr);
+    }
+
+    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+  } catch (error) {
+    console.error('Error creating nested reply:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create reply' });
+  }
+});
+
+// ---------------- Like a reply (reels) ----------------
+app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/like', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId, commentId, replyId } = req.params;
+  if (!reelId || !commentId || !replyId) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  const likeRef = db.ref(`reels_reply_likes/${reelId}/${commentId}/${replyId}/${userId}`);
+  const replyRef = db.ref(`reels_comment_replies/${reelId}/${commentId}/${replyId}`);
+
+  try {
+    const replySnap = await replyRef.once('value');
+    if (!replySnap.exists()) return res.status(404).json({ ok: false, error: 'Reply not found' });
+
+    const likeSnap = await likeRef.once('value');
+    let isLiked = likeSnap.exists();
+    let delta = 0;
+
+    if (isLiked) {
+      await likeRef.remove();
+      delta = -1;
+      isLiked = false;
+    } else {
+      await likeRef.set(admin.database.ServerValue.TIMESTAMP);
+      delta = 1;
+      isLiked = true;
+    }
+
+    let newLikesCount = 0;
+    await replyRef.child('likes').transaction((current) => {
+      newLikesCount = (current || 0) + delta;
+      return newLikesCount < 0 ? 0 : newLikesCount;
+    });
+
+    // notify reply owner
+    try {
+      const replyVal = replySnap.val();
+      const replyOwnerId = replyVal.userId || '';
+      if (delta === 1 && replyOwnerId && replyOwnerId !== userId) {
+        const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
+        const fromProfile = fromProfileSnap.val() || {};
+        const notifRef = db.ref(`notifications/${replyOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'reply_like',
+          from_user_id: userId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: null,
+          reelId: reelId,
+          commentId: commentId,
+          replyId: replyId,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+        sendPushNotification(replyOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بردك ❤️', { type: 'reply_like', url: `https://aite-lite.vercel.app/reels` });
+      }
+    } catch (nerr) {
+      console.error('Failed to create reels reply_like notification:', nerr);
+    }
+
+    res.json({ ok: true, is_liked: isLiked, likes: newLikesCount });
+  } catch (error) {
+    console.error('Error toggling reel reply like:', error);
+    res.status(500).json({ ok: false, error: 'Failed to toggle reply like' });
+  }
+});
+
+// ---------------- Reply to a reply (nested reply - reels) ----------------
+app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId, commentId, replyId } = req.params;
+  const { content } = req.body;
+  if (!reelId || !commentId || !replyId || !content) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const userSnap = await db.ref(`profiles/${userId}`).once('value');
+    const userData = userSnap.val() || {};
+
+    const parentReplySnap = await db.ref(`reels_comment_replies/${reelId}/${commentId}/${replyId}`).once('value');
+    const parentReply = parentReplySnap.val() || {};
+
+    const newReplyRef = db.ref(`reels_comment_replies/${reelId}/${commentId}`).push();
+    const newReplyId = newReplyRef.key;
+
+    const replyData = {
+      id: newReplyId,
+      reelId,
+      commentId,
+      userId,
+      username: userData.username || 'مستخدم',
+      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      content: content.trim(),
+      timestamp: admin.database.ServerValue.TIMESTAMP,
+      likes: 0,
+      replyToId: replyId,
+      replyToUsername: parentReply.username || 'مستخدم'
+    };
+
+    await newReplyRef.set(replyData);
+
+    // increment repliesCount on comment
+    const commentRef = db.ref(`reels_comments/${reelId}/${commentId}`);
+    let newRepliesCount = 0;
+    await commentRef.child('repliesCount').transaction((current) => {
+      newRepliesCount = (current || 0) + 1;
+      return newRepliesCount;
+    });
+
+    // notify parent reply owner
+    try {
+      const parentReplyOwnerId = parentReply.userId || '';
+      if (parentReplyOwnerId && parentReplyOwnerId !== userId) {
+        const notifRef = db.ref(`notifications/${parentReplyOwnerId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'reply_reply',
+          from_user_id: userId,
+          from_username: userData.username || 'مستخدم',
+          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          postId: null,
+          reelId,
+          commentId,
+          replyId: newReplyId,
+          replyContent: replyData.content,
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+        sendPushNotification(parentReplyOwnerId, `${userData.username || 'شخص ما'}`, `رد على ردك: ${replyData.content.substring(0, 50)}`, { type: 'reply_reply', url: `https://aite-lite.vercel.app/reels` });
+      }
+    } catch (nerr) {
+      console.error('Failed to create reels reply_reply notification:', nerr);
+    }
+
+    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+  } catch (error) {
+    console.error('Error creating nested reply for reel:', error);
+    res.status(500).json({ ok: false, error: 'Failed to create reply' });
   }
 });
 
@@ -4012,6 +4307,7 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
 
 // New endpoint: get replies for a reel comment
 app.get('/api/reels/:reelId/comments/:commentId/replies', requireAuth, async (req, res) => {
+  const currentUserId = req.session.userId;
   const { reelId, commentId } = req.params;
   try {
     const snap = await db.ref(`reels_comment_replies/${reelId}/${commentId}`)
@@ -4021,7 +4317,18 @@ app.get('/api/reels/:reelId/comments/:commentId/replies', requireAuth, async (re
     snap.forEach(child => {
       replies.push(child.val());
     });
-    res.json({ ok: true, replies: replies });
+    // Enrich replies with likes info
+    const enrichedReplies = await Promise.all(replies.map(async (r) => {
+      const replyId = r.id || r.replyId || '';
+      let likes = typeof r.likes === 'number' ? r.likes : 0;
+      let is_liked = false;
+      try {
+        const userLikeSnap = await db.ref(`reels_reply_likes/${reelId}/${commentId}/${replyId}/${currentUserId}`).once('value');
+        is_liked = userLikeSnap.exists();
+      } catch (e) {}
+      return { ...r, likes, is_liked };
+    }));
+    res.json({ ok: true, replies: enrichedReplies });
   } catch (error) {
     console.error('Error fetching replies for reel comment:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
