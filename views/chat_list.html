@@ -14,6 +14,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
     <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
         body {
             background-color: #000000;
             color: #e4e6eb;
@@ -21,6 +24,18 @@
             min-height: 100vh;
             padding-bottom: 80px; 
             overflow-x: hidden;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
+        /* Global text overflow prevention */
+        p, span, div, h1, h2, h3, h4, h5, h6, li, td, th, label, a {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+        pre, code {
+            white-space: pre-wrap;
+            word-break: break-all;
         }
 
         .glass-navbar {
@@ -5002,22 +5017,28 @@ function handleNotifClick(el) {
                     const commentsListEl = document.getElementById('commentsList');
                     if (!commentsListEl) return;
 
-                    // prevent duplicate: if exists, ignore or replace
+                    // prevent duplicate: if exists, preserve its replies
                     const existing = document.getElementById(`comment-${comment.commentId}`);
                     if (existing) {
-                        // already exists -> update it
+                        // Preserve existing replies before replacing
+                        const repliesSection = existing.querySelector('.fb-replies-section');
+                        const savedRepliesHtml = repliesSection ? repliesSection.outerHTML : '';
+                        // SSE data lacks recentReplies - keep existing replies
                         existing.outerHTML = createCommentHtml(comment, postId);
+                        if (savedRepliesHtml && savedRepliesHtml.includes('fb-reply-item')) {
+                            const newEl = document.getElementById(`comment-${comment.commentId}`);
+                            if (newEl) {
+                                const newReplies = newEl.querySelector('.fb-replies-section');
+                                if (newReplies) newReplies.outerHTML = savedRepliesHtml;
+                            }
+                        }
                     } else {
-                        // append new comment
+                        // New comment - SSE data has no replies, which is correct for new comments
                         commentsListEl.insertAdjacentHTML('beforeend', createCommentHtml(comment, postId));
                     }
 
-                    // update counts/badge
-                    const badgeEl = document.getElementById('commentCountBadge');
-                    let current = badgeEl ? Number(badgeEl.innerText || 0) : 0;
-                    current = isNaN(current) ? 1 : current + 1;
-                    if (badgeEl) badgeEl.innerText = current;
-                    updatePostCommentCount(postId, current);
+                    // update counts/badge - re-fetch to get accurate total
+                    fetchAndDisplayComments(postId).catch(() => {});
 
                     // ensure verification is updated for this user
                     updateCommentsVerification([comment]);
@@ -5038,20 +5059,16 @@ function handleNotifClick(el) {
                     if (!comment || !comment.commentId) return;
                     const existing = document.getElementById(`comment-${comment.commentId}`);
                     if (existing) {
-                        // Preserve existing replies before replacing comment HTML
+                        // Always preserve existing replies before replacing comment HTML
                         const repliesSection = existing.querySelector('.fb-replies-section');
                         const savedRepliesHtml = repliesSection ? repliesSection.outerHTML : '';
                         existing.outerHTML = createCommentHtml(comment, postId);
-                        // Restore replies if the new render lost them
-                        if (savedRepliesHtml) {
+                        // Restore replies - SSE data never includes recentReplies
+                        if (savedRepliesHtml && savedRepliesHtml.includes('fb-reply-item')) {
                             const newEl = document.getElementById(`comment-${comment.commentId}`);
                             if (newEl) {
                                 const newReplies = newEl.querySelector('.fb-replies-section');
-                                const newContainer = newReplies ? newReplies.querySelector('[id^="replies-container-"]') : null;
-                                // If new render has no inline replies but old one did, restore
-                                if (newContainer && newContainer.children.length === 0 && savedRepliesHtml.includes('fb-reply-item')) {
-                                    newReplies.outerHTML = savedRepliesHtml;
-                                }
+                                if (newReplies) newReplies.outerHTML = savedRepliesHtml;
                             }
                         }
                         updateCommentsVerification([comment]);

@@ -67,7 +67,7 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: storage, fileFilter: fileFilter });
+const upload = multer({ storage: storage, fileFilter: fileFilter, limits: { fileSize: 500 * 1024 * 1024 } });
 
 // Initialize Firebase Admin
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY || '{}');
@@ -123,8 +123,8 @@ const writeLimiter = rateLimit({
   message: { ok: false, error: 'Too many requests, please slow down.' }
 });
 
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+app.use(express.json({ limit: '500mb' }));
 
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
@@ -150,7 +150,7 @@ function fileFilter(req, file, cb) {
 }
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'a-firebase-secret-key-is-better',
+  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
   proxy: true,
@@ -166,6 +166,24 @@ app.use(session({
     ttl: 86400
   })
 }));
+
+// Sanitize user-supplied values before using them in Firebase paths
+function sanitizePathParam(val) {
+  if (!val) return '';
+  // Firebase keys cannot contain . $ # [ ] / or control chars
+  return String(val).replace(/[\.\$#\[\]\/\x00-\x1f]/g, '');
+}
+
+// Validate that a URL is a legitimate Cloudinary URL (prevent arbitrary URL injection)
+function isValidCloudinaryUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'res.cloudinary.com' && parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
@@ -574,11 +592,11 @@ app.post('/register', authLimiter, (req, res, next) => {
 
     const email = `${username}@trimer.io`;
 
-    // Support direct Cloudinary URLs (from client-side upload)
-    if (req.body.profile_picture_url) {
+    // Support direct Cloudinary URLs (from client-side upload) - validate URL origin
+    if (req.body.profile_picture_url && isValidCloudinaryUrl(req.body.profile_picture_url)) {
       profile_picture_url = req.body.profile_picture_url;
     }
-    if (req.body.cover_photo_url) {
+    if (req.body.cover_photo_url && isValidCloudinaryUrl(req.body.cover_photo_url)) {
       cover_photo_url = req.body.cover_photo_url;
     }
 
@@ -1846,9 +1864,9 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Target user ID is missing' });
     }
 
-    // دعم روابط Cloudinary المباشرة (من chat.html الجديد)
+    // دعم روابط Cloudinary المباشرة (من chat.html الجديد) - validate URL
     let mediaObject = null;
-    if (req.body.mediaUrl) {
+    if (req.body.mediaUrl && isValidCloudinaryUrl(req.body.mediaUrl)) {
       mediaObject = {
         url: req.body.mediaUrl,
         type: req.body.mediaType || 'file',
@@ -2821,11 +2839,11 @@ app.post('/api/profile/edit', requireAuth, (req, res, next) => {
       updates.email = newEmail;
     }
 
-    // Support direct Cloudinary URLs (from client-side upload)
-    if (req.body.profile_picture_url) {
+    // Support direct Cloudinary URLs (from client-side upload) - validate URL origin
+    if (req.body.profile_picture_url && isValidCloudinaryUrl(req.body.profile_picture_url)) {
       updates.profile_picture_url = req.body.profile_picture_url;
     }
-    if (req.body.cover_photo_url) {
+    if (req.body.cover_photo_url && isValidCloudinaryUrl(req.body.cover_photo_url)) {
       updates.cover_photo_url = req.body.cover_photo_url;
     }
 

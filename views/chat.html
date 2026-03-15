@@ -34,7 +34,15 @@ html, body {
   overflow: hidden; 
   touch-action: pan-y;
   user-select: none;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
+p, span, div, h1, h2, h3, h4, h5, h6, li, td, th, label, a {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+pre, code { white-space: pre-wrap; word-break: break-all; }
 
 .wrap {
   height: 100dvh;
@@ -4272,16 +4280,31 @@ async function uploadToCloudinary(file) {
     // For raw files, use 'auto' as the upload resource type
     var uploadResourceType = (resourceType === 'raw') ? 'auto' : resourceType;
     var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + uploadResourceType + '/upload';
-    var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
-    if (!uploadRes.ok) {
-      var errText = '';
-      try { var errJson = await uploadRes.json(); errText = (errJson.error && errJson.error.message) || 'خطأ في الرفع'; } catch(e) { errText = 'فشل رفع الملف (HTTP ' + uploadRes.status + ')'; }
-      throw new Error(errText);
-    }
-    var uploadData = await uploadRes.json();
 
-    if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف');
-    return { url: uploadData.secure_url, type: file.type };
+    // Use XMLHttpRequest for upload progress tracking
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadUrl, true);
+      xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+          var pct = Math.round((e.loaded / e.total) * 100);
+          sendBtn.innerHTML = '<div style="font-size:11px;line-height:1;">' + pct + '%</div>';
+        }
+      };
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          var uploadData = JSON.parse(xhr.responseText);
+          if (uploadData.error) return reject(new Error(uploadData.error.message || 'فشل رفع الملف'));
+          resolve({ url: uploadData.secure_url, type: file.type });
+        } else {
+          var errText = 'فشل رفع الملف (HTTP ' + xhr.status + ')';
+          try { var errJson = JSON.parse(xhr.responseText); errText = (errJson.error && errJson.error.message) || errText; } catch(e) {}
+          reject(new Error(errText));
+        }
+      };
+      xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
+      xhr.send(fd);
+    });
   } catch(err) {
     console.error('Cloudinary upload error:', err);
     throw err;

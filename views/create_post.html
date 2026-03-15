@@ -12,16 +12,21 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
 
+        *, *::before, *::after { box-sizing: border-box; }
         body {
             background-color: #000000;
             color: #e4e6eb;
             font-family: 'Tajawal', sans-serif;
             overflow-x: hidden;
-            /* خلفية شبكية خفيفة جداً لإعطاء عمق للأسود */
+            overflow-wrap: break-word;
+            word-wrap: break-word;
             background-image: 
                 linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
             background-size: 40px 40px;
+        }
+        p, span, div, h1, h2, h3, h4, h5, h6, li, td, th, label, a {
+            overflow-wrap: break-word; word-wrap: break-word; word-break: break-word;
         }
 
         /* لوحة زجاجية سوداء */
@@ -2238,7 +2243,7 @@
         startRecordingBtn.addEventListener('click', startRecording);
         stopRecordingBtn.addEventListener('click', stopRecording);
 
-        // ************** رفع ملف إلى Cloudinary **************
+        // ************** رفع ملف إلى Cloudinary مع شريط تقدم **************
         async function uploadToCloudinary(file, resourceType) {
             var signRes = await fetch('/api/cloudinary/sign', {
                 method: 'POST',
@@ -2257,11 +2262,29 @@
             fd.append('folder', signData.folder);
 
             var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
-            var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
-            var uploadData = await uploadRes.json();
 
-            if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف إلى Cloudinary');
-            return uploadData.secure_url;
+            // Use XMLHttpRequest for upload progress tracking
+            return new Promise(function(resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', uploadUrl, true);
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        var pct = Math.round((e.loaded / e.total) * 100);
+                        if (submitBtnText) submitBtnText.textContent = 'جاري الرفع ' + pct + '%';
+                    }
+                };
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        var uploadData = JSON.parse(xhr.responseText);
+                        if (uploadData.error) return reject(new Error(uploadData.error.message || 'فشل رفع الملف'));
+                        resolve(uploadData.secure_url);
+                    } else {
+                        reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
+                    }
+                };
+                xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
+                xhr.send(fd);
+            });
         }
 
         // ************** إرسال المنشور **************
