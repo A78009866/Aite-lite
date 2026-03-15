@@ -3914,12 +3914,17 @@ function handleNotifClick(el) {
             const likesCount = comment.likes || 0;
             const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/posts/${escapeAttr(postId)}/comments/${escapeAttr(comment.commentId)}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
-            // Show ALL replies instantly (no view more button)
+            // Show ALL replies instantly
             let allRepliesHtml = '';
             const totalReplies = comment.repliesCount || (comment.recentReplies ? comment.recentReplies.length : 0);
-            if (comment.recentReplies && comment.recentReplies.length > 0) {
+            const hasInlineReplies = comment.recentReplies && comment.recentReplies.length > 0;
+            if (hasInlineReplies) {
                 allRepliesHtml = comment.recentReplies.map(r => createReplyHtml(r, postId, comment.commentId)).join('');
             }
+            // Always show View Replies button when there are replies
+            // If replies are already rendered inline, it toggles visibility
+            // If not rendered yet, it loads them from server
+            const viewRepliesBtn = totalReplies > 0 ? `<button class="fb-view-replies-btn" onclick="toggleOrLoadReplies('${escapeAttr(postId)}', '${escapeAttr(comment.commentId)}', this)"><i class="fas fa-comments"></i> عرض الردود <span class="fb-replies-count">${totalReplies}</span></button>` : '';
 
             return `
                 <div class="fb-comment-thread" id="comment-${escapeAttr(comment.commentId)}" data-comment-id="${escapeAttr(comment.commentId)}">
@@ -3940,7 +3945,8 @@ function handleNotifClick(el) {
                     </div>
 
                     <div class="fb-replies-section" id="replies-section-${escapeAttr(comment.commentId)}" style="${totalReplies > 0 ? '' : 'display:none'}">
-                        <div id="replies-container-${escapeAttr(comment.commentId)}">
+                        ${viewRepliesBtn}
+                        <div id="replies-container-${escapeAttr(comment.commentId)}" style="${hasInlineReplies ? '' : 'display:none'}">
                             ${allRepliesHtml}
                         </div>
                     </div>
@@ -3979,6 +3985,51 @@ function handleNotifClick(el) {
             }
             const indicator = document.getElementById('replyIndicator');
             if (indicator) indicator.classList.add('hidden');
+        }
+
+        // Load all replies for a comment from server
+        async function loadAllReplies(postId, commentId, triggerBtn) {
+            try {
+                const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    const container = document.getElementById(`replies-container-${commentId}`);
+                    if (container) {
+                        container.innerHTML = data.replies.map(r => createReplyHtml(r, postId, commentId)).join('');
+                        container.style.display = '';
+                    }
+                    const section = document.getElementById(`replies-section-${commentId}`);
+                    if (section) section.style.display = '';
+                    // Update the button count
+                    if (triggerBtn) {
+                        const countEl = triggerBtn.querySelector('.fb-replies-count');
+                        if (countEl) countEl.textContent = data.replies.length;
+                    }
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // Toggle replies visibility or load from server if not yet loaded
+        function toggleOrLoadReplies(postId, commentId, btn) {
+            const container = document.getElementById(`replies-container-${commentId}`);
+            if (!container) return;
+            // If container has replies already, toggle visibility
+            if (container.children.length > 0) {
+                const isHidden = container.style.display === 'none';
+                container.style.display = isHidden ? '' : 'none';
+                // Update button text
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    icon.className = isHidden ? 'fas fa-comments' : 'fas fa-chevron-down';
+                }
+            } else {
+                // No replies loaded yet, fetch from server
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+                loadAllReplies(postId, commentId, btn).then(() => {
+                    const count = container.children.length;
+                    btn.innerHTML = `<i class="fas fa-comments"></i> عرض الردود <span class="fb-replies-count">${count}</span>`;
+                });
+            }
         }
 
         // Toggle like on a comment (Facebook-style)
@@ -4963,38 +5014,12 @@ function handleNotifClick(el) {
                 return;
             }
 
+            // SSE comments_snapshot: re-fetch enriched data from REST API
+            // instead of rendering raw SSE data (which lacks recentReplies)
             commentsEventSource.addEventListener('comments_snapshot', (e) => {
                 try {
-                    const items = JSON.parse(e.data || '[]');
-                    const commentsListEl = document.getElementById('commentsList');
-                    if (!commentsListEl) return;
-
-                    // Render full snapshot (replace)
-                    if (Array.isArray(items)) {
-                        if (items.length === 0) {
-                            commentsListEl.innerHTML = `
-                              <div class="flex flex-col items-center justify-center py-10 text-gray-500 opacity-70">
-                                  <i class="fa-solid fa-comment text-4xl mb-3"></i>
-                                  <p class="text-sm">لا توجد تعليقات بعد.</p>
-                                  <p class="text-xs">كن أول من يعلق!</p>
-                              </div>`;
-                        } else {
-                            commentsListEl.innerHTML = items.map(c => createCommentHtml(c, postId)).join('');
-                            // update verification badges
-                            updateCommentsVerification(items);
-                        }
-
-                        // update counts
-                        const badgeEl = document.getElementById('commentCountBadge');
-                        if (badgeEl) badgeEl.innerText = items.length;
-                        updatePostCommentCount(postId, items.length);
-
-                        // scroll to bottom
-                        setTimeout(() => {
-                            const el = document.getElementById('commentsList');
-                            if (el) el.scrollTop = el.scrollHeight;
-                        }, 80);
-                    }
+                    // Use the enriched REST endpoint to get full data with replies
+                    fetchAndDisplayComments(postId);
                 } catch (err) {
                     console.error('comments_snapshot handler error', err);
                 }
@@ -5043,7 +5068,22 @@ function handleNotifClick(el) {
                     if (!comment || !comment.commentId) return;
                     const existing = document.getElementById(`comment-${comment.commentId}`);
                     if (existing) {
+                        // Preserve existing replies before replacing comment HTML
+                        const repliesSection = existing.querySelector('.fb-replies-section');
+                        const savedRepliesHtml = repliesSection ? repliesSection.outerHTML : '';
                         existing.outerHTML = createCommentHtml(comment, postId);
+                        // Restore replies if the new render lost them
+                        if (savedRepliesHtml) {
+                            const newEl = document.getElementById(`comment-${comment.commentId}`);
+                            if (newEl) {
+                                const newReplies = newEl.querySelector('.fb-replies-section');
+                                const newContainer = newReplies ? newReplies.querySelector('[id^="replies-container-"]') : null;
+                                // If new render has no inline replies but old one did, restore
+                                if (newContainer && newContainer.children.length === 0 && savedRepliesHtml.includes('fb-reply-item')) {
+                                    newReplies.outerHTML = savedRepliesHtml;
+                                }
+                            }
+                        }
                         updateCommentsVerification([comment]);
                     }
                 } catch (err) {

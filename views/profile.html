@@ -674,6 +674,7 @@
         .fb-reply-meta .fb-action { font-weight: 600; cursor: pointer; background: none; border: none; padding: 0; font-size: 11px; color: #8a8d91; transition: color 0.15s; }
         .fb-reply-meta .fb-action:hover { color: #e4e6eb; }
         .fb-reply-meta .fb-action.liked-btn { color: #f87171; }
+        body.modal-open { overflow: hidden !important; position: fixed; width: 100%; }
         .fb-view-replies-btn {
             background: linear-gradient(135deg, rgba(45,136,255,0.12) 0%, rgba(99,102,241,0.12) 100%);
             border: 1px solid rgba(45,136,255,0.25);
@@ -3371,10 +3372,12 @@ function createCommentHtml(comment, postIdForSafety = '') {
 
     let repliesPreview = '';
     const totalReplies = comment.repliesCount || (comment.recentReplies ? comment.recentReplies.length : 0);
-    if (comment.recentReplies && comment.recentReplies.length > 0) {
+    const hasInlineReplies = comment.recentReplies && comment.recentReplies.length > 0;
+    if (hasInlineReplies) {
         repliesPreview = comment.recentReplies.map(r => createReplyHtml(r, postId, comment.commentId)).join('');
     }
-    const viewMoreBtn = (totalReplies > 0 && (!comment.recentReplies || comment.recentReplies.length < totalReplies)) ? `<button class="fb-view-replies-btn" onclick="loadAllReplies('${postId}', '${comment.commentId}', this)"><i class="fas fa-comments"></i> عرض كل الردود <span class="fb-replies-count">${totalReplies}</span></button>` : '';
+    // Always show View Replies button when there are replies
+    const viewRepliesBtn = totalReplies > 0 ? `<button class="fb-view-replies-btn" onclick="toggleOrLoadReplies('${postId}', '${comment.commentId}', this)"><i class="fas fa-comments"></i> عرض الردود <span class="fb-replies-count">${totalReplies}</span></button>` : '';
 
     return `
         <div class="fb-comment-thread" id="comment-${comment.commentId}">
@@ -3395,8 +3398,8 @@ function createCommentHtml(comment, postIdForSafety = '') {
             </div>
 
             <div class="fb-replies-section" id="replies-section-${comment.commentId}" style="${totalReplies > 0 ? '' : 'display:none'}">
-                ${viewMoreBtn}
-                <div id="replies-container-${comment.commentId}">
+                ${viewRepliesBtn}
+                <div id="replies-container-${comment.commentId}" style="${hasInlineReplies ? '' : 'display:none'}">
                     ${repliesPreview}
                 </div>
             </div>
@@ -3457,7 +3460,10 @@ async function submitReply(postId, commentId) {
             const myProfile = { username: 'أنا', profile_picture_url: document.getElementById('myCurrentAvatar')?.src || DEFAULT_PROFILE_PIC_URL, userId: currentUserId || '' };
             const replyData = data.reply || { content, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, id: data.replyId || ('tmp-' + Date.now()), replyToUsername: '' };
             const container = document.getElementById(`replies-container-${commentId}`);
-            if (container) container.insertAdjacentHTML('beforeend', createReplyHtml(replyData, postId, commentId));
+            if (container) {
+                container.insertAdjacentHTML('beforeend', createReplyHtml(replyData, postId, commentId));
+                container.style.display = '';
+            }
             const section = document.getElementById(`replies-section-${commentId}`);
             if (section) section.style.display = '';
             // Background sync
@@ -3525,7 +3531,6 @@ async function postReply(postId, commentId) {
 }
 
 async function loadAllReplies(postId, commentId, triggerBtn) {
-    if (triggerBtn) triggerBtn.style.display = 'none';
     try {
         const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
         const data = await res.json();
@@ -3533,11 +3538,34 @@ async function loadAllReplies(postId, commentId, triggerBtn) {
             const container = document.getElementById(`replies-container-${commentId}`);
             if (container) {
                 container.innerHTML = data.replies.map(r => createReplyHtml(r, postId, commentId)).join('');
+                container.style.display = '';
             }
             const section = document.getElementById(`replies-section-${commentId}`);
             if (section) section.style.display = '';
+            if (triggerBtn) {
+                const countEl = triggerBtn.querySelector('.fb-replies-count');
+                if (countEl) countEl.textContent = data.replies.length;
+            }
         }
-    } catch (e) { console.error(e); if (triggerBtn) triggerBtn.style.display = ''; }
+    } catch (e) { console.error(e); }
+}
+
+// Toggle replies visibility or load from server if not yet loaded
+function toggleOrLoadReplies(postId, commentId, btn) {
+    const container = document.getElementById(`replies-container-${commentId}`);
+    if (!container) return;
+    if (container.children.length > 0) {
+        const isHidden = container.style.display === 'none';
+        container.style.display = isHidden ? '' : 'none';
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = isHidden ? 'fas fa-comments' : 'fas fa-chevron-down';
+    } else {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+        loadAllReplies(postId, commentId, btn).then(() => {
+            const count = container.children.length;
+            btn.innerHTML = `<i class="fas fa-comments"></i> عرض الردود <span class="fb-replies-count">${count}</span>`;
+        });
+    }
 }
 
 async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
@@ -3559,9 +3587,10 @@ async function fetchAndDisplayComments(postId) {
             commentsListEl.innerHTML = '';
             const comments = result.comments || [];
             
-            if(badgeEl) badgeEl.innerText = comments.length;
+            const totalCount = result.totalCount || comments.length;
+            if(badgeEl) badgeEl.innerText = totalCount;
 
-            updatePostCommentCount(postId, comments.length);
+            updatePostCommentCount(postId, totalCount);
 
             if (comments.length === 0) {
                 commentsListEl.innerHTML = `
@@ -3715,6 +3744,8 @@ async function handleLike(postId, buttonElement) {
 
 /* ----------------- Comment modal open/close (profile) ----------------- */
 
+let scrollYBeforeModal = 0;
+
 function handleComment(postId) { 
     currentPostIdForComments = postId;
     
@@ -3725,6 +3756,9 @@ function handleComment(postId) {
     const modal = document.getElementById('commentModal');
     const content = document.getElementById('commentModalContent');
     
+    scrollYBeforeModal = window.scrollY;
+    document.body.classList.add('modal-open');
+    document.body.style.top = `-${scrollYBeforeModal}px`;
     modal.classList.remove('hidden');
     
     setTimeout(() => {
@@ -3732,6 +3766,7 @@ function handleComment(postId) {
     }, 10);
 
     fetchAndDisplayComments(postId);
+    initSwipeGesture();
 }
 
 function closeCommentModal() {
@@ -3746,7 +3781,56 @@ function closeCommentModal() {
         if(document.getElementById('newCommentInput')) document.getElementById('newCommentInput').value = '';
         if(document.getElementById('commentsList')) document.getElementById('commentsList').innerHTML = '';
         if(document.getElementById('commentCountBadge')) document.getElementById('commentCountBadge').innerText = '0';
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        window.scrollTo(0, scrollYBeforeModal);
     }, 300);
+}
+
+// Swipe gesture for Instagram-like dismiss
+function initSwipeGesture() {
+    const content = document.getElementById('commentModalContent');
+    let startY = 0, currentY = 0, isDragging = false;
+
+    const onTouchStart = (e) => {
+        const commentsList = document.getElementById('commentsList');
+        if (commentsList && commentsList.scrollTop > 0) return;
+        startY = e.touches[0].clientY;
+        isDragging = true;
+        content.style.transition = 'none';
+    };
+    const onTouchMove = (e) => {
+        if (!isDragging) return;
+        currentY = e.touches[0].clientY;
+        const diff = currentY - startY;
+        if (diff > 0) {
+            content.style.transform = `translateY(${diff}px)`;
+            e.preventDefault();
+        }
+    };
+    const onTouchEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        content.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+        const diff = currentY - startY;
+        if (diff > 120) {
+            closeCommentModal();
+        } else {
+            content.style.transform = 'translateY(0)';
+            setTimeout(() => { if (content.classList.contains('open')) content.style.transform = ''; }, 300);
+        }
+        startY = 0; currentY = 0;
+    };
+
+    content.removeEventListener('touchstart', content._swipeStart);
+    content.removeEventListener('touchmove', content._swipeMove);
+    content.removeEventListener('touchend', content._swipeEnd);
+    content._swipeStart = onTouchStart;
+    content._swipeMove = onTouchMove;
+    content._swipeEnd = onTouchEnd;
+    content.addEventListener('touchstart', onTouchStart, { passive: false });
+    content.addEventListener('touchmove', onTouchMove, { passive: false });
+    content.addEventListener('touchend', onTouchEnd);
 }
 
 async function postComment() {

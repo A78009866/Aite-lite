@@ -17,6 +17,7 @@
       font-family: 'Cairo', sans-serif; 
       overflow: hidden; 
     }
+    body.modal-open { overflow: hidden !important; position: fixed; width: 100%; }
 
     .swiper { width: 100%; height: 100%; }
     .swiper-slide {
@@ -693,6 +694,7 @@
     const modal = document.getElementById('commentModal');
     const content = document.getElementById('commentModalContent');
     modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
     setTimeout(() => content.classList.add('open'), 10);
     if(swiperInstance) swiperInstance.allowTouchMove = false;
 
@@ -712,6 +714,7 @@
     content.classList.remove('open');
     setTimeout(() => {
       modal.classList.add('hidden');
+      document.body.classList.remove('modal-open');
       if(swiperInstance) swiperInstance.allowTouchMove = true;
       currentReelIdForComments = null;
       commentsList.innerHTML = '';
@@ -836,12 +839,15 @@
     const likesCount = c.likes || 0;
     const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/reels/${escapeAttr(reelId)}/comments/${escapeAttr(commentId)}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
-    // Show ALL replies instantly (no view more button)
+    // Show ALL replies instantly
     let allRepliesHtml = '';
     const totalReplies = c.repliesCount || (c.recentReplies ? c.recentReplies.length : 0);
-    if(c.recentReplies && c.recentReplies.length > 0) {
+    const hasInlineReplies = c.recentReplies && c.recentReplies.length > 0;
+    if(hasInlineReplies) {
       allRepliesHtml = c.recentReplies.map(r => createReelReplyHtml(r, reelId, commentId)).join('');
     }
+    // Always show View Replies button when there are replies
+    const viewRepliesBtn = totalReplies > 0 ? `<button class="fb-view-replies-btn" onclick="toggleOrLoadReelReplies('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', this)"><i class="fas fa-comments"></i> عرض الردود <span class="fb-replies-count">${totalReplies}</span></button>` : '';
 
     return `
       <div class="fb-comment-thread" id="comment-${escapeAttr(commentId)}">
@@ -862,7 +868,8 @@
         </div>
 
         <div class="fb-replies-section" id="replies-section-${escapeAttr(commentId)}" style="${totalReplies > 0 ? '' : 'display:none'}">
-          <div id="replies-container-${escapeAttr(commentId)}">
+          ${viewRepliesBtn}
+          <div id="replies-container-${escapeAttr(commentId)}" style="${hasInlineReplies ? '' : 'display:none'}">
             ${allRepliesHtml}
           </div>
         </div>
@@ -975,17 +982,41 @@
   }
 
   async function loadAllReelReplies(reelId, commentId, btn) {
-    if (btn) btn.style.display = 'none';
     try {
       const res = await fetch(`/api/reels/${reelId}/comments/${commentId}/replies`, { credentials: 'include' });
       const data = await res.json();
       if (data.ok && data.replies) {
         const container = document.getElementById(`replies-container-${commentId}`);
-        if (container) { container.innerHTML = data.replies.map(r => createReelReplyHtml(r, reelId, commentId)).join(''); }
+        if (container) {
+          container.innerHTML = data.replies.map(r => createReelReplyHtml(r, reelId, commentId)).join('');
+          container.style.display = '';
+        }
         const section = document.getElementById(`replies-section-${commentId}`);
         if (section) section.style.display = '';
+        if (btn) {
+          const countEl = btn.querySelector('.fb-replies-count');
+          if (countEl) countEl.textContent = data.replies.length;
+        }
       }
-    } catch (e) { console.error(e); if (btn) btn.style.display = ''; }
+    } catch (e) { console.error(e); }
+  }
+
+  // Toggle replies visibility or load from server if not yet loaded
+  function toggleOrLoadReelReplies(reelId, commentId, btn) {
+    const container = document.getElementById(`replies-container-${commentId}`);
+    if (!container) return;
+    if (container.children.length > 0) {
+      const isHidden = container.style.display === 'none';
+      container.style.display = isHidden ? '' : 'none';
+      const icon = btn.querySelector('i');
+      if (icon) icon.className = isHidden ? 'fas fa-comments' : 'fas fa-chevron-down';
+    } else {
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+      loadAllReelReplies(reelId, commentId, btn).then(() => {
+        const count = container.children.length;
+        btn.innerHTML = `<i class="fas fa-comments"></i> عرض الردود <span class="fb-replies-count">${count}</span>`;
+      });
+    }
   }
 
   function startReelReplyToReply(reelId, commentId, replyId, replyUsername) {
