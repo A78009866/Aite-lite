@@ -295,6 +295,42 @@
     .fb-reply-meta .fb-action:hover { color: #e4e6eb; }
     .fb-reply-meta .fb-action.liked-btn { color: #f87171; }
 
+    /* Toggle replies button */
+    .fb-toggle-replies-btn {
+        background: none; border: none;
+        color: #2d88ff; font-weight: 700; font-size: 12.5px; cursor: pointer;
+        padding: 6px 0 2px; display: inline-flex; align-items: center; gap: 6px;
+        transition: all 0.2s ease; margin-right: 44px;
+    }
+    .fb-toggle-replies-btn:hover { color: #5aa5ff; }
+    .fb-toggle-replies-btn i {
+        font-size: 10px; transition: transform 0.3s ease;
+    }
+    .fb-toggle-replies-btn.expanded i {
+        transform: rotate(180deg);
+    }
+    .fb-toggle-replies-btn .toggle-replies-count {
+        background: rgba(45, 136, 255, 0.15);
+        color: #2d88ff;
+        border-radius: 10px;
+        padding: 1px 7px;
+        font-size: 11px;
+        font-weight: 700;
+        min-width: 18px;
+        text-align: center;
+    }
+    .fb-replies-section.collapsed {
+        display: none !important;
+    }
+    .fb-replies-section.expanded {
+        display: block !important;
+        animation: slideDownReplies 0.3s ease;
+    }
+    @keyframes slideDownReplies {
+        from { opacity: 0; max-height: 0; transform: translateY(-8px); }
+        to { opacity: 1; max-height: 2000px; transform: translateY(0); }
+    }
+
     .comment-item { padding: 8px 0; }
     .comment-actions { display: none; }
     .small-avatar { width: 28px; height: 28px; border-radius: 999px; object-fit: cover; }
@@ -849,12 +885,21 @@
     const likesCount = c.likes || 0;
     const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/reels/${escapeAttr(reelId)}/comments/${escapeAttr(commentId)}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
-    // Show ALL replies instantly - no hidden state, no "view replies" button
     let allRepliesHtml = '';
     const hasReplies = c.recentReplies && c.recentReplies.length > 0;
+    const repliesCount = hasReplies ? c.recentReplies.length : 0;
     if(hasReplies) {
       allRepliesHtml = c.recentReplies.map(r => createReelReplyHtml(r, reelId, commentId)).join('');
     }
+
+    // Toggle button for replies
+    const toggleBtn = hasReplies ? `
+      <button class="fb-toggle-replies-btn" onclick="toggleRepliesSection('${escapeAttr(commentId)}', this)" id="toggle-replies-btn-${escapeAttr(commentId)}">
+        <i class="fas fa-chevron-down"></i>
+        <span>عرض الردود</span>
+        <span class="toggle-replies-count">${repliesCount}</span>
+      </button>
+    ` : '';
 
     return `
       <div class="fb-comment-thread" id="comment-${escapeAttr(commentId)}">
@@ -874,13 +919,54 @@
           </div>
         </div>
 
-        <div class="fb-replies-section" id="replies-section-${escapeAttr(commentId)}" style="${hasReplies ? '' : 'display:none'}">
+        ${toggleBtn}
+
+        <div class="fb-replies-section collapsed" id="replies-section-${escapeAttr(commentId)}" style="${hasReplies ? '' : 'display:none'}">
           <div id="replies-container-${escapeAttr(commentId)}">
             ${allRepliesHtml}
           </div>
         </div>
       </div>
     `;
+  }
+
+  // Toggle replies show/hide
+  function toggleRepliesSection(commentId, btn) {
+      const section = document.getElementById('replies-section-' + commentId);
+      if (!section) return;
+      const isCollapsed = section.classList.contains('collapsed');
+      if (isCollapsed) {
+          section.classList.remove('collapsed');
+          section.classList.add('expanded');
+          btn.classList.add('expanded');
+          btn.querySelector('span:not(.toggle-replies-count)').textContent = 'إخفاء الردود';
+      } else {
+          section.classList.remove('expanded');
+          section.classList.add('collapsed');
+          btn.classList.remove('expanded');
+          btn.querySelector('span:not(.toggle-replies-count)').textContent = 'عرض الردود';
+      }
+  }
+
+  // Auto-expand replies section when a new reply is added
+  function expandRepliesSection(commentId) {
+      const section = document.getElementById('replies-section-' + commentId);
+      const btn = document.getElementById('toggle-replies-btn-' + commentId);
+      if (section) {
+          section.style.display = '';
+          section.classList.remove('collapsed');
+          section.classList.add('expanded');
+      }
+      if (btn) {
+          btn.classList.add('expanded');
+          btn.querySelector('span:not(.toggle-replies-count)').textContent = 'إخفاء الردود';
+          const container = document.getElementById('replies-container-' + commentId);
+          if (container) {
+              const count = container.querySelectorAll('.fb-reply-item').length;
+              const countEl = btn.querySelector('.toggle-replies-count');
+              if (countEl) countEl.textContent = count;
+          }
+      }
   }
 
   async function updateCommentBadges(comments) {
@@ -999,6 +1085,22 @@
         }
         const section = document.getElementById(`replies-section-${commentId}`);
         if (section) section.style.display = '';
+        // Update toggle button count and create if missing
+        const btn = document.getElementById(`toggle-replies-btn-${commentId}`);
+        if (btn) {
+            const countEl = btn.querySelector('.toggle-replies-count');
+            if (countEl) countEl.textContent = data.replies.length;
+        } else if (data.replies.length > 0) {
+            const thread = document.getElementById(`comment-${commentId}`);
+            if (thread && section) {
+                const newBtn = document.createElement('button');
+                newBtn.className = 'fb-toggle-replies-btn expanded';
+                newBtn.id = `toggle-replies-btn-${commentId}`;
+                newBtn.onclick = function() { toggleRepliesSection(commentId, newBtn); };
+                newBtn.innerHTML = `<i class="fas fa-chevron-down" style="transform:rotate(180deg)"></i> <span>\u0625\u062e\u0641\u0627\u0621 \u0627\u0644\u0631\u062f\u0648\u062f</span> <span class="toggle-replies-count">${data.replies.length}</span>`;
+                thread.insertBefore(newBtn, section);
+            }
+        }
       }
     } catch (e) { console.error(e); }
   }
@@ -1071,8 +1173,7 @@
           const replyData = data.reply || { content, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, id: data.replyId || ('tmp-' + Date.now()), replyToUsername: replyToName };
           const container = document.getElementById(`replies-container-${commentId}`);
           if (container) container.insertAdjacentHTML('beforeend', createReelReplyHtml(replyData, currentReelIdForComments, commentId));
-          const section = document.getElementById(`replies-section-${commentId}`);
-          if (section) section.style.display = '';
+          expandRepliesSection(commentId);
           // Update counter locally
           updateReelCommentCounter(1);
           // Background sync - only refresh this comment's replies
@@ -1098,8 +1199,7 @@
           const replyData = data.reply || { content, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, id: data.replyId || ('tmp-' + Date.now()) };
           const container = document.getElementById(`replies-container-${commentId}`);
           if (container) container.insertAdjacentHTML('beforeend', createReelReplyHtml(replyData, currentReelIdForComments, commentId));
-          const section = document.getElementById(`replies-section-${commentId}`);
-          if (section) section.style.display = '';
+          expandRepliesSection(commentId);
           // Update counter locally
           updateReelCommentCounter(1);
           // Background sync - only refresh this comment's replies
