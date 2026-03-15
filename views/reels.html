@@ -156,10 +156,27 @@
       height: 75vh; border-radius: 20px 20px 0 0;
       transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       z-index: 50;
+      touch-action: none;
     }
     .glass-comment-modal-content.open { transform: translateY(0); }
     .glass-modal-bg { background-color: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); transition: opacity 0.3s; }
-    .modal-handle { width: 40px; height: 4px; background-color: rgba(255,255,255,0.3); border-radius: 2px; margin: 12px auto 8px auto; }
+    .modal-handle { width: 40px; height: 4px; background-color: rgba(255,255,255,0.3); border-radius: 2px; margin: 12px auto 8px auto; cursor: grab; }
+    /* Who liked modal for comments/replies */
+    .comment-likes-modal-overlay {
+      position: fixed; inset: 0; z-index: 80;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s;
+    }
+    .comment-likes-modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .comment-likes-modal-box {
+      background: #1a1a1e; border-radius: 20px 20px 0 0;
+      width: 100%; max-width: 500px; max-height: 60vh;
+      display: flex; flex-direction: column;
+      transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .comment-likes-modal-overlay.open .comment-likes-modal-box { transform: translateY(0); }
 
     .custom-scrollbar::-webkit-scrollbar { width: 6px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
@@ -664,6 +681,7 @@
       console.error('openComments error', e);
       commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
     }
+    initReelSwipeGesture();
   };
 
   function closeCommentsSheet() {
@@ -680,6 +698,50 @@
     }, 300);
   }
 
+  // Swipe gesture for Instagram-like dismiss
+  function initReelSwipeGesture() {
+    const content = document.getElementById('commentModalContent');
+    let startY = 0, currentY = 0, isDragging = false;
+    const onTouchStart = (e) => {
+      const cl = document.getElementById('commentsList');
+      if (cl && cl.scrollTop > 0) return;
+      startY = e.touches[0].clientY;
+      isDragging = true;
+      content.style.transition = 'none';
+    };
+    const onTouchMove = (e) => {
+      if (!isDragging) return;
+      currentY = e.touches[0].clientY;
+      const diff = currentY - startY;
+      if (diff > 0) {
+        content.style.transform = `translateY(${diff}px)`;
+        e.preventDefault();
+      }
+    };
+    const onTouchEnd = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      content.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+      const diff = currentY - startY;
+      if (diff > 120) {
+        closeCommentsSheet();
+      } else {
+        content.style.transform = 'translateY(0)';
+        setTimeout(() => { if (content.classList.contains('open')) content.style.transform = ''; }, 300);
+      }
+      startY = 0; currentY = 0;
+    };
+    content.removeEventListener('touchstart', content._swipeStart);
+    content.removeEventListener('touchmove', content._swipeMove);
+    content.removeEventListener('touchend', content._swipeEnd);
+    content._swipeStart = onTouchStart;
+    content._swipeMove = onTouchMove;
+    content._swipeEnd = onTouchEnd;
+    content.addEventListener('touchstart', onTouchStart, { passive: false });
+    content.addEventListener('touchmove', onTouchMove, { passive: false });
+    content.addEventListener('touchend', onTouchEnd);
+  }
+
   // Close when clicking backdrop area of modal
   document.getElementById('commentModal').addEventListener('click', function(e) {
     if (e.target === this) closeCommentsSheet();
@@ -694,9 +756,10 @@
       if (!data.ok) throw new Error('Invalid response');
 
       const comments = data.comments || [];
-      document.getElementById('commentCountBadge').innerText = comments.length;
+      const totalCount = data.totalCount || comments.length;
+      document.getElementById('commentCountBadge').innerText = totalCount;
       const countEl = document.getElementById(`commentCount-${reelId}`);
-      if (countEl) countEl.textContent = comments.length;
+      if (countEl) countEl.textContent = totalCount;
 
       if(comments.length === 0) {
         commentsList.innerHTML = '<p class="text-center text-gray-500 py-10">لا توجد تعليقات بعد.</p>';
@@ -717,7 +780,7 @@
     const replyTime = r.timestamp ? new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '';
     const likesCount = r.likes || 0;
     const mentionHtml = r.replyToUsername ? `<span class="fb-reply-mention">@${escapeHtml(r.replyToUsername)}</span> ` : '';
-    const likeBadge = likesCount > 0 ? `<span class="fb-like-badge"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
+    const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/reels/${escapeAttr(reelId)}/comments/${escapeAttr(commentId)}/replies/${escapeAttr(rId)}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
     return `
       <div class="fb-reply-item" id="reply-${escapeAttr(rId)}">
@@ -749,14 +812,14 @@
     const username = c.user ? c.user.username : c.username;
     const userId = c.user ? c.user.userId : (c.userId || c.userID || '');
     const likesCount = c.likes || 0;
-    const likeBadge = likesCount > 0 ? `<span class="fb-like-badge"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
+    const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/reels/${escapeAttr(reelId)}/comments/${escapeAttr(commentId)}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
-    let repliesPreview = '';
+    // Show ALL replies instantly (no view more button)
+    let allRepliesHtml = '';
     const totalReplies = c.repliesCount || (c.recentReplies ? c.recentReplies.length : 0);
     if(c.recentReplies && c.recentReplies.length > 0) {
-      repliesPreview = c.recentReplies.slice(0, 2).map(r => createReelReplyHtml(r, reelId, commentId)).join('');
+      allRepliesHtml = c.recentReplies.map(r => createReelReplyHtml(r, reelId, commentId)).join('');
     }
-    const viewMoreBtn = totalReplies > 2 ? `<button class="fb-view-replies-btn" onclick="loadAllReelReplies('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', this)"><i class="fas fa-reply"></i> عرض كل الردود (${totalReplies})</button>` : '';
 
     return `
       <div class="fb-comment-thread" id="comment-${escapeAttr(commentId)}">
@@ -777,13 +840,12 @@
         </div>
 
         <div class="fb-replies-section" id="replies-section-${escapeAttr(commentId)}" style="${totalReplies > 0 ? '' : 'display:none'}">
-          ${viewMoreBtn}
           <div id="replies-container-${escapeAttr(commentId)}">
-            ${repliesPreview}
+            ${allRepliesHtml}
           </div>
         </div>
       </div>
-    `;
+    
   }
 
   async function updateCommentBadges(comments) {
@@ -823,7 +885,7 @@
           if (bubble) {
             let badge = bubble.querySelector('.fb-like-badge');
             if (data.likes > 0) {
-              if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; bubble.appendChild(badge); }
+              if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; badge.style.cursor = 'pointer'; badge.onclick = (e) => { e.stopPropagation(); showCommentLikesList(`/api/reels/${reelId}/comments/${commentId}/likes`); }; bubble.appendChild(badge); }
               badge.innerHTML = `<i class="fas fa-heart"></i> ${data.likes}`;
             } else if (badge) { badge.remove(); }
           }
@@ -851,7 +913,7 @@
           if (bubble) {
             let badge = bubble.querySelector('.fb-like-badge');
             if (data.likes > 0) {
-              if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; bubble.appendChild(badge); }
+              if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; badge.style.cursor = 'pointer'; badge.onclick = (e) => { e.stopPropagation(); showCommentLikesList(`/api/reels/${reelId}/comments/${commentId}/replies/${replyId}/likes`); }; bubble.appendChild(badge); }
               badge.innerHTML = `<i class="fas fa-heart"></i> ${data.likes}`;
             } else if (badge) { badge.remove(); }
           }
@@ -859,6 +921,35 @@
       }
     } catch (e) { console.error(e); }
     finally { btn.disabled = false; }
+  }
+
+  // Who liked comment/reply modal
+  async function showCommentLikesList(endpoint) {
+    const modal = document.getElementById('commentLikesModal');
+    const content = document.getElementById('commentLikesListContent');
+    modal.classList.add('open');
+    content.innerHTML = '<div style="display:flex;justify-content:center;padding:32px 0;"><i class="fas fa-spinner fa-spin" style="color:#f87171;font-size:20px;"></i></div>';
+    try {
+      const res = await fetch(endpoint, { credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.ok && data.users && data.users.length > 0) {
+        content.innerHTML = data.users.map(function(u) {
+          const badge = u.is_verified && VERIFIED_IMG_URL ? ' <img src="' + VERIFIED_IMG_URL + '" class="verified-badge-img" style="width:14px;height:14px;display:inline;vertical-align:middle;">' : '';
+          return '<a href="/profile?userId=' + encodeURIComponent(u.id) + '" class="likes-user-item">' +
+            '<img src="' + (u.profile_picture_url || DEFAULT_AVATAR) + '" onerror="this.src=\'' + DEFAULT_AVATAR + '\'"> ' +
+            '<span class="username">' + u.username + badge + '</span></a>';
+        }).join('');
+      } else {
+        content.innerHTML = '<div style="text-align:center;color:#6b7280;padding:32px 0;"><i class="far fa-heart" style="font-size:24px;margin-bottom:8px;display:block;"></i><p style="font-size:14px;">لا توجد إعجابات بعد</p></div>';
+      }
+    } catch(e) {
+      console.error(e);
+      content.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">فشل في جلب الإعجابات</div>';
+    }
+  }
+
+  function closeCommentLikesModal() {
+    document.getElementById('commentLikesModal').classList.remove('open');
   }
 
   async function loadAllReelReplies(reelId, commentId, btn) {
@@ -936,9 +1027,7 @@
         });
         const data = await res.json();
         if (res.ok && data.ok) {
-          loadAllReelReplies(currentReelIdForComments, commentId, null);
-          const section = document.getElementById(`replies-section-${commentId}`);
-          if (section) section.style.display = '';
+          await fetchAndRenderReelComments(currentReelIdForComments);
         }
       } catch (e) { console.error(e); }
       return;
@@ -956,9 +1045,7 @@
         });
         const data = await res.json();
         if (res.ok && data.ok) {
-          loadAllReelReplies(currentReelIdForComments, commentId, null);
-          const section = document.getElementById(`replies-section-${commentId}`);
-          if (section) section.style.display = '';
+          await fetchAndRenderReelComments(currentReelIdForComments);
         } else {
           alert(data.error || 'فشل في إرسال الرد');
         }
@@ -1126,6 +1213,18 @@ html[data-theme="light"] #likesListContent {
     color: #1c1e21 !important;
 }
 </style>
+<!-- Comment/Reply Likes Modal -->
+<div id="commentLikesModal" class="comment-likes-modal-overlay" onclick="closeCommentLikesModal()">
+  <div class="comment-likes-modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle" onclick="closeCommentLikesModal()"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 16px 8px;border-bottom:1px solid rgba(255,255,255,0.08);">
+      <h3 style="font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;"><i class="fas fa-heart" style="color:#ef4444;"></i> إعجابات التعليق</h3>
+      <button style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:#9ca3af;border:none;cursor:pointer;" onclick="closeCommentLikesModal()"><i class="fas fa-times" style="font-size:12px;"></i></button>
+    </div>
+    <div id="commentLikesListContent" style="flex-grow:1;overflow-y:auto;padding:8px;"></div>
+  </div>
+</div>
+
 <div id="likesModal" class="likes-modal-overlay" onclick="closeLikesModal()">
   <div class="likes-modal-box" onclick="event.stopPropagation()">
     <div class="modal-handle" onclick="closeLikesModal()"></div>

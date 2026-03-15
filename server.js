@@ -3495,13 +3495,12 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
         repliesCount = normalized.repliesCount || 0;
       }
 
-      // optionally fetch last few replies (e.g., last 5)
-      let recentReplies = [];
-      try {
-        const repliesSnap = await db.ref(`comment_replies/${postId}/${normalized.commentId}`)
-          .orderByChild('timestamp')
-          .limitToLast(5)
-          .once('value');
+        // fetch ALL replies (no limit)
+        let recentReplies = [];
+        try {
+          const repliesSnap = await db.ref(`comment_replies/${postId}/${normalized.commentId}`)
+            .orderByChild('timestamp')
+            .once('value');
         repliesSnap.forEach(r => recentReplies.push(r.val()));
       } catch (e) {
         recentReplies = [];
@@ -3516,7 +3515,13 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
       };
     }));
 
-    res.json({ ok: true, comments: enriched });
+    // Calculate total count: comments + all replies
+    let totalCount = enriched.length;
+    for (const c of enriched) {
+      totalCount += (c.repliesCount || 0);
+    }
+
+    res.json({ ok: true, comments: enriched, totalCount: totalCount });
   } catch (error) {
     console.error('Error fetching comments:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب التعليقات.' });
@@ -3833,6 +3838,94 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requir
   } catch (error) {
     console.error('Error creating nested reply for reel:', error);
     res.status(500).json({ ok: false, error: 'Failed to create reply' });
+  }
+});
+
+// ---------------- Get who liked a comment (posts) ----------------
+app.get('/api/posts/:postId/comments/:commentId/likes', requireAuth, async (req, res) => {
+  const { postId, commentId } = req.params;
+  try {
+    const likesSnap = await db.ref(`comment_likes/${postId}/${commentId}`).once('value');
+    const likesObj = likesSnap.val() || {};
+    const userIds = Object.keys(likesObj);
+    const users = [];
+    for (const uid of userIds) {
+      const profileSnap = await db.ref(`profiles/${uid}`).once('value');
+      const profile = profileSnap.val();
+      if (profile) {
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+      }
+    }
+    res.json({ ok: true, users });
+  } catch (error) {
+    console.error('Error fetching comment likes list:', error);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// ---------------- Get who liked a reply (posts) ----------------
+app.get('/api/posts/:postId/comments/:commentId/replies/:replyId/likes', requireAuth, async (req, res) => {
+  const { postId, commentId, replyId } = req.params;
+  try {
+    const likesSnap = await db.ref(`reply_likes/${postId}/${commentId}/${replyId}`).once('value');
+    const likesObj = likesSnap.val() || {};
+    const userIds = Object.keys(likesObj);
+    const users = [];
+    for (const uid of userIds) {
+      const profileSnap = await db.ref(`profiles/${uid}`).once('value');
+      const profile = profileSnap.val();
+      if (profile) {
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+      }
+    }
+    res.json({ ok: true, users });
+  } catch (error) {
+    console.error('Error fetching reply likes list:', error);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// ---------------- Get who liked a reel comment ----------------
+app.get('/api/reels/:reelId/comments/:commentId/likes', requireAuth, async (req, res) => {
+  const { reelId, commentId } = req.params;
+  try {
+    const likesSnap = await db.ref(`reels_comment_likes/${reelId}/${commentId}`).once('value');
+    const likesObj = likesSnap.val() || {};
+    const userIds = Object.keys(likesObj);
+    const users = [];
+    for (const uid of userIds) {
+      const profileSnap = await db.ref(`profiles/${uid}`).once('value');
+      const profile = profileSnap.val();
+      if (profile) {
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+      }
+    }
+    res.json({ ok: true, users });
+  } catch (error) {
+    console.error('Error fetching reel comment likes list:', error);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// ---------------- Get who liked a reel reply ----------------
+app.get('/api/reels/:reelId/comments/:commentId/replies/:replyId/likes', requireAuth, async (req, res) => {
+  const { reelId, commentId, replyId } = req.params;
+  try {
+    const likesSnap = await db.ref(`reels_reply_likes/${reelId}/${commentId}/${replyId}`).once('value');
+    const likesObj = likesSnap.val() || {};
+    const userIds = Object.keys(likesObj);
+    const users = [];
+    for (const uid of userIds) {
+      const profileSnap = await db.ref(`profiles/${uid}`).once('value');
+      const profile = profileSnap.val();
+      if (profile) {
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+      }
+    }
+    res.json({ ok: true, users });
+  } catch (error) {
+    console.error('Error fetching reel reply likes list:', error);
+    res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
 
@@ -4373,10 +4466,10 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
           repliesCount = countSnapshotChildren(repliesSnap);
         }
       } catch (e) {}
-      // recentReplies - last 3
+      // recentReplies - ALL replies
       let recentReplies = [];
       try {
-        const rr = await db.ref(`reels_comment_replies/${reelId}/${c.id}`).orderByChild('timestamp').limitToLast(3).once('value');
+        const rr = await db.ref(`reels_comment_replies/${reelId}/${c.id}`).orderByChild('timestamp').once('value');
         rr.forEach(r => recentReplies.push(r.val()));
       } catch (e) {}
 
@@ -4392,7 +4485,13 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
     // sort by timestamp ascending for UI (older first)
     enriched.sort((a,b) => (a.timestamp||0) - (b.timestamp||0));
 
-    res.json({ ok: true, comments: enriched });
+    // Calculate total count: comments + all replies
+    let totalCount = enriched.length;
+    for (const c of enriched) {
+      totalCount += (c.repliesCount || 0);
+    }
+
+    res.json({ ok: true, comments: enriched, totalCount: totalCount });
   } catch (error) {
     console.error(error);
     res.status(500).json({ ok: false });
