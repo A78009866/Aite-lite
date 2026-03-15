@@ -4514,7 +4514,12 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
     const comments = [];
     snap.forEach(s => {
       const val = s.val();
-      if (val) comments.push(val);
+      if (val) {
+        // Ensure commentId and id are always set
+        if (!val.id) val.id = s.key;
+        if (!val.commentId) val.commentId = val.id || s.key;
+        comments.push(val);
+      }
     });
 
     // For each comment, include likes/repliesCount and whether current user liked it

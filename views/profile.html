@@ -2498,9 +2498,6 @@
                                    class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-4 rounded-lg transition duration-300 flex items-center text-sm shadow-md">
                                     تعديل
                                 </a>
-                                <button id="shareProfileBtn" onclick="shareProfileLink()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-300 flex items-center text-sm shadow-md" title="مشاركة البروفايل">
-                                    <i class="fas fa-share-alt" style="font-size:14px;"></i>
-                                </button>
                             </div>
 
                             <!-- chatButton + 3-dot menu row -->
@@ -2705,28 +2702,39 @@ let currentPostIdToDelete = null;
 let currentOptionsPostId = null;
 let currentOptionsUserId = null;
 
-/* ---------------- Share profile link ---------------- */
-function shareProfileLink() {
-    const profileId = currentProfileId || currentUserId;
-    if (!profileId) return;
-    const url = window.location.origin + '/profile?userId=' + profileId;
-    if (navigator.share) {
-        navigator.share({ title: 'بروفايل', url: url }).catch(() => {});
-    } else {
+/* ---------------- Copy post link (same as home feed) ---------------- */
+function copyPostLink(postId, event) {
+    if (event && event.stopPropagation) event.stopPropagation();
+    if (!postId) {
+        showToast('رابط غير متوفر', { type: 'error' });
+        return;
+    }
+    const url = `${window.location.origin}/post?id=${encodeURIComponent(postId)}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(() => {
-            showToast('تم نسخ رابط البروفايل!', { type: 'success' });
+            showToast('تم نسخ رابط المنشور', { type: 'success' });
         }).catch(() => {
-            // Fallback for older browsers
-            const ta = document.createElement('textarea');
-            ta.value = url;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            showToast('تم نسخ رابط البروفايل!', { type: 'success' });
+            fallbackCopyTextToClipboard(url);
         });
+    } else {
+        fallbackCopyTextToClipboard(url);
+    }
+}
+
+function fallbackCopyTextToClipboard(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        showToast('تم نسخ رابط المنشور', { type: 'success' });
+    } catch (err) {
+        showToast('فشل نسخ الرابط', { type: 'error' });
+    } finally {
+        document.body.removeChild(textarea);
     }
 }
 
@@ -3329,11 +3337,17 @@ function createPostCard(post) {
 
             <!-- Action Buttons -->
             <div class="flex justify-around border-t border-gray-700 mt-3 pt-3 px-3 pb-3">
-                <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button" data-is-liked="${post.is_liked}" onclick="handleLike('${post.postId}', this)">
-                    <i class="${likeIconClass} ml-2 like-icon"></i> إعجاب
+                <button class="flex items-center ${likeButtonClass} hover:text-red-500 transition duration-300 w-full justify-center post-like-button gap-2" data-is-liked="${post.is_liked}" onclick="handleLike('${post.postId}', this)">
+                    <i class="${likeIconClass} ml-2 like-icon text-lg"></i>
+                    <span class="text-sm font-medium">إعجاب</span>
                 </button>
-                <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center" onclick="handleComment('${post.postId}')">
-                    <i class="fa-solid fa-comment ml-2"></i> تعليق
+                <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="handleComment('${post.postId}')">
+                    <i class="fa-solid fa-comment text-lg"></i>
+                    <span class="text-sm font-medium">تعليق</span>
+                </button>
+                <button class="flex items-center text-gray-400 hover:text-blue-500 transition duration-300 w-full justify-center gap-2" onclick="copyPostLink('${post.postId}', event)">
+                    <i class="fas fa-share-nodes text-lg"></i>
+                    <span class="text-sm font-medium">مشاركة</span>
                 </button>
             </div>
         </div>
@@ -3750,26 +3764,7 @@ async function handleLike(postId, buttonElement) {
 let scrollYBeforeModal = 0;
 
 function handleComment(postId) { 
-    currentPostIdForComments = postId;
-    
-    const myPic = (document.getElementById('userProfilePic').src || DEFAULT_PROFILE_PIC_URL);
-    const inputAvatar = document.getElementById('myCurrentAvatar');
-    if(inputAvatar) inputAvatar.src = myPic;
-
-    const modal = document.getElementById('commentModal');
-    const content = document.getElementById('commentModalContent');
-    
-    scrollYBeforeModal = window.scrollY;
-    document.body.classList.add('modal-open');
-    document.body.style.top = `-${scrollYBeforeModal}px`;
-    modal.classList.remove('hidden');
-    
-    setTimeout(() => {
-        content.classList.add('open');
-    }, 10);
-
-    fetchAndDisplayComments(postId);
-    initSwipeGesture();
+    window.location.href = '/post?id=' + encodeURIComponent(postId);
 }
 
 function closeCommentModal() {
