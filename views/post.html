@@ -370,11 +370,33 @@
         .fb-reply-meta .fb-action:hover { color: #e4e6eb; }
         .fb-reply-meta .fb-action.liked-btn { color: #f87171; }
         .fb-view-replies-btn {
-            background: none; border: none; color: #2d88ff;
+            background: linear-gradient(135deg, rgba(45,136,255,0.12) 0%, rgba(99,102,241,0.12) 100%);
+            border: 1px solid rgba(45,136,255,0.25);
+            color: #60a5fa;
             font-weight: 600; font-size: 12px; cursor: pointer;
-            padding: 4px 12px; display: flex; align-items: center; gap: 4px;
+            padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;
+            border-radius: 20px;
+            transition: all 0.25s ease;
+            margin: 4px 0 4px 44px;
         }
-        .fb-view-replies-btn:hover { text-decoration: underline; }
+        .fb-view-replies-btn:hover {
+            background: linear-gradient(135deg, rgba(45,136,255,0.22) 0%, rgba(99,102,241,0.22) 100%);
+            border-color: rgba(45,136,255,0.45);
+            color: #93bbfc;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(45,136,255,0.15);
+        }
+        .fb-view-replies-btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+        .fb-view-replies-btn i {
+            font-size: 11px;
+            transition: transform 0.2s ease;
+        }
+        .fb-view-replies-btn:hover i {
+            transform: rotate(-15deg) scale(1.1);
+        }
 
         .fb-reply-input-box {
             display: flex; align-items: center; gap: 8px;
@@ -2763,10 +2785,13 @@
 
             const pid = currentPostIdForComments;
 
+            const myProfile = { username: 'أنا', profile_picture_url: document.getElementById('myCurrentAvatar')?.src || DEFAULT_AVATAR, userId: currentUserId || '' };
+
             // If replying to a reply (nested)
             if (replyingToCommentId && replyingToReplyId) {
                 const commentId = replyingToCommentId;
                 const replyId = replyingToReplyId;
+                const replyToName = replyingToUsername || '';
                 cancelReply();
                 try {
                     const res = await fetch(`/api/posts/${pid}/comments/${commentId}/replies/${replyId}/reply`, {
@@ -2774,8 +2799,16 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ content })
                     });
-                    if (res.ok) {
-                        await fetchComments(pid);
+                    const data = await res.json();
+                    if (res.ok && data.ok) {
+                        // Optimistic instant insert
+                        const replyData = data.reply || { content, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, id: data.replyId || ('tmp-' + Date.now()), replyToUsername: replyToName };
+                        const container = document.getElementById(`replies-container-${commentId}`);
+                        if (container) container.insertAdjacentHTML('beforeend', createReplyHtml(replyData, pid, commentId));
+                        const section = document.getElementById(`replies-section-${commentId}`);
+                        if (section) section.style.display = '';
+                        // Background sync
+                        fetchComments(pid).catch(() => {});
                     }
                 } catch (e) { console.error(e); }
                 btn.disabled = false;
@@ -2791,8 +2824,16 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ content })
                     });
-                    if (res.ok) {
-                        await fetchComments(pid);
+                    const data = await res.json();
+                    if (res.ok && data.ok) {
+                        // Optimistic instant insert
+                        const replyData = data.reply || { content, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, id: data.replyId || ('tmp-' + Date.now()) };
+                        const container = document.getElementById(`replies-container-${commentId}`);
+                        if (container) container.insertAdjacentHTML('beforeend', createReplyHtml(replyData, pid, commentId));
+                        const section = document.getElementById(`replies-section-${commentId}`);
+                        if (section) section.style.display = '';
+                        // Background sync
+                        fetchComments(pid).catch(() => {});
                     }
                 } catch (e) { console.error(e); }
                 btn.disabled = false;
@@ -2806,8 +2847,18 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ content })
                 });
-                if(res.ok) {
-                    fetchComments(pid);
+                const data = await res.json();
+                if(res.ok && data.ok) {
+                    // Optimistic instant insert
+                    const commentData = data.comment || { content, commentId: data.commentId || ('tmp-' + Date.now()), user: myProfile, timestamp: Date.now(), likes: 0, is_liked: false, recentReplies: [], repliesCount: 0 };
+                    const list = document.getElementById('commentsList');
+                    if (list) {
+                        if (list.querySelector('.text-gray-500')) list.innerHTML = '';
+                        list.insertAdjacentHTML('beforeend', createCommentHtml(commentData, pid));
+                        list.scrollTop = list.scrollHeight;
+                    }
+                    // Background sync
+                    fetchComments(pid).catch(() => {});
                 }
             } catch(e) { console.error(e); }
             btn.disabled = false;

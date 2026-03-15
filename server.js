@@ -2998,11 +2998,31 @@ app.get('/api/posts', requireAuth, async (req, res) => {
     // Take top 50
     const topPosts = scoredPosts.slice(0, 50);
 
+    // Enrich posts with total comments + replies count
+    const commentCountPromises = topPosts.map(async (post) => {
+      let total = post.commentsCount || 0;
+      try {
+        const commentsSnap = await db.ref(`comments/${post.postId}`).once('value');
+        let commentsNum = 0;
+        let repliesNum = 0;
+        commentsSnap.forEach(c => {
+          commentsNum++;
+          const val = c.val();
+          if (val && typeof val.repliesCount === 'number') repliesNum += val.repliesCount;
+        });
+        if (commentsNum > 0) total = commentsNum + repliesNum;
+      } catch(e) {}
+      return { postId: post.postId, totalCommentsCount: total };
+    });
+    const commentCounts = await Promise.all(commentCountPromises);
+    const commentCountMap = {};
+    commentCounts.forEach(c => { commentCountMap[c.postId] = c.totalCommentsCount; });
+
     const finalPosts = topPosts.map(post => {
       const { _score, ...cleanPost } = post;
       return {
         ...cleanPost,
-        commentsCount: post.commentsCount || 0,
+        commentsCount: commentCountMap[post.postId] || post.commentsCount || 0,
         is_liked: likedStatuses[post.postId] || false,
         user: {
           username: profiles[post.userId]?.username || 'مستخدم',
@@ -3068,9 +3088,24 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
       likedStatuses[posts[idx].postId] = snap.val() !== null;
     });
 
+    // Enrich with total comments + replies count
+    const userPostCountPromises = posts.map(async (post) => {
+      let total = post.commentsCount || 0;
+      try {
+        const cSnap = await db.ref(`comments/${post.postId}`).once('value');
+        let cn = 0, rn = 0;
+        cSnap.forEach(c => { cn++; const v = c.val(); if (v && typeof v.repliesCount === 'number') rn += v.repliesCount; });
+        if (cn > 0) total = cn + rn;
+      } catch(e) {}
+      return { postId: post.postId, total };
+    });
+    const userPostCounts = await Promise.all(userPostCountPromises);
+    const userPostCountMap = {};
+    userPostCounts.forEach(c => { userPostCountMap[c.postId] = c.total; });
+
     const finalPosts = posts.map(post => ({
       ...post,
-      commentsCount: post.commentsCount || 0,
+      commentsCount: userPostCountMap[post.postId] || post.commentsCount || 0,
       is_liked: likedStatuses[post.postId] || false,
       user: {
         username: profiles[post.userId]?.username || 'مستخدم',
@@ -3495,13 +3530,24 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
         repliesCount = normalized.repliesCount || 0;
       }
 
-        // fetch ALL replies (no limit)
+        // fetch ALL replies (no limit) and enrich with is_liked
         let recentReplies = [];
         try {
           const repliesSnap = await db.ref(`comment_replies/${postId}/${normalized.commentId}`)
             .orderByChild('timestamp')
             .once('value');
-        repliesSnap.forEach(r => recentReplies.push(r.val()));
+          const rawReplies = [];
+          repliesSnap.forEach(r => rawReplies.push(r.val()));
+          recentReplies = await Promise.all(rawReplies.map(async (r) => {
+            const replyId = r.id || r.replyId || '';
+            let rLikes = typeof r.likes === 'number' ? r.likes : 0;
+            let rIsLiked = false;
+            try {
+              const userLikeSnap = await db.ref(`reply_likes/${postId}/${normalized.commentId}/${replyId}/${currentUserId}`).once('value');
+              rIsLiked = userLikeSnap.exists();
+            } catch (e) {}
+            return { ...r, likes: rLikes, is_liked: rIsLiked };
+          }));
       } catch (e) {
         recentReplies = [];
       }
@@ -4086,9 +4132,23 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
       const userData = userSnap.val() || {};
       const likeSnap = await db.ref(`reels_likes/${reel.reelId}/${currentUserId}`).once('value');
       
+      // Calculate total comments + replies count
+      let totalCommentsCount = reel.commentsCount || 0;
+      try {
+        const commentsSnap = await db.ref(`reels_comments/${reel.reelId}`).once('value');
+        let commentsNum = 0;
+        let repliesNum = 0;
+        commentsSnap.forEach(c => {
+          commentsNum++;
+          const val = c.val();
+          if (val && typeof val.repliesCount === 'number') repliesNum += val.repliesCount;
+        });
+        if (commentsNum > 0) totalCommentsCount = commentsNum + repliesNum;
+      } catch(e) {}
+
       return {
         ...reel,
-        commentsCount: reel.commentsCount || 0,
+        commentsCount: totalCommentsCount,
         is_liked: likeSnap.exists(),
         user: {
           username: userData.username || 'مستخدم',
@@ -4466,11 +4526,22 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
           repliesCount = countSnapshotChildren(repliesSnap);
         }
       } catch (e) {}
-      // recentReplies - ALL replies
+      // recentReplies - ALL replies, enriched with is_liked
       let recentReplies = [];
       try {
         const rr = await db.ref(`reels_comment_replies/${reelId}/${c.id}`).orderByChild('timestamp').once('value');
-        rr.forEach(r => recentReplies.push(r.val()));
+        const rawReplies = [];
+        rr.forEach(r => rawReplies.push(r.val()));
+        recentReplies = await Promise.all(rawReplies.map(async (r) => {
+          const replyId = r.id || r.replyId || '';
+          let rLikes = typeof r.likes === 'number' ? r.likes : 0;
+          let rIsLiked = false;
+          try {
+            const userLikeSnap = await db.ref(`reels_reply_likes/${reelId}/${c.id}/${replyId}/${currentUserId}`).once('value');
+            rIsLiked = userLikeSnap.exists();
+          } catch (e) {}
+          return { ...r, likes: rLikes, is_liked: rIsLiked };
+        }));
       } catch (e) {}
 
       return {

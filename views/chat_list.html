@@ -198,6 +198,28 @@
             transition: opacity 0.3s;
         }
 
+        body.modal-open { overflow: hidden !important; position: fixed; width: 100%; }
+
+        /* Comment Likes Modal */
+        .comment-likes-modal-overlay {
+            position: fixed; inset: 0; z-index: 80;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            display: flex; align-items: flex-end; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .comment-likes-modal-overlay.open { opacity: 1; pointer-events: auto; }
+        .comment-likes-modal-box {
+            background: #1a1a1e; border-radius: 20px 20px 0 0;
+            width: 100%; max-width: 500px; max-height: 60vh;
+            display: flex; flex-direction: column;
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .comment-likes-modal-overlay.open .comment-likes-modal-box { transform: translateY(0); }
+        @media (min-width: 768px) {
+            .comment-likes-modal-box { border-radius: 16px; max-height: 50vh; margin-bottom: 10vh; }
+        }
+
         .close-btn-circle {
             background: rgba(255,255,255,0.1);
             width: 30px;
@@ -617,11 +639,33 @@
         .fb-reply-meta .fb-action:hover { color: #e4e6eb; }
         .fb-reply-meta .fb-action.liked-btn { color: #f87171; }
         .fb-view-replies-btn {
-            background: none; border: none; color: #2d88ff;
+            background: linear-gradient(135deg, rgba(45,136,255,0.12) 0%, rgba(99,102,241,0.12) 100%);
+            border: 1px solid rgba(45,136,255,0.25);
+            color: #60a5fa;
             font-weight: 600; font-size: 12px; cursor: pointer;
-            padding: 4px 12px; display: flex; align-items: center; gap: 4px;
+            padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;
+            border-radius: 20px;
+            transition: all 0.25s ease;
+            margin: 4px 0 4px 44px;
         }
-        .fb-view-replies-btn:hover { text-decoration: underline; }
+        .fb-view-replies-btn:hover {
+            background: linear-gradient(135deg, rgba(45,136,255,0.22) 0%, rgba(99,102,241,0.22) 100%);
+            border-color: rgba(45,136,255,0.45);
+            color: #93bbfc;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(45,136,255,0.15);
+        }
+        .fb-view-replies-btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+        .fb-view-replies-btn i {
+            font-size: 11px;
+            transition: transform 0.2s ease;
+        }
+        .fb-view-replies-btn:hover i {
+            transform: rotate(-15deg) scale(1.1);
+        }
         .fb-reply-input-box {
             display: flex; gap: 8px; padding: 6px 0 6px 44px; align-items: center;
         }
@@ -2917,6 +2961,19 @@ function handleNotifClick(el) {
         </div>
     </div>
 
+    <!-- Comment Likes Modal -->
+    <div id="commentLikesModal" class="comment-likes-modal-overlay" onclick="closeCommentLikesModal()">
+        <div class="comment-likes-modal-box" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800">
+                <h3 class="text-white font-bold text-base">الإعجابات</h3>
+                <button onclick="closeCommentLikesModal()" class="close-btn-circle text-gray-300 hover:text-white">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+            <div id="commentLikesListContent" class="overflow-y-auto flex-1 p-2"></div>
+        </div>
+    </div>
+
     <div id="postOptionsModal" class="hidden fixed inset-0 z-[80] flex items-end justify-center glass-modal-bg" onclick="closePostOptionsModal()">
       <div class="sheet w-full md:max-w-md" onclick="event.stopPropagation()">
         <div class="modal-handle" style="margin-bottom:8px;"></div>
@@ -3825,7 +3882,7 @@ function handleNotifClick(el) {
             const replyTime = r.timestamp ? new Date(r.timestamp).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '';
             const likesCount = r.likes || 0;
             const mentionHtml = r.replyToUsername ? `<span class="fb-reply-mention">@${escapeHtml(r.replyToUsername)}</span> ` : '';
-            const likeBadge = likesCount > 0 ? `<span class="fb-like-badge"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
+            const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/posts/${escapeAttr(postId)}/comments/${escapeAttr(commentId)}/replies/${escapeAttr(rId)}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
             return `
                 <div class="fb-reply-item" id="reply-${escapeAttr(rId)}">
@@ -3839,7 +3896,7 @@ function handleNotifClick(el) {
                         <div class="fb-reply-meta">
                             <span class="fb-time">${replyTime}</span>
                             <button class="fb-action ${likedClass}" onclick="toggleReplyLike('${escapeAttr(postId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
-                            <button class="fb-action" onclick="startReplyToReply('${escapeAttr(postId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', '${escapeHtml(r.username)}')">رد</button>
+                            <button class="fb-action" onclick="setReplyMode('${escapeAttr(commentId)}', '${escapeHtml(r.username)}', '${escapeAttr(rId)}')">رد</button>
                         </div>
                     </div>
                 </div>`;
@@ -3855,14 +3912,14 @@ function handleNotifClick(el) {
             const likeIcon = comment.is_liked ? 'fas' : 'far';
             const commentDate = new Date(comment.timestamp).toLocaleString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             const likesCount = comment.likes || 0;
-            const likeBadge = likesCount > 0 ? `<span class="fb-like-badge"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
+            const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/posts/${escapeAttr(postId)}/comments/${escapeAttr(comment.commentId)}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
-            let repliesPreview = '';
+            // Show ALL replies instantly (no view more button)
+            let allRepliesHtml = '';
             const totalReplies = comment.repliesCount || (comment.recentReplies ? comment.recentReplies.length : 0);
             if (comment.recentReplies && comment.recentReplies.length > 0) {
-                repliesPreview = comment.recentReplies.slice(0, 2).map(r => createReplyHtml(r, postId, comment.commentId)).join('');
+                allRepliesHtml = comment.recentReplies.map(r => createReplyHtml(r, postId, comment.commentId)).join('');
             }
-            const viewMoreBtn = totalReplies > 2 ? `<button class="fb-view-replies-btn" onclick="loadAllReplies('${escapeAttr(postId)}', '${escapeAttr(comment.commentId)}', this)"><i class="fas fa-reply"></i> عرض كل الردود (${totalReplies})</button>` : '';
 
             return `
                 <div class="fb-comment-thread" id="comment-${escapeAttr(comment.commentId)}" data-comment-id="${escapeAttr(comment.commentId)}">
@@ -3877,96 +3934,51 @@ function handleNotifClick(el) {
                             <div class="fb-comment-meta">
                                 <span class="fb-time">${commentDate}</span>
                                 <button class="fb-action ${likedClass}" onclick="toggleCommentLike('${escapeAttr(postId)}', '${escapeAttr(comment.commentId)}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
-                                <button class="fb-action" onclick="showReplyBox('${escapeAttr(comment.commentId)}')">رد</button>
+                                <button class="fb-action" onclick="setReplyMode('${escapeAttr(comment.commentId)}', '${escapeHtml(username)}')">رد</button>
                             </div>
                         </div>
                     </div>
 
                     <div class="fb-replies-section" id="replies-section-${escapeAttr(comment.commentId)}" style="${totalReplies > 0 ? '' : 'display:none'}">
-                        ${viewMoreBtn}
                         <div id="replies-container-${escapeAttr(comment.commentId)}">
-                            ${repliesPreview}
+                            ${allRepliesHtml}
                         </div>
-                    </div>
-
-                    <div id="reply-box-${escapeAttr(comment.commentId)}" class="fb-reply-input-box" style="display:none">
-                        <input type="text" id="reply-input-${escapeAttr(comment.commentId)}" placeholder="اكتب رداً..." onkeydown="if(event.key==='Enter')submitReply('${escapeAttr(postId)}','${escapeAttr(comment.commentId)}')">
-                        <button onclick="submitReply('${escapeAttr(postId)}', '${escapeAttr(comment.commentId)}')"><i class="fas fa-paper-plane"></i></button>
                     </div>
                 </div>
             `;
         }
 
-        // Show/hide reply box for a comment
-        function showReplyBox(commentId) {
-            const box = document.getElementById(`reply-box-${commentId}`);
-            if (box) {
-                box.style.display = box.style.display === 'none' ? 'flex' : 'none';
-                if (box.style.display === 'flex') {
-                    const input = document.getElementById(`reply-input-${commentId}`);
-                    if (input) { input.value = ''; input.focus(); }
-                }
+        // Set reply mode using the bottom input field (unified approach)
+        function setReplyMode(commentId, username, replyToId) {
+            currentReplyCommentId = commentId;
+            currentReplyingTo = username;
+            const input = document.getElementById('newCommentInput');
+            if (input) {
+                input.dataset.replyCommentId = commentId;
+                input.dataset.replyingTo = username;
+                if (replyToId) input.dataset.replyToId = replyToId;
+                else delete input.dataset.replyToId;
+                input.placeholder = `الرد على ${username}...`;
+                input.focus();
             }
-        }
-
-        // Start reply to a reply
-        function startReplyToReply(postId, commentId, replyId, replyUsername) {
-            const box = document.getElementById(`reply-box-${commentId}`);
-            if (box) {
-                box.style.display = 'flex';
-                const input = document.getElementById(`reply-input-${commentId}`);
-                if (input) {
-                    input.value = `@${replyUsername} `;
-                    input.focus();
-                    input.dataset.replyToId = replyId;
-                }
-            }
-        }
-
-        // Submit reply from inline box
-        async function submitReply(postId, commentId) {
-            const input = document.getElementById(`reply-input-${commentId}`);
-            if (!input) return;
-            const content = input.value.trim();
-            if (!content) return;
-            input.value = '';
-
-            const replyToId = input.dataset.replyToId || null;
-            if (replyToId) { delete input.dataset.replyToId; }
-
-            try {
-                let url, body;
-                if (replyToId) {
-                    url = `/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies/${encodeURIComponent(replyToId)}/reply`;
-                    body = JSON.stringify({ content });
-                } else {
-                    url = `/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/reply`;
-                    body = JSON.stringify({ content });
-                }
-                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body });
-                const data = await res.json();
-                if (res.ok && data.ok) {
-                    loadAllReplies(postId, commentId, null);
-                    const section = document.getElementById(`replies-section-${commentId}`);
-                    if (section) section.style.display = '';
-                }
-            } catch (e) { console.error(e); }
-        }
-
-        // Keep setupReply/cancelReply for the main input (backwards compat)
-        function setupReply(commentId, username) {
-            showReplyBox(commentId);
+            const indicator = document.getElementById('replyIndicator');
+            const replyingToEl = document.getElementById('replyingToUsername');
+            if (indicator) indicator.classList.remove('hidden');
+            if (replyingToEl) replyingToEl.textContent = `الرد على ${username}`;
         }
 
         function cancelReply() {
             currentReplyingTo = null;
             currentReplyCommentId = null;
-            if (newCommentInput) {
-                newCommentInput.dataset.replyingTo = '';
-                newCommentInput.dataset.replyCommentId = '';
-                newCommentInput.placeholder = 'أضف تعليقاً...';
+            const input = document.getElementById('newCommentInput');
+            if (input) {
+                input.dataset.replyingTo = '';
+                input.dataset.replyCommentId = '';
+                delete input.dataset.replyToId;
+                input.placeholder = 'أضف تعليقاً...';
             }
-            if (replyIndicator) replyIndicator.classList.add('hidden');
+            const indicator = document.getElementById('replyIndicator');
+            if (indicator) indicator.classList.add('hidden');
         }
 
         // Toggle like on a comment (Facebook-style)
@@ -3986,7 +3998,7 @@ function handleNotifClick(el) {
                         if (bubble) {
                             let badge = bubble.querySelector('.fb-like-badge');
                             if (data.likes > 0) {
-                                if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; bubble.appendChild(badge); }
+                                if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; badge.style.cursor = 'pointer'; badge.onclick = function(e) { e.stopPropagation(); showCommentLikesList(`/api/posts/${postId}/comments/${commentId}/likes`); }; bubble.appendChild(badge); }
                                 badge.innerHTML = `<i class="fas fa-heart"></i> ${data.likes}`;
                             } else if (badge) { badge.remove(); }
                         }
@@ -4012,7 +4024,7 @@ function handleNotifClick(el) {
                         if (bubble) {
                             let badge = bubble.querySelector('.fb-like-badge');
                             if (data.likes > 0) {
-                                if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; bubble.appendChild(badge); }
+                                if (!badge) { badge = document.createElement('span'); badge.className = 'fb-like-badge'; badge.style.cursor = 'pointer'; badge.onclick = function(e) { e.stopPropagation(); showCommentLikesList(`/api/posts/${postId}/comments/${commentId}/replies/${replyId}/likes`); }; bubble.appendChild(badge); }
                                 badge.innerHTML = `<i class="fas fa-heart"></i> ${data.likes}`;
                             } else if (badge) { badge.remove(); }
                         }
@@ -4022,50 +4034,38 @@ function handleNotifClick(el) {
             finally { btn.disabled = false; }
         }
 
-        // Post a reply to a comment (kept for legacy/main input)
-        async function postReply(postId, commentId, content) {
+        // Show who liked a comment or reply
+        async function showCommentLikesList(apiUrl) {
+            const overlay = document.getElementById('commentLikesModal');
+            const listEl = document.getElementById('commentLikesListContent');
+            if (!overlay || !listEl) return;
+            overlay.classList.add('open');
+            listEl.innerHTML = '<div class="flex justify-center py-6"><i class="fas fa-spinner fa-spin text-blue-500 text-xl"></i></div>';
             try {
-                const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/reply`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ content })
-                });
+                const res = await fetch(apiUrl, { credentials: 'same-origin' });
                 const data = await res.json();
-                if (res.ok && data.ok) {
-                    cancelReply();
-                    loadAllReplies(postId, commentId, null);
-                    const section = document.getElementById(`replies-section-${commentId}`);
-                    if (section) section.style.display = '';
+                if (res.ok && data.ok && data.users && data.users.length > 0) {
+                    listEl.innerHTML = data.users.map(u => `
+                        <a href="/profile?userId=${encodeURIComponent(u.id)}" class="flex items-center gap-3 p-3 hover:bg-gray-800 rounded-xl transition" dir="rtl">
+                            <img src="${u.profile_picture_url || '/default-avatar.png'}" class="w-10 h-10 rounded-full object-cover border border-gray-700">
+                            <div class="flex-1 min-w-0">
+                                <span class="text-white text-sm font-medium">${u.username || 'مستخدم'}</span>
+                                ${u.is_verified ? '<img src="https://firebasestorage.googleapis.com/v0/b/chat-trimer.firebasestorage.app/o/icons%2Fverified.png?alt=media" class="inline w-4 h-4 mr-1">' : ''}
+                            </div>
+                            <i class="fas fa-heart text-red-500 text-sm"></i>
+                        </a>
+                    `).join('');
                 } else {
-                    showToast(data.error || 'فشل في إرسال الرد');
+                    listEl.innerHTML = '<p class="text-center text-gray-500 py-6">لا توجد إعجابات بعد.</p>';
                 }
             } catch (e) {
                 console.error(e);
-                showToast('فشل في الاتصال');
+                listEl.innerHTML = '<p class="text-center text-red-400 py-6">خطأ في الاتصال</p>';
             }
         }
-
-        // Load all replies for a comment (Facebook-style)
-        async function loadAllReplies(postId, commentId, triggerBtn) {
-            if (triggerBtn) triggerBtn.style.display = 'none';
-            try {
-                const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/replies`, { credentials: 'same-origin' });
-                const data = await res.json();
-                if (res.ok && data.ok) {
-                    const container = document.getElementById(`replies-container-${commentId}`);
-                    if (container) {
-                        container.innerHTML = data.replies.map(r => createReplyHtml(r, postId, commentId)).join('');
-                    }
-                    const section = document.getElementById(`replies-section-${commentId}`);
-                    if (section) section.style.display = '';
-                }
-            } catch (e) { console.error(e); if (triggerBtn) triggerBtn.style.display = ''; }
-        }
-
-        // Keep old name for backwards compat
-        async function fetchAndShowAllReplies(postId, commentId, triggerBtn) {
-            return loadAllReplies(postId, commentId, triggerBtn);
+        function closeCommentLikesModal() {
+            const overlay = document.getElementById('commentLikesModal');
+            if (overlay) overlay.classList.remove('open');
         }
 
         // Normalize a raw comment (legacy fallback) - kept for safety
@@ -5088,6 +5088,8 @@ function handleNotifClick(el) {
         }
 
         // Handle opening comments modal and start SSE
+        let scrollYBeforeModal = 0;
+
         function handleComment(postId) { 
             currentPostIdForComments = postId;
             
@@ -5098,6 +5100,9 @@ function handleNotifClick(el) {
             const modal = document.getElementById('commentModal');
             const content = document.getElementById('commentModalContent');
             
+            scrollYBeforeModal = window.scrollY;
+            document.body.classList.add('modal-open');
+            document.body.style.top = `-${scrollYBeforeModal}px`;
             modal.classList.remove('hidden');
             
             setTimeout(() => {
@@ -5107,6 +5112,7 @@ function handleNotifClick(el) {
             // fetch initial snapshot via REST (works even if SSE delayed) and subscribe to SSE for live updates
             fetchAndDisplayComments(postId);
             setupCommentsSSE(postId);
+            initSwipeGesture();
         }
 
         function closeCommentModal() {
@@ -5126,7 +5132,56 @@ function handleNotifClick(el) {
                 if(document.getElementById('commentCountBadge')) document.getElementById('commentCountBadge').innerText = '0';
                 // close realtime subscription when modal closed
                 closeCommentsSSE();
+                document.body.classList.remove('modal-open');
+                document.body.style.top = '';
+                window.scrollTo(0, scrollYBeforeModal);
             }, 300);
+        }
+
+        // Swipe gesture for Instagram-like dismiss
+        function initSwipeGesture() {
+            const content = document.getElementById('commentModalContent');
+            let startY = 0, currentY = 0, isDragging = false;
+
+            const onTouchStart = (e) => {
+                const commentsList = document.getElementById('commentsList');
+                if (commentsList && commentsList.scrollTop > 0) return;
+                startY = e.touches[0].clientY;
+                isDragging = true;
+                content.style.transition = 'none';
+            };
+            const onTouchMove = (e) => {
+                if (!isDragging) return;
+                currentY = e.touches[0].clientY;
+                const diff = currentY - startY;
+                if (diff > 0) {
+                    content.style.transform = `translateY(${diff}px)`;
+                    e.preventDefault();
+                }
+            };
+            const onTouchEnd = () => {
+                if (!isDragging) return;
+                isDragging = false;
+                content.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+                const diff = currentY - startY;
+                if (diff > 120) {
+                    closeCommentModal();
+                } else {
+                    content.style.transform = 'translateY(0)';
+                    setTimeout(() => { if (content.classList.contains('open')) content.style.transform = ''; }, 300);
+                }
+                startY = 0; currentY = 0;
+            };
+
+            content.removeEventListener('touchstart', content._swipeStart);
+            content.removeEventListener('touchmove', content._swipeMove);
+            content.removeEventListener('touchend', content._swipeEnd);
+            content._swipeStart = onTouchStart;
+            content._swipeMove = onTouchMove;
+            content._swipeEnd = onTouchEnd;
+            content.addEventListener('touchstart', onTouchStart, { passive: false });
+            content.addEventListener('touchmove', onTouchMove, { passive: false });
+            content.addEventListener('touchend', onTouchEnd);
         }
 
         // Fetch comments (uses new enriched endpoint)
@@ -5144,10 +5199,11 @@ function handleNotifClick(el) {
                     commentsListEl.innerHTML = '';
                     const comments = result.comments || [];
                     
-                    if(badgeEl) badgeEl.innerText = comments.length;
+                    const totalCount = result.totalCount || comments.length;
+                    if(badgeEl) badgeEl.innerText = totalCount;
 
-                    // synchronize post card's comment count with actual comments length
-                    updatePostCommentCount(postId, comments.length);
+                    // synchronize post card's comment count with total (comments + replies)
+                    updatePostCommentCount(postId, totalCount);
 
                     if (comments.length === 0) {
                         commentsListEl.innerHTML = `
@@ -5214,8 +5270,17 @@ function handleNotifClick(el) {
 
             try {
                 let response;
-                if (currentReplyCommentId) {
-                    // إذا كان هناك رد على تعليق
+                const replyToId = input.dataset.replyToId || null;
+                if (currentReplyCommentId && replyToId) {
+                    // رد على رد
+                    response = await fetch(`/api/posts/${encodeURIComponent(currentPostIdForComments)}/comments/${encodeURIComponent(currentReplyCommentId)}/replies/${encodeURIComponent(replyToId)}/reply`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ content: content })
+                    });
+                } else if (currentReplyCommentId) {
+                    // رد على تعليق
                     response = await fetch(`/api/posts/${encodeURIComponent(currentPostIdForComments)}/comments/${encodeURIComponent(currentReplyCommentId)}/reply`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -5232,22 +5297,44 @@ function handleNotifClick(el) {
                     });
                 }
 
-                const result = await response.json();
+                    const result = await response.json();
 
-                if (response.ok && result.ok) {
-                    // After successful post, re-fetch the entire comments list to avoid shape/count divergence
-                    await fetchAndDisplayComments(currentPostIdForComments);
+                    if (response.ok && result.ok) {
+                        // Optimistic instant display: insert new comment/reply into DOM immediately
+                        const myProfile = { username: 'أنا', profile_picture_url: document.getElementById('myCurrentAvatar')?.src || DEFAULT_AVATAR, userId: currentUserId || '' };
+                        if (currentReplyCommentId) {
+                            // It was a reply - insert instantly into replies container
+                            const replyData = result.reply || { content: content, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, id: result.replyId || ('tmp-' + Date.now()), replyToUsername: currentReplyingTo || '' };
+                            const replyHtml = createReplyHtml(replyData, currentPostIdForComments, currentReplyCommentId);
+                            const container = document.getElementById(`replies-container-${currentReplyCommentId}`);
+                            if (container) container.insertAdjacentHTML('beforeend', replyHtml);
+                            const section = document.getElementById(`replies-section-${currentReplyCommentId}`);
+                            if (section) section.style.display = '';
+                        } else {
+                            // It was a new comment - insert instantly
+                            const commentData = result.comment || { content: content, commentId: result.commentId || ('tmp-' + Date.now()), user: myProfile, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, recentReplies: [], repliesCount: 0 };
+                            const commentHtml = createCommentHtml(commentData, currentPostIdForComments);
+                            const list = document.getElementById('commentsList');
+                            if (list) {
+                                if (list.querySelector('.text-gray-500')) list.innerHTML = '';
+                                list.insertAdjacentHTML('beforeend', commentHtml);
+                                list.scrollTop = list.scrollHeight;
+                            }
+                        }
 
-                    // If server returned a newComments count, ensure post card is updated (fallback kept)
-                    if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
-                        updatePostCommentCount(currentPostIdForComments, Number(result.newComments));
-                    }
+                        // Background re-fetch to sync with server (non-blocking)
+                        fetchAndDisplayComments(currentPostIdForComments).catch(() => {});
 
-                    input.value = '';
-                    input.focus();
+                        // If server returned a newComments count, ensure post card is updated (fallback kept)
+                        if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
+                            updatePostCommentCount(currentPostIdForComments, Number(result.newComments));
+                        }
+
+                        input.value = '';
+                        input.focus();
                     
-                    // إعادة تعيين حالة الرد بعد الإرسال
-                    cancelReply();
+                        // إعادة تعيين حالة الرد بعد الإرسال
+                        cancelReply();
                 } else {
                     errorEl.textContent = result.error || 'فشل الإرسال';
                     errorEl.classList.remove('hidden');

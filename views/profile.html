@@ -675,11 +675,39 @@
         .fb-reply-meta .fb-action:hover { color: #e4e6eb; }
         .fb-reply-meta .fb-action.liked-btn { color: #f87171; }
         .fb-view-replies-btn {
-            background: none; border: none; color: #2d88ff;
+            background: linear-gradient(135deg, rgba(45,136,255,0.12) 0%, rgba(99,102,241,0.12) 100%);
+            border: 1px solid rgba(45,136,255,0.25);
+            color: #60a5fa;
             font-weight: 600; font-size: 12px; cursor: pointer;
-            padding: 4px 12px; display: flex; align-items: center; gap: 4px;
+            padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;
+            border-radius: 20px;
+            transition: all 0.25s ease;
+            margin: 4px 0 4px 44px;
         }
-        .fb-view-replies-btn:hover { text-decoration: underline; }
+        .fb-view-replies-btn:hover {
+            background: linear-gradient(135deg, rgba(45,136,255,0.22) 0%, rgba(99,102,241,0.22) 100%);
+            border-color: rgba(45,136,255,0.45);
+            color: #93bbfc;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(45,136,255,0.15);
+        }
+        .fb-view-replies-btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+        .fb-view-replies-btn i {
+            font-size: 11px;
+            transition: transform 0.2s ease;
+        }
+        .fb-view-replies-btn:hover i {
+            transform: rotate(-15deg) scale(1.1);
+        }
+        .fb-view-replies-btn .fb-replies-count {
+            background: rgba(45,136,255,0.2);
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
         .fb-reply-input-box {
             display: flex; gap: 8px; padding: 6px 0 6px 44px; align-items: center;
         }
@@ -3344,9 +3372,9 @@ function createCommentHtml(comment, postIdForSafety = '') {
     let repliesPreview = '';
     const totalReplies = comment.repliesCount || (comment.recentReplies ? comment.recentReplies.length : 0);
     if (comment.recentReplies && comment.recentReplies.length > 0) {
-        repliesPreview = comment.recentReplies.slice(0, 2).map(r => createReplyHtml(r, postId, comment.commentId)).join('');
+        repliesPreview = comment.recentReplies.map(r => createReplyHtml(r, postId, comment.commentId)).join('');
     }
-    const viewMoreBtn = totalReplies > 2 ? `<button class="fb-view-replies-btn" onclick="loadAllReplies('${postId}', '${comment.commentId}', this)"><i class="fas fa-reply"></i> عرض كل الردود (${totalReplies})</button>` : '';
+    const viewMoreBtn = (totalReplies > 0 && (!comment.recentReplies || comment.recentReplies.length < totalReplies)) ? `<button class="fb-view-replies-btn" onclick="loadAllReplies('${postId}', '${comment.commentId}', this)"><i class="fas fa-comments"></i> عرض كل الردود <span class="fb-replies-count">${totalReplies}</span></button>` : '';
 
     return `
         <div class="fb-comment-thread" id="comment-${comment.commentId}">
@@ -3425,9 +3453,15 @@ async function submitReply(postId, commentId) {
         const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ content }) });
         const data = await res.json();
         if (res.ok && data.ok) {
-            loadAllReplies(postId, commentId, null);
+            // Optimistic instant insert
+            const myProfile = { username: 'أنا', profile_picture_url: document.getElementById('myCurrentAvatar')?.src || DEFAULT_PROFILE_PIC_URL, userId: currentUserId || '' };
+            const replyData = data.reply || { content, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, id: data.replyId || ('tmp-' + Date.now()), replyToUsername: '' };
+            const container = document.getElementById(`replies-container-${commentId}`);
+            if (container) container.insertAdjacentHTML('beforeend', createReplyHtml(replyData, postId, commentId));
             const section = document.getElementById(`replies-section-${commentId}`);
             if (section) section.style.display = '';
+            // Background sync
+            loadAllReplies(postId, commentId, null);
         }
     } catch (e) { console.error(e); }
 }
@@ -3738,8 +3772,18 @@ async function postComment() {
         const result = await response.json();
 
         if (response.ok && result.ok) {
-            // After successful post, re-fetch the entire comments list to avoid shape/count divergence
-            await fetchAndDisplayComments(currentPostIdForComments);
+            // Optimistic instant display
+            const myProfile = { username: 'أنا', profile_picture_url: document.getElementById('myCurrentAvatar')?.src || DEFAULT_PROFILE_PIC_URL, userId: currentUserId || '' };
+            const commentData = result.comment || { content: content, commentId: result.commentId || ('tmp-' + Date.now()), user: myProfile, username: myProfile.username, profile_picture_url: myProfile.profile_picture_url, userId: myProfile.userId, timestamp: Date.now(), likes: 0, is_liked: false, recentReplies: [], repliesCount: 0 };
+            const list = document.getElementById('commentsList');
+            if (list) {
+                if (list.querySelector('.text-gray-500')) list.innerHTML = '';
+                list.insertAdjacentHTML('beforeend', createCommentHtml(commentData, currentPostIdForComments));
+                list.scrollTop = list.scrollHeight;
+            }
+
+            // Background re-fetch to sync with server (non-blocking)
+            fetchAndDisplayComments(currentPostIdForComments).catch(() => {});
 
             // If server returned a newComments count, ensure post card is updated (fallback kept)
             if (typeof result.newComments !== 'undefined' && result.newComments !== null) {
