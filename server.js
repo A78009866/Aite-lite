@@ -3559,34 +3559,49 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
             .orderByChild('timestamp')
             .once('value');
           const rawReplies = [];
-          repliesSnap.forEach(r => rawReplies.push(r.val()));
-          recentReplies = await Promise.all(rawReplies.map(async (r) => {
-            const replyId = r.id || r.replyId || '';
-            let rLikes = typeof r.likes === 'number' ? r.likes : 0;
-            let rIsLiked = false;
+          repliesSnap.forEach(r => {
+            const val = r.val();
+            if (val && typeof val === 'object') rawReplies.push(val);
+          });
+          const enrichedRepliesResults = await Promise.all(rawReplies.map(async (r) => {
             try {
-              const userLikeSnap = await db.ref(`reply_likes/${postId}/${normalized.commentId}/${replyId}/${currentUserId}`).once('value');
-              rIsLiked = userLikeSnap.exists();
-            } catch (e) {}
-            return { ...r, likes: rLikes, is_liked: rIsLiked };
+              const replyId = r.id || r.replyId || '';
+              let rLikes = typeof r.likes === 'number' ? r.likes : 0;
+              let rIsLiked = false;
+              try {
+                if (replyId) {
+                  const userLikeSnap = await db.ref(`reply_likes/${postId}/${normalized.commentId}/${replyId}/${currentUserId}`).once('value');
+                  rIsLiked = userLikeSnap.exists();
+                }
+              } catch (e) {}
+              return { ...r, likes: rLikes, is_liked: rIsLiked };
+            } catch (innerErr) {
+              // If enriching one reply fails, still return the raw reply
+              return { ...r, likes: 0, is_liked: false };
+            }
           }));
+          recentReplies = enrichedRepliesResults.filter(r => r != null);
       } catch (e) {
+        console.error('Error fetching replies for comment', normalized.commentId, e);
         recentReplies = [];
       }
+
+      // Use actual fetched replies count for accuracy
+      const actualRepliesCount = recentReplies.length > 0 ? recentReplies.length : repliesCount;
 
       return {
         ...normalized,
         likes: likesCount,
         is_liked: isLiked,
-        repliesCount: repliesCount,
+        repliesCount: actualRepliesCount,
         recentReplies: recentReplies
       };
     }));
 
-    // Calculate total count: comments + all replies
+    // Calculate total count: comments + all replies (use actual recentReplies length)
     let totalCount = enriched.length;
     for (const c of enriched) {
-      totalCount += (c.repliesCount || 0);
+      totalCount += (c.recentReplies ? c.recentReplies.length : (c.repliesCount || 0));
     }
 
     res.json({ ok: true, comments: enriched, totalCount: totalCount });
@@ -3606,20 +3621,27 @@ app.get('/api/posts/:postId/comments/:commentId/replies', requireAuth, async (re
       .once('value');
     const replies = [];
     snap.forEach(child => {
-      replies.push(child.val());
+      const val = child.val();
+      if (val && typeof val === 'object') replies.push(val);
     });
     // Enrich replies with likes info
     const enrichedReplies = await Promise.all(replies.map(async (r) => {
-      const replyId = r.id || r.replyId || '';
-      let likes = typeof r.likes === 'number' ? r.likes : 0;
-      let is_liked = false;
       try {
-        const userLikeSnap = await db.ref(`reply_likes/${postId}/${commentId}/${replyId}/${currentUserId}`).once('value');
-        is_liked = userLikeSnap.exists();
-      } catch (e) {}
-      return { ...r, likes, is_liked };
+        const replyId = r.id || r.replyId || '';
+        let likes = typeof r.likes === 'number' ? r.likes : 0;
+        let is_liked = false;
+        try {
+          if (replyId) {
+            const userLikeSnap = await db.ref(`reply_likes/${postId}/${commentId}/${replyId}/${currentUserId}`).once('value');
+            is_liked = userLikeSnap.exists();
+          }
+        } catch (e) {}
+        return { ...r, likes, is_liked };
+      } catch (innerErr) {
+        return { ...r, likes: 0, is_liked: false };
+      }
     }));
-    res.json({ ok: true, replies: enrichedReplies });
+    res.json({ ok: true, replies: enrichedReplies.filter(r => r != null) });
   } catch (error) {
     console.error('Error fetching replies:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
@@ -4502,20 +4524,27 @@ app.get('/api/reels/:reelId/comments/:commentId/replies', requireAuth, async (re
       .once('value');
     const replies = [];
     snap.forEach(child => {
-      replies.push(child.val());
+      const val = child.val();
+      if (val && typeof val === 'object') replies.push(val);
     });
     // Enrich replies with likes info
     const enrichedReplies = await Promise.all(replies.map(async (r) => {
-      const replyId = r.id || r.replyId || '';
-      let likes = typeof r.likes === 'number' ? r.likes : 0;
-      let is_liked = false;
       try {
-        const userLikeSnap = await db.ref(`reels_reply_likes/${reelId}/${commentId}/${replyId}/${currentUserId}`).once('value');
-        is_liked = userLikeSnap.exists();
-      } catch (e) {}
-      return { ...r, likes, is_liked };
+        const replyId = r.id || r.replyId || '';
+        let likes = typeof r.likes === 'number' ? r.likes : 0;
+        let is_liked = false;
+        try {
+          if (replyId) {
+            const userLikeSnap = await db.ref(`reels_reply_likes/${reelId}/${commentId}/${replyId}/${currentUserId}`).once('value');
+            is_liked = userLikeSnap.exists();
+          }
+        } catch (e) {}
+        return { ...r, likes, is_liked };
+      } catch (innerErr) {
+        return { ...r, likes: 0, is_liked: false };
+      }
     }));
-    res.json({ ok: true, replies: enrichedReplies });
+    res.json({ ok: true, replies: enrichedReplies.filter(r => r != null) });
   } catch (error) {
     console.error('Error fetching replies for reel comment:', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب الردود.' });
@@ -4569,17 +4598,26 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
       try {
         const rr = await db.ref(`reels_comment_replies/${reelId}/${c.id}`).orderByChild('timestamp').once('value');
         const rawReplies = [];
-        rr.forEach(r => rawReplies.push(r.val()));
-        recentReplies = await Promise.all(rawReplies.map(async (r) => {
-          const replyId = r.id || r.replyId || '';
-          let rLikes = typeof r.likes === 'number' ? r.likes : 0;
-          let rIsLiked = false;
+        rr.forEach(r => {
+          const val = r.val();
+          if (val && typeof val === 'object') rawReplies.push(val);
+        });
+        recentReplies = (await Promise.all(rawReplies.map(async (r) => {
           try {
-            const userLikeSnap = await db.ref(`reels_reply_likes/${reelId}/${c.id}/${replyId}/${currentUserId}`).once('value');
-            rIsLiked = userLikeSnap.exists();
-          } catch (e) {}
-          return { ...r, likes: rLikes, is_liked: rIsLiked };
-        }));
+            const replyId = r.id || r.replyId || '';
+            let rLikes = typeof r.likes === 'number' ? r.likes : 0;
+            let rIsLiked = false;
+            try {
+              if (replyId) {
+                const userLikeSnap = await db.ref(`reels_reply_likes/${reelId}/${c.id}/${replyId}/${currentUserId}`).once('value');
+                rIsLiked = userLikeSnap.exists();
+              }
+            } catch (e) {}
+            return { ...r, likes: rLikes, is_liked: rIsLiked };
+          } catch (innerErr) {
+            return { ...r, likes: 0, is_liked: false };
+          }
+        }))).filter(r => r != null);
       } catch (e) {}
 
       return {

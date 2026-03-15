@@ -2477,13 +2477,18 @@
             }
         }
 
+        let _fetchInlineVersion = 0;
         async function fetchCommentsInline(id) {
+            const myVersion = ++_fetchInlineVersion;
             const list = document.getElementById('inlineCommentsList');
             list.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>';
             
             try {
                 const res = await fetch(`/api/posts/${id}/comments`);
                 const data = await res.json();
+                
+                // Skip if a newer fetch was started
+                if (myVersion !== _fetchInlineVersion) return;
                 
                 if(data.ok) {
                     const totalCount = data.totalCount || data.comments.length;
@@ -2503,7 +2508,9 @@
                 }
             } catch(e) {
                 console.error(e);
-                list.innerHTML = '<p class="text-center text-red-400">فشل التحميل</p>';
+                if (myVersion === _fetchInlineVersion) {
+                    list.innerHTML = '<p class="text-center text-red-400">فشل التحميل</p>';
+                }
             }
         }
 
@@ -2889,18 +2896,24 @@
 
         // Auto-load comments when page loads
         if (postId) {
+            let _commentsAlreadyLoaded = false;
             // Wait for the post to load, then auto-show comments
-            const _origRenderPost = window.renderPost;
             const _waitForPost = setInterval(() => {
                 if (document.querySelector('.glass-post-card[data-post-id]')) {
                     clearInterval(_waitForPost);
-                    handleComment(postId);
+                    if (!_commentsAlreadyLoaded) {
+                        _commentsAlreadyLoaded = true;
+                        handleComment(postId);
+                    }
                 }
             }, 200);
             // Fallback: load comments after 2 seconds even if post hasn't loaded
             setTimeout(() => {
                 clearInterval(_waitForPost);
-                if (postId) handleComment(postId);
+                if (postId && !_commentsAlreadyLoaded) {
+                    _commentsAlreadyLoaded = true;
+                    handleComment(postId);
+                }
             }, 2000);
         }
 
