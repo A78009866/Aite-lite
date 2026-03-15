@@ -4493,7 +4493,6 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
   try {
     const snap = await db.ref(`reels_comments/${reelId}`)
       .orderByChild('timestamp')
-      .limitToLast(100)
       .once('value');
 
     const comments = [];
