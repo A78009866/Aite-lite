@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<script>(function(){var t=localStorage.getItem("aite-theme")||"dark";document.documentElement.setAttribute("data-theme",t)})()</script>
+
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aite - كل المستخدمين وطلبات الصداقة</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body { background: #000; color: #e4e6eb; font-family: Inter, system-ui, sans-serif; }
+    .glass-navbar { background-color: rgba(30,30,30,0.5); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .user-card { background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04); border-radius: 12px; padding:10px; display:flex; gap:12px; align-items:center; justify-content:space-between; }
+    .user-info { display:flex; gap:10px; align-items:center; min-width:0; text-decoration: none; color: inherit; transition: opacity 0.2s; }
+    .user-info:hover { opacity: 0.8; }
+    .user-name { font-weight:700; color:#e6eefb; }
+    .user-sub { color:#9fb3c8; font-size:13px; }
+    .action-btn { padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); color:#e6eefb; cursor:pointer; }
+    .action-btn.message { background: #10b981; color: #fff; border: none; padding: 6px 10px; border-radius: 12px; font-size: 13px; box-shadow: 0 2px 6px rgba(16,185,129,0.12); text-decoration: none; }
+    .tab { padding:8px 12px; cursor:pointer; border-radius:999px; }
+    .tab.active { background:#111827; border:1px solid rgba(255,255,255,0.04); }
+    .friend-req-badge { position: absolute; top: -6px; left: -6px; min-width: 18px; height: 18px; padding: 0 6px; background: #ef4444; color:#fff; font-size:12px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; }
+    .mobile-safe { padding-bottom:84px; }
+    .btn-accept { background: #16a34a; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 12px; border: none; }
+    .btn-reject { background: #ef4444; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 12px; border: none; }
+    @media (max-width:480px) { .action-btn.message, .btn-accept, .btn-reject { padding:5px 8px; font-size:12px; border-radius:10px; } }
+
+    /* VERIFIED BADGE IMAGE */
+    .verified-badge-img {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      margin-left: 6px;
+      object-fit: cover;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.06);
+      vertical-align: middle;
+    }
+
+    /* ------------------ Toasts (black glassy) ------------------ */
+    #toastContainer {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1100;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+        pointer-events: none;
+    }
+    .toast {
+        min-width: 220px;
+        max-width: 90vw;
+        color: #ffffff;
+        background: rgba(7,7,8,0.6);
+        border: 1px solid rgba(255,255,255,0.06);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        padding: 10px 14px;
+        border-radius: 12px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        pointer-events: auto;
+        font-size: 14px;
+    }
+    .toast.success { border-left: 4px solid #16a34a; }
+    .toast.error   { border-left: 4px solid #ef4444; }
+    .toast.info    { border-left: 4px solid #3b82f6; }
+    .toast i { width: 18px; text-align: center; }
+    .toast .msg { flex: 1; word-break: break-word; text-align: right; }
+    .toast .close-btn { margin-left: 8px; background: transparent; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 14px; }
+  
+
+    /* ============================================================
+       LIGHT MODE THEME
+       ============================================================ */
+    [data-theme="light"] {
+        color-scheme: light;
+    }
+
+    /* --- Body --- */
+    html[data-theme="light"] body {
+        background-color: #f0f2f5 !important;
+        background-image: none !important;
+        background: #f0f2f5 !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Navbar --- */
+    html[data-theme="light"] .glass-navbar {
+        background-color: rgba(255, 255, 255, 0.92) !important;
+        border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* --- Cards & Panels --- */
+    html[data-theme="light"] .glass-post-card,
+    html[data-theme="light"] .glass-panel,
+    html[data-theme="light"] .glass-form-card,
+    html[data-theme="light"] .glass-profile-card {
+        background-color: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    /* --- Glass Inputs --- */
+    html[data-theme="light"] .glass-input {
+        background: #f0f2f5 !important;
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-input:focus {
+        border-color: #3b82f6 !important;
+        background: #e4e6ea !important;
+        box-shadow: 0 0 0 2px rgba(59,130,246,0.15) !important;
+    }
+    html[data-theme="light"] .glass-input::placeholder { color: #8a8d91 !important; }
+
+    /* --- Glass Buttons --- */
+    html[data-theme="light"] .glass-button {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-color: rgba(0, 0, 0, 0.12) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-button:hover {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Dropdown --- */
+    html[data-theme="light"] .glass-dropdown {
+        background-color: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+    }
+
+    /* --- Comment Modal (Bottom Sheet) --- */
+    html[data-theme="light"] .glass-comment-modal-content {
+        background-color: #ffffff !important;
+        border-top-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
+    }
+    html[data-theme="light"] .glass-modal-bg {
+        background-color: rgba(0, 0, 0, 0.35) !important;
+    }
+    html[data-theme="light"] .modal-handle {
+        background-color: rgba(0, 0, 0, 0.2) !important;
+    }
+    html[data-theme="light"] .close-btn-circle {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .close-btn-circle:hover {
+        background: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* --- Comments --- */
+    html[data-theme="light"] .comment-item {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .comment-item:hover {
+        background: #e4e6ea !important;
+    }
+    html[data-theme="light"] .comment-actions button {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .comment-actions button:hover {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .comment-actions button.text-red-500,
+    html[data-theme="light"] .comment-actions button.text-red-400,
+    html[data-theme="light"] .comment-actions button.liked-btn {
+        color: #e74c3c !important;
+        background: rgba(231,76,60,0.08) !important;
+        border-color: rgba(231,76,60,0.15) !important;
+    }
+    html[data-theme="light"] .reply-item {
+        background: #f8f9fa !important;
+        border-color: rgba(0, 0, 0, 0.06) !important;
+        border-right-color: #3b82f6 !important;
+    }
+
+    /* --- Bottom Navbar --- */
+    html[data-theme="light"] .glass-bottom-navbar {
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        border-top-color: rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* --- User Cards --- */
+    html[data-theme="light"] .user-card,
+    html[data-theme="light"] .notification-card,
+    html[data-theme="light"] .glass-user-card {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .glass-user-card.unread {
+        background-color: rgba(13, 148, 136, 0.06) !important;
+    }
+    html[data-theme="light"] .notification-card.unread {
+        border-left-color: #007AFF !important;
+    }
+
+    /* --- Modals --- */
+    html[data-theme="light"] .modal-backdrop {
+        background: rgba(0, 0, 0, 0.4) !important;
+    }
+    html[data-theme="light"] .modal-glass {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.15) !important;
+    }
+
+    /* --- Post Options Sheet --- */
+    html[data-theme="light"] #postOptionsModal .sheet {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .option-btn {
+        background: #f0f2f5 !important;
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .option-btn.danger {
+        background: linear-gradient(90deg,#fecaca, #fca5a5) !important;
+        color: #991b1b !important;
+    }
+
+    /* --- Header Actions --- */
+    html[data-theme="light"] .header-actions .action-btn {
+        background: rgba(0, 0, 0, 0.05) !important;
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .header-actions .action-btn:hover {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Audio Player --- */
+    html[data-theme="light"] .audio-play-wrapper {
+        background: #e4e6ea !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .waveform-post {
+        background: #e4e6ea !important;
+        border-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Reel Cards --- */
+    html[data-theme="light"] .reel-card-item {
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+    }
+
+    /* --- Search --- */
+    html[data-theme="light"] .search-input-container {
+        background: rgba(0, 0, 0, 0.06) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .search-input-container:focus-within {
+        background: rgba(0, 0, 0, 0.08) !important;
+        border-color: #3b82f6 !important;
+    }
+    html[data-theme="light"] .search-input {
+        color: #1c1e21 !important;
+    }
+
+    /* --- User Result Rows --- */
+    html[data-theme="light"] .user-result-row {
+        background: #f8f9fa !important;
+        border-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Tabs --- */
+    html[data-theme="light"] .tab {
+        color: #65676b;
+    }
+    html[data-theme="light"] .tab.active {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21;
+    }
+
+    /* --- Toasts --- */
+    html[data-theme="light"] .toast {
+        background: rgba(255, 255, 255, 0.95) !important;
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+    }
+
+    /* --- Create Options --- */
+    html[data-theme="light"] .create-option-card {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .create-option-card:hover {
+        background: #f0f2f5 !important;
+        border-color: rgba(59, 130, 246, 0.4) !important;
+    }
+
+    /* --- Upload Areas --- */
+    html[data-theme="light"] .upload-area,
+    html[data-theme="light"] .upload-btn {
+        background: #f8f9fa !important;
+        border-color: #ccd0d5 !important;
+    }
+    html[data-theme="light"] .upload-area.active,
+    html[data-theme="light"] .upload-btn:hover {
+        background: #e4e6ea !important;
+        border-color: #3b82f6 !important;
+    }
+
+    /* --- Section Cards --- */
+    html[data-theme="light"] .section-card {
+        background: #f8f9fa !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Context Menu (Chat) --- */
+    html[data-theme="light"] .context-menu {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.15) !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action:hover {
+        background: rgba(0, 0, 0, 0.05) !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action i {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action.danger,
+    html[data-theme="light"] .context-menu .menu-action.danger i {
+        color: #e74c3c !important;
+    }
+    html[data-theme="light"] .context-menu .reactions-row {
+        border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+    }
+    html[data-theme="light"] .context-menu .menu-separator {
+        background: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Edit Modal --- */
+    html[data-theme="light"] .edit-modal {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .edit-modal h3 {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .edit-modal textarea {
+        background: #f0f2f5 !important;
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Chat Page Specifics --- */
+    html[data-theme="light"] .wrap {
+        background: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .top {
+        background: #ffffff !important;
+        border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .meta .name {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .meta .sub {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .back-btn {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .incoming-container .msg {
+        background: #e4e6ea !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .outgoing-container .msg {
+        background: rgba(59, 130, 246, 0.2) !important;
+        color: #1c1e21 !important;
+        border-color: rgba(59, 130, 246, 0.15) !important;
+    }
+    html[data-theme="light"] .msg-meta {
+        color: rgba(0,0,0,0.45) !important;
+    }
+    html[data-theme="light"] .reply-context {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-right-color: rgba(0,0,0,0.3) !important;
+    }
+    html[data-theme="light"] .reply-context-sender {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .reply-context-text {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .msg-reaction-badge {
+        background: #ffffff !important;
+        border-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .msg-audio-player {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .audio-play-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        border-color: rgba(0, 0, 0, 0.12) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .audio-time {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .context-menu-overlay.active {
+        background: rgba(0,0,0,0.15) !important;
+    }
+
+    /* --- Online Dot Border --- */
+    html[data-theme="light"] .online-dot {
+        border-color: #ffffff !important;
+    }
+    html[data-theme="light"] .status-indicator.large {
+        border-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .status-indicator.small {
+        border-color: #ffffff !important;
+    }
+
+    /* --- Actions Dropdown (Notifications) --- */
+    html[data-theme="light"] .actions-dropdown {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+    }
+    html[data-theme="light"] .actions-dropdown button {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .actions-dropdown button:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
+    }
+    html[data-theme="light"] .action-small {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .top-action-btn {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Create Family Specifics --- */
+    html[data-theme="light"] .container {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08) !important;
+    }
+    html[data-theme="light"] .preview {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .hint {
+        background: rgba(255,255,255,0.8) !important;
+        color: #65676b !important;
+    }
+    html[data-theme="light"] input[type="text"] {
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .btn {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .note {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .overlay {
+        background: rgba(0, 0, 0, 0.4) !important;
+    }
+    html[data-theme="light"] .card {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .fam-name {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .key {
+        background: #f0f2f5 !important;
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .small-btn {
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .small-btn.primary {
+        background: #f0f2f5 !important;
+    }
+
+    /* --- Profile Page Friend Buttons --- */
+    html[data-theme="light"] .action-btn {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .action-btn:hover {
+        background: rgba(0, 0, 0, 0.07) !important;
+    }
+    /* Keep colored buttons as-is */
+    html[data-theme="light"] .action-btn.message {
+        background: #1fd14f !important;
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .btn-accept {
+        background: #16a34a !important;
+        color: #fff !important;
+    }
+    html[data-theme="light"] .btn-reject {
+        background: #ef4444 !important;
+        color: #fff !important;
+    }
+
+    /* --- Tailwind Text Color Overrides --- */
+    html[data-theme="light"] .text-white {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .text-gray-100 {
+        color: #374151 !important;
+    }
+    html[data-theme="light"] .text-gray-200 {
+        color: #4b5563 !important;
+    }
+    html[data-theme="light"] .text-gray-300 {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .text-gray-400 {
+        color: #9ca3af !important;
+    }
+    html[data-theme="light"] .text-gray-500 {
+        color: #6b7280 !important;
+    }
+
+    /* --- Tailwind Background Overrides --- */
+    html[data-theme="light"] .bg-black {
+        background-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .bg-gray-700 {
+        background-color: #e4e6ea !important;
+    }
+    html[data-theme="light"] .bg-gray-800 {
+        background-color: #e4e6ea !important;
+    }
+    html[data-theme="light"] .bg-gray-900 {
+        background-color: #f0f2f5 !important;
+    }
+
+    /* --- Tailwind Border Overrides --- */
+    html[data-theme="light"] .border-gray-600 {
+        border-color: #d1d5db !important;
+    }
+    html[data-theme="light"] .border-gray-700 {
+        border-color: #d1d5db !important;
+    }
+    html[data-theme="light"] .border-gray-800 {
+        border-color: #e5e7eb !important;
+    }
+
+    /* --- Hover Overrides --- */
+    html[data-theme="light"] .hover\:bg-white\/10:hover {
+        background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+    html[data-theme="light"] .hover\:text-white:hover {
+        color: #1c1e21 !important;
+    }
+
+    /* --- BG Utilities with brackets --- */
+    html[data-theme="light"] .bg-\[\#18191a\],
+    html[data-theme="light"] .bg-\[\#242526\] {
+        background-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .bg-\[\#1f2937\] {
+        background-color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-white\/10 {
+        background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Scrollbar --- */
+    html[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb,
+    html[data-theme="light"] .custom-scroll::-webkit-scrollbar-thumb {
+        background: #c4c4c4 !important;
+    }
+
+    /* --- Inline Error --- */
+    html[data-theme="light"] .inline-error {
+        color: #dc2626 !important;
+    }
+
+    /* --- Eye Button --- */
+    html[data-theme="light"] .eye-btn {
+        color: #6b7280 !important;
+    }
+
+    /* --- Delete Account Modal --- */
+    html[data-theme="light"] #deleteModal .bg-\[\#1f2937\] {
+        background-color: #ffffff !important;
+        border-color: #d1d5db !important;
+    }
+
+    /* --- Avatar Story Borders --- */
+    html[data-theme="light"] .avatar-with-dot.has-story {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff)) !important;
+    }
+    html[data-theme="light"] .avatar-with-dot.has-story.viewed {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%) !important;
+    }
+    html[data-theme="light"] .avatar-circle.has-story {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff)) !important;
+    }
+    html[data-theme="light"] .avatar-circle.has-story.viewed {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%) !important;
+    }
+    html[data-theme="light"] .avatar-wrapper.has-story img#profileImage {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff)) !important;
+    }
+    html[data-theme="light"] .avatar-wrapper.has-story.viewed img#profileImage {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%) !important;
+    }
+
+    /* --- Verified Badge (remove shadow in light mode) --- */
+    html[data-theme="light"] .verified-badge-img {
+        box-shadow: none !important;
+        border-color: transparent !important;
+    }
+
+    /* --- User Name Colors --- */
+    html[data-theme="light"] .user-name {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .user-sub {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .notif-title {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .notif-time {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .notif-target {
+        color: #65676b !important;
+    }
+
+    /* --- Create Reel Specifics --- */
+    html[data-theme="light"] .loader {
+        border-color: #d1d5db !important;
+        border-top-color: #3b82f6 !important;
+    }
+
+    /* --- Preserve Colored Buttons --- */
+    html[data-theme="light"] .bg-blue-600 {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-blue-600 .text-white,
+    html[data-theme="light"] .bg-blue-600.text-white {
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-red-600,
+    html[data-theme="light"] .bg-red-700 {
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-red-600 .text-white,
+    html[data-theme="light"] .bg-red-700 .text-white {
+        color: #ffffff !important;
+    }
+    /* Keep delete/logout button text white */
+    html[data-theme="light"] button.bg-red-600,
+    html[data-theme="light"] button.bg-red-700,
+    html[data-theme="light"] .bg-green-600,
+    html[data-theme="light"] .bg-emerald-600 {
+        color: #ffffff !important;
+    }
+    /* Post comment button */
+    html[data-theme="light"] .bg-blue-600.text-white,
+    html[data-theme="light"] button.bg-blue-600,
+    html[data-theme="light"] #postCommentBtn {
+        color: #ffffff !important;
+    }
+    /* Keep submit button styles */
+    html[data-theme="light"] .submit-btn {
+        color: #ffffff !important;
+    }
+
+    /* --- Preserve specific nav items --- */
+    html[data-theme="light"] .glass-bottom-navbar .text-blue-400 {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] a.text-blue-400,
+    html[data-theme="light"] .text-blue-400 {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] .text-red-500 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .text-green-400 {
+        color: #16a34a !important;
+    }
+
+    /* --- Post Text Fade --- */
+    html[data-theme="light"] .post-text-fade {
+        background: linear-gradient(transparent, #ffffff) !important;
+    }
+
+    /* --- Composer (Chat) --- */
+    html[data-theme="light"] .composer {
+        background: #ffffff !important;
+        border-top-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .composer-inner {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .composer-inner input,
+    html[data-theme="light"] .composer-inner textarea {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Logout/Delete buttons on settings --- */
+    html[data-theme="light"] button[onclick="openLogoutModal()"] {
+        background: rgba(239, 68, 68, 0.06) !important;
+        border-color: rgba(239, 68, 68, 0.2) !important;
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] button[onclick="openDeleteModal()"] {
+        background: rgba(0, 0, 0, 0.03) !important;
+        border-color: rgba(0, 0, 0, 0.12) !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Misc --- */
+    html[data-theme="light"] .text-red-300 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .bg-red-900\/50 {
+        background-color: rgba(254, 202, 202, 0.5) !important;
+    }
+
+
+    /* ============================================================
+       ENHANCED LIGHT MODE CONTRAST FIXES
+       ============================================================ */
+
+    /* --- Fix text-gray-400 contrast (was too light on white bg) --- */
+    html[data-theme="light"] .text-gray-400 {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .text-gray-500 {
+        color: #4b5563 !important;
+    }
+
+    /* --- General headings color --- */
+    html[data-theme="light"] h1,
+    html[data-theme="light"] h2,
+    html[data-theme="light"] h3,
+    html[data-theme="light"] h4,
+    html[data-theme="light"] h5 {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Navbar & dropdown text/icons --- */
+    html[data-theme="light"] .glass-navbar a,
+    html[data-theme="light"] .glass-navbar button {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-navbar a:hover {
+        color: #3b82f6 !important;
+    }
+    html[data-theme="light"] .glass-navbar .text-red-400 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .glass-dropdown a {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-dropdown a:hover {
+        background: rgba(0, 0, 0, 0.05) !important;
+    }
+    html[data-theme="light"] .glass-dropdown .text-red-400 {
+        color: #dc2626 !important;
+    }
+
+    /* --- Bottom navbar icons --- */
+    html[data-theme="light"] .glass-bottom-navbar a,
+    html[data-theme="light"] .glass-bottom-navbar button {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-bottom-navbar a:hover,
+    html[data-theme="light"] .glass-bottom-navbar button:hover {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-bottom-navbar .text-blue-400,
+    html[data-theme="light"] .glass-bottom-navbar a.text-blue-400 {
+        color: #2563eb !important;
+    }
+
+    /* --- Badge colors (notification/message badges) --- */
+    html[data-theme="light"] #notifBadge,
+    html[data-theme="light"] #msgBadge,
+    html[data-theme="light"] #friendReqBadge,
+    html[data-theme="light"] .friend-req-badge,
+    html[data-theme="light"] .unread-badge,
+    html[data-theme="light"] .badge {
+        color: #fff !important;
+    }
+
+    /* --- Chat: Delete Modal --- */
+    html[data-theme="light"] .delete-modal {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .delete-modal h3 {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .delete-modal p {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .delete-modal-buttons .cancel-delete-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .delete-modal-buttons .cancel-delete-btn:hover {
+        background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-theme="light"] .delete-modal-buttons .confirm-delete-btn {
+        color: #fff !important;
+    }
+
+    /* --- Chat: Edit Modal Buttons --- */
+    html[data-theme="light"] .edit-modal-buttons .cancel-edit-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .edit-modal-buttons .cancel-edit-btn:hover {
+        background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-theme="light"] .edit-modal-buttons .save-edit-btn {
+        color: #fff !important;
+    }
+
+    /* --- Chat: Message states --- */
+    html[data-theme="light"] .msg-deleted {
+        color: rgba(0, 0, 0, 0.4) !important;
+    }
+    html[data-theme="light"] .msg-edited-label {
+        color: rgba(0, 0, 0, 0.4) !important;
+    }
+
+    /* --- Chat: Reply preview --- */
+    html[data-theme="light"] .reply-preview-text {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .reply-to-label {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] #reply-container {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* --- Chat: File preview --- */
+    html[data-theme="light"] .preview-filename {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .preview-sub {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] #file-preview-area {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Chat: Close button --- */
+    html[data-theme="light"] .close-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .close-btn:hover {
+        background: #ef4444 !important;
+        color: #fff !important;
+    }
+
+    /* --- Chat: Textarea --- */
+    html[data-theme="light"] textarea {
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+    html[data-theme="light"] textarea::placeholder {
+        color: #8a8d91 !important;
+    }
+    html[data-theme="light"] textarea:focus {
+        border-color: #3b82f6 !important;
+    }
+
+    /* --- Chat: Send button --- */
+    html[data-theme="light"] .send-btn {
+        color: #fff !important;
+    }
+    html[data-theme="light"] .send-btn:disabled {
+        background: #d1d5db !important;
+        color: #9ca3af !important;
+    }
+
+    /* --- Chat: Sending spinner --- */
+    html[data-theme="light"] .sending-spinner {
+        border-color: rgba(0, 0, 0, 0.15) !important;
+        border-top-color: #3b82f6 !important;
+    }
+
+    /* --- Chat: Reply indicator icon --- */
+    html[data-theme="light"] .reply-indicator-icon {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Chat: Recording UI --- */
+    html[data-theme="light"] #recording-ui {
+        background: rgba(239, 68, 68, 0.08) !important;
+        border-color: rgba(239, 68, 68, 0.2) !important;
+    }
+    html[data-theme="light"] .rec-time {
+        color: #dc2626 !important;
+        text-shadow: none !important;
+    }
+    html[data-theme="light"] .rec-live-bar {
+        background: #ef4444 !important;
+    }
+    html[data-theme="light"] .cancel-rec {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .cancel-rec:hover {
+        background: rgba(239, 68, 68, 0.12) !important;
+        color: #dc2626 !important;
+    }
+
+    /* --- Chat: Audio player in messages --- */
+    html[data-theme="light"] .msg-audio-player:hover {
+        border-color: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-theme="light"] .audio-live-bar {
+        background: #1c1e21 !important;
+    }
+
+    /* --- Audio play button (post waveform) --- */
+    html[data-theme="light"] .audio-play-button {
+        background: #1c1e21 !important;
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .audio-play-button i {
+        color: #ffffff !important;
+    }
+
+    /* --- Video overlays (keep white on dark video bg) --- */
+    html[data-theme="light"] .video-play-overlay i {
+        color: rgba(255, 255, 255, 0.94) !important;
+    }
+    html[data-theme="light"] .video-fs-btn {
+        color: #fff !important;
+    }
+    html[data-theme="light"] .play-btn i {
+        color: white !important;
+    }
+    html[data-theme="light"] .reel-play-icon i {
+        color: rgba(255, 255, 255, 0.95) !important;
+    }
+
+    /* --- Story elements (keep white on dark overlays) --- */
+    html[data-theme="light"] .story-username {
+        color: #e4e6eb !important;
+    }
+    html[data-theme="light"] .story-text-overlay {
+        color: white !important;
+    }
+    html[data-theme="light"] .create-story-btn {
+        color: white !important;
+    }
+    html[data-theme="light"] .story-color-opt.selected {
+        border-color: #3b82f6 !important;
+    }
+
+    /* --- Big heart animation --- */
+    html[data-theme="light"] .big-heart {
+        color: white !important;
+    }
+
+    /* --- Media type badge --- */
+    html[data-theme="light"] .media-type-badge {
+        color: #fff !important;
+    }
+
+    /* --- Remove media button --- */
+    html[data-theme="light"] .remove-media-btn {
+        color: white !important;
+    }
+
+    /* --- Image overlay close (keep white on dark overlay) --- */
+    html[data-theme="light"] .img-close-btn {
+        color: #fff !important;
+    }
+
+    /* --- Toast close button --- */
+    html[data-theme="light"] .toast .close-btn {
+        color: #65676b !important;
+        background: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- View all families button --- */
+    html[data-theme="light"] #viewAllFamiliesBtn {
+        color: #4b5563 !important;
+    }
+    html[data-theme="light"] #viewAllFamiliesBtn:hover {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Section card hover --- */
+    html[data-theme="light"] .section-card:hover {
+        border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* --- Profile border fix --- */
+    html[data-theme="light"] img#profileImage {
+        border-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] #profileStatus {
+        color: #65676b !important;
+    }
+
+    /* --- Recording pulse (keep visible) --- */
+    html[data-theme="light"] .recording-pulse {
+        border-color: #ef4444 !important;
+        background-color: #ef4444 !important;
+    }
+
+    /* --- Attachment button --- */
+    html[data-theme="light"] .attach-btn:hover {
+        border-color: rgba(0, 0, 0, 0.2) !important;
+    }
+
+    /* --- General input placeholders --- */
+    html[data-theme="light"] input::placeholder {
+        color: #8a8d91 !important;
+    }
+
+    /* --- Chat CSS Variables override --- */
+    html[data-theme="light"] {
+        --bg: #f0f2f5;
+        --glass-bg: rgba(0, 0, 0, 0.03);
+        --glass-border: rgba(0, 0, 0, 0.1);
+        --accent: #2563eb;
+        --muted: #1c1e21;
+        --reply-bg: rgba(0, 0, 0, 0.04);
+        --reply-border: rgba(0, 0, 0, 0.1);
+        --msg-incoming-bg: #e4e6ea;
+        --msg-outgoing-bg: rgba(59, 130, 246, 0.15);
+    }
+
+    /* --- Delete modal (Tailwind-based on multiple pages) --- */
+    html[data-theme="light"] .bg-gray-600 {
+        background-color: #d1d5db !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .bg-gray-600:hover {
+        background-color: #c4c7cc !important;
+    }
+
+    /* --- Keep white text on colored buttons --- */
+    html[data-theme="light"] .bg-red-600 .text-white,
+    html[data-theme="light"] .bg-red-700 .text-white,
+    html[data-theme="light"] .bg-blue-600 .text-white,
+    html[data-theme="light"] .bg-green-600 .text-white,
+    html[data-theme="light"] .bg-emerald-600 .text-white {
+        color: #ffffff !important;
+    }
+
+    /* --- Submit premium button --- */
+    html[data-theme="light"] .submit-btn-premium:hover:not(:disabled) {
+        color: #fff !important;
+    }
+
+    /* --- Composer box shadow fix --- */
+    html[data-theme="light"] .composer {
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Fix labels and small text --- */
+    html[data-theme="light"] label {
+        color: #4b5563 !important;
+    }
+
+    /* --- Spinner (loading states) --- */
+    html[data-theme="light"] .fa-spinner {
+        color: #6b7280 !important;
+    }
+
+    /* --- Glass panel icons and text contrast --- */
+    html[data-theme="light"] .glass-panel h2 {
+        color: #4b5563 !important;
+    }
+    html[data-theme="light"] .glass-panel i {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-button i {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-button span {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Preserve specific icon colors --- */
+    html[data-theme="light"] .text-red-500 i,
+    html[data-theme="light"] i.text-red-500 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .text-yellow-400 i,
+    html[data-theme="light"] i.text-yellow-400 {
+        color: #f59e0b !important;
+    }
+    html[data-theme="light"] .heart-btn,
+    html[data-theme="light"] .heart-btn i {
+        color: #ef4444 !important;
+    }
+
+    /* --- Upload area text --- */
+    html[data-theme="light"] .upload-area i {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .upload-area p,
+    html[data-theme="light"] .upload-area span {
+        color: #4b5563 !important;
+    }
+
+    /* --- Media viewer close button (keep white on dark overlay) --- */
+    html[data-theme="light"] #mediaViewerModal button {
+        color: #fff !important;
+    }
+
+
+    /* --- Dark Links for Light Mode --- */
+    html[data-theme="light"] a,
+    html[data-theme="light"] .post-text a {
+        color: #1d4ed8 !important;
+    }
+    html[data-theme="light"] a:hover,
+    html[data-theme="light"] .post-text a:hover {
+        color: #1e40af !important;
+    }
+    /* Override inline JS link color */
+    html[data-theme="light"] a[style*="color:#7dd3fc"],
+    html[data-theme="light"] a[style*="color: #7dd3fc"] {
+        color: #1d4ed8 !important;
+    }
+    /* Keep navbar/button colors intact */
+    html[data-theme="light"] .glass-bottom-navbar a {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-bottom-navbar a.text-blue-400 {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] .glass-navbar a {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-dropdown a {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .read-more-btn {
+        color: #1d4ed8 !important;
+    }
+
+    /* ============================================================
+       THEME TOGGLE SWITCH (Settings Page)
+       ============================================================ */
+    .theme-switch {
+        position: relative;
+        width: 52px;
+        height: 28px;
+        flex-shrink: 0;
+    }
+    .theme-switch input { display: none; }
+    .theme-slider {
+        position: absolute;
+        inset: 0;
+        background: #374151;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .theme-slider:before {
+        content: '';
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        bottom: 3px;
+        left: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .theme-switch input:checked + .theme-slider {
+        background: linear-gradient(135deg, #f59e0b, #f97316);
+    }
+    .theme-switch input:checked + .theme-slider:before {
+        transform: translateX(24px);
+    }
+
+
+    /* ===== DESKTOP RESPONSIVE LAYOUT ===== */
+    .desktop-sidebar {
+        display: none;
+    }
+
+    @media (min-width: 768px) {
+        .glass-bottom-navbar {
+            display: none !important;
+        }
+
+        .desktop-sidebar {
+            display: flex;
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 220px;
+            height: 100vh;
+            background: rgba(10, 10, 10, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            flex-direction: column;
+            padding: 20px 12px;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .desktop-sidebar .sidebar-logo {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 800;
+            font-size: 22px;
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 12px;
+            margin-bottom: 28px;
+            display: block;
+        }
+
+        .desktop-sidebar .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .desktop-sidebar .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .desktop-sidebar .sidebar-link:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .desktop-sidebar .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+        }
+
+        .desktop-sidebar .sidebar-link i {
+            width: 24px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        /* Main content offset for sidebar */
+        body {
+            padding-right: 220px !important;
+        }
+
+        /* Adjust sticky headers */
+        header.sticky {
+            right: 220px;
+        }
+
+        .glass-navbar.sticky {
+            right: 220px;
+        }
+
+        /* Light mode sidebar */
+        html[data-theme="light"] .desktop-sidebar {
+            background: rgba(255, 255, 255, 0.97) !important;
+            border-left-color: rgba(0, 0, 0, 0.08) !important;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-link {
+            color: #65676b;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-link:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #1c1e21;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.1);
+            color: #2563eb;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-logo {
+            color: #1c1e21;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .desktop-sidebar {
+            width: 260px;
+        }
+        body {
+            padding-right: 260px !important;
+        }
+        header.sticky {
+            right: 260px;
+        }
+        .glass-navbar.sticky {
+            right: 260px;
+        }
+    }
+
+    @media (min-width: 1440px) {
+        .desktop-sidebar {
+            width: 280px;
+        }
+        body {
+            padding-right: 280px !important;
+        }
+        header.sticky {
+            right: 280px;
+        }
+        .glass-navbar.sticky {
+            right: 280px;
+        }
+    }
+
+
+    /* ===== ALL USERS DESKTOP ADJUSTMENTS ===== */
+    @media (min-width: 768px) {
+        main {
+            max-width: 760px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    }
+    @media (min-width: 1024px) {
+        main {
+            max-width: 900px;
+        }
+    }
+
+</style>
+</head>
+<body class="mobile-safe">
+
+<!-- Desktop Sidebar Navigation -->
+<aside class="desktop-sidebar">
+    <a href="/chat_list" class="sidebar-logo">Aite</a>
+    <nav class="sidebar-nav">
+        <a href="/chat_list" class="sidebar-link" data-page="/chat_list">
+            <i class="fas fa-home"></i>
+            <span>الرئيسية</span>
+        </a>
+        <a href="/users_list" class="sidebar-link" data-page="/users_list">
+            <i class="fab fa-facebook-messenger"></i>
+            <span>المحادثات</span>
+        </a>
+        <a href="/reels" class="sidebar-link" data-page="/reels">
+            <i class="fas fa-clapperboard"></i>
+            <span>ريلز</span>
+        </a>
+        <a href="/notifications" class="sidebar-link" data-page="/notifications">
+            <i class="fas fa-bell"></i>
+            <span>الإشعارات</span>
+        </a>
+        <a href="/all_users" class="sidebar-link" data-page="/all_users">
+            <i class="fas fa-users"></i>
+            <span>المستخدمون</span>
+        </a>
+        <a href="/search" class="sidebar-link" data-page="/search">
+            <i class="fas fa-search"></i>
+            <span>بحث</span>
+        </a>
+        <a href="/profile" class="sidebar-link" data-page="/profile">
+            <i class="fas fa-user"></i>
+            <span>الملف الشخصي</span>
+        </a>
+        <a href="/settings" class="sidebar-link" data-page="/settings">
+            <i class="fas fa-cog"></i>
+            <span>الإعدادات</span>
+        </a>
+    </nav>
+</aside>
+
+
+
+  <header class="glass-navbar sticky top-0 z-50 p-3">
+    <nav class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/chat_list" class="text-gray-400 hover:text-white p-2"><i class="fas fa-arrow-right text-2xl"></i></a>
+      </div>
+
+      <div class="text-center">
+        <h1 class="text-lg font-bold">اكتشف المستخدمين</h1>
+      </div>
+
+      <div style="width:40px; display:flex; gap:8px; align-items:center; justify-content:flex-end; position:relative;">
+        <span id="friendReqTopBadge" class="friend-req-badge" style="display:none;">0</span>
+      </div>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4">
+    <div class="flex gap-3 mb-4">
+      <div id="tabAll" class="tab active">كل المستخدمين</div>
+      <div id="tabRequests" class="tab">طلبات الصداقة</div>
+    </div>
+
+    <div id="allUsersContainer" class="space-y-3">
+      <div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري تحميل المستخدمين...</div>
+    </div>
+
+    <div id="requestsContainer" class="space-y-3 hidden">
+      <div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري تحميل طلبات الصداقة...</div>
+    </div>
+  </main>
+
+  <!-- Toast container -->
+  <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+  const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png";
+  const tabAll = document.getElementById('tabAll');
+  const tabRequests = document.getElementById('tabRequests');
+  const allUsersContainer = document.getElementById('allUsersContainer');
+  const requestsContainer = document.getElementById('requestsContainer');
+  const friendReqTopBadge = document.getElementById('friendReqTopBadge');
+
+  tabAll.addEventListener('click', () => { tabAll.classList.add('active'); tabRequests.classList.remove('active'); allUsersContainer.classList.remove('hidden'); requestsContainer.classList.add('hidden'); });
+  tabRequests.addEventListener('click', () => { tabRequests.classList.add('active'); tabAll.classList.remove('active'); requestsContainer.classList.remove('hidden'); allUsersContainer.classList.add('hidden'); loadRequests(); });
+
+  /* ---------------- Toast helper (black glassy) ---------------- */
+  function showToast(message, opts = {}) {
+    const { type = 'info', duration = 3500 } = opts;
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = `
+      <i class="${type === 'success' ? 'fas fa-check-circle' : (type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle')}"></i>
+      <div class="msg">${escapeHtml(message)}</div>
+      <button class="close-btn" aria-label="close">&times;</button>
+    `;
+
+    const closeBtn = toast.querySelector('.close-btn');
+    const removeToast = () => {
+      toast.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s';
+      toast.style.transform = 'translateY(-10px)';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 200);
+    };
+    closeBtn.addEventListener('click', removeToast);
+
+    container.appendChild(toast);
+
+    // entrance animation
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-10px)';
+    requestAnimationFrame(() => {
+      toast.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s';
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+    });
+
+    const t = setTimeout(() => {
+      removeToast();
+    }, duration);
+
+    // pause on hover
+    toast.addEventListener('mouseenter', () => clearTimeout(t));
+  }
+
+  async function loadAllUsers() {
+    allUsersContainer.innerHTML = '<div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري تحميل المستخدمين...</div>';
+    try {
+      const res = await fetch('/api/users/all', { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error('failed');
+
+      if (data.users.length === 0) {
+        allUsersContainer.innerHTML = '<div class="text-center text-gray-500 p-6">لا يوجد مستخدمون آخرون.</div>';
+        return;
+      }
+
+      allUsersContainer.innerHTML = data.users.map(u => {
+        let btnHtml = '';
+        if (u.is_friend) {
+          btnHtml = `<a href="/chat?contactId=${u.id}" class="action-btn message">مراسلة</a>`;
+        } else if (u.request_received) {
+          btnHtml = `<button class="btn-accept" data-id="${u.id}" data-action="accept"><i class="fas fa-user-check" style="margin-left:4px"></i>قبول</button> <button class="btn-reject" data-id="${u.id}" data-action="reject"><i class="fas fa-times" style="margin-left:4px"></i>رفض</button>`;
+        } else if (u.request_sent) {
+          btnHtml = `<button class="action-btn" data-id="${u.id}" data-action="cancel">إلغاء الطلب</button>`;
+        } else {
+          btnHtml = `<button class="action-btn" data-id="${u.id}" data-action="send">إضافة صديق</button>`;
+        }
+
+        // placeholder for verified badge; will be updated later
+        const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${u.id}"></span>`;
+
+        return `<div class="user-card">
+          <a href="/profile?userId=${u.id}" class="user-info">
+            <img src="${escapeHtml(u.profile_picture_url || '/assets/default_profile_pic.png')}" class="w-12 h-12 rounded-full object-cover">
+            <div style="min-width:0">
+              <div class="user-name">@${escapeHtml(u.username)} ${verifiedPlaceholder}</div>
+              <div class="user-sub">${escapeHtml(u.full_name || '')}</div>
+            </div>
+          </a>
+          <div>${btnHtml}</div>
+        </div>`;
+      }).join('');
+
+      // bind actions
+      document.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.currentTarget.getAttribute('data-id');
+          const action = e.currentTarget.getAttribute('data-action');
+          if (action === 'send') {
+            e.currentTarget.disabled = true;
+            e.currentTarget.textContent = 'جاري الإرسال...';
+            try {
+              const r = await fetch('/api/friends/request', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadAllUsers(); updateFriendReqBadge(); showToast('تم إرسال طلب الصداقة.', { type: 'success' }); }
+              else { showToast(j.error || 'فشل إرسال الطلب', { type: 'error' }); e.currentTarget.disabled = false; loadAllUsers(); }
+            } catch (err) { showToast('خطأ في الشبكة', { type: 'error' }); e.currentTarget.disabled = false; loadAllUsers(); }
+          } else if (action === 'cancel') {
+            e.currentTarget.disabled = true;
+            e.currentTarget.textContent = 'جاري الإلغاء...';
+            try {
+              const r = await fetch('/api/friends/cancel', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadAllUsers(); updateFriendReqBadge(); showToast('تم إلغاء الطلب.', { type: 'success' }); }
+              else { showToast('فشل الإلغاء', { type: 'error' }); loadAllUsers(); }
+            } catch (err) { showToast('خطأ', { type: 'error' }); loadAllUsers(); }
+          } else if (action === 'accept') {
+            e.currentTarget.disabled = true;
+            try {
+              const r = await fetch('/api/friends/accept', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadAllUsers(); loadRequests(); updateFriendReqBadge(); showToast('تمت الموافقة — أصبح هذا المستخدم صديقك.', { type: 'success' }); }
+              else { showToast('فشل في القبول', { type: 'error' }); loadAllUsers(); }
+            } catch (err) { showToast('خطأ في الشبكة', { type: 'error' }); loadAllUsers(); }
+          } else if (action === 'reject') {
+            e.currentTarget.disabled = true;
+            try {
+              const r = await fetch('/api/friends/reject', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadAllUsers(); loadRequests(); updateFriendReqBadge(); showToast('تم رفض الطلب.', { type: 'success' }); }
+              else { showToast('فشل في الرفض', { type: 'error' }); loadAllUsers(); }
+            } catch (err) { showToast('خطأ في الشبكة', { type: 'error' }); loadAllUsers(); }
+          }
+        });
+      });
+
+      // تحديث شارات التوثيق بعد العرض
+      updateVerifiedBadges();
+
+    } catch (e) {
+      allUsersContainer.innerHTML = '<div class="text-center text-red-500 p-6">فشل في تحميل المستخدمين.</div>';
+    }
+  }
+
+  async function loadRequests() {
+    requestsContainer.innerHTML = '<div class="text-center text-gray-400 p-6"><i class="fas fa-spinner fa-spin"></i> جاري تحميل الطلبات...</div>';
+    try {
+      const res = await fetch('/api/friends/requests', { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error('failed');
+
+      if (!data.requests || data.requests.length === 0) {
+        requestsContainer.innerHTML = '<div class="text-center text-gray-500 p-6">لا توجد طلبات صداقة واردة.</div>';
+        updateFriendReqBadge();
+        return;
+      }
+
+      requestsContainer.innerHTML = data.requests.map(r => {
+        // placeholder for verified badge in requests list (profile might include is_verified)
+        const verifiedPlaceholder = `<span class="verified-placeholder" data-user-id="${r.from}"></span>`;
+        return `<div class="user-card">
+          <a href="/profile?userId=${r.from}" class="user-info">
+            <img src="${escapeHtml(r.profile_picture_url || '/assets/default_profile_pic.png')}" class="w-12 h-12 rounded-full object-cover">
+            <div style="min-width:0">
+              <div class="user-name">@${escapeHtml(r.username)} ${verifiedPlaceholder}</div>
+            </div>
+          </a>
+          <div>
+            <button class="btn-accept" data-action="accept" data-id="${r.from}">قبول</button>
+            <button class="btn-reject" data-action="reject" data-id="${r.from}">رفض</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      document.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.currentTarget.getAttribute('data-id');
+          const action = e.currentTarget.getAttribute('data-action');
+          if (action === 'accept') {
+            e.currentTarget.disabled = true;
+            try {
+              const r = await fetch('/api/friends/accept', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadRequests(); updateFriendReqBadge(); showToast('تمت الموافقة — أصبح هذا المستخدم صديقك.', { type: 'success' }); }
+              else { showToast('فشل في القبول', { type: 'error' }); loadRequests(); }
+            } catch (err) { showToast('خطأ', { type: 'error' }); loadRequests(); }
+          } else if (action === 'reject') {
+            e.currentTarget.disabled = true;
+            try {
+              const r = await fetch('/api/friends/reject', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from_id: id })});
+              const j = await r.json();
+              if (r.ok && j.ok) { loadRequests(); updateFriendReqBadge(); showToast('تم رفض الطلب.', { type: 'success' }); }
+              else { showToast('فشل', { type: 'error' }); loadRequests(); }
+            } catch (err) { showToast('خطأ', { type: 'error' }); loadRequests(); }
+          }
+        });
+      });
+
+      // update badges for request users too
+      updateVerifiedBadges();
+
+      updateFriendReqBadge();
+
+    } catch (e) {
+      requestsContainer.innerHTML = '<div class="text-center text-red-500 p-6">فشل في تحميل الطلبات.</div>';
+    }
+  }
+
+  async function updateFriendReqBadge() {
+    try {
+      const r = await fetch('/api/friends/requests_count', { credentials: 'same-origin' });
+      const j = await r.json();
+      if (r.ok && j.ok) {
+        if (j.count > 0) { friendReqTopBadge.style.display = 'inline-flex'; friendReqTopBadge.textContent = j.count > 99 ? '99+' : String(j.count); }
+        else friendReqTopBadge.style.display = 'none';
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function escapeHtml(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // SSE to update friend requests badge live
+  (function setupSSE() {
+    if (!window.EventSource) return;
+    const es = new EventSource('/api/notifications/stream', { withCredentials: true });
+    es.addEventListener('notifications', e => {
+      try {
+        const p = JSON.parse(e.data);
+        const pending = p.pending_friend_requests_count || 0;
+        if (pending > 0) { friendReqTopBadge.style.display = 'inline-flex'; friendReqTopBadge.textContent = pending > 99 ? '99+' : String(pending); }
+        else friendReqTopBadge.style.display = 'none';
+      } catch (err) {}
+    });
+    es.addEventListener('error', (err) => { /* ignore */ });
+  })();
+
+  // ----------------- VERIFIED BADGES HELPERS -----------------
+  async function updateVerifiedBadges() {
+    const placeholders = Array.from(document.querySelectorAll('.verified-placeholder'));
+    if (placeholders.length === 0) return;
+    await Promise.all(placeholders.map(async ph => {
+      const uid = ph.dataset.userId;
+      if (!uid) return;
+      try {
+        const res = await fetch(`/api/profile?userId=${encodeURIComponent(uid)}`, { credentials: 'same-origin' });
+        if (!res.ok) { ph.remove(); return; }
+        const data = await res.json();
+        if (data && data.ok && data.is_verified) {
+          const img = document.createElement('img');
+          img.src = VERIFIED_IMG_URL;
+          img.alt = 'موثق';
+          img.title = 'موثق';
+          img.className = 'verified-badge-img';
+          ph.replaceWith(img);
+        } else {
+          ph.remove();
+        }
+      } catch (e) {
+        ph.remove();
+      }
+    }));
+  }
+
+  // initial load
+  document.addEventListener('DOMContentLoaded', () => {
+    loadAllUsers();
+    updateFriendReqBadge();
+  });
+</script>
+
+
+<script>
+(function() {
+    var path = window.location.pathname;
+    var links = document.querySelectorAll('.desktop-sidebar .sidebar-link');
+    links.forEach(function(link) {
+        if (link.getAttribute('data-page') === path) {
+            link.classList.add('active');
+        }
+    });
+})();
+</script>
+
+<script>
+// Heartbeat - mark user as active
+(function(){
+  fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
+  setInterval(() => { fetch("/api/status/heartbeat", { method: "POST", credentials: "same-origin" }).catch(()=>{}); }, 20000);
+})();
+</script>
+
+</body>
+</html>

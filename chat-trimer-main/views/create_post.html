@@ -1,0 +1,2368 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<script>(function(){var t=localStorage.getItem("aite-theme")||"dark";document.documentElement.setAttribute("data-theme",t);var l=localStorage.getItem("aite-lang")||"ar";var r=l==="ar";document.documentElement.setAttribute("lang",l);document.documentElement.setAttribute("dir",r?"rtl":"ltr")})()</script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n-page-title="create_post_title">إنشاء منشور جديد - Aite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
+
+        body {
+            background-color: #000000;
+            color: #e4e6eb;
+            font-family: 'Tajawal', sans-serif;
+            overflow-x: hidden;
+            /* خلفية شبكية خفيفة جداً لإعطاء عمق للأسود */
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* لوحة زجاجية سوداء */
+        .glass-panel {
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+        }
+
+        /* حقول الإدخال */
+        .glass-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+
+        .glass-input:focus {
+            background: rgba(0, 0, 0, 0.8);
+            border-color: rgba(255, 255, 255, 0.2);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+        }
+
+        .glass-input::placeholder {
+            color: #555;
+        }
+
+        /* تخصيص السكرول بار */
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: #333; 
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background-color: transparent;
+        }
+
+        /* زر التسجيل مع تأثير النبض الأبيض */
+        @keyframes pulse-white {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+        .recording-pulse {
+            animation: pulse-white 2s infinite;
+            border-color: #fff !important;
+            background-color: #fff !important;
+            color: #000 !important;
+        }
+
+        /* زر النشر الفخم */
+        .submit-btn-premium {
+            background: #fff;
+            color: #000;
+            border: 1px solid #fff;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .submit-btn-premium:hover:not(:disabled) {
+            background: #000;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        }
+        .submit-btn-premium:disabled {
+            background: #222;
+            color: #555;
+            border-color: #333;
+        }
+
+        /* زر المرفقات */
+        .attach-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        .attach-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        /* WaveSurfer Container */
+        #waveform-preview {
+            height: 80px; 
+            background: linear-gradient(180deg, rgba(20,20,20,1) 0%, rgba(30,30,30,1) 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+        }
+
+        /* --- Media Type Tabs --- */
+        .media-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .media-tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 8px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: #888;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .media-tab:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #ccc;
+        }
+        .media-tab.active {
+            background: rgba(59, 130, 246, 0.12);
+            border-color: rgba(59, 130, 246, 0.4);
+            color: #60a5fa;
+        }
+        .media-tab i {
+            font-size: 18px;
+        }
+
+        /* --- Media Section Panel --- */
+        .media-section {
+            display: none;
+            animation: fadeInUp 0.3s ease;
+        }
+        .media-section.active {
+            display: block;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Upload Drop Zone --- */
+        .upload-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            padding: 32px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .upload-zone:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .upload-zone.dragover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .upload-zone-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 20px;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+        .upload-zone:hover .upload-zone-icon {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+        }
+
+        /* --- Preview Container --- */
+        .preview-card {
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            position: relative;
+        }
+        .preview-card .preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .preview-card .preview-header .file-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #aaa;
+        }
+        .preview-card .preview-header .file-info i {
+            color: #60a5fa;
+        }
+        .preview-card .preview-body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 120px;
+        }
+        .preview-remove-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 12px;
+        }
+        .preview-remove-btn:hover {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        /* --- Audio File Preview --- */
+        .audio-file-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            width: 100%;
+        }
+        .audio-file-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .audio-file-icon i {
+            color: #fff;
+            font-size: 18px;
+        }
+        .audio-file-details {
+            flex: 1;
+            min-width: 0;
+        }
+        .audio-file-name {
+            font-size: 13px;
+            color: #e4e6eb;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .audio-file-type {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* --- Light mode: media tabs & upload --- */
+        html[data-theme="light"] .media-tab {
+            border-color: rgba(0, 0, 0, 0.1) !important;
+            background: rgba(0, 0, 0, 0.03) !important;
+            color: #65676b !important;
+        }
+        html[data-theme="light"] .media-tab:hover {
+            background: rgba(0, 0, 0, 0.06) !important;
+            border-color: rgba(0, 0, 0, 0.15) !important;
+            color: #1c1e21 !important;
+        }
+        html[data-theme="light"] .media-tab.active {
+            background: rgba(59, 130, 246, 0.08) !important;
+            border-color: rgba(59, 130, 246, 0.35) !important;
+            color: #2563eb !important;
+        }
+        html[data-theme="light"] .upload-zone {
+            border-color: rgba(0, 0, 0, 0.15) !important;
+            background: rgba(0, 0, 0, 0.02) !important;
+        }
+        html[data-theme="light"] .upload-zone:hover {
+            border-color: rgba(59, 130, 246, 0.4) !important;
+            background: rgba(59, 130, 246, 0.04) !important;
+        }
+        html[data-theme="light"] .upload-zone-icon {
+            background: rgba(0, 0, 0, 0.06) !important;
+            color: #65676b !important;
+        }
+        html[data-theme="light"] .upload-zone:hover .upload-zone-icon {
+            background: rgba(59, 130, 246, 0.12) !important;
+            color: #2563eb !important;
+        }
+        html[data-theme="light"] .preview-card {
+            background: #f8f9fa !important;
+            border-color: rgba(0, 0, 0, 0.1) !important;
+        }
+        html[data-theme="light"] .preview-card .preview-header {
+            background: rgba(0, 0, 0, 0.03) !important;
+            border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+        }
+        html[data-theme="light"] .preview-card .preview-header .file-info {
+            color: #65676b !important;
+        }
+        html[data-theme="light"] .audio-file-name {
+            color: #1c1e21 !important;
+        }
+        html[data-theme="light"] .audio-file-type {
+            color: #65676b !important;
+        }
+        html[data-theme="light"] #waveform-preview {
+            background: #e4e6ea !important;
+            border-color: rgba(0, 0, 0, 0.06) !important;
+        }
+        html[data-theme="light"] #audioRecorderContainer {
+            background: rgba(0, 0, 0, 0.02) !important;
+            border-color: rgba(0, 0, 0, 0.08) !important;
+        }
+        html[data-theme="light"] #startRecordingBtn {
+            background: #f0f2f5 !important;
+            border-color: rgba(0, 0, 0, 0.15) !important;
+            color: #1c1e21 !important;
+        }
+        html[data-theme="light"] #stopRecordingBtn {
+            background: #f0f2f5 !important;
+            border-color: rgba(0, 0, 0, 0.1) !important;
+            color: #65676b !important;
+        }
+        html[data-theme="light"] #playPausePreview {
+            background: rgba(0, 0, 0, 0.04) !important;
+            border-color: rgba(0, 0, 0, 0.08) !important;
+            color: #1c1e21 !important;
+        }
+
+        /* --- Light mode: submit button premium --- */
+        html[data-theme="light"] .submit-btn-premium {
+            background: #1c1e21 !important;
+            color: #fff !important;
+            border-color: #1c1e21 !important;
+        }
+        html[data-theme="light"] .submit-btn-premium:hover:not(:disabled) {
+            background: #000 !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+        }
+        html[data-theme="light"] .submit-btn-premium:disabled {
+            background: #d1d5db !important;
+            color: #9ca3af !important;
+            border-color: #d1d5db !important;
+        }
+
+        /* --- Light mode: attach button --- */
+        html[data-theme="light"] .attach-btn {
+            background: rgba(0, 0, 0, 0.04) !important;
+            border-color: rgba(0, 0, 0, 0.1) !important;
+            color: #1c1e21 !important;
+        }
+        html[data-theme="light"] .attach-btn:hover {
+            background: rgba(0, 0, 0, 0.08) !important;
+            border-color: rgba(0, 0, 0, 0.2) !important;
+        }
+    
+
+    /* ============================================================
+       LIGHT MODE THEME
+       ============================================================ */
+    [data-theme="light"] {
+        color-scheme: light;
+    }
+
+    /* --- Body --- */
+    html[data-theme="light"] body {
+        background-color: #f0f2f5 !important;
+        background-image: none !important;
+        background: #f0f2f5 !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Navbar --- */
+    html[data-theme="light"] .glass-navbar {
+        background-color: rgba(255, 255, 255, 0.92) !important;
+        border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* --- Cards & Panels --- */
+    html[data-theme="light"] .glass-post-card,
+    html[data-theme="light"] .glass-panel,
+    html[data-theme="light"] .glass-form-card,
+    html[data-theme="light"] .glass-profile-card {
+        background-color: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    /* --- Glass Inputs --- */
+    html[data-theme="light"] .glass-input {
+        background: #f0f2f5 !important;
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-input:focus {
+        border-color: #3b82f6 !important;
+        background: #e4e6ea !important;
+        box-shadow: 0 0 0 2px rgba(59,130,246,0.15) !important;
+    }
+    html[data-theme="light"] .glass-input::placeholder { color: #8a8d91 !important; }
+
+    /* --- Glass Buttons --- */
+    html[data-theme="light"] .glass-button {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-color: rgba(0, 0, 0, 0.12) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-button:hover {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Dropdown --- */
+    html[data-theme="light"] .glass-dropdown {
+        background-color: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+    }
+
+    /* --- Comment Modal (Bottom Sheet) --- */
+    html[data-theme="light"] .glass-comment-modal-content {
+        background-color: #ffffff !important;
+        border-top-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
+    }
+    html[data-theme="light"] .glass-modal-bg {
+        background-color: rgba(0, 0, 0, 0.35) !important;
+    }
+    html[data-theme="light"] .modal-handle {
+        background-color: rgba(0, 0, 0, 0.2) !important;
+    }
+    html[data-theme="light"] .close-btn-circle {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .close-btn-circle:hover {
+        background: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* --- Comments --- */
+    html[data-theme="light"] .comment-item {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .comment-item:hover {
+        background: #e4e6ea !important;
+    }
+    html[data-theme="light"] .comment-actions button {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .comment-actions button:hover {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .comment-actions button.text-red-500,
+    html[data-theme="light"] .comment-actions button.text-red-400,
+    html[data-theme="light"] .comment-actions button.liked-btn {
+        color: #e74c3c !important;
+        background: rgba(231,76,60,0.08) !important;
+        border-color: rgba(231,76,60,0.15) !important;
+    }
+    html[data-theme="light"] .reply-item {
+        background: #f8f9fa !important;
+        border-color: rgba(0, 0, 0, 0.06) !important;
+        border-right-color: #3b82f6 !important;
+    }
+
+    /* --- Bottom Navbar --- */
+    html[data-theme="light"] .glass-bottom-navbar {
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        border-top-color: rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* --- User Cards --- */
+    html[data-theme="light"] .user-card,
+    html[data-theme="light"] .notification-card,
+    html[data-theme="light"] .glass-user-card {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .glass-user-card.unread {
+        background-color: rgba(13, 148, 136, 0.06) !important;
+    }
+    html[data-theme="light"] .notification-card.unread {
+        border-left-color: #007AFF !important;
+    }
+
+    /* --- Modals --- */
+    html[data-theme="light"] .modal-backdrop {
+        background: rgba(0, 0, 0, 0.4) !important;
+    }
+    html[data-theme="light"] .modal-glass {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.15) !important;
+    }
+
+    /* --- Post Options Sheet --- */
+    html[data-theme="light"] #postOptionsModal .sheet {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .option-btn {
+        background: #f0f2f5 !important;
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .option-btn.danger {
+        background: linear-gradient(90deg,#fecaca, #fca5a5) !important;
+        color: #991b1b !important;
+    }
+
+    /* --- Header Actions --- */
+    html[data-theme="light"] .header-actions .action-btn {
+        background: rgba(0, 0, 0, 0.05) !important;
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .header-actions .action-btn:hover {
+        background: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Audio Player --- */
+    html[data-theme="light"] .audio-play-wrapper {
+        background: #e4e6ea !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .waveform-post {
+        background: #e4e6ea !important;
+        border-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Reel Cards --- */
+    html[data-theme="light"] .reel-card-item {
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+    }
+
+    /* --- Search --- */
+    html[data-theme="light"] .search-input-container {
+        background: rgba(0, 0, 0, 0.06) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .search-input-container:focus-within {
+        background: rgba(0, 0, 0, 0.08) !important;
+        border-color: #3b82f6 !important;
+    }
+    html[data-theme="light"] .search-input {
+        color: #1c1e21 !important;
+    }
+
+    /* --- User Result Rows --- */
+    html[data-theme="light"] .user-result-row {
+        background: #f8f9fa !important;
+        border-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Tabs --- */
+    html[data-theme="light"] .tab {
+        color: #65676b;
+    }
+    html[data-theme="light"] .tab.active {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21;
+    }
+
+    /* --- Toasts --- */
+    html[data-theme="light"] .toast {
+        background: rgba(255, 255, 255, 0.95) !important;
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+    }
+
+    /* --- Create Options --- */
+    html[data-theme="light"] .create-option-card {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .create-option-card:hover {
+        background: #f0f2f5 !important;
+        border-color: rgba(59, 130, 246, 0.4) !important;
+    }
+
+    /* --- Upload Areas --- */
+    html[data-theme="light"] .upload-area,
+    html[data-theme="light"] .upload-btn {
+        background: #f8f9fa !important;
+        border-color: #ccd0d5 !important;
+    }
+    html[data-theme="light"] .upload-area.active,
+    html[data-theme="light"] .upload-btn:hover {
+        background: #e4e6ea !important;
+        border-color: #3b82f6 !important;
+    }
+
+    /* --- Section Cards --- */
+    html[data-theme="light"] .section-card {
+        background: #f8f9fa !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Context Menu (Chat) --- */
+    html[data-theme="light"] .context-menu {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.15) !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action:hover {
+        background: rgba(0, 0, 0, 0.05) !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action i {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .context-menu .menu-action.danger,
+    html[data-theme="light"] .context-menu .menu-action.danger i {
+        color: #e74c3c !important;
+    }
+    html[data-theme="light"] .context-menu .reactions-row {
+        border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+    }
+    html[data-theme="light"] .context-menu .menu-separator {
+        background: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Edit Modal --- */
+    html[data-theme="light"] .edit-modal {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .edit-modal h3 {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .edit-modal textarea {
+        background: #f0f2f5 !important;
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Chat Page Specifics --- */
+    html[data-theme="light"] .wrap {
+        background: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .top {
+        background: #ffffff !important;
+        border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .meta .name {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .meta .sub {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .back-btn {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .incoming-container .msg {
+        background: #e4e6ea !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .outgoing-container .msg {
+        background: rgba(59, 130, 246, 0.2) !important;
+        color: #1c1e21 !important;
+        border-color: rgba(59, 130, 246, 0.15) !important;
+    }
+    html[data-theme="light"] .msg-meta {
+        color: rgba(0,0,0,0.45) !important;
+    }
+    html[data-theme="light"] .reply-context {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-right-color: rgba(0,0,0,0.3) !important;
+    }
+    html[data-theme="light"] .reply-context-sender {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .reply-context-text {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .msg-reaction-badge {
+        background: #ffffff !important;
+        border-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .msg-audio-player {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .audio-play-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        border-color: rgba(0, 0, 0, 0.12) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .audio-time {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .context-menu-overlay.active {
+        background: rgba(0,0,0,0.15) !important;
+    }
+
+    /* --- Online Dot Border --- */
+    html[data-theme="light"] .online-dot {
+        border-color: #ffffff !important;
+    }
+    html[data-theme="light"] .status-indicator.large {
+        border-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .status-indicator.small {
+        border-color: #ffffff !important;
+    }
+
+    /* --- Actions Dropdown (Notifications) --- */
+    html[data-theme="light"] .actions-dropdown {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+    }
+    html[data-theme="light"] .actions-dropdown button {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .actions-dropdown button:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
+    }
+    html[data-theme="light"] .action-small {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .top-action-btn {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Create Family Specifics --- */
+    html[data-theme="light"] .container {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08) !important;
+    }
+    html[data-theme="light"] .preview {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .hint {
+        background: rgba(255,255,255,0.8) !important;
+        color: #65676b !important;
+    }
+    html[data-theme="light"] input[type="text"] {
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .btn {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .note {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .overlay {
+        background: rgba(0, 0, 0, 0.4) !important;
+    }
+    html[data-theme="light"] .card {
+        background: #ffffff !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .fam-name {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .key {
+        background: #f0f2f5 !important;
+        border-color: #ccd0d5 !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .small-btn {
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .small-btn.primary {
+        background: #f0f2f5 !important;
+    }
+
+    /* --- Profile Page Friend Buttons --- */
+    html[data-theme="light"] .action-btn {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .action-btn:hover {
+        background: rgba(0, 0, 0, 0.07) !important;
+    }
+    /* Keep colored buttons as-is */
+    html[data-theme="light"] .action-btn.message {
+        background: #1fd14f !important;
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .btn-accept {
+        background: #16a34a !important;
+        color: #fff !important;
+    }
+    html[data-theme="light"] .btn-reject {
+        background: #ef4444 !important;
+        color: #fff !important;
+    }
+
+    /* --- Tailwind Text Color Overrides --- */
+    html[data-theme="light"] .text-white {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .text-gray-100 {
+        color: #374151 !important;
+    }
+    html[data-theme="light"] .text-gray-200 {
+        color: #4b5563 !important;
+    }
+    html[data-theme="light"] .text-gray-300 {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .text-gray-400 {
+        color: #9ca3af !important;
+    }
+    html[data-theme="light"] .text-gray-500 {
+        color: #6b7280 !important;
+    }
+
+    /* --- Tailwind Background Overrides --- */
+    html[data-theme="light"] .bg-black {
+        background-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .bg-gray-700 {
+        background-color: #e4e6ea !important;
+    }
+    html[data-theme="light"] .bg-gray-800 {
+        background-color: #e4e6ea !important;
+    }
+    html[data-theme="light"] .bg-gray-900 {
+        background-color: #f0f2f5 !important;
+    }
+
+    /* --- Tailwind Border Overrides --- */
+    html[data-theme="light"] .border-gray-600 {
+        border-color: #d1d5db !important;
+    }
+    html[data-theme="light"] .border-gray-700 {
+        border-color: #d1d5db !important;
+    }
+    html[data-theme="light"] .border-gray-800 {
+        border-color: #e5e7eb !important;
+    }
+
+    /* --- Hover Overrides --- */
+    html[data-theme="light"] .hover\:bg-white\/10:hover {
+        background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+    html[data-theme="light"] .hover\:text-white:hover {
+        color: #1c1e21 !important;
+    }
+
+    /* --- BG Utilities with brackets --- */
+    html[data-theme="light"] .bg-\[\#18191a\],
+    html[data-theme="light"] .bg-\[\#242526\] {
+        background-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] .bg-\[\#1f2937\] {
+        background-color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-white\/10 {
+        background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Scrollbar --- */
+    html[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb,
+    html[data-theme="light"] .custom-scroll::-webkit-scrollbar-thumb {
+        background: #c4c4c4 !important;
+    }
+
+    /* --- Inline Error --- */
+    html[data-theme="light"] .inline-error {
+        color: #dc2626 !important;
+    }
+
+    /* --- Eye Button --- */
+    html[data-theme="light"] .eye-btn {
+        color: #6b7280 !important;
+    }
+
+    /* --- Delete Account Modal --- */
+    html[data-theme="light"] #deleteModal .bg-\[\#1f2937\] {
+        background-color: #ffffff !important;
+        border-color: #d1d5db !important;
+    }
+
+    /* --- Avatar Story Borders --- */
+    html[data-theme="light"] .avatar-with-dot.has-story {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff)) !important;
+    }
+    html[data-theme="light"] .avatar-with-dot.has-story.viewed {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%) !important;
+    }
+    html[data-theme="light"] .avatar-circle.has-story {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff)) !important;
+    }
+    html[data-theme="light"] .avatar-circle.has-story.viewed {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%) !important;
+    }
+    html[data-theme="light"] .avatar-wrapper.has-story img#profileImage {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff)) !important;
+    }
+    html[data-theme="light"] .avatar-wrapper.has-story.viewed img#profileImage {
+        background-image: linear-gradient(#f0f2f5, #f0f2f5), linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%) !important;
+    }
+
+    /* --- User Name Colors --- */
+    html[data-theme="light"] .user-name {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .user-sub {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .notif-title {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .notif-time {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .notif-target {
+        color: #65676b !important;
+    }
+
+    /* --- Create Reel Specifics --- */
+    html[data-theme="light"] .loader {
+        border-color: #d1d5db !important;
+        border-top-color: #3b82f6 !important;
+    }
+
+    /* --- Preserve Colored Buttons --- */
+    html[data-theme="light"] .bg-blue-600 {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-blue-600 .text-white,
+    html[data-theme="light"] .bg-blue-600.text-white {
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-red-600,
+    html[data-theme="light"] .bg-red-700 {
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .bg-red-600 .text-white,
+    html[data-theme="light"] .bg-red-700 .text-white {
+        color: #ffffff !important;
+    }
+    /* Keep delete/logout button text white */
+    html[data-theme="light"] button.bg-red-600,
+    html[data-theme="light"] button.bg-red-700,
+    html[data-theme="light"] .bg-green-600,
+    html[data-theme="light"] .bg-emerald-600 {
+        color: #ffffff !important;
+    }
+    /* Post comment button */
+    html[data-theme="light"] .bg-blue-600.text-white,
+    html[data-theme="light"] button.bg-blue-600,
+    html[data-theme="light"] #postCommentBtn {
+        color: #ffffff !important;
+    }
+    /* Keep submit button styles */
+    html[data-theme="light"] .submit-btn {
+        color: #ffffff !important;
+    }
+
+    /* --- Preserve specific nav items --- */
+    html[data-theme="light"] .glass-bottom-navbar .text-blue-400 {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] a.text-blue-400,
+    html[data-theme="light"] .text-blue-400 {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] .text-red-500 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .text-green-400 {
+        color: #16a34a !important;
+    }
+
+    /* --- Post Text Fade --- */
+    html[data-theme="light"] .post-text-fade {
+        background: linear-gradient(transparent, #ffffff) !important;
+    }
+
+    /* --- Composer (Chat) --- */
+    html[data-theme="light"] .composer {
+        background: #ffffff !important;
+        border-top-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-theme="light"] .composer-inner {
+        background: #f0f2f5 !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .composer-inner input,
+    html[data-theme="light"] .composer-inner textarea {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Logout/Delete buttons on settings --- */
+    html[data-theme="light"] button[onclick="openLogoutModal()"] {
+        background: rgba(239, 68, 68, 0.06) !important;
+        border-color: rgba(239, 68, 68, 0.2) !important;
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] button[onclick="openDeleteModal()"] {
+        background: rgba(0, 0, 0, 0.03) !important;
+        border-color: rgba(0, 0, 0, 0.12) !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Misc --- */
+    html[data-theme="light"] .text-red-300 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .bg-red-900\/50 {
+        background-color: rgba(254, 202, 202, 0.5) !important;
+    }
+
+
+    /* ============================================================
+       ENHANCED LIGHT MODE CONTRAST FIXES
+       ============================================================ */
+
+    /* --- Fix text-gray-400 contrast (was too light on white bg) --- */
+    html[data-theme="light"] .text-gray-400 {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .text-gray-500 {
+        color: #4b5563 !important;
+    }
+
+    /* --- General headings color --- */
+    html[data-theme="light"] h1,
+    html[data-theme="light"] h2,
+    html[data-theme="light"] h3,
+    html[data-theme="light"] h4,
+    html[data-theme="light"] h5 {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Navbar & dropdown text/icons --- */
+    html[data-theme="light"] .glass-navbar a,
+    html[data-theme="light"] .glass-navbar button {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-navbar a:hover {
+        color: #3b82f6 !important;
+    }
+    html[data-theme="light"] .glass-navbar .text-red-400 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .glass-dropdown a {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-dropdown a:hover {
+        background: rgba(0, 0, 0, 0.05) !important;
+    }
+    html[data-theme="light"] .glass-dropdown .text-red-400 {
+        color: #dc2626 !important;
+    }
+
+    /* --- Bottom navbar icons --- */
+    html[data-theme="light"] .glass-bottom-navbar a,
+    html[data-theme="light"] .glass-bottom-navbar button {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-bottom-navbar a:hover,
+    html[data-theme="light"] .glass-bottom-navbar button:hover {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-bottom-navbar .text-blue-400,
+    html[data-theme="light"] .glass-bottom-navbar a.text-blue-400 {
+        color: #2563eb !important;
+    }
+
+    /* --- Badge colors (notification/message badges) --- */
+    html[data-theme="light"] #notifBadge,
+    html[data-theme="light"] #msgBadge,
+    html[data-theme="light"] #friendReqBadge,
+    html[data-theme="light"] .friend-req-badge,
+    html[data-theme="light"] .unread-badge,
+    html[data-theme="light"] .badge {
+        color: #fff !important;
+    }
+
+    /* --- Chat: Delete Modal --- */
+    html[data-theme="light"] .delete-modal {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    html[data-theme="light"] .delete-modal h3 {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .delete-modal p {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] .delete-modal-buttons .cancel-delete-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .delete-modal-buttons .cancel-delete-btn:hover {
+        background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-theme="light"] .delete-modal-buttons .confirm-delete-btn {
+        color: #fff !important;
+    }
+
+    /* --- Chat: Edit Modal Buttons --- */
+    html[data-theme="light"] .edit-modal-buttons .cancel-edit-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .edit-modal-buttons .cancel-edit-btn:hover {
+        background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-theme="light"] .edit-modal-buttons .save-edit-btn {
+        color: #fff !important;
+    }
+
+    /* --- Chat: Message states --- */
+    html[data-theme="light"] .msg-deleted {
+        color: rgba(0, 0, 0, 0.4) !important;
+    }
+    html[data-theme="light"] .msg-edited-label {
+        color: rgba(0, 0, 0, 0.4) !important;
+    }
+
+    /* --- Chat: Reply preview --- */
+    html[data-theme="light"] .reply-preview-text {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .reply-to-label {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] #reply-container {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* --- Chat: File preview --- */
+    html[data-theme="light"] .preview-filename {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .preview-sub {
+        color: #65676b !important;
+    }
+    html[data-theme="light"] #file-preview-area {
+        background: rgba(0, 0, 0, 0.04) !important;
+        border-color: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* --- Chat: Close button --- */
+    html[data-theme="light"] .close-btn {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .close-btn:hover {
+        background: #ef4444 !important;
+        color: #fff !important;
+    }
+
+    /* --- Chat: Textarea --- */
+    html[data-theme="light"] textarea {
+        color: #1c1e21 !important;
+        border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+    html[data-theme="light"] textarea::placeholder {
+        color: #8a8d91 !important;
+    }
+    html[data-theme="light"] textarea:focus {
+        border-color: #3b82f6 !important;
+    }
+
+    /* --- Chat: Send button --- */
+    html[data-theme="light"] .send-btn {
+        color: #fff !important;
+    }
+    html[data-theme="light"] .send-btn:disabled {
+        background: #d1d5db !important;
+        color: #9ca3af !important;
+    }
+
+    /* --- Chat: Sending spinner --- */
+    html[data-theme="light"] .sending-spinner {
+        border-color: rgba(0, 0, 0, 0.15) !important;
+        border-top-color: #3b82f6 !important;
+    }
+
+    /* --- Chat: Reply indicator icon --- */
+    html[data-theme="light"] .reply-indicator-icon {
+        background: rgba(0, 0, 0, 0.08) !important;
+        color: #1c1e21 !important;
+    }
+
+    /* --- Chat: Recording UI --- */
+    html[data-theme="light"] #recording-ui {
+        background: rgba(239, 68, 68, 0.08) !important;
+        border-color: rgba(239, 68, 68, 0.2) !important;
+    }
+    html[data-theme="light"] .rec-time {
+        color: #dc2626 !important;
+        text-shadow: none !important;
+    }
+    html[data-theme="light"] .rec-live-bar {
+        background: #ef4444 !important;
+    }
+    html[data-theme="light"] .cancel-rec {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .cancel-rec:hover {
+        background: rgba(239, 68, 68, 0.12) !important;
+        color: #dc2626 !important;
+    }
+
+    /* --- Chat: Audio player in messages --- */
+    html[data-theme="light"] .msg-audio-player:hover {
+        border-color: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-theme="light"] .audio-live-bar {
+        background: #1c1e21 !important;
+    }
+
+    /* --- Audio play button (post waveform) --- */
+    html[data-theme="light"] .audio-play-button {
+        background: #1c1e21 !important;
+        color: #ffffff !important;
+    }
+    html[data-theme="light"] .audio-play-button i {
+        color: #ffffff !important;
+    }
+
+    /* --- Video overlays (keep white on dark video bg) --- */
+    html[data-theme="light"] .video-play-overlay i {
+        color: rgba(255, 255, 255, 0.94) !important;
+    }
+    html[data-theme="light"] .video-fs-btn {
+        color: #fff !important;
+    }
+    html[data-theme="light"] .play-btn i {
+        color: white !important;
+    }
+    html[data-theme="light"] .reel-play-icon i {
+        color: rgba(255, 255, 255, 0.95) !important;
+    }
+
+    /* --- Story elements (keep white on dark overlays) --- */
+    html[data-theme="light"] .story-username {
+        color: #e4e6eb !important;
+    }
+    html[data-theme="light"] .story-text-overlay {
+        color: white !important;
+    }
+    html[data-theme="light"] .create-story-btn {
+        color: white !important;
+    }
+    html[data-theme="light"] .story-color-opt.selected {
+        border-color: #3b82f6 !important;
+    }
+
+    /* --- Big heart animation --- */
+    html[data-theme="light"] .big-heart {
+        color: white !important;
+    }
+
+    /* --- Media type badge --- */
+    html[data-theme="light"] .media-type-badge {
+        color: #fff !important;
+    }
+
+    /* --- Remove media button --- */
+    html[data-theme="light"] .remove-media-btn {
+        color: white !important;
+    }
+
+    /* --- Image overlay close (keep white on dark overlay) --- */
+    html[data-theme="light"] .img-close-btn {
+        color: #fff !important;
+    }
+
+    /* --- Toast close button --- */
+    html[data-theme="light"] .toast .close-btn {
+        color: #65676b !important;
+        background: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- View all families button --- */
+    html[data-theme="light"] #viewAllFamiliesBtn {
+        color: #4b5563 !important;
+    }
+    html[data-theme="light"] #viewAllFamiliesBtn:hover {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Section card hover --- */
+    html[data-theme="light"] .section-card:hover {
+        border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* --- Profile border fix --- */
+    html[data-theme="light"] img#profileImage {
+        border-color: #f0f2f5 !important;
+    }
+    html[data-theme="light"] #profileStatus {
+        color: #65676b !important;
+    }
+
+    /* --- Recording pulse (keep visible) --- */
+    html[data-theme="light"] .recording-pulse {
+        border-color: #ef4444 !important;
+        background-color: #ef4444 !important;
+    }
+
+    /* --- Attachment button --- */
+    html[data-theme="light"] .attach-btn:hover {
+        border-color: rgba(0, 0, 0, 0.2) !important;
+    }
+
+    /* --- General input placeholders --- */
+    html[data-theme="light"] input::placeholder {
+        color: #8a8d91 !important;
+    }
+
+    /* --- Chat CSS Variables override --- */
+    html[data-theme="light"] {
+        --bg: #f0f2f5;
+        --glass-bg: rgba(0, 0, 0, 0.03);
+        --glass-border: rgba(0, 0, 0, 0.1);
+        --accent: #2563eb;
+        --muted: #1c1e21;
+        --reply-bg: rgba(0, 0, 0, 0.04);
+        --reply-border: rgba(0, 0, 0, 0.1);
+        --msg-incoming-bg: #e4e6ea;
+        --msg-outgoing-bg: rgba(59, 130, 246, 0.15);
+    }
+
+    /* --- Delete modal (Tailwind-based on multiple pages) --- */
+    html[data-theme="light"] .bg-gray-600 {
+        background-color: #d1d5db !important;
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .bg-gray-600:hover {
+        background-color: #c4c7cc !important;
+    }
+
+    /* --- Keep white text on colored buttons --- */
+    html[data-theme="light"] .bg-red-600 .text-white,
+    html[data-theme="light"] .bg-red-700 .text-white,
+    html[data-theme="light"] .bg-blue-600 .text-white,
+    html[data-theme="light"] .bg-green-600 .text-white,
+    html[data-theme="light"] .bg-emerald-600 .text-white {
+        color: #ffffff !important;
+    }
+
+    /* --- Submit premium button --- */
+    html[data-theme="light"] .submit-btn-premium:hover:not(:disabled) {
+        color: #fff !important;
+    }
+
+    /* --- Composer box shadow fix --- */
+    html[data-theme="light"] .composer {
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* --- Fix labels and small text --- */
+    html[data-theme="light"] label {
+        color: #4b5563 !important;
+    }
+
+    /* --- Spinner (loading states) --- */
+    html[data-theme="light"] .fa-spinner {
+        color: #6b7280 !important;
+    }
+
+    /* --- Glass panel icons and text contrast --- */
+    html[data-theme="light"] .glass-panel h2 {
+        color: #4b5563 !important;
+    }
+    html[data-theme="light"] .glass-panel i {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-button i {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-button span {
+        color: #1c1e21 !important;
+    }
+
+    /* --- Preserve specific icon colors --- */
+    html[data-theme="light"] .text-red-500 i,
+    html[data-theme="light"] i.text-red-500 {
+        color: #dc2626 !important;
+    }
+    html[data-theme="light"] .text-yellow-400 i,
+    html[data-theme="light"] i.text-yellow-400 {
+        color: #f59e0b !important;
+    }
+    html[data-theme="light"] .heart-btn,
+    html[data-theme="light"] .heart-btn i {
+        color: #ef4444 !important;
+    }
+
+    /* --- Upload area text --- */
+    html[data-theme="light"] .upload-area i {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .upload-area p,
+    html[data-theme="light"] .upload-area span {
+        color: #4b5563 !important;
+    }
+
+    /* --- Media viewer close button (keep white on dark overlay) --- */
+    html[data-theme="light"] #mediaViewerModal button {
+        color: #fff !important;
+    }
+
+
+    /* --- Dark Links for Light Mode --- */
+    html[data-theme="light"] a,
+    html[data-theme="light"] .post-text a {
+        color: #1d4ed8 !important;
+    }
+    html[data-theme="light"] a:hover,
+    html[data-theme="light"] .post-text a:hover {
+        color: #1e40af !important;
+    }
+    /* Override inline JS link color */
+    html[data-theme="light"] a[style*="color:#7dd3fc"],
+    html[data-theme="light"] a[style*="color: #7dd3fc"] {
+        color: #1d4ed8 !important;
+    }
+    /* Keep navbar/button colors intact */
+    html[data-theme="light"] .glass-bottom-navbar a {
+        color: #6b7280 !important;
+    }
+    html[data-theme="light"] .glass-bottom-navbar a.text-blue-400 {
+        color: #2563eb !important;
+    }
+    html[data-theme="light"] .glass-navbar a {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .glass-dropdown a {
+        color: #1c1e21 !important;
+    }
+    html[data-theme="light"] .read-more-btn {
+        color: #1d4ed8 !important;
+    }
+
+    /* ============================================================
+       THEME TOGGLE SWITCH (Settings Page)
+       ============================================================ */
+    .theme-switch {
+        position: relative;
+        width: 52px;
+        height: 28px;
+        flex-shrink: 0;
+    }
+    .theme-switch input { display: none; }
+    .theme-slider {
+        position: absolute;
+        inset: 0;
+        background: #374151;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .theme-slider:before {
+        content: '';
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        bottom: 3px;
+        left: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .theme-switch input:checked + .theme-slider {
+        background: linear-gradient(135deg, #f59e0b, #f97316);
+    }
+    .theme-switch input:checked + .theme-slider:before {
+        transform: translateX(24px);
+    }
+
+
+    /* ===== DESKTOP RESPONSIVE LAYOUT ===== */
+    .desktop-sidebar {
+        display: none;
+    }
+
+    @media (min-width: 768px) {
+        .glass-bottom-navbar {
+            display: none !important;
+        }
+
+        .desktop-sidebar {
+            display: flex;
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 220px;
+            height: 100vh;
+            background: rgba(10, 10, 10, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            flex-direction: column;
+            padding: 20px 12px;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .desktop-sidebar .sidebar-logo {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 800;
+            font-size: 22px;
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 12px;
+            margin-bottom: 28px;
+            display: block;
+        }
+
+        .desktop-sidebar .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .desktop-sidebar .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .desktop-sidebar .sidebar-link:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .desktop-sidebar .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+        }
+
+        .desktop-sidebar .sidebar-link i {
+            width: 24px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        /* Main content offset for sidebar */
+        body {
+            padding-right: 220px !important;
+        }
+
+        /* Adjust sticky headers */
+        header.sticky {
+            right: 220px;
+        }
+
+        .glass-navbar.sticky {
+            right: 220px;
+        }
+
+        /* Light mode sidebar */
+        html[data-theme="light"] .desktop-sidebar {
+            background: rgba(255, 255, 255, 0.97) !important;
+            border-left-color: rgba(0, 0, 0, 0.08) !important;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-link {
+            color: #65676b;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-link:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #1c1e21;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.1);
+            color: #2563eb;
+        }
+        html[data-theme="light"] .desktop-sidebar .sidebar-logo {
+            color: #1c1e21;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .desktop-sidebar {
+            width: 260px;
+        }
+        body {
+            padding-right: 260px !important;
+        }
+        header.sticky {
+            right: 260px;
+        }
+        .glass-navbar.sticky {
+            right: 260px;
+        }
+    }
+
+    @media (min-width: 1440px) {
+        .desktop-sidebar {
+            width: 280px;
+        }
+        body {
+            padding-right: 280px !important;
+        }
+        header.sticky {
+            right: 280px;
+        }
+        .glass-navbar.sticky {
+            right: 280px;
+        }
+    }
+
+
+    /* ===== CREATE POST DESKTOP ADJUSTMENTS ===== */
+    @media (min-width: 768px) {
+        body > div:first-of-type,
+        .glass-panel {
+            max-width: 680px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    }
+    @media (min-width: 1024px) {
+        body > div:first-of-type,
+        .glass-panel {
+            max-width: 780px;
+        }
+    }
+
+</style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+<!-- Desktop Sidebar Navigation -->
+<aside class="desktop-sidebar">
+    <a href="/chat_list" class="sidebar-logo">Aite</a>
+    <nav class="sidebar-nav">
+        <a href="/chat_list" class="sidebar-link" data-page="/chat_list">
+            <i class="fas fa-home"></i>
+            <span>الرئيسية</span>
+        </a>
+        <a href="/users_list" class="sidebar-link" data-page="/users_list">
+            <i class="fab fa-facebook-messenger"></i>
+            <span>المحادثات</span>
+        </a>
+        <a href="/reels" class="sidebar-link" data-page="/reels">
+            <i class="fas fa-clapperboard"></i>
+            <span>ريلز</span>
+        </a>
+        <a href="/notifications" class="sidebar-link" data-page="/notifications">
+            <i class="fas fa-bell"></i>
+            <span>الإشعارات</span>
+        </a>
+        <a href="/all_users" class="sidebar-link" data-page="/all_users">
+            <i class="fas fa-users"></i>
+            <span>المستخدمون</span>
+        </a>
+        <a href="/search" class="sidebar-link" data-page="/search">
+            <i class="fas fa-search"></i>
+            <span>بحث</span>
+        </a>
+        <a href="/profile" class="sidebar-link" data-page="/profile">
+            <i class="fas fa-user"></i>
+            <span>الملف الشخصي</span>
+        </a>
+        <a href="/settings" class="sidebar-link" data-page="/settings">
+            <i class="fas fa-cog"></i>
+            <span>الإعدادات</span>
+        </a>
+    </nav>
+</aside>
+
+
+
+    <div class="glass-panel p-6 sm:p-8 rounded-[2rem] w-full max-w-2xl relative z-10">
+        
+        <div class="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+            <a href="/chat_list" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/5 transition duration-300" title="العودة">
+                 <i class="fas fa-arrow-right text-lg"></i>
+            </a>
+            <h1 class="text-2xl font-bold text-white tracking-wide">
+                إنشاء منشور
+            </h1>
+            <div class="w-10"></div> 
+        </div>
+        
+        <form id="createPostForm" action="/api/posts/create" method="POST" enctype="multipart/form-data">
+            
+            <!-- Text Content -->
+            <div class="mb-6 relative">
+                <i class="fas fa-pen absolute top-5 right-5 text-gray-600 text-xs"></i>
+                <textarea id="postContent" name="content" rows="5" placeholder="اكتب ما تفكر به..."
+                          class="glass-input custom-scroll w-full p-5 pr-10 rounded-2xl text-lg resize-none"></textarea>
+            </div>
+
+            <!-- Hidden file inputs -->
+            <input type="file" id="imageFile" accept="image/*" class="hidden">
+            <input type="file" id="videoFile" accept="video/*" class="hidden">
+            <input type="file" id="audioFile" accept="audio/*" class="hidden">
+            <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="hidden">
+
+            <!-- Media Type Tabs -->
+            <div class="media-tabs mb-2">
+                <button type="button" class="media-tab" data-tab="image" onclick="switchMediaTab('image')">
+                    <i class="fas fa-image"></i>
+                    <span>صورة</span>
+                </button>
+                <button type="button" class="media-tab" data-tab="video" onclick="switchMediaTab('video')">
+                    <i class="fas fa-video"></i>
+                    <span>فيديو</span>
+                </button>
+                <button type="button" class="media-tab" data-tab="audio" onclick="switchMediaTab('audio')">
+                    <i class="fas fa-music"></i>
+                    <span>ملف صوتي</span>
+                </button>
+                <button type="button" class="media-tab" data-tab="record" onclick="switchMediaTab('record')">
+                    <i class="fas fa-microphone"></i>
+                    <span>تسجيل</span>
+                </button>
+            </div>
+
+            <!-- Image Section -->
+            <div id="section-image" class="media-section mb-6">
+                <div id="imageUploadZone" class="upload-zone" onclick="document.getElementById('imageFile').click()">
+                    <div class="upload-zone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                    <p class="text-sm text-gray-400 mb-1">اضغط لاختيار صورة</p>
+                    <p class="text-xs text-gray-600">PNG, JPG, GIF, WEBP</p>
+                </div>
+                <div id="imagePreviewCard" class="preview-card hidden mt-3">
+                    <div class="preview-header">
+                        <div class="file-info">
+                            <i class="fas fa-image"></i>
+                            <span id="imageFileName">صورة</span>
+                        </div>
+                        <button type="button" class="preview-remove-btn" onclick="removeMedia('image')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="preview-body">
+                        <img id="imagePreviewImg" src="" alt="معاينة" style="max-height:350px; width:100%; object-fit:contain;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video Section -->
+            <div id="section-video" class="media-section mb-6">
+                <div id="videoUploadZone" class="upload-zone" onclick="document.getElementById('videoFile').click()">
+                    <div class="upload-zone-icon"><i class="fas fa-film"></i></div>
+                    <p class="text-sm text-gray-400 mb-1">اضغط لاختيار فيديو</p>
+                    <p class="text-xs text-gray-600">MP4, MOV, WEBM</p>
+                </div>
+                <div id="videoPreviewCard" class="preview-card hidden mt-3">
+                    <div class="preview-header">
+                        <div class="file-info">
+                            <i class="fas fa-video"></i>
+                            <span id="videoFileName">فيديو</span>
+                        </div>
+                        <button type="button" class="preview-remove-btn" onclick="removeMedia('video')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="preview-body">
+                        <video id="videoPreviewEl" controls style="max-height:350px; width:100%; background:#000;"></video>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio File Section -->
+            <div id="section-audio" class="media-section mb-6">
+                <div id="audioUploadZone" class="upload-zone" onclick="document.getElementById('audioFile').click()">
+                    <div class="upload-zone-icon"><i class="fas fa-headphones"></i></div>
+                    <p class="text-sm text-gray-400 mb-1">اضغط لاختيار ملف صوتي</p>
+                    <p class="text-xs text-gray-600">MP3, WAV, OGG, M4A</p>
+                </div>
+                <div id="audioPreviewCard" class="preview-card hidden mt-3">
+                    <div class="preview-header">
+                        <div class="file-info">
+                            <i class="fas fa-music"></i>
+                            <span id="audioFileName">ملف صوتي</span>
+                        </div>
+                        <button type="button" class="preview-remove-btn" onclick="removeMedia('audio')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="preview-body">
+                        <div class="audio-file-preview">
+                            <div class="audio-file-icon">
+                                <i class="fas fa-music"></i>
+                            </div>
+                            <div class="audio-file-details">
+                                <div id="audioPreviewName" class="audio-file-name">ملف صوتي</div>
+                                <div id="audioPreviewType" class="audio-file-type">audio</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="padding: 0 16px 16px;">
+                        <audio id="audioPreviewEl" controls style="width:100%; height:40px;"></audio>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recording Section -->
+            <div id="section-record" class="media-section mb-6">
+                <div id="audioRecorderContainer" class="p-5 border border-white/5 bg-white/[0.02] rounded-2xl flex flex-col items-center transition-all duration-300">
+                    
+                    <div class="flex items-center justify-between w-full mb-4 px-2">
+                        <h3 class="text-sm font-medium text-gray-400">تسجيل صوتي</h3>
+                        <span id="recordingStatus" class="text-xs font-mono text-gray-600">جاهز</span>
+                    </div>
+                    
+                    <div class="flex items-center justify-center gap-6 mb-4">
+                        <button type="button" id="startRecordingBtn" class="w-14 h-14 rounded-full border border-white/20 bg-black text-white hover:border-white transition-all flex items-center justify-center group disabled:opacity-30" title="بدء التسجيل">
+                            <i class="fas fa-microphone text-lg group-hover:scale-110 transition-transform"></i>
+                        </button>
+                        
+                        <button type="button" id="stopRecordingBtn" class="w-14 h-14 rounded-full border border-white/5 bg-neutral-900 text-gray-400 hover:text-white hover:bg-neutral-800 flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed" disabled title="إيقاف">
+                            <i class="fas fa-stop text-lg"></i>
+                        </button>
+                    </div>
+
+                    <div id="waveform-preview" class="w-full hidden mt-2 shadow-inner"></div>
+
+                    <div id="audioPlaybackContainer" class="w-full mt-4 hidden">
+                        <button id="playPausePreview" type="button" class="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-200 rounded-xl transition duration-300 flex items-center justify-center gap-3 text-sm">
+                            <i class="fas fa-play text-xs"></i> استمع للتسجيل
+                        </button>
+                    </div>
+
+                    <div id="recordingPreviewCard" class="w-full mt-3 hidden">
+                        <div class="preview-card">
+                            <div class="preview-header">
+                                <div class="file-info">
+                                    <i class="fas fa-microphone"></i>
+                                    <span>تسجيل صوتي</span>
+                                </div>
+                                <button type="button" class="preview-remove-btn" onclick="removeMedia('record')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Submit Area -->
+            <div class="flex justify-end items-center gap-4 pt-4 border-t border-white/5 mt-2">
+                <button type="submit" id="submitBtn" class="submit-btn-premium w-full sm:w-auto px-10 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2" disabled>
+                    <span id="submitBtnText">نشر</span>
+                    <i class="fas fa-arrow-left text-xs transform -rotate-45"></i>
+                    <i id="loadingIndicator" class="fas fa-spinner fa-spin hidden"></i>
+                </button>
+            </div>
+            
+            <div id="errorMessage" class="text-red-400 bg-red-900/10 border border-red-900/20 rounded-lg p-3 mt-4 text-center text-sm hidden"></div>
+
+        </form>
+    </div>
+    
+    <script>
+        // ************** الثوابت والمتغيرات **************
+        const form = document.getElementById('createPostForm');
+        const mediaFile = document.getElementById('mediaFile');
+        const imageFileInput = document.getElementById('imageFile');
+        const videoFileInput = document.getElementById('videoFile');
+        const audioFileInput = document.getElementById('audioFile');
+        const postContent = document.getElementById('postContent');
+        const submitBtn = document.getElementById('submitBtn');
+        const submitBtnText = document.getElementById('submitBtnText');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorMessage = document.getElementById('errorMessage');
+        
+        const startRecordingBtn = document.getElementById('startRecordingBtn');
+        const stopRecordingBtn = document.getElementById('stopRecordingBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const waveformPreview = document.getElementById('waveform-preview'); 
+        const audioPlaybackContainer = document.getElementById('audioPlaybackContainer');
+        const playPausePreview = document.getElementById('playPausePreview');
+        
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob = null;
+        let mediaStream = null;
+        let wavesurferPreview;
+        let activeTab = null;
+        let selectedMediaType = null; // 'image', 'video', 'audio', 'record'
+
+        // ************** تبديل التبويبات **************
+        function switchMediaTab(tab) {
+            const tabs = document.querySelectorAll('.media-tab');
+            const sections = document.querySelectorAll('.media-section');
+
+            if (activeTab === tab) {
+                // Toggle off - clicking active tab again hides it
+                tabs.forEach(t => t.classList.remove('active'));
+                sections.forEach(s => s.classList.remove('active'));
+                activeTab = null;
+                return;
+            }
+
+            tabs.forEach(t => t.classList.remove('active'));
+            sections.forEach(s => s.classList.remove('active'));
+
+            const targetTab = document.querySelector(`.media-tab[data-tab="${tab}"]`);
+            const targetSection = document.getElementById(`section-${tab}`);
+            if (targetTab) targetTab.classList.add('active');
+            if (targetSection) targetSection.classList.add('active');
+            activeTab = tab;
+        }
+
+        // ************** إزالة الوسائط **************
+        function removeMedia(type) {
+            if (type === 'image') {
+                imageFileInput.value = '';
+                document.getElementById('imagePreviewCard').classList.add('hidden');
+                document.getElementById('imageUploadZone').classList.remove('hidden');
+                if (selectedMediaType === 'image') {
+                    selectedMediaType = null;
+                    syncMediaFile(null);
+                }
+            } else if (type === 'video') {
+                videoFileInput.value = '';
+                document.getElementById('videoPreviewCard').classList.add('hidden');
+                document.getElementById('videoUploadZone').classList.remove('hidden');
+                const vid = document.getElementById('videoPreviewEl');
+                vid.pause(); vid.src = '';
+                if (selectedMediaType === 'video') {
+                    selectedMediaType = null;
+                    syncMediaFile(null);
+                }
+            } else if (type === 'audio') {
+                audioFileInput.value = '';
+                document.getElementById('audioPreviewCard').classList.add('hidden');
+                document.getElementById('audioUploadZone').classList.remove('hidden');
+                const aud = document.getElementById('audioPreviewEl');
+                aud.pause(); aud.src = '';
+                if (selectedMediaType === 'audio') {
+                    selectedMediaType = null;
+                    syncMediaFile(null);
+                }
+            } else if (type === 'record') {
+                resetAudioRecording();
+                document.getElementById('recordingPreviewCard').classList.add('hidden');
+                if (selectedMediaType === 'record') {
+                    selectedMediaType = null;
+                    syncMediaFile(null);
+                }
+            }
+            checkInputs();
+        }
+
+        // ************** مزامنة الملف الرئيسي **************
+        function syncMediaFile(file) {
+            if (!file) {
+                mediaFile.value = '';
+                return;
+            }
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            mediaFile.files = dataTransfer.files;
+        }
+
+        // ************** معالجة اختيار الصور **************
+        imageFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    document.getElementById('imagePreviewImg').src = ev.target.result;
+                    document.getElementById('imageFileName').textContent = file.name;
+                    document.getElementById('imagePreviewCard').classList.remove('hidden');
+                    document.getElementById('imageUploadZone').classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+                selectedMediaType = 'image';
+                syncMediaFile(file);
+                // Clear other media types
+                clearOtherMedia('image');
+            }
+            checkInputs();
+        });
+
+        // ************** معالجة اختيار الفيديو **************
+        videoFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                const url = URL.createObjectURL(file);
+                document.getElementById('videoPreviewEl').src = url;
+                document.getElementById('videoFileName').textContent = file.name;
+                document.getElementById('videoPreviewCard').classList.remove('hidden');
+                document.getElementById('videoUploadZone').classList.add('hidden');
+                selectedMediaType = 'video';
+                syncMediaFile(file);
+                clearOtherMedia('video');
+            }
+            checkInputs();
+        });
+
+        // ************** معالجة اختيار الصوت **************
+        audioFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                const url = URL.createObjectURL(file);
+                document.getElementById('audioPreviewEl').src = url;
+                document.getElementById('audioPreviewName').textContent = file.name;
+                document.getElementById('audioPreviewType').textContent = file.type || 'audio';
+                document.getElementById('audioFileName').textContent = file.name;
+                document.getElementById('audioPreviewCard').classList.remove('hidden');
+                document.getElementById('audioUploadZone').classList.add('hidden');
+                selectedMediaType = 'audio';
+                syncMediaFile(file);
+                clearOtherMedia('audio');
+            }
+            checkInputs();
+        });
+
+        // ************** مسح أنواع الوسائط الأخرى **************
+        function clearOtherMedia(keepType) {
+            if (keepType !== 'image' && imageFileInput.files.length > 0) {
+                imageFileInput.value = '';
+                document.getElementById('imagePreviewCard').classList.add('hidden');
+                document.getElementById('imageUploadZone').classList.remove('hidden');
+            }
+            if (keepType !== 'video' && videoFileInput.files.length > 0) {
+                videoFileInput.value = '';
+                document.getElementById('videoPreviewCard').classList.add('hidden');
+                document.getElementById('videoUploadZone').classList.remove('hidden');
+                const vid = document.getElementById('videoPreviewEl');
+                vid.pause(); vid.src = '';
+            }
+            if (keepType !== 'audio' && audioFileInput.files.length > 0) {
+                audioFileInput.value = '';
+                document.getElementById('audioPreviewCard').classList.add('hidden');
+                document.getElementById('audioUploadZone').classList.remove('hidden');
+                const aud = document.getElementById('audioPreviewEl');
+                aud.pause(); aud.src = '';
+            }
+            if (keepType !== 'record' && audioBlob) {
+                resetAudioRecording();
+                document.getElementById('recordingPreviewCard').classList.add('hidden');
+            }
+        }
+
+        // ************** تهيئة WaveSurfer **************
+        function initializeWaveSurfer() {
+            if (wavesurferPreview) {
+                 wavesurferPreview.destroy();
+            }
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            wavesurferPreview = WaveSurfer.create({
+                container: '#waveform-preview',
+                waveColor: isLight ? '#b0b0b0' : '#404040',
+                progressColor: isLight ? '#1c1e21' : '#ffffff',
+                cursorColor: 'transparent',
+                barWidth: 2,
+                barRadius: 2,
+                barGap: 2,
+                responsive: true,
+                height: 80,
+                backend: 'MediaElement',
+                rtl: true,
+            });
+            
+            playPausePreview.onclick = () => {
+                wavesurferPreview.playPause();
+            };
+
+            wavesurferPreview.on('play', () => {
+                playPausePreview.innerHTML = '<i class="fas fa-pause text-xs"></i> إيقاف مؤقت';
+            });
+            wavesurferPreview.on('pause', () => {
+                playPausePreview.innerHTML = '<i class="fas fa-play text-xs"></i> استمع للتسجيل';
+            });
+            wavesurferPreview.on('finish', () => {
+                 playPausePreview.innerHTML = '<i class="fas fa-redo text-xs"></i> إعادة';
+                 wavesurferPreview.seekTo(0);
+            });
+        }
+
+        // ************** وظائف تسجيل الصوت **************
+        async function startRecording() {
+            try {
+                initializeWaveSurfer();
+                waveformPreview.classList.remove('hidden');
+                audioPlaybackContainer.classList.add('hidden');
+                document.getElementById('recordingPreviewCard').classList.add('hidden');
+                
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(mediaStream);
+                audioChunks = [];
+                audioBlob = null;
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    startRecordingBtn.classList.remove('recording-pulse');
+                    startRecordingBtn.innerHTML = '<i class="fas fa-microphone text-lg"></i>';
+                    
+                    audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    wavesurferPreview.load(audioUrl); 
+                    
+                    audioPlaybackContainer.classList.remove('hidden');
+                    document.getElementById('recordingPreviewCard').classList.remove('hidden');
+                    
+                    const recordedFile = new File([audioBlob], "recorded_audio.webm", { type: mediaRecorder.mimeType });
+                    selectedMediaType = 'record';
+                    syncMediaFile(recordedFile);
+                    clearOtherMedia('record');
+                    
+                    recordingStatus.textContent = 'تم الالتقاط';
+                    recordingStatus.style.color = '';
+                    checkInputs();
+                };
+
+                mediaRecorder.start();
+                
+                startRecordingBtn.disabled = true;
+                stopRecordingBtn.disabled = false;
+                startRecordingBtn.classList.add('recording-pulse'); 
+                startRecordingBtn.innerHTML = '<i class="fas fa-circle text-red-500 text-xs"></i>';
+                recordingStatus.textContent = 'جاري التسجيل...';
+                recordingStatus.style.color = '';
+                
+            } catch (err) {
+                console.error('Error:', err);
+                recordingStatus.textContent = 'خطأ ميكروفون';
+                startRecordingBtn.disabled = false;
+                stopRecordingBtn.disabled = true;
+                startRecordingBtn.classList.remove('recording-pulse');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            startRecordingBtn.disabled = false;
+            stopRecordingBtn.disabled = true;
+            startRecordingBtn.classList.remove('recording-pulse');
+        }
+        
+        function resetAudioRecording() {
+            stopRecording();
+            if(wavesurferPreview) {
+                wavesurferPreview.empty();
+                wavesurferPreview.destroy();
+                wavesurferPreview = null;
+            }
+            audioPlaybackContainer.classList.add('hidden');
+            waveformPreview.classList.add('hidden');
+            recordingStatus.textContent = 'جاهز';
+            recordingStatus.style.color = '';
+            audioBlob = null;
+            audioChunks = [];
+        }
+
+        // ************** التحقق من المدخلات **************
+        function checkInputs() {
+            const hasContent = postContent.value.trim().length > 0;
+            const hasMediaFile = mediaFile.files.length > 0;
+            
+            if (hasContent || hasMediaFile) {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
+            }
+        }
+
+        postContent.addEventListener('input', checkInputs); 
+        startRecordingBtn.addEventListener('click', startRecording);
+        stopRecordingBtn.addEventListener('click', stopRecording);
+
+        // ************** رفع ملف إلى Cloudinary **************
+        async function uploadToCloudinary(file, resourceType) {
+            var signRes = await fetch('/api/cloudinary/sign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }),
+                credentials: 'same-origin'
+            });
+            var signData = await signRes.json();
+            if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+
+            var fd = new FormData();
+            fd.append('file', file);
+            fd.append('api_key', signData.api_key);
+            fd.append('timestamp', signData.timestamp);
+            fd.append('signature', signData.signature);
+            fd.append('folder', signData.folder);
+
+            var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+            var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
+            var uploadData = await uploadRes.json();
+
+            if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف إلى Cloudinary');
+            return uploadData.secure_url;
+        }
+
+        // ************** إرسال المنشور **************
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtnText.textContent = 'جاري النشر';
+            loadingIndicator.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+
+            const content = postContent.value.trim();
+            let mediaUrl = null;
+            let mediaType = null;
+
+            try {
+                if (mediaFile.files.length > 0) {
+                    const file = mediaFile.files[0];
+                    const mimeType = file.type || '';
+                    let resourceType = 'auto';
+                    if (mimeType.startsWith('image/')) { resourceType = 'image'; mediaType = 'image'; }
+                    else if (mimeType.startsWith('video/')) { resourceType = 'video'; mediaType = 'video'; }
+                    else if (mimeType.startsWith('audio/')) { resourceType = 'video'; mediaType = 'audio'; }
+                    else { resourceType = 'auto'; mediaType = 'raw'; }
+
+                    submitBtnText.textContent = 'جاري رفع الملف...';
+                    mediaUrl = await uploadToCloudinary(file, resourceType);
+                }
+
+                submitBtnText.textContent = 'جاري النشر...';
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: content,
+                        mediaUrl: mediaUrl,
+                        mediaType: mediaType
+                    }),
+                    credentials: 'same-origin'
+                });
+                
+                const result = await response.json();
+
+                if (response.ok && result.ok) {
+                    window.location.href = '/chat_list';
+                } else {
+                    errorMessage.textContent = result.error || 'حدث خطأ';
+                    errorMessage.classList.remove('hidden');
+                    submitBtn.disabled = false;
+                    submitBtnText.textContent = 'نشر';
+                    loadingIndicator.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                errorMessage.textContent = 'خطأ: ' + (error.message || 'فشل الاتصال.');
+                errorMessage.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtnText.textContent = 'نشر';
+                loadingIndicator.classList.add('hidden');
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            checkInputs(); 
+        });
+
+        function formatAndEscapeContent(text) {
+            if (!text && text !== 0) return '';
+            let escapedText = String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return escapedText.replace(urlRegex, function(url) {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 hover:underline transition" dir="ltr" style="display:inline-block; max-width:100%; word-break:break-all;" onclick="event.stopPropagation()">${url}</a>`;
+            });
+        }
+    </script>
+<script src="/lang.js"></script>
+
+
+<script>
+(function() {
+    var path = window.location.pathname;
+    var links = document.querySelectorAll('.desktop-sidebar .sidebar-link');
+    links.forEach(function(link) {
+        if (link.getAttribute('data-page') === path) {
+            link.classList.add('active');
+        }
+    });
+})();
+</script>
+
+<script>
+// Heartbeat - mark user as active
+(function(){
+  fetch('/api/status/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(()=>{});
+  setInterval(() => { fetch("/api/status/heartbeat", { method: "POST", credentials: "same-origin" }).catch(()=>{}); }, 20000);
+})();
+</script>
+
+</body>
+</html>
