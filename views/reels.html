@@ -1065,8 +1065,10 @@
           if (container) container.insertAdjacentHTML('beforeend', createReelReplyHtml(replyData, currentReelIdForComments, commentId));
           const section = document.getElementById(`replies-section-${commentId}`);
           if (section) section.style.display = '';
-          // Background sync
-          fetchAndRenderReelComments(currentReelIdForComments).catch(() => {});
+          // Update counter locally
+          updateReelCommentCounter(1);
+          // Background sync - only refresh this comment's replies
+          loadAllReelReplies(currentReelIdForComments, commentId);
         }
       } catch (e) { console.error(e); }
       return;
@@ -1090,8 +1092,10 @@
           if (container) container.insertAdjacentHTML('beforeend', createReelReplyHtml(replyData, currentReelIdForComments, commentId));
           const section = document.getElementById(`replies-section-${commentId}`);
           if (section) section.style.display = '';
-          // Background sync
-          fetchAndRenderReelComments(currentReelIdForComments).catch(() => {});
+          // Update counter locally
+          updateReelCommentCounter(1);
+          // Background sync - only refresh this comment's replies
+          loadAllReelReplies(currentReelIdForComments, commentId);
         } else {
           alert(data.error || 'فشل في إرسال الرد');
         }
@@ -1120,10 +1124,24 @@
         list.insertAdjacentHTML('beforeend', createCommentHtml(commentData, currentReelIdForComments));
         list.scrollTop = list.scrollHeight;
       }
-      // Background sync
+      // Update counter locally
+      updateReelCommentCounter(1);
+      // Background sync for normal comments
       fetchAndRenderReelComments(currentReelIdForComments).catch(() => {});
     } catch(e) { console.error('send comment error', e); alert('فشل الإرسال'); }
   });
+
+  // Helper: update reel comment counter by delta
+  function updateReelCommentCounter(delta) {
+    const badge = document.getElementById('commentCountBadge');
+    const current = parseInt(badge?.innerText || '0') || 0;
+    const newCount = current + delta;
+    if (badge) badge.innerText = newCount;
+    if (currentReelIdForComments) {
+      const countEl = document.getElementById(`commentCount-${currentReelIdForComments}`);
+      if (countEl) countEl.textContent = newCount;
+    }
+  }
 
   // Enter key to send comment
   document.getElementById('commentInput').addEventListener('keydown', function(e) {

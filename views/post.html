@@ -2500,13 +2500,16 @@
             content.addEventListener('touchend', onTouchEnd);
         }
 
+        let _fetchCommentsVersion = 0;
         async function fetchComments(id) {
+            const myVersion = ++_fetchCommentsVersion;
             const list = document.getElementById('commentsList');
             list.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>';
             
             const res = await fetch(`/api/posts/${id}/comments`);
             const data = await res.json();
             
+            if (myVersion !== _fetchCommentsVersion) return; // stale response, discard
             if(data.ok) {
                 const totalCount = data.totalCount || data.comments.length;
                 document.getElementById('commentCountBadge').innerText = totalCount;
@@ -2819,8 +2822,10 @@
                         }
                         const section = document.getElementById(`replies-section-${commentId}`);
                         if (section) section.style.display = '';
-                        // Background sync
-                        fetchComments(pid).catch(() => {});
+                        // Update counter locally
+                        updateCommentCounter(1);
+                        // Background sync - only refresh this comment's replies
+                        loadAllReplies(pid, commentId);
                     }
                 } catch (e) { console.error(e); }
                 btn.disabled = false;
@@ -2847,8 +2852,10 @@
                         }
                         const section = document.getElementById(`replies-section-${commentId}`);
                         if (section) section.style.display = '';
-                        // Background sync
-                        fetchComments(pid).catch(() => {});
+                        // Update counter locally
+                        updateCommentCounter(1);
+                        // Background sync - only refresh this comment's replies
+                        loadAllReplies(pid, commentId);
                     }
                 } catch (e) { console.error(e); }
                 btn.disabled = false;
@@ -2872,12 +2879,24 @@
                         list.insertAdjacentHTML('beforeend', createCommentHtml(commentData, pid));
                         list.scrollTop = list.scrollHeight;
                     }
-                    // Background sync
+                    // Update counter locally
+                    updateCommentCounter(1);
+                    // Background sync for normal comments
                     fetchComments(pid).catch(() => {});
                 }
             } catch(e) { console.error(e); }
             btn.disabled = false;
         };
+
+        // Helper: update comment counter by delta
+        function updateCommentCounter(delta) {
+            const badge = document.getElementById('commentCountBadge');
+            const display = document.getElementById('commentsCountDisplay');
+            const current = parseInt(badge?.innerText || '0') || 0;
+            const newCount = current + delta;
+            if (badge) badge.innerText = newCount;
+            if (display) display.innerText = newCount;
+        }
 
         // Enter key to send
         document.getElementById('newCommentInput').addEventListener('keydown', function(e) {

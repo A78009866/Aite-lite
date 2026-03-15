@@ -3438,6 +3438,10 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
 
     await replyRef.set(replyData);
 
+    // Read back saved reply to get resolved timestamp
+    const savedReplySnap = await replyRef.once('value');
+    const savedReply = savedReplySnap.val() || replyData;
+
     // increment repliesCount on comment
     let newRepliesCount = 0;
     await commentRef.child('repliesCount').transaction((current) => {
@@ -3472,7 +3476,7 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
       console.error('Failed to create comment_reply notification:', nerr);
     }
 
-    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+    res.json({ ok: true, reply: savedReply, repliesCount: newRepliesCount });
 
   } catch (error) {
     console.error('Error creating reply:', error);
@@ -3705,6 +3709,10 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
 
     await newReplyRef.set(replyData);
 
+    // Read back saved reply to get resolved timestamp
+    const savedNestedReplySnap = await newReplyRef.once('value');
+    const savedNestedReply = savedNestedReplySnap.val() || replyData;
+
     // increment repliesCount on comment
     const commentRef = db.ref(`comments/${postId}/${commentId}`);
     let newRepliesCount = 0;
@@ -3738,7 +3746,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
       console.error('Failed to create reply_reply notification:', nerr);
     }
 
-    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+    res.json({ ok: true, reply: savedNestedReply, repliesCount: newRepliesCount });
   } catch (error) {
     console.error('Error creating nested reply:', error);
     res.status(500).json({ ok: false, error: 'Failed to create reply' });
@@ -3846,6 +3854,10 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requir
 
     await newReplyRef.set(replyData);
 
+    // Read back saved reply to get resolved timestamp
+    const savedReelNestedReplySnap = await newReplyRef.once('value');
+    const savedReelNestedReply = savedReelNestedReplySnap.val() || replyData;
+
     // increment repliesCount on comment
     const commentRef = db.ref(`reels_comments/${reelId}/${commentId}`);
     let newRepliesCount = 0;
@@ -3880,7 +3892,7 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requir
       console.error('Failed to create reels reply_reply notification:', nerr);
     }
 
-    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+    res.json({ ok: true, reply: savedReelNestedReply, repliesCount: newRepliesCount });
   } catch (error) {
     console.error('Error creating nested reply for reel:', error);
     res.status(500).json({ ok: false, error: 'Failed to create reply' });
@@ -4416,6 +4428,10 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
 
     await replyRef.set(replyData);
 
+    // Read back saved reply to get resolved timestamp
+    const savedReelReplySnap = await replyRef.once('value');
+    const savedReelReply = savedReelReplySnap.val() || replyData;
+
     // increment repliesCount on comment
     let newRepliesCount = 0;
     await commentRef.child('repliesCount').transaction((current) => {
@@ -4451,7 +4467,7 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
       console.error('Failed to create reels comment_reply notification:', nerr);
     }
 
-    res.json({ ok: true, reply: replyData, repliesCount: newRepliesCount });
+    res.json({ ok: true, reply: savedReelReply, repliesCount: newRepliesCount });
   } catch (error) {
     console.error('Error creating reply for reel comment:', error);
     res.status(500).json({ ok: false, error: 'Failed to create reply' });

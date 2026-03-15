@@ -2493,10 +2493,15 @@
                         </div>
 
                         <div class="flex flex-col items-end gap-2" style="flex-shrink:0;">
-                            <a id="editProfileButton" href="/edit_profile"
-                               class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-4 rounded-lg transition duration-300 flex items-center text-sm shadow-md">
-                                تعديل
-                            </a>
+                            <div class="flex gap-2 items-center">
+                                <a id="editProfileButton" href="/edit_profile"
+                                   class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-4 rounded-lg transition duration-300 flex items-center text-sm shadow-md">
+                                    تعديل
+                                </a>
+                                <button id="shareProfileBtn" onclick="shareProfileLink()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-300 flex items-center text-sm shadow-md" title="مشاركة البروفايل">
+                                    <i class="fas fa-share-alt" style="font-size:14px;"></i>
+                                </button>
+                            </div>
 
                             <!-- chatButton + 3-dot menu row -->
                             <div id="chatActionsRow" class="flex gap-2 items-center">
@@ -2699,6 +2704,31 @@ let currentPostIdToDelete = null;
 /* --------- New variables for post options bottom sheet --------- */
 let currentOptionsPostId = null;
 let currentOptionsUserId = null;
+
+/* ---------------- Share profile link ---------------- */
+function shareProfileLink() {
+    const profileId = currentProfileId || currentUserId;
+    if (!profileId) return;
+    const url = window.location.origin + '/profile?userId=' + profileId;
+    if (navigator.share) {
+        navigator.share({ title: 'بروفايل', url: url }).catch(() => {});
+    } else {
+        navigator.clipboard.writeText(url).then(() => {
+            showToast('تم نسخ رابط البروفايل!', { type: 'success' });
+        }).catch(() => {
+            // Fallback for older browsers
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('تم نسخ رابط البروفايل!', { type: 'success' });
+        });
+    }
+}
 
 /* ---------------- Toast helper (black glassy) ---------------- */
 function showToast(message, opts = {}) {
