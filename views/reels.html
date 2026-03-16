@@ -529,6 +529,17 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   let replyingToUsername = null;
   const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>');
 
+  // Helper: convert Cloudinary video URL to a thumbnail image URL
+  function getVideoThumbnail(videoUrl) {
+      if (!videoUrl) return '';
+      const cloudinaryVideoRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(v[0-9]+\/)(.+)\.(mp4|mov|avi|webm|mkv|m4v)/i;
+      const match = videoUrl.match(cloudinaryVideoRegex);
+      if (match) {
+          return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
+      }
+      return '';
+  }
+
   document.addEventListener('DOMContentLoaded', loadReels);
 
   // Fetch user info for avatar in comment input
@@ -578,7 +589,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     const wrapper = document.getElementById('reelsWrapper');
     wrapper.innerHTML = reels.map((reel, index) => {
       const isOwner = reel.userId === currentUserId;
-      const poster = reel.thumbnailUrl || BLACK_POSTER;
+      const poster = reel.thumbnailUrl || getVideoThumbnail(reel.videoUrl) || BLACK_POSTER;
       return `
       <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
         <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-contain" playsinline preload="metadata" webkit-playsinline></video>

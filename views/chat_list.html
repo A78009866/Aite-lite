@@ -3288,6 +3288,19 @@ function handleNotifClick(el) {
 
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png";
         const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
+
+        // Helper: convert Cloudinary video URL to a thumbnail image URL
+        function getVideoThumbnail(videoUrl) {
+            if (!videoUrl) return '';
+            // Cloudinary video thumbnail: change extension to .jpg and add so_1 for 1s offset
+            const cloudinaryVideoRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(v[0-9]+\/)(.+)\.(mp4|mov|avi|webm|mkv|m4v)/i;
+            const match = videoUrl.match(cloudinaryVideoRegex);
+            if (match) {
+                return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
+            }
+            // fallback: return empty (will use client-side extraction)
+            return '';
+        }
         const CREATE_FAMILY_BG = 'https://plus.unsplash.com/premium_vector-1682298522309-88e4dc1ccc4d?q=80&w=1125&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
         const postsFeed = document.getElementById('postsFeed');
@@ -3857,7 +3870,8 @@ function handleNotifClick(el) {
                     `;
                 } else if (post.media.type === 'video') {
                      // LARGER, CLEANER VIDEO DISPLAY (minimal controls, big and clear)
-                     const poster = escapeAttr(post.media.poster || post.media.thumbnail || 'https://via.placeholder.com/1200x675?text=Video');
+                     const autoThumb = getVideoThumbnail(post.media.url);
+                     const poster = escapeAttr(post.media.poster || post.media.thumbnail || autoThumb || '');
                      const videoSrc = escapeAttr(post.media.url || '');
                      mediaContent = `
                         <div class="relative w-full video-large overflow-hidden bg-black group" id="video-container-${escapeAttr(post.postId)}" style="border-radius:0">
@@ -4414,7 +4428,12 @@ function handleNotifClick(el) {
                         let mediaHtml = '';
                         if (mediaUrl) {
                             if (mediaType === 'video') {
-                                mediaHtml = `<video class="story-card-media" src="${escapeAttr(mediaUrl)}" muted preload="metadata" poster="" onerror="this.style.display='none'"></video>`;
+                                const videoThumb = getVideoThumbnail(mediaUrl);
+                                if (videoThumb) {
+                                    mediaHtml = `<img class="story-card-media" src="${escapeAttr(videoThumb)}" alt="" onerror="this.style.display='none'">`;
+                                } else {
+                                    mediaHtml = `<img class="story-card-media" src="${escapeAttr(mediaUrl)}" alt="" onerror="this.style.display='none'">`;
+                                }
                             } else {
                                 mediaHtml = `<img class="story-card-media" src="${escapeAttr(mediaUrl)}" alt="" onerror="this.style.display='none'">`;
                             }
@@ -4423,8 +4442,12 @@ function handleNotifClick(el) {
                         const textHtml = storyText ? `<span class="story-card-text">${escapeHtml(storyText.substring(0, 30))}</span>` : '';
                         const countHtml = itemCount > 1 ? `<span class="story-card-count">${itemCount}</span>` : '';
 
+                        // Use story_color for border (from latest item or group level)
+                        const storyColor = group.story_color || (latestItem && latestItem.story_color) || '';
+                        const borderStyle = storyColor ? `style="border-color: ${escapeAttr(storyColor)}; box-shadow: 0 4px 16px ${escapeAttr(storyColor)}33;"` : '';
+
                         html += `
-                            <div class="story-card ${unseenClass}" onclick="window.location.href='/stories?groupIndex=${index}'">
+                            <div class="story-card ${unseenClass}" ${borderStyle} onclick="window.location.href='/stories?groupIndex=${index}'">
                                 ${mediaHtml}
                                 <div class="story-card-overlay"></div>
                                 <img class="story-card-avatar" src="${escapeAttr(group.profile_picture_url || myPic)}" alt="${escapeAttr(group.username)}" onerror="this.src='${DEFAULT_AVATAR}'">
@@ -4703,7 +4726,8 @@ function handleNotifClick(el) {
             document.getElementById('storyTextContent').textContent = story.text || '';
             
             if (story.mediaType === 'video') {
-                mediaContainer.innerHTML = `<video id="activeStoryVideo" src="${escapeAttr(story.mediaUrl)}" autoplay playsinline poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect fill='%23000' width='1' height='1'/%3E%3C/svg%3E" class="w-full h-full object-contain bg-black"></video>`;
+                const storyVideoPoster = getVideoThumbnail(story.mediaUrl) || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect fill='%23000' width='1' height='1'/%3E%3C/svg%3E";
+                mediaContainer.innerHTML = `<video id="activeStoryVideo" src="${escapeAttr(story.mediaUrl)}" autoplay playsinline poster="${escapeAttr(storyVideoPoster)}" class="w-full h-full object-contain bg-black"></video>`;
                 const vid = document.getElementById('activeStoryVideo');
                 vid.onloadedmetadata = () => {
                     startStoryTimer(vid.duration * 1000);
@@ -4940,8 +4964,8 @@ function handleNotifClick(el) {
         function createReelsTrayHtml(reels) {
             if(!reels || reels.length === 0) return '';
             const items = reels.map(r => {
-                const thumb = r.thumbnailUrl || r.posterUrl || ''; 
                 const videoUrl = r.videoUrl || r.video_url || '';
+                const thumb = r.thumbnailUrl || r.posterUrl || getVideoThumbnail(videoUrl) || ''; 
                 // show poster image if available, otherwise show placeholder for later thumbnail extraction
                 const posterHtml = thumb
                   ? `<img src="${escapeAttr(thumb)}" alt="thumbnail" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23000%22/></svg>'">`

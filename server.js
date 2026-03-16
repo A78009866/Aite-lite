@@ -63,11 +63,24 @@ const storage = new CloudinaryStorage({
       .replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
       .substring(0, 100);
 
+    // Smart compression: optimize quality while preserving visual fidelity
+    let transformation = [];
+    if (file.mimetype && file.mimetype.startsWith('image/')) {
+      transformation = [
+        { quality: 'auto:good', fetch_format: 'auto' }
+      ];
+    } else if (file.mimetype && file.mimetype.startsWith('video/')) {
+      transformation = [
+        { quality: 'auto:good', fetch_format: 'auto' }
+      ];
+    }
+
     return {
       folder: folderName,
       public_id: Date.now() + '-' + (safeName || 'file'),
       resource_type: 'auto',
-      format: format
+      format: format,
+      transformation: transformation.length > 0 ? transformation : undefined
     };
   },
 });
@@ -1493,10 +1506,14 @@ app.get('/api/stories', requireAuth, async (req, res) => {
           items: []
         };
       }
-      // إضافة حالة المشاهدة ولون القصة
-      const storyViews = allViews[story.id] || {};
-      story.viewed = !!storyViews[currentUserId];
-      groupedStories[story.userId].items.push(story);
+        // إضافة حالة المشاهدة ولون القصة
+        const storyViews = allViews[story.id] || {};
+        story.viewed = !!storyViews[currentUserId];
+        // حفظ لون القصة على مستوى المجموعة (أول لون غير فارغ)
+        if (story.story_color && !groupedStories[story.userId].story_color) {
+          groupedStories[story.userId].story_color = story.story_color;
+        }
+        groupedStories[story.userId].items.push(story);
     });
 
     // ترتيب القصص داخل كل مستخدم حسب الوقت

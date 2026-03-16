@@ -1809,6 +1809,41 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         document.getElementById('selectedTrackUI').style.display = 'none';
     }
 
+    // Smart client-side image compression before upload
+    async function compressImage(file, maxWidth, maxHeight, quality) {
+        maxWidth = maxWidth || 1920;
+        maxHeight = maxHeight || 1920;
+        quality = quality || 0.85;
+        if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+        if (file.size < 500 * 1024) return file; // skip small images
+        return new Promise(function(resolve) {
+            var img = new Image();
+            img.onload = function() {
+                var w = img.width, h = img.height;
+                if (w <= maxWidth && h <= maxHeight && file.size < 2 * 1024 * 1024) {
+                    resolve(file); return;
+                }
+                var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
+                var newW = Math.round(w * ratio);
+                var newH = Math.round(h * ratio);
+                var canvas = document.createElement('canvas');
+                canvas.width = newW;
+                canvas.height = newH;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, newW, newH);
+                canvas.toBlob(function(blob) {
+                    if (blob && blob.size < file.size) {
+                        resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                    } else {
+                        resolve(file);
+                    }
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = function() { resolve(file); };
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
     // رفع ملف مباشرة إلى Cloudinary باستخدام توقيع من السيرفر مع شريط تقدم
     var _storyUploadBtn = null;
     async function uploadToCloudinary(file, resourceType) {
@@ -1871,9 +1906,14 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         _storyUploadBtn = btn;
 
         try {
-            // Step 1: Upload media directly to Cloudinary
+            // Step 1: Compress image if needed, then upload to Cloudinary
             var mediaResourceType = selectedMediaType === 'video' ? 'video' : 'image';
-            var mediaUrl = await uploadToCloudinary(selectedMediaFile, mediaResourceType);
+            var fileToUpload = selectedMediaFile;
+            if (mediaResourceType === 'image') {
+                btn.innerHTML = '<i class="fas fa-compress"></i> جاري الضغط...';
+                fileToUpload = await compressImage(selectedMediaFile);
+            }
+            var mediaUrl = await uploadToCloudinary(fileToUpload, mediaResourceType);
 
             // Step 2: Upload audio if selected
             var audioUrl = null;

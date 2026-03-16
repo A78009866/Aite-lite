@@ -2315,6 +2315,41 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         startRecordingBtn.addEventListener('click', startRecording);
         stopRecordingBtn.addEventListener('click', stopRecording);
 
+        // Smart client-side image compression before upload
+        async function compressImage(file, maxWidth, maxHeight, quality) {
+            maxWidth = maxWidth || 1920;
+            maxHeight = maxHeight || 1920;
+            quality = quality || 0.85;
+            if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+            if (file.size < 500 * 1024) return file;
+            return new Promise(function(resolve) {
+                var img = new Image();
+                img.onload = function() {
+                    var w = img.width, h = img.height;
+                    if (w <= maxWidth && h <= maxHeight && file.size < 2 * 1024 * 1024) {
+                        resolve(file); return;
+                    }
+                    var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
+                    var newW = Math.round(w * ratio);
+                    var newH = Math.round(h * ratio);
+                    var canvas = document.createElement('canvas');
+                    canvas.width = newW;
+                    canvas.height = newH;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, newW, newH);
+                    canvas.toBlob(function(blob) {
+                        if (blob && blob.size < file.size) {
+                            resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                        } else {
+                            resolve(file);
+                        }
+                    }, 'image/jpeg', quality);
+                };
+                img.onerror = function() { resolve(file); };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
         // ************** رفع ملف إلى Cloudinary مع شريط تقدم **************
         async function uploadToCloudinary(file, resourceType) {
             var signRes = await fetch('/api/cloudinary/sign', {
@@ -2373,7 +2408,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 
             try {
                 if (mediaFile.files.length > 0) {
-                    const file = mediaFile.files[0];
+                    let file = mediaFile.files[0];
                     const mimeType = file.type || '';
                     let resourceType = 'auto';
                     if (mimeType.startsWith('image/')) { resourceType = 'image'; mediaType = 'image'; }
@@ -2381,6 +2416,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                     else if (mimeType.startsWith('audio/')) { resourceType = 'video'; mediaType = 'audio'; }
                     else { resourceType = 'auto'; mediaType = 'raw'; }
 
+                    // Compress images before upload
+                    if (mediaType === 'image') {
+                        submitBtnText.textContent = 'جاري الضغط...';
+                        file = await compressImage(file);
+                    }
                     submitBtnText.textContent = 'جاري رفع الملف...';
                     mediaUrl = await uploadToCloudinary(file, resourceType);
                 }

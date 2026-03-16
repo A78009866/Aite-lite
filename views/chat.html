@@ -3520,9 +3520,10 @@ function createMsgElement(msg) {
         contentHtml += `<div class="msg-media-standalone"><img src="${url}" onclick="openChatMediaViewer('${url}', 'image')"></div>`;
     } else if (type.startsWith('video')) {
         const vidId = 'chatv-' + msg.messageId;
+        const vidPoster = getVideoThumbnail(url);
         contentHtml += `<div class="msg-media-standalone">
             <div class="chat-video-wrap">
-                <video id="${vidId}" src="${url}" playsinline preload="metadata" onclick="toggleChatVideo('${vidId}')"></video>
+                <video id="${vidId}" src="${url}" playsinline preload="metadata" ${vidPoster ? 'poster="' + vidPoster + '"' : ''} onclick="toggleChatVideo('${vidId}')"></video>
                 <div class="chat-video-overlay" id="overlay-${vidId}" onclick="toggleChatVideo('${vidId}')">
                     <div class="chat-video-play-circle"><i class="fas fa-play"></i></div>
                 </div>
@@ -4333,6 +4334,52 @@ function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Helper: convert Cloudinary video URL to a thumbnail image URL
+function getVideoThumbnail(videoUrl) {
+    if (!videoUrl) return '';
+    const cloudinaryVideoRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(v[0-9]+\/)(.+)\.(mp4|mov|avi|webm|mkv|m4v)/i;
+    const match = videoUrl.match(cloudinaryVideoRegex);
+    if (match) {
+        return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
+    }
+    return '';
+}
+
+// Smart client-side image compression before upload
+async function compressImage(file, maxWidth, maxHeight, quality) {
+    maxWidth = maxWidth || 1920;
+    maxHeight = maxHeight || 1920;
+    quality = quality || 0.85;
+    if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+    if (file.size < 500 * 1024) return file;
+    return new Promise(function(resolve) {
+        var img = new Image();
+        img.onload = function() {
+            var w = img.width, h = img.height;
+            if (w <= maxWidth && h <= maxHeight && file.size < 2 * 1024 * 1024) {
+                resolve(file); return;
+            }
+            var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
+            var newW = Math.round(w * ratio);
+            var newH = Math.round(h * ratio);
+            var canvas = document.createElement('canvas');
+            canvas.width = newW;
+            canvas.height = newH;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, newW, newH);
+            canvas.toBlob(function(blob) {
+                if (blob && blob.size < file.size) {
+                    resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                } else {
+                    resolve(file);
+                }
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = function() { resolve(file); };
+        img.src = URL.createObjectURL(file);
+    });
+}
+
 // --- Sending ---
 // --- Direct Cloudinary Upload (bypass server size limits) ---
 async function uploadToCloudinary(file) {
@@ -4409,9 +4456,13 @@ sendBtn.onclick = async () => {
     var mediaType = null;
     var mediaFilename = null;
 
-    // Upload file directly to Cloudinary if present
+    // Upload file directly to Cloudinary if present (compress images first)
     if (uploadedFile) {
-      var result = await uploadToCloudinary(uploadedFile);
+      var fileToSend = uploadedFile;
+      if (uploadedFile.type && uploadedFile.type.startsWith('image/')) {
+        fileToSend = await compressImage(uploadedFile);
+      }
+      var result = await uploadToCloudinary(fileToSend);
       mediaUrl = result.url;
       var ft = uploadedFile.type || '';
       if (ft.startsWith('image')) mediaType = 'image';

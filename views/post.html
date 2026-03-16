@@ -2066,6 +2066,17 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             }
         }
 
+        // Helper: convert Cloudinary video URL to a thumbnail image URL
+        function getVideoThumbnail(videoUrl) {
+            if (!videoUrl) return '';
+            const cloudinaryVideoRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(v[0-9]+\/)(.+)\.(mp4|mov|avi|webm|mkv|m4v)/i;
+            const match = videoUrl.match(cloudinaryVideoRegex);
+            if (match) {
+                return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
+            }
+            return '';
+        }
+
         function renderPost(post) {
             let mediaContent = '';
             
@@ -2077,7 +2088,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                         </div>
                     `;
                 } else if (post.media.type === 'video') {
-                     const poster = post.media.poster || 'https://via.placeholder.com/1200x675?text=Video';
+                     const autoThumb = getVideoThumbnail(post.media.url);
+                     const poster = post.media.poster || autoThumb || '';
                      mediaContent = `
                         <div class="relative w-full video-large overflow-hidden bg-black group" id="video-container-${post.postId}" style="border-radius:0">
                             <video id="video-${post.postId}" src="${post.media.url}" 

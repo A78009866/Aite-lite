@@ -735,6 +735,17 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    // Helper: convert Cloudinary video URL to a thumbnail image URL
+    function getVideoThumbnail(videoUrl) {
+        if (!videoUrl) return '';
+        const cloudinaryVideoRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(v[0-9]+\/)(.+)\.(mp4|mov|avi|webm|mkv|m4v)/i;
+        const match = videoUrl.match(cloudinaryVideoRegex);
+        if (match) {
+            return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
+        }
+        return '';
+    }
+
     function showToast(msg) {
         const t = document.getElementById('toast');
         t.textContent = msg;
@@ -1130,7 +1141,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         stopMedia();
 
         if (story.mediaType === 'video') {
-            mediaContainer.innerHTML = `<video src="${escapeAttr(story.mediaUrl)}" autoplay playsinline poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect fill='%23000' width='1' height='1'/%3E%3C/svg%3E" style="width:100%;height:100%;object-fit:contain;background:#000;"></video>`;
+            const videoPoster = getVideoThumbnail(story.mediaUrl) || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect fill='%23000' width='1' height='1'/%3E%3C/svg%3E";
+            mediaContainer.innerHTML = `<video src="${escapeAttr(story.mediaUrl)}" autoplay playsinline poster="${escapeAttr(videoPoster)}" style="width:100%;height:100%;object-fit:contain;background:#000;"></video>`;
             const vid = mediaContainer.querySelector('video');
             vid.onloadedmetadata = () => {
                 startTimer(vid.duration * 1000);
