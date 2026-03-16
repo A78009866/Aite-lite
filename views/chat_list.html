@@ -962,107 +962,199 @@
 
         /* ensure anchor clicks don't bubble up by default */
         .post-text a { cursor: pointer; }
-                /* Stories Tray CSS */
+                /* Stories Cards CSS */
         .stories-scroll-container {
             display: flex;
-            gap: 16px;
+            gap: 10px;
             overflow-x: auto;
             padding: 12px 0;
             margin-bottom: 8px;
             -webkit-overflow-scrolling: touch;
-            scrollbar-width: none; /* Firefox */
+            scrollbar-width: none;
         }
-        .stories-scroll-container::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+        .stories-scroll-container::-webkit-scrollbar { display: none; }
 
-        .story-circle-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            width: 72px;
-            flex-shrink: 0;
-        }
-
-        .story-circle {
-            width: 68px;
-            height: 68px;
-            border-radius: 50%;
-            padding: 3px;
+        .story-card {
+            flex: 0 0 110px;
+            height: 170px;
+            border-radius: 14px;
             position: relative;
-            background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+            overflow: hidden;
+            cursor: pointer;
+            background: #111;
+            border: 2px solid transparent;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
         }
-
-        .story-circle.has-active-story {
-            background: conic-gradient(from var(--story-angle, 0deg), var(--c1, #00c6ff), var(--c2, #0072ff), transparent 40%, var(--c1, #00c6ff));
-            animation: storySnake 2.4s ease-in-out infinite;
+        .story-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 28px rgba(0,0,0,0.5);
         }
-
-        .story-circle.no-story {
-            background: #4b5563;
-            animation: none;
+        .story-card.has-unseen {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 16px rgba(59,130,246,0.3);
         }
-
-        @property --story-angle {
-            syntax: '<angle>';
-            initial-value: 0deg;
-            inherits: false;
+        .story-card.has-unseen:hover {
+            box-shadow: 0 8px 28px rgba(59,130,246,0.4);
         }
-
-        @keyframes storySnake {
-            0%   { --story-angle: 0deg; transform: scale(1); }
-            15%  { --story-angle: 70deg; transform: scale(1.04); }
-            30%  { --story-angle: 120deg; transform: scale(1); }
-            45%  { --story-angle: 190deg; transform: scale(1.04); }
-            60%  { --story-angle: 240deg; transform: scale(1); }
-            75%  { --story-angle: 310deg; transform: scale(1.04); }
-            100% { --story-angle: 360deg; transform: scale(1); }
-        }
-
-        /* fallback for browsers that don't support @property */
-        @supports not (background: conic-gradient(from 0deg, red, blue)) {
-            .story-circle.has-active-story {
-                animation: storySnakeFallback 1.8s linear infinite;
-            }
-            @keyframes storySnakeFallback {
-                0%   { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        }
-
-        .story-circle img {
+        .story-card-media {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
-            border-radius: 50%;
-            border: 2px solid #000;
             object-fit: cover;
         }
-
-        .story-username {
+        .story-card-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.05) 100%);
+        }
+        .story-card-avatar {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #3b82f6;
+            object-fit: cover;
+            background: #000;
+            z-index: 2;
+        }
+        .story-card.seen .story-card-avatar {
+            border-color: #4b5563;
+        }
+        .story-card-username {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            left: 8px;
             font-size: 11px;
-            color: #e4e6eb;
+            font-weight: 700;
+            color: #fff;
             text-align: center;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            width: 100%;
+            z-index: 2;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.7);
         }
-
-        .create-story-btn {
+        .story-card-text {
             position: absolute;
-            bottom: 0;
-            right: 0;
-            background: #3b82f6;
-            color: white;
-            width: 20px;
-            height: 20px;
+            bottom: 26px;
+            right: 6px;
+            left: 6px;
+            font-size: 10px;
+            color: rgba(255,255,255,0.85);
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            z-index: 2;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+        }
+        .story-card-online {
+            position: absolute;
+            top: 38px;
+            right: 8px;
+            width: 10px;
+            height: 10px;
+            background: #22c55e;
+            border: 2px solid #000;
             border-radius: 50%;
+            z-index: 3;
+            box-shadow: 0 0 6px rgba(34,197,94,0.6);
+        }
+        /* Create Story Card */
+        .story-card-create {
+            flex: 0 0 110px;
+            height: 170px;
+            border-radius: 14px;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            background: rgba(255,255,255,0.04);
+            border: 2px dashed rgba(255,255,255,0.15);
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+        .story-card-create:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(59,130,246,0.4);
+            transform: translateY(-4px);
+        }
+        .story-card-create .create-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #3b82f6;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
-            border: 2px solid #000;
+            color: #fff;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(59,130,246,0.3);
         }
+        .story-card-create .create-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255,255,255,0.15);
+        }
+        .story-card-create .create-label {
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        .story-card-count {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 8px;
+            z-index: 2;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Light mode story cards */
+        html[data-theme="light"] .story-card {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        html[data-theme="light"] .story-card:hover {
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        html[data-theme="light"] .story-card-create {
+            background: rgba(0,0,0,0.03);
+            border-color: rgba(0,0,0,0.12);
+        }
+        html[data-theme="light"] .story-card-create:hover {
+            background: rgba(0,0,0,0.06);
+        }
+        html[data-theme="light"] .story-card-create .create-label {
+            color: #64748b;
+        }
+        html[data-theme="light"] .story-card-avatar {
+            border-color: #3b82f6;
+        }
+        html[data-theme="light"] .story-card.seen .story-card-avatar {
+            border-color: #d1d5db;
+        }
+
+        /* Keep old circle classes for fallback/compatibility */
+        .story-circle-wrapper { display:none; }
+        .story-circle { display:none; }
+        .story-username { display:none; }
+        .create-story-btn { display:none; }
 
         /* Story Viewer Modal */
         #storyViewerModal {
@@ -2545,33 +2637,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         <div class="skeleton-bone skeleton-circle" style="width:32px;height:32px;"></div>
       </div>
     </div>
-    <!-- Stories row skeleton -->
-    <div style="padding:12px 16px;display:flex;gap:14px;overflow:hidden;">
-      
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;">
-        <div class="skeleton-bone skeleton-circle" style="width:62px;height:62px;"></div>
-        <div class="skeleton-bone" style="width:42px;height:10px;border-radius:4px;"></div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;">
-        <div class="skeleton-bone skeleton-circle" style="width:62px;height:62px;"></div>
-        <div class="skeleton-bone" style="width:42px;height:10px;border-radius:4px;"></div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;">
-        <div class="skeleton-bone skeleton-circle" style="width:62px;height:62px;"></div>
-        <div class="skeleton-bone" style="width:42px;height:10px;border-radius:4px;"></div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;">
-        <div class="skeleton-bone skeleton-circle" style="width:62px;height:62px;"></div>
-        <div class="skeleton-bone" style="width:42px;height:10px;border-radius:4px;"></div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;">
-        <div class="skeleton-bone skeleton-circle" style="width:62px;height:62px;"></div>
-        <div class="skeleton-bone" style="width:42px;height:10px;border-radius:4px;"></div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;">
-        <div class="skeleton-bone skeleton-circle" style="width:62px;height:62px;"></div>
-        <div class="skeleton-bone" style="width:42px;height:10px;border-radius:4px;"></div>
-      </div>
+    <!-- Stories cards skeleton -->
+    <div style="padding:12px 16px;display:flex;gap:10px;overflow:hidden;">
+      <div class="skeleton-bone" style="flex:0 0 110px;height:170px;border-radius:14px;"></div>
+      <div class="skeleton-bone" style="flex:0 0 110px;height:170px;border-radius:14px;"></div>
+      <div class="skeleton-bone" style="flex:0 0 110px;height:170px;border-radius:14px;"></div>
+      <div class="skeleton-bone" style="flex:0 0 110px;height:170px;border-radius:14px;"></div>
     </div>
     <!-- Post cards skeleton -->
     
@@ -4309,13 +4380,12 @@ function handleNotifClick(el) {
                 const userPicEl = document.getElementById('userProfilePic');
                 if (userPicEl) myPic = userPicEl.src;
 
+                // Create Story card
                 let html = `
-                    <div class="story-circle-wrapper" onclick="window.location.href='/create-story'">
-                        <div class="story-circle viewed border-2 border-white/50">
-                            <img src="${escapeAttr(myPic)}" alt="أضف قصة">
-                            <div class="create-story-btn"><i class="fas fa-plus"></i></div>
-                        </div>
-                        <span class="story-username">إضافة قصة</span>
+                    <div class="story-card-create" onclick="window.location.href='/create-story'">
+                        <img class="create-avatar" src="${escapeAttr(myPic)}" alt="أضف قصة" onerror="this.src='${DEFAULT_AVATAR}'">
+                        <div class="create-icon"><i class="fas fa-plus"></i></div>
+                        <span class="create-label">إضافة قصة</span>
                     </div>
                 `;
 
@@ -4323,28 +4393,35 @@ function handleNotifClick(el) {
                     storiesDataGroups = data.storiesGroups || [];
                     storiesDataGroups.forEach((group, index) => {
                         const hasUnviewed = group.items.some(item => !item.viewed);
-                        const onlineDotHtml = group.is_online ? '<span class="online-dot online-dot-small" style="z-index:10;"></span>' : '';
-                        const circleClass = hasUnviewed ? 'has-active-story' : 'no-story';
-                        // لون القصة المخصص (إن وجد) — نبحث في عدة أماكن محتملة
-                        const storyColor = group.story_color || group.storyColor || (group.items[0] && (group.items[0].story_color || group.items[0].storyColor)) || '';
-                        let customStyle = '';
-                        if (hasUnviewed && storyColor) {
-                            // استخراج الألوان من التدرج
-                            const colorMatch = storyColor.match(/#[0-9a-fA-F]{6}/g);
-                            if (colorMatch && colorMatch.length >= 2) {
-                                customStyle = `--c1:${colorMatch[0]};--c2:${colorMatch[1]};background:conic-gradient(from var(--story-angle, 0deg), ${colorMatch[0]}, ${colorMatch[1]}, transparent 40%, ${colorMatch[0]}) !important;`;
+                        const latestItem = group.items[group.items.length - 1];
+                        const mediaUrl = latestItem ? latestItem.mediaUrl : '';
+                        const mediaType = latestItem ? (latestItem.mediaType || 'image') : 'image';
+                        const storyText = latestItem ? (latestItem.text || '') : '';
+                        const itemCount = group.items.length;
+                        const onlineDotHtml = group.is_online ? '<span class="story-card-online"></span>' : '';
+                        const unseenClass = hasUnviewed ? 'has-unseen' : 'seen';
+
+                        let mediaHtml = '';
+                        if (mediaUrl) {
+                            if (mediaType === 'video') {
+                                mediaHtml = `<video class="story-card-media" src="${escapeAttr(mediaUrl)}" muted preload="metadata" poster="" onerror="this.style.display='none'"></video>`;
+                            } else {
+                                mediaHtml = `<img class="story-card-media" src="${escapeAttr(mediaUrl)}" alt="" onerror="this.style.display='none'">`;
                             }
                         }
-                        const clickAction = `window.location.href='/stories?groupIndex=${index}'`;
+
+                        const textHtml = storyText ? `<span class="story-card-text">${escapeHtml(storyText.substring(0, 30))}</span>` : '';
+                        const countHtml = itemCount > 1 ? `<span class="story-card-count">${itemCount}</span>` : '';
+
                         html += `
-                            <div class="story-circle-wrapper" onclick="${clickAction}">
-                                <div class="story-circle ${circleClass}" style="${customStyle}">
-                                    <img src="${escapeAttr(group.profile_picture_url || myPic)}" 
-                                         alt="${escapeAttr(group.username)}" 
-                                         onerror="this.src='${myPic}'">
-                                    ${onlineDotHtml}
-                                </div>
-                                <span class="story-username">${escapeHtml(group.username)}</span>
+                            <div class="story-card ${unseenClass}" onclick="window.location.href='/stories?groupIndex=${index}'">
+                                ${mediaHtml}
+                                <div class="story-card-overlay"></div>
+                                <img class="story-card-avatar" src="${escapeAttr(group.profile_picture_url || myPic)}" alt="${escapeAttr(group.username)}" onerror="this.src='${DEFAULT_AVATAR}'">
+                                ${onlineDotHtml}
+                                ${countHtml}
+                                ${textHtml}
+                                <span class="story-card-username">${escapeHtml(group.username)}</span>
                             </div>
                         `;
                     });
@@ -5039,6 +5116,11 @@ function handleNotifClick(el) {
                             postsFeed.innerHTML += reelsHtml;
                         }
 
+                        // Insert friend suggestions after the 2nd post
+                        if (index === 1 && window._discoverUsersHtml) {
+                            postsFeed.innerHTML += window._discoverUsersHtml;
+                        }
+
                         if (post.media && post.media.type === 'audio') {
                             audioPostsToInit.push({ postId: post.postId, url: post.media.url });
                         }
@@ -5504,6 +5586,7 @@ function handleNotifClick(el) {
                 const data = await res.json();
                 if (!res.ok || !data.ok || !data.users || data.users.length === 0) {
                     wrapper.classList.add('hidden');
+                    window._discoverUsersHtml = '';
                     return;
                 }
 
@@ -5533,11 +5616,13 @@ function handleNotifClick(el) {
 
                 if (sorted.length === 0) {
                     wrapper.classList.add('hidden');
+                    window._discoverUsersHtml = '';
                     return;
                 }
 
-                wrapper.classList.remove('hidden');
-                scroll.innerHTML = sorted.map(u => {
+                // Keep static wrapper hidden - suggestions will be injected into feed
+                wrapper.classList.add('hidden');
+                const cardsHtml = sorted.map(u => {
                     const onlineDot = u.is_online ? '<span class="dc-online-dot"></span>' : '';
                     // Smart category label
                     let categoryLabel = '';
@@ -5572,8 +5657,26 @@ function handleNotifClick(el) {
                         </div>
                     `;
                 }).join('');
+
+                // Store the HTML for inline feed insertion
+                window._discoverUsersHtml = `
+                    <div class="max-w-xl mx-auto" style="margin-top:8px;margin-bottom:8px;">
+                        <div class="glass-post-card rounded-xl shadow-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-white font-bold text-sm flex items-center gap-2">
+                                    <i class="fas fa-user-plus text-blue-400"></i>
+                                    <span>تعرّف على أشخاص جدد</span>
+                                </h3>
+                            </div>
+                            <div class="discover-scroll">${cardsHtml}</div>
+                        </div>
+                    </div>
+                `;
+                // Also set scroll for legacy compatibility
+                scroll.innerHTML = cardsHtml;
             } catch (e) {
                 console.error('Error fetching discover users:', e);
+                window._discoverUsersHtml = '';
             }
         }
 
