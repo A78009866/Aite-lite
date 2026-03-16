@@ -559,50 +559,8 @@
     // ======== WEBVIEW FILE INPUT FIX ========
     // File inputs are placed INSIDE the upload zones as transparent overlays.
     // This ensures they work natively in WebView without needing programmatic .click().
-    //
-    // CRITICAL WORKAROUND: Android WebView has a bug where if onShowFileChooser's
-    // callback is not resolved (e.g. user cancels picker), subsequent file picker
-    // attempts are blocked. To work around this WITHOUT modifying the Kotlin code,
-    // we replace the file input with a fresh clone after each use. This forces
-    // the WebView to treat it as a new element.
-
-    function replaceFileInput(oldInput) {
-        var newInput = oldInput.cloneNode(false);
-        // Re-attach the same change handler
-        if (oldInput.id === 'imageFile') {
-            newInput.addEventListener('change', handleImageChange);
-        } else if (oldInput.id === 'videoFile') {
-            newInput.addEventListener('change', handleVideoChange);
-        } else if (oldInput.id === 'audioFile') {
-            newInput.addEventListener('change', handleAudioChange);
-        }
-        oldInput.parentNode.replaceChild(newInput, oldInput);
-        // Update reference
-        if (oldInput.id === 'imageFile') imageFileInput = newInput;
-        else if (oldInput.id === 'videoFile') videoFileInput = newInput;
-        else if (oldInput.id === 'audioFile') audioFileInput = newInput;
-        return newInput;
-    }
-
-    // Auto-replace inputs after picker closes (handles both select & cancel)
-    function setupAutoReplace(input) {
-        // When the window regains focus after file picker closes, replace input
-        // This ensures the next tap will work even if user cancelled
-        input.addEventListener('click', function() {
-            var onFocus = function() {
-                window.removeEventListener('focus', onFocus);
-                // Delay to let change event fire first
-                setTimeout(function() {
-                    replaceFileInput(input);
-                }, 500);
-            };
-            window.addEventListener('focus', onFocus);
-        });
-    }
-
-    setupAutoReplace(imageFileInput);
-    setupAutoReplace(videoFileInput);
-    setupAutoReplace(audioFileInput);
+    // No input replacement is needed since the user taps the overlay directly
+    // (not programmatic .click()), which works reliably in Android WebView.
 
     // ======== TAB SWITCHING ========
     function switchMediaTab(tab) {
@@ -664,24 +622,14 @@
     }
 
     // ======== IMAGE HANDLING (MULTI) ========
-    // Use FileReader for WebView compatibility (URL.createObjectURL may fail)
+    // Use URL.createObjectURL directly (same approach as create_story which works in WebView).
+    // Falls back to FileReader only if createObjectURL is not available.
     function readFileAsDataUrl(file, callback) {
         try {
-            // Try blob URL first (faster)
             var blobUrl = URL.createObjectURL(file);
-            // Test if blob URL actually works by creating a test image
-            var testImg = new Image();
-            testImg.onload = function() { callback(blobUrl); };
-            testImg.onerror = function() {
-                // Blob URL failed, use FileReader fallback
-                var reader = new FileReader();
-                reader.onload = function(ev) { callback(ev.target.result); };
-                reader.onerror = function() { callback(null); };
-                reader.readAsDataURL(file);
-            };
-            testImg.src = blobUrl;
+            callback(blobUrl);
         } catch(err) {
-            // URL.createObjectURL not supported, use FileReader
+            // URL.createObjectURL not supported, use FileReader fallback
             var reader = new FileReader();
             reader.onload = function(ev) { callback(ev.target.result); };
             reader.onerror = function() { callback(null); };
