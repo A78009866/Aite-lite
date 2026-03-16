@@ -557,9 +557,52 @@
     var currentSlide = 0;
 
     // ======== WEBVIEW FILE INPUT FIX ========
-    // File inputs are now placed INSIDE the upload zones as transparent overlays.
+    // File inputs are placed INSIDE the upload zones as transparent overlays.
     // This ensures they work natively in WebView without needing programmatic .click().
-    // No additional JS handlers needed - the browser/WebView handles the tap directly.
+    //
+    // CRITICAL WORKAROUND: Android WebView has a bug where if onShowFileChooser's
+    // callback is not resolved (e.g. user cancels picker), subsequent file picker
+    // attempts are blocked. To work around this WITHOUT modifying the Kotlin code,
+    // we replace the file input with a fresh clone after each use. This forces
+    // the WebView to treat it as a new element.
+
+    function replaceFileInput(oldInput) {
+        var newInput = oldInput.cloneNode(false);
+        // Re-attach the same change handler
+        if (oldInput.id === 'imageFile') {
+            newInput.addEventListener('change', handleImageChange);
+        } else if (oldInput.id === 'videoFile') {
+            newInput.addEventListener('change', handleVideoChange);
+        } else if (oldInput.id === 'audioFile') {
+            newInput.addEventListener('change', handleAudioChange);
+        }
+        oldInput.parentNode.replaceChild(newInput, oldInput);
+        // Update reference
+        if (oldInput.id === 'imageFile') imageFileInput = newInput;
+        else if (oldInput.id === 'videoFile') videoFileInput = newInput;
+        else if (oldInput.id === 'audioFile') audioFileInput = newInput;
+        return newInput;
+    }
+
+    // Auto-replace inputs after picker closes (handles both select & cancel)
+    function setupAutoReplace(input) {
+        // When the window regains focus after file picker closes, replace input
+        // This ensures the next tap will work even if user cancelled
+        input.addEventListener('click', function() {
+            var onFocus = function() {
+                window.removeEventListener('focus', onFocus);
+                // Delay to let change event fire first
+                setTimeout(function() {
+                    replaceFileInput(input);
+                }, 500);
+            };
+            window.addEventListener('focus', onFocus);
+        });
+    }
+
+    setupAutoReplace(imageFileInput);
+    setupAutoReplace(videoFileInput);
+    setupAutoReplace(audioFileInput);
 
     // ======== TAB SWITCHING ========
     function switchMediaTab(tab) {
@@ -621,26 +664,53 @@
     }
 
     // ======== IMAGE HANDLING (MULTI) ========
-    imageFileInput.addEventListener('change', function(e) {
-        if (e.target.files.length > 0) {
-            var files = Array.from(e.target.files);
-            files.forEach(function(file) {
-                try {
-                    var blobUrl = URL.createObjectURL(file);
-                    selectedImages.push({ file: file, dataUrl: blobUrl });
-                } catch(err) {
-                    console.error('Error creating image preview:', err);
-                }
-            });
-            if (selectedImages.length > 0) {
-                renderCarousel();
-                selectedMediaType = 'image';
-                syncMediaFile(selectedImages[0].file);
-                clearOtherMedia('image');
-                checkInputs();
-            }
+    // Use FileReader for WebView compatibility (URL.createObjectURL may fail)
+    function readFileAsDataUrl(file, callback) {
+        try {
+            // Try blob URL first (faster)
+            var blobUrl = URL.createObjectURL(file);
+            // Test if blob URL actually works by creating a test image
+            var testImg = new Image();
+            testImg.onload = function() { callback(blobUrl); };
+            testImg.onerror = function() {
+                // Blob URL failed, use FileReader fallback
+                var reader = new FileReader();
+                reader.onload = function(ev) { callback(ev.target.result); };
+                reader.onerror = function() { callback(null); };
+                reader.readAsDataURL(file);
+            };
+            testImg.src = blobUrl;
+        } catch(err) {
+            // URL.createObjectURL not supported, use FileReader
+            var reader = new FileReader();
+            reader.onload = function(ev) { callback(ev.target.result); };
+            reader.onerror = function() { callback(null); };
+            reader.readAsDataURL(file);
         }
-    });
+    }
+
+    function handleImageChange(e) {
+        if (e.target.files && e.target.files.length > 0) {
+            var files = Array.from(e.target.files);
+            var pending = files.length;
+            files.forEach(function(file) {
+                readFileAsDataUrl(file, function(dataUrl) {
+                    if (dataUrl) {
+                        selectedImages.push({ file: file, dataUrl: dataUrl });
+                    }
+                    pending--;
+                    if (pending === 0 && selectedImages.length > 0) {
+                        renderCarousel();
+                        selectedMediaType = 'image';
+                        syncMediaFile(selectedImages[0].file);
+                        clearOtherMedia('image');
+                        checkInputs();
+                    }
+                });
+            });
+        }
+    }
+    imageFileInput.addEventListener('change', handleImageChange);
 
     function renderCarousel() {
         var carouselArea = document.getElementById('imageCarouselArea');
@@ -701,14 +771,36 @@
 
         var addBtn = document.createElement('div');
         addBtn.className = 'add-more-btn';
-        addBtn.innerHTML = '<i class="fas fa-plus"></i>';
-        var addLabel = document.createElement('label');
-        addLabel.setAttribute('for', 'imageFile');
-        addLabel.style.cssText = 'display:flex;align-items:center;justify-content:center;cursor:pointer;width:100%;height:100%;';
-        addLabel.appendChild(document.createTextNode(''));
-        addBtn.innerHTML = '';
-        addBtn.appendChild(addLabel);
-        addLabel.innerHTML = '<i class="fas fa-plus"></i>';
+        addBtn.style.position = 'relative';
+        addBtn.style.overflow = 'hidden';
+        addBtn.innerHTML = '<i class="fas fa-plus" style="position:relative;z-index:1;pointer-events:none;"></i>';
+        // WebView-friendly: overlay a real file input instead of <label for>
+        var addInput = document.createElement('input');
+        addInput.type = 'file';
+        addInput.accept = 'image/*';
+        addInput.multiple = true;
+        addInput.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:5;font-size:200px;';
+        addInput.addEventListener('change', function(ev) {
+            if (ev.target.files && ev.target.files.length > 0) {
+                var files = Array.from(ev.target.files);
+                var pending = files.length;
+                files.forEach(function(file) {
+                    readFileAsDataUrl(file, function(dataUrl) {
+                        if (dataUrl) {
+                            selectedImages.push({ file: file, dataUrl: dataUrl });
+                        }
+                        pending--;
+                        if (pending === 0) {
+                            renderCarousel();
+                            selectedMediaType = 'image';
+                            syncMediaFile(selectedImages[0].file);
+                            checkInputs();
+                        }
+                    });
+                });
+            }
+        });
+        addBtn.appendChild(addInput);
         thumbs.appendChild(addBtn);
 
         prevBtn.style.display = selectedImages.length > 1 ? '' : 'none';
@@ -779,23 +871,36 @@
     })();
 
     // ======== VIDEO HANDLING ========
-    videoFileInput.addEventListener('change', function(e) {
-        if (e.target.files.length > 0) {
+    function handleVideoChange(e) {
+        if (e.target.files && e.target.files.length > 0) {
             var file = e.target.files[0];
-            document.getElementById('videoPreviewEl').src = URL.createObjectURL(file);
+            try {
+                document.getElementById('videoPreviewEl').src = URL.createObjectURL(file);
+            } catch(err) {
+                var reader = new FileReader();
+                reader.onload = function(ev) { document.getElementById('videoPreviewEl').src = ev.target.result; };
+                reader.readAsDataURL(file);
+            }
             document.getElementById('videoFileName').textContent = file.name;
             document.getElementById('videoPreviewCard').classList.remove('hidden');
             document.getElementById('videoUploadZone').style.display = 'none';
             selectedMediaType = 'video'; syncMediaFile(file); clearOtherMedia('video');
         }
         checkInputs();
-    });
+    }
+    videoFileInput.addEventListener('change', handleVideoChange);
 
     // ======== AUDIO HANDLING ========
-    audioFileInput.addEventListener('change', function(e) {
-        if (e.target.files.length > 0) {
+    function handleAudioChange(e) {
+        if (e.target.files && e.target.files.length > 0) {
             var file = e.target.files[0];
-            document.getElementById('audioPreviewEl').src = URL.createObjectURL(file);
+            try {
+                document.getElementById('audioPreviewEl').src = URL.createObjectURL(file);
+            } catch(err) {
+                var reader = new FileReader();
+                reader.onload = function(ev) { document.getElementById('audioPreviewEl').src = ev.target.result; };
+                reader.readAsDataURL(file);
+            }
             document.getElementById('audioPreviewName').textContent = file.name;
             document.getElementById('audioPreviewType').textContent = file.type || 'audio';
             document.getElementById('audioFileName').textContent = file.name;
@@ -804,7 +909,8 @@
             selectedMediaType = 'audio'; syncMediaFile(file); clearOtherMedia('audio');
         }
         checkInputs();
-    });
+    }
+    audioFileInput.addEventListener('change', handleAudioChange);
 
     // ======== CLEAR OTHER MEDIA ========
     function clearOtherMedia(keepType) {
