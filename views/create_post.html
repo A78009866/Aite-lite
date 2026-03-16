@@ -26,33 +26,6 @@
             overflow-wrap: break-word; word-wrap: break-word; word-break: break-word;
         }
         .hidden { display: none !important; }
-        /* Mobile-compatible hidden file inputs */
-        .file-input-hidden {
-            position: absolute !important;
-            width: 1px !important;
-            height: 1px !important;
-            padding: 0 !important;
-            margin: -1px !important;
-            overflow: hidden !important;
-            clip: rect(0, 0, 0, 0) !important;
-            white-space: nowrap !important;
-            border: 0 !important;
-            opacity: 0 !important;
-        }
-        /* WebView-friendly: file input overlays the upload zone */
-        .upload-zone {
-            position: relative;
-            overflow: hidden;
-        }
-        .upload-zone .webview-file-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            width: 100%; height: 100%;
-            opacity: 0;
-            cursor: pointer;
-            z-index: 10;
-            font-size: 200px; /* makes tap target large on mobile */
-        }
 
         .create-page { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -407,11 +380,11 @@
 
             <!-- ====== IMAGE SECTION (Multi-image + Carousel) ====== -->
             <div id="section-image" class="media-section" style="margin-bottom:20px;">
-                <div id="imageUploadZone" class="upload-zone" style="cursor:pointer;">
-                    <input type="file" id="imageFile" accept="image/*" multiple class="webview-file-overlay">
+                <div id="imageUploadZone" class="upload-zone" style="cursor:pointer;position:relative;overflow:hidden;">
+                    <input type="file" id="imageFile" accept="image/*" onchange="handleImageChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
                     <div class="upload-zone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
-                    <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار صور</p>
-                    <p style="font-size:12px;color:#555;margin:0;">يمكنك اختيار عدة صور - PNG, JPG, GIF, WEBP</p>
+                    <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار صورة</p>
+                    <p style="font-size:12px;color:#555;margin:0;">PNG, JPG, GIF, WEBP - يمكنك إضافة المزيد بعد الاختيار</p>
                 </div>
 
                 <!-- Carousel Preview -->
@@ -433,8 +406,8 @@
 
             <!-- Video Section -->
             <div id="section-video" class="media-section" style="margin-bottom:20px;">
-                <div id="videoUploadZone" class="upload-zone" style="cursor:pointer;">
-                    <input type="file" id="videoFile" accept="video/*" class="webview-file-overlay">
+                <div id="videoUploadZone" class="upload-zone" style="cursor:pointer;position:relative;overflow:hidden;">
+                    <input type="file" id="videoFile" accept="video/*" onchange="handleVideoChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
                     <div class="upload-zone-icon"><i class="fas fa-film"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار فيديو</p>
                     <p style="font-size:12px;color:#555;margin:0;">MP4, MOV, WEBM</p>
@@ -452,8 +425,8 @@
 
             <!-- Audio Section -->
             <div id="section-audio" class="media-section" style="margin-bottom:20px;">
-                <div id="audioUploadZone" class="upload-zone" style="cursor:pointer;">
-                    <input type="file" id="audioFile" accept="audio/*" class="webview-file-overlay">
+                <div id="audioUploadZone" class="upload-zone" style="cursor:pointer;position:relative;overflow:hidden;">
+                    <input type="file" id="audioFile" accept="audio/*" onchange="handleAudioChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
                     <div class="upload-zone-icon"><i class="fas fa-headphones"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار ملف صوتي</p>
                     <p style="font-size:12px;color:#555;margin:0;">MP3, WAV, OGG, M4A</p>
@@ -637,28 +610,22 @@
         }
     }
 
-    function handleImageChange(e) {
-        if (e.target.files && e.target.files.length > 0) {
-            var files = Array.from(e.target.files);
-            var pending = files.length;
-            files.forEach(function(file) {
-                readFileAsDataUrl(file, function(dataUrl) {
-                    if (dataUrl) {
-                        selectedImages.push({ file: file, dataUrl: dataUrl });
-                    }
-                    pending--;
-                    if (pending === 0 && selectedImages.length > 0) {
-                        renderCarousel();
-                        selectedMediaType = 'image';
-                        syncMediaFile(selectedImages[0].file);
-                        clearOtherMedia('image');
-                        checkInputs();
-                    }
-                });
-            });
-        }
+    function handleImageChange(input) {
+        if (!input.files || !input.files[0]) return;
+        var file = input.files[0];
+        readFileAsDataUrl(file, function(dataUrl) {
+            if (dataUrl) {
+                selectedImages.push({ file: file, dataUrl: dataUrl });
+                renderCarousel();
+                selectedMediaType = 'image';
+                syncMediaFile(selectedImages[0].file);
+                clearOtherMedia('image');
+                checkInputs();
+            }
+        });
+        // Reset input so same file can be re-selected
+        input.value = '';
     }
-    imageFileInput.addEventListener('change', handleImageChange);
 
     function renderCarousel() {
         var carouselArea = document.getElementById('imageCarouselArea');
@@ -726,28 +693,20 @@
         var addInput = document.createElement('input');
         addInput.type = 'file';
         addInput.accept = 'image/*';
-        addInput.multiple = true;
         addInput.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:5;font-size:200px;';
-        addInput.addEventListener('change', function(ev) {
-            if (ev.target.files && ev.target.files.length > 0) {
-                var files = Array.from(ev.target.files);
-                var pending = files.length;
-                files.forEach(function(file) {
-                    readFileAsDataUrl(file, function(dataUrl) {
-                        if (dataUrl) {
-                            selectedImages.push({ file: file, dataUrl: dataUrl });
-                        }
-                        pending--;
-                        if (pending === 0) {
-                            renderCarousel();
-                            selectedMediaType = 'image';
-                            syncMediaFile(selectedImages[0].file);
-                            checkInputs();
-                        }
-                    });
-                });
-            }
-        });
+        addInput.onchange = function() {
+            if (!addInput.files || !addInput.files[0]) return;
+            var file = addInput.files[0];
+            readFileAsDataUrl(file, function(dataUrl) {
+                if (dataUrl) {
+                    selectedImages.push({ file: file, dataUrl: dataUrl });
+                    renderCarousel();
+                    selectedMediaType = 'image';
+                    syncMediaFile(selectedImages[0].file);
+                    checkInputs();
+                }
+            });
+        };
         addBtn.appendChild(addInput);
         thumbs.appendChild(addBtn);
 
@@ -819,46 +778,42 @@
     })();
 
     // ======== VIDEO HANDLING ========
-    function handleVideoChange(e) {
-        if (e.target.files && e.target.files.length > 0) {
-            var file = e.target.files[0];
-            try {
-                document.getElementById('videoPreviewEl').src = URL.createObjectURL(file);
-            } catch(err) {
-                var reader = new FileReader();
-                reader.onload = function(ev) { document.getElementById('videoPreviewEl').src = ev.target.result; };
-                reader.readAsDataURL(file);
-            }
-            document.getElementById('videoFileName').textContent = file.name;
-            document.getElementById('videoPreviewCard').classList.remove('hidden');
-            document.getElementById('videoUploadZone').style.display = 'none';
-            selectedMediaType = 'video'; syncMediaFile(file); clearOtherMedia('video');
+    function handleVideoChange(input) {
+        if (!input.files || !input.files[0]) return;
+        var file = input.files[0];
+        try {
+            document.getElementById('videoPreviewEl').src = URL.createObjectURL(file);
+        } catch(err) {
+            var reader = new FileReader();
+            reader.onload = function(ev) { document.getElementById('videoPreviewEl').src = ev.target.result; };
+            reader.readAsDataURL(file);
         }
+        document.getElementById('videoFileName').textContent = file.name;
+        document.getElementById('videoPreviewCard').classList.remove('hidden');
+        document.getElementById('videoUploadZone').style.display = 'none';
+        selectedMediaType = 'video'; syncMediaFile(file); clearOtherMedia('video');
         checkInputs();
     }
-    videoFileInput.addEventListener('change', handleVideoChange);
 
     // ======== AUDIO HANDLING ========
-    function handleAudioChange(e) {
-        if (e.target.files && e.target.files.length > 0) {
-            var file = e.target.files[0];
-            try {
-                document.getElementById('audioPreviewEl').src = URL.createObjectURL(file);
-            } catch(err) {
-                var reader = new FileReader();
-                reader.onload = function(ev) { document.getElementById('audioPreviewEl').src = ev.target.result; };
-                reader.readAsDataURL(file);
-            }
-            document.getElementById('audioPreviewName').textContent = file.name;
-            document.getElementById('audioPreviewType').textContent = file.type || 'audio';
-            document.getElementById('audioFileName').textContent = file.name;
-            document.getElementById('audioPreviewCard').classList.remove('hidden');
-            document.getElementById('audioUploadZone').style.display = 'none';
-            selectedMediaType = 'audio'; syncMediaFile(file); clearOtherMedia('audio');
+    function handleAudioChange(input) {
+        if (!input.files || !input.files[0]) return;
+        var file = input.files[0];
+        try {
+            document.getElementById('audioPreviewEl').src = URL.createObjectURL(file);
+        } catch(err) {
+            var reader = new FileReader();
+            reader.onload = function(ev) { document.getElementById('audioPreviewEl').src = ev.target.result; };
+            reader.readAsDataURL(file);
         }
+        document.getElementById('audioPreviewName').textContent = file.name;
+        document.getElementById('audioPreviewType').textContent = file.type || 'audio';
+        document.getElementById('audioFileName').textContent = file.name;
+        document.getElementById('audioPreviewCard').classList.remove('hidden');
+        document.getElementById('audioUploadZone').style.display = 'none';
+        selectedMediaType = 'audio'; syncMediaFile(file); clearOtherMedia('audio');
         checkInputs();
     }
-    audioFileInput.addEventListener('change', handleAudioChange);
 
     // ======== CLEAR OTHER MEDIA ========
     function clearOtherMedia(keepType) {
