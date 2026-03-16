@@ -115,9 +115,57 @@
         }
     }
 
+
+/* ========== SKELETON / SHIMMER LOADING ========== */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 0.35s ease;
+}
+.skeleton-loader.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.skeleton-bone {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 8px;
+}
+html[data-theme="light"] .skeleton-bone {
+  background: linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0.06) 75%);
+  background-size: 800px 100%;
+}
+.skeleton-loader .sk-bg {
+  background: #000;
+}
+html[data-theme="light"] .skeleton-loader .sk-bg {
+  background: #f0f2f5;
+}
+.skeleton-circle {
+  border-radius: 50%;
+}
+
 </style>
 </head>
 <body>
+
+<div id="skeletonLoader" class="skeleton-loader">
+  <div class="sk-bg" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+      <div class="skeleton-bone skeleton-circle" style="width:100px;height:100px;"></div>
+      <div class="skeleton-bone" style="width:120px;height:24px;border-radius:6px;"></div>
+    </div>
+  </div>
+</div>
+
 
     <img src="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sond_skyline_from_top_City_Hall_-_Aug_2025.jpg" alt="Aite Logo" class="splash-logo">
     
@@ -167,5 +215,26 @@ window.receiveAndroidToken = function(token) {
     }).catch(err => console.error("Error saving token", err));
 };
     </script>
+
+<script>
+
+(function(){
+  var sk = document.getElementById('skeletonLoader');
+  if (!sk) return;
+  function hideSkeleton() {
+    sk.classList.add('hidden');
+    setTimeout(function(){ sk.style.display = 'none'; }, 400);
+  }
+  // Hide on DOMContentLoaded + small delay for data fetch
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(hideSkeleton, 600);
+  } else {
+    window.addEventListener('DOMContentLoaded', function(){ setTimeout(hideSkeleton, 600); });
+  }
+  // Fallback: max 4 seconds
+  setTimeout(hideSkeleton, 4000);
+})();
+
+</script>
 </body>
 </html>

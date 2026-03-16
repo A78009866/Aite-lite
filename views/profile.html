@@ -208,6 +208,8 @@
             cursor: pointer;
             font-size: 15px;
             transition: all 0.2s;
+            position: relative;
+            z-index: 50;
         }
         .profile-dots-btn:hover {
             background: rgba(255,255,255,0.2);
@@ -225,6 +227,9 @@
             overflow: hidden;
             z-index: 9999;
             box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        .profile-dots-dropdown.show {
+            display: block;
         }
         .profile-dots-dropdown .dots-item {
             width: 100%;
@@ -2391,9 +2396,81 @@
         }
     }
 
+
+/* ========== SKELETON / SHIMMER LOADING ========== */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 0.35s ease;
+}
+.skeleton-loader.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.skeleton-bone {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 8px;
+}
+html[data-theme="light"] .skeleton-bone {
+  background: linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0.06) 75%);
+  background-size: 800px 100%;
+}
+.skeleton-loader .sk-bg {
+  background: #000;
+}
+html[data-theme="light"] .skeleton-loader .sk-bg {
+  background: #f0f2f5;
+}
+.skeleton-circle {
+  border-radius: 50%;
+}
+
 </style>
 </head>
 <body class="min-h-screen relative" style="overflow-x:hidden;">
+
+<div id="skeletonLoader" class="skeleton-loader">
+  <div class="sk-bg" style="min-height:100vh;padding:0;">
+    <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div class="skeleton-bone" style="width:24px;height:24px;border-radius:6px;"></div>
+      <div class="skeleton-bone" style="width:100px;height:20px;border-radius:6px;"></div>
+      <div class="skeleton-bone" style="width:24px;height:24px;border-radius:6px;"></div>
+    </div>
+    <!-- Cover + avatar -->
+    <div class="skeleton-bone" style="width:100%;height:160px;border-radius:0;"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;margin-top:-40px;padding:0 16px;">
+      <div class="skeleton-bone skeleton-circle" style="width:88px;height:88px;border:4px solid #000;"></div>
+      <div class="skeleton-bone" style="width:140px;height:18px;margin-top:12px;border-radius:6px;"></div>
+      <div class="skeleton-bone" style="width:90px;height:12px;margin-top:8px;border-radius:4px;"></div>
+      <div class="skeleton-bone" style="width:200px;height:12px;margin-top:10px;border-radius:4px;"></div>
+      <!-- Stats -->
+      <div style="display:flex;gap:24px;margin-top:16px;">
+        <div style="text-align:center;"><div class="skeleton-bone" style="width:30px;height:16px;margin:0 auto 4px;border-radius:4px;"></div><div class="skeleton-bone" style="width:50px;height:10px;border-radius:4px;"></div></div>
+        <div style="text-align:center;"><div class="skeleton-bone" style="width:30px;height:16px;margin:0 auto 4px;border-radius:4px;"></div><div class="skeleton-bone" style="width:50px;height:10px;border-radius:4px;"></div></div>
+        <div style="text-align:center;"><div class="skeleton-bone" style="width:30px;height:16px;margin:0 auto 4px;border-radius:4px;"></div><div class="skeleton-bone" style="width:50px;height:10px;border-radius:4px;"></div></div>
+      </div>
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px;margin-top:16px;width:100%;">
+        <div class="skeleton-bone" style="flex:1;height:38px;border-radius:10px;"></div>
+        <div class="skeleton-bone" style="flex:1;height:38px;border-radius:10px;"></div>
+      </div>
+    </div>
+    <!-- Posts grid -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:20px;padding:0 2px;">
+      <div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div><div class="skeleton-bone" style="aspect-ratio:1;border-radius:2px;"></div>
+    </div>
+  </div>
+</div>
+
 
 <!-- Desktop Sidebar Navigation -->
 <aside class="desktop-sidebar">
@@ -2478,7 +2555,7 @@
     <main class="max-w-6xl mx-auto p-4">
         <div class="max-w-full mx-auto">
 
-            <div id="profileCard" class="glass-profile-card rounded-xl shadow-2xl p-0 mb-4 animate-fadeIn" style="overflow:visible;">
+            <div id="profileCard" class="glass-profile-card rounded-xl shadow-2xl p-0 mb-4 animate-fadeIn" style="overflow:visible; position:relative; z-index:50;">
 
                 <div id="coverPhotoContainer" class="w-full h-40 bg-gray-900 relative"
                      style="background-image: url('/assets/default_cover_photo.jpg'); background-size: cover; background-position: center; border-radius: 12px 12px 0 0; overflow:hidden;">
@@ -2519,7 +2596,7 @@
     مراسلة
 </a>
                                 <!-- 3-dot menu -->
-                                <div id="profileMenuWrapper" style="position:relative; display:none;">
+                                <div id="profileMenuWrapper" style="position:relative; display:none; z-index:9999;">
                                     <button id="profileMenuBtn" class="profile-dots-btn">
                                         <i class="fas fa-ellipsis-v"></i>
                                     </button>
@@ -4745,5 +4822,26 @@ function closeLikesModal() {
 }
 </script>
 
+
+<script>
+
+(function(){
+  var sk = document.getElementById('skeletonLoader');
+  if (!sk) return;
+  function hideSkeleton() {
+    sk.classList.add('hidden');
+    setTimeout(function(){ sk.style.display = 'none'; }, 400);
+  }
+  // Hide on DOMContentLoaded + small delay for data fetch
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(hideSkeleton, 600);
+  } else {
+    window.addEventListener('DOMContentLoaded', function(){ setTimeout(hideSkeleton, 600); });
+  }
+  // Fallback: max 4 seconds
+  setTimeout(hideSkeleton, 4000);
+})();
+
+</script>
 </body>
 </html>

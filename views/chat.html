@@ -2258,10 +2258,83 @@ textarea:focus { border-color: var(--accent); }
         transform: translateX(24px);
     }
 
+
+/* ========== SKELETON / SHIMMER LOADING ========== */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 0.35s ease;
+}
+.skeleton-loader.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.skeleton-bone {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 8px;
+}
+html[data-theme="light"] .skeleton-bone {
+  background: linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0.06) 75%);
+  background-size: 800px 100%;
+}
+.skeleton-loader .sk-bg {
+  background: #000;
+}
+html[data-theme="light"] .skeleton-loader .sk-bg {
+  background: #f0f2f5;
+}
+.skeleton-circle {
+  border-radius: 50%;
+}
+
 </style>
 <script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
 <body>
+
+<div id="skeletonLoader" class="skeleton-loader">
+  <div class="sk-bg" style="min-height:100vh;display:flex;flex-direction:column;">
+    <!-- Chat header -->
+    <div style="padding:8px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,0.06);height:56px;">
+      <div class="skeleton-bone" style="width:24px;height:24px;border-radius:6px;"></div>
+      <div class="skeleton-bone skeleton-circle" style="width:38px;height:38px;"></div>
+      <div style="flex:1;">
+        <div class="skeleton-bone" style="width:100px;height:14px;margin-bottom:4px;border-radius:4px;"></div>
+        <div class="skeleton-bone" style="width:60px;height:10px;border-radius:4px;"></div>
+      </div>
+      <div class="skeleton-bone skeleton-circle" style="width:36px;height:36px;"></div>
+    </div>
+    <!-- Messages area -->
+    <div style="flex:1;padding:16px 12px;display:flex;flex-direction:column;gap:12px;">
+      <!-- Incoming messages -->
+      <div style="display:flex;justify-content:flex-start;"><div class="skeleton-bone" style="width:200px;height:36px;border-radius:14px;"></div></div>
+      <div style="display:flex;justify-content:flex-start;"><div class="skeleton-bone" style="width:160px;height:36px;border-radius:14px;"></div></div>
+      <!-- Outgoing messages -->
+      <div style="display:flex;justify-content:flex-end;"><div class="skeleton-bone" style="width:180px;height:36px;border-radius:14px;"></div></div>
+      <div style="display:flex;justify-content:flex-start;"><div class="skeleton-bone" style="width:220px;height:70px;border-radius:14px;"></div></div>
+      <div style="display:flex;justify-content:flex-end;"><div class="skeleton-bone" style="width:140px;height:36px;border-radius:14px;"></div></div>
+      <div style="display:flex;justify-content:flex-start;"><div class="skeleton-bone" style="width:190px;height:36px;border-radius:14px;"></div></div>
+      <div style="display:flex;justify-content:flex-end;"><div class="skeleton-bone" style="width:170px;height:56px;border-radius:14px;"></div></div>
+      <div style="display:flex;justify-content:flex-start;"><div class="skeleton-bone" style="width:210px;height:36px;border-radius:14px;"></div></div>
+    </div>
+    <!-- Composer -->
+    <div style="padding:10px 12px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;align-items:center;">
+      <div class="skeleton-bone skeleton-circle" style="width:36px;height:36px;"></div>
+      <div class="skeleton-bone" style="flex:1;height:40px;border-radius:20px;"></div>
+      <div class="skeleton-bone skeleton-circle" style="width:36px;height:36px;"></div>
+    </div>
+  </div>
+</div>
+
 
 <!-- Desktop Sidebar Navigation -->
 <aside class="desktop-sidebar">
@@ -4479,5 +4552,26 @@ init();
 })();
 </script>
 
+
+<script>
+
+(function(){
+  var sk = document.getElementById('skeletonLoader');
+  if (!sk) return;
+  function hideSkeleton() {
+    sk.classList.add('hidden');
+    setTimeout(function(){ sk.style.display = 'none'; }, 400);
+  }
+  // Hide on DOMContentLoaded + small delay for data fetch
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(hideSkeleton, 600);
+  } else {
+    window.addEventListener('DOMContentLoaded', function(){ setTimeout(hideSkeleton, 600); });
+  }
+  // Fallback: max 4 seconds
+  setTimeout(hideSkeleton, 4000);
+})();
+
+</script>
 </body>
 </html>

@@ -123,8 +123,8 @@ const writeLimiter = rateLimit({
   message: { ok: false, error: 'Too many requests, please slow down.' }
 });
 
-app.use(express.urlencoded({ extended: true, limit: '500mb' }));
-app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
@@ -135,7 +135,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Helper: validate allowed MIME types for file uploads
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
 const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac'];
 const ALL_ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_AUDIO_TYPES];
@@ -172,6 +172,24 @@ function sanitizePathParam(val) {
   if (!val) return '';
   // Firebase keys cannot contain . $ # [ ] / or control chars
   return String(val).replace(/[\.\$#\[\]\/\x00-\x1f]/g, '');
+}
+
+// Truncate user-supplied text to a safe maximum length
+function truncateText(val, maxLen) {
+  if (!val) return '';
+  const s = String(val);
+  return s.length > maxLen ? s.substring(0, maxLen) : s;
+}
+
+// Sanitize HTML entities in user-supplied text to prevent stored XSS
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 // Validate that a URL is a legitimate Cloudinary URL (prevent arbitrary URL injection)
@@ -1383,6 +1401,14 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
   let mediaType = req.body.mediaType || null;
   let audioUrl = req.body.audioUrl || null;
 
+  // Validate Cloudinary URLs when provided directly
+  if (mediaUrl && !isValidCloudinaryUrl(mediaUrl)) {
+    return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
+  }
+  if (audioUrl && !isValidCloudinaryUrl(audioUrl)) {
+    return res.status(400).json({ ok: false, error: 'رابط الصوت غير صالح.' });
+  }
+
   // If files were uploaded via multer (backward compatibility)
   if (!mediaUrl && req.files && req.files.story_media) {
     const mediaFile = req.files.story_media[0];
@@ -1852,10 +1878,10 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
     // تنظيف الـ ID
     if (contact_id) contact_id = String(contact_id).replace(/['\"]+/g, '').trim();
 
-    const content = req.body.content || '';
+    const content = truncateText(req.body.content || '', 5000);
     const reply_to_id = req.body.replied_to_id || null;
-    const reply_to_sender = req.body.replied_to_sender || null;
-    const reply_to_content = req.body.replied_to_content || null;
+    const reply_to_sender = truncateText(req.body.replied_to_sender || '', 100);
+    const reply_to_content = truncateText(req.body.replied_to_content || '', 1000);
     
     // جلب الملفات المرفوعة
     const files = req.files || [];
@@ -2881,9 +2907,14 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
   upload.single('media')(req, res, next);
 }, async (req, res) => {
   const userId = req.session.userId;
-  const content = req.body.content ? req.body.content.trim() : '';
+  const content = truncateText(req.body.content ? req.body.content.trim() : '', 5000);
   let mediaUrl = req.body.mediaUrl || null;
   let mediaType = req.body.mediaType || null;
+
+  // Validate Cloudinary URL when provided directly
+  if (mediaUrl && !isValidCloudinaryUrl(mediaUrl)) {
+    return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
+  }
 
   // If files were uploaded via multer (backward compatibility)
   if (!mediaUrl && req.file) {
@@ -3269,8 +3300,8 @@ app.get('/api/reels/:reelId/likes', requireAuth, async (req, res) => {
 // Comment on post (UPDATED: normalize, return newComments)
 app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   const userId = req.session.userId;
-  const postId = req.params.postId;
-  const { content } = req.body;
+  const postId = sanitizePathParam(req.params.postId);
+  const content = truncateText((req.body.content || ''), 2000);
 
   if (!postId || !content) return res.status(400).json({ ok: false, error: 'Missing postId or content' });
 
@@ -4120,10 +4151,15 @@ app.post('/api/reels/create', requireAuth, writeLimiter, (req, res, next) => {
   upload.single('media')(req, res, next);
 }, async (req, res) => {
   const userId = req.session.userId;
-  const description = req.body.description ? req.body.description.trim() : '';
+  const description = truncateText(req.body.description ? req.body.description.trim() : '', 2000);
 
   let videoUrl = req.body.videoUrl || null;
   let mimeType = req.body.mimeType || 'video/mp4';
+
+  // Validate Cloudinary URL when provided directly
+  if (videoUrl && !isValidCloudinaryUrl(videoUrl)) {
+    return res.status(400).json({ ok: false, error: 'رابط الفيديو غير صالح.' });
+  }
 
   // If file was uploaded via multer (backward compatibility)
   if (!videoUrl && req.file) {
@@ -5058,11 +5094,7 @@ app.post('/api/account/delete', requireAuth, async (req, res) => {
 // These endpoints return HTML fragments (partials) consumed by HTMX on the client.
 // They are lightweight representations of families and posts used for fast in-page navigation.
 
-// helper server-side escaper
-function escapeHtml(s) {
-  if (!s && s !== 0) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+// helper server-side escaper (uses the escapeHtml defined near top of file)
 
 /**
  * Partial: families list (HTML)
