@@ -997,6 +997,11 @@
         .story-card.has-unseen:hover {
             box-shadow: 0 8px 28px rgba(59,130,246,0.4);
         }
+        .story-card.has-story-color {
+            border: 2.5px solid transparent !important;
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+        }
         .story-card-media {
             position: absolute;
             inset: 0;
@@ -1020,6 +1025,9 @@
             object-fit: cover;
             background: #000;
             z-index: 2;
+        }
+        .story-card-avatar.has-story-color {
+            border-color: var(--story-avatar-color, #3b82f6);
         }
         .story-card.seen .story-card-avatar {
             border-color: #4b5563;
@@ -1146,8 +1154,16 @@
         html[data-theme="light"] .story-card-avatar {
             border-color: #3b82f6;
         }
+        html[data-theme="light"] .story-card-avatar.has-story-color {
+            border-color: var(--story-avatar-color, #3b82f6);
+        }
         html[data-theme="light"] .story-card.seen .story-card-avatar {
             border-color: #d1d5db;
+        }
+        html[data-theme="light"] .story-card.has-story-color {
+            border: 2.5px solid transparent !important;
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
         }
 
         /* Keep old circle classes for fallback/compatibility */
@@ -4444,13 +4460,31 @@ function handleNotifClick(el) {
 
                         // Use story_color for border (from latest item or group level)
                         const storyColor = group.story_color || (latestItem && latestItem.story_color) || '';
-                        const borderStyle = storyColor ? `style="border-color: ${escapeAttr(storyColor)}; box-shadow: 0 4px 16px ${escapeAttr(storyColor)}33;"` : '';
+                        let borderStyle = '';
+                        let storyColorClass = '';
+                        let avatarColorClass = '';
+                        let avatarColorStyle = '';
+                        if (storyColor) {
+                            // Extract first hex color from gradient for avatar border and box-shadow
+                            const hexMatch = storyColor.match(/#[0-9a-fA-F]{3,8}/);
+                            const solidColor = hexMatch ? hexMatch[0] : '#3b82f6';
+                            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+                            const bgFill = isLight ? '#fff' : '#111';
+                            if (storyColor.includes('gradient')) {
+                                borderStyle = `style="background-image: linear-gradient(${bgFill},${bgFill}), ${storyColor}; box-shadow: 0 4px 16px ${solidColor}33;"`;
+                                storyColorClass = 'has-story-color';
+                            } else {
+                                borderStyle = `style="border-color: ${escapeAttr(storyColor)}; box-shadow: 0 4px 16px ${escapeAttr(storyColor)}33;"`;
+                            }
+                            avatarColorClass = 'has-story-color';
+                            avatarColorStyle = `style="--story-avatar-color: ${solidColor}"`;
+                        }
 
                         html += `
-                            <div class="story-card ${unseenClass}" ${borderStyle} onclick="window.location.href='/stories?groupIndex=${index}'">
+                            <div class="story-card ${unseenClass} ${storyColorClass}" ${borderStyle} onclick="window.location.href='/stories?groupIndex=${index}'">
                                 ${mediaHtml}
                                 <div class="story-card-overlay"></div>
-                                <img class="story-card-avatar" src="${escapeAttr(group.profile_picture_url || myPic)}" alt="${escapeAttr(group.username)}" onerror="this.src='${DEFAULT_AVATAR}'">
+                                <img class="story-card-avatar ${avatarColorClass}" ${avatarColorStyle} src="${escapeAttr(group.profile_picture_url || myPic)}" alt="${escapeAttr(group.username)}" onerror="this.src='${DEFAULT_AVATAR}'">
                                 ${onlineDotHtml}
                                 ${countHtml}
                                 ${textHtml}
