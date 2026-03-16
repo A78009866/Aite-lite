@@ -39,6 +39,20 @@
             border: 0 !important;
             opacity: 0 !important;
         }
+        /* WebView-friendly: file input overlays the upload zone */
+        .upload-zone {
+            position: relative;
+            overflow: hidden;
+        }
+        .upload-zone .webview-file-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 10;
+            font-size: 200px; /* makes tap target large on mobile */
+        }
 
         .create-page { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -372,10 +386,7 @@
                     class="glass-input custom-scroll" style="width:100%;padding:16px;border-radius:16px;font-size:16px;resize:none;line-height:1.6;"></textarea>
             </div>
 
-            <!-- Hidden file inputs (WebView compatible) -->
-            <input type="file" id="imageFile" accept="image/*,image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif" class="file-input-hidden" multiple>
-            <input type="file" id="videoFile" accept="video/*,video/mp4,video/webm,video/quicktime" class="file-input-hidden">
-            <input type="file" id="audioFile" accept="audio/*,audio/mpeg,audio/wav,audio/ogg" class="file-input-hidden">
+            <!-- Hidden file inputs -->
             <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="file-input-hidden">
 
             <!-- Media Tabs -->
@@ -397,6 +408,7 @@
             <!-- ====== IMAGE SECTION (Multi-image + Carousel) ====== -->
             <div id="section-image" class="media-section" style="margin-bottom:20px;">
                 <div id="imageUploadZone" class="upload-zone" style="cursor:pointer;">
+                    <input type="file" id="imageFile" accept="image/*" multiple class="webview-file-overlay">
                     <div class="upload-zone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار صور</p>
                     <p style="font-size:12px;color:#555;margin:0;">يمكنك اختيار عدة صور - PNG, JPG, GIF, WEBP</p>
@@ -422,6 +434,7 @@
             <!-- Video Section -->
             <div id="section-video" class="media-section" style="margin-bottom:20px;">
                 <div id="videoUploadZone" class="upload-zone" style="cursor:pointer;">
+                    <input type="file" id="videoFile" accept="video/*" class="webview-file-overlay">
                     <div class="upload-zone-icon"><i class="fas fa-film"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار فيديو</p>
                     <p style="font-size:12px;color:#555;margin:0;">MP4, MOV, WEBM</p>
@@ -440,6 +453,7 @@
             <!-- Audio Section -->
             <div id="section-audio" class="media-section" style="margin-bottom:20px;">
                 <div id="audioUploadZone" class="upload-zone" style="cursor:pointer;">
+                    <input type="file" id="audioFile" accept="audio/*" class="webview-file-overlay">
                     <div class="upload-zone-icon"><i class="fas fa-headphones"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار ملف صوتي</p>
                     <p style="font-size:12px;color:#555;margin:0;">MP3, WAV, OGG, M4A</p>
@@ -543,31 +557,9 @@
     var currentSlide = 0;
 
     // ======== WEBVIEW FILE INPUT FIX ========
-    // Some WebView implementations don't trigger file inputs via <label for="...">
-    // We add explicit click handlers as fallback
-    (function fixWebViewFileInputs() {
-        var zones = [
-            { zone: 'imageUploadZone', input: 'imageFile' },
-            { zone: 'videoUploadZone', input: 'videoFile' },
-            { zone: 'audioUploadZone', input: 'audioFile' }
-        ];
-        zones.forEach(function(z) {
-            var zoneEl = document.getElementById(z.zone);
-            var inputEl = document.getElementById(z.input);
-            if (zoneEl && inputEl) {
-                zoneEl.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    inputEl.click();
-                });
-                // Touch support for WebView
-                zoneEl.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    inputEl.click();
-                }, { passive: false });
-            }
-        });
-    })();
+    // File inputs are now placed INSIDE the upload zones as transparent overlays.
+    // This ensures they work natively in WebView without needing programmatic .click().
+    // No additional JS handlers needed - the browser/WebView handles the tap directly.
 
     // ======== TAB SWITCHING ========
     function switchMediaTab(tab) {

@@ -1547,23 +1547,23 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 
         <!-- Upload Buttons -->
         <div id="uploadButtonsArea" class="flex gap-3 mb-5">
-            <label for="storyImageInput" class="upload-btn">
+            <div class="upload-btn" style="position:relative;overflow:hidden;">
+                <input type="file" id="storyImageInput" accept="image/*" onchange="handleMediaSelect(this, 'image')" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
                 <div class="icon-circle bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30">
                     <i class="fas fa-image text-pink-400"></i>
                 </div>
                 <span class="text-white font-bold text-sm">اختر صورة</span>
                 <span class="text-gray-500 text-xs">JPG, PNG, WEBP</span>
-            </label>
-            <label for="storyVideoInput" class="upload-btn">
+            </div>
+            <div class="upload-btn" style="position:relative;overflow:hidden;">
+                <input type="file" id="storyVideoInput" accept="video/*" onchange="handleMediaSelect(this, 'video')" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
                 <div class="icon-circle bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30">
                     <i class="fas fa-video text-blue-400"></i>
                 </div>
                 <span class="text-white font-bold text-sm">اختر فيديو</span>
                 <span class="text-gray-500 text-xs">MP4, MOV, WEBM</span>
-            </label>
+            </div>
         </div>
-        <input type="file" id="storyImageInput" accept="image/*,image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);border:0;opacity:0;" onchange="handleMediaSelect(this, 'image')">
-        <input type="file" id="storyVideoInput" accept="video/*,video/mp4,video/webm,video/quicktime" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);border:0;opacity:0;" onchange="handleMediaSelect(this, 'video')">
 
         <!-- Media Preview -->
         <div id="mediaPreviewArea" class="media-preview-area mb-5" style="display:none;">
@@ -1648,31 +1648,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     var searchTimeout;
 
     // ======== WEBVIEW FILE INPUT FIX ========
-    // WebView apps often fail to trigger file inputs via <label for="...">
-    // We add explicit click/touch handlers as fallback
-    (function fixWebViewFileInputs() {
-        var pairs = [
-            { labelFor: 'storyImageInput' },
-            { labelFor: 'storyVideoInput' }
-        ];
-        pairs.forEach(function(p) {
-            var inputEl = document.getElementById(p.labelFor);
-            if (!inputEl) return;
-            // Find all labels that reference this input
-            var labels = document.querySelectorAll('label[for="' + p.labelFor + '"]');
-            labels.forEach(function(label) {
-                label.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    inputEl.click();
-                });
-                label.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    inputEl.click();
-                }, { passive: false });
-            });
-        });
-    })();
+    // File inputs are now placed INSIDE the upload buttons as transparent overlays.
+    // This ensures they work natively in WebView without needing programmatic .click().
 
     function showToast(msg) {
         var t = document.getElementById('toastEl');
