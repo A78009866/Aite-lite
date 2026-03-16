@@ -58,9 +58,14 @@ const storage = new CloudinaryStorage({
       format = 'webm';
     }
 
+    // Sanitize filename: remove special chars, keep only safe characters
+    const safeName = path.parse(file.originalname).name
+      .replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
+      .substring(0, 100);
+
     return {
       folder: folderName,
-      public_id: Date.now() + '-' + path.parse(file.originalname).name,
+      public_id: Date.now() + '-' + (safeName || 'file'),
       resource_type: 'auto',
       format: format
     };
@@ -123,8 +128,8 @@ const writeLimiter = rateLimit({
   message: { ok: false, error: 'Too many requests, please slow down.' }
 });
 
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+app.use(express.json({ limit: '500mb' }));
 
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
@@ -135,10 +140,33 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Helper: validate allowed MIME types for file uploads
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
-const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac'];
-const ALL_ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_AUDIO_TYPES];
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/tiff', 'image/x-icon', 'image/heic', 'image/heif', 'image/avif'];
+const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/3gpp', 'video/3gpp2', 'video/ogg', 'video/x-flv', 'video/x-ms-wmv', 'video/mpeg'];
+const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/flac', 'audio/x-m4a', 'audio/opus', 'audio/amr', 'audio/x-wav', 'audio/midi', 'audio/x-midi'];
+const ALLOWED_DOCUMENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/zip',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+  'application/gzip',
+  'application/x-tar',
+  'text/plain',
+  'text/csv',
+  'text/html',
+  'text/css',
+  'text/javascript',
+  'application/json',
+  'application/xml',
+  'application/x-sql',
+  'application/octet-stream'
+];
+const ALL_ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_AUDIO_TYPES, ...ALLOWED_DOCUMENT_TYPES];
 
 // Multer file filter to restrict uploads
 function fileFilter(req, file, cb) {
