@@ -26,6 +26,19 @@
             overflow-wrap: break-word; word-wrap: break-word; word-break: break-word;
         }
         .hidden { display: none !important; }
+        /* Mobile-compatible hidden file inputs */
+        .file-input-hidden {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+            opacity: 0 !important;
+        }
 
         .create-page { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -180,9 +193,15 @@
             position: relative; width: 100%; border-radius: 16px; overflow: hidden;
             background: #0a0a0a; border: 1px solid rgba(255,255,255,0.08);
         }
-        .carousel-track { display: flex; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); touch-action: pan-y; }
+        .carousel-track {
+            display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch; scrollbar-width: none;
+            scroll-behavior: smooth; direction: ltr;
+        }
+        .carousel-track::-webkit-scrollbar { display: none; }
         .carousel-slide {
-            min-width: 100%; display: flex; align-items: center; justify-content: center; background: #0a0a0a;
+            min-width: 100%; flex-shrink: 0; display: flex; align-items: center;
+            justify-content: center; background: #0a0a0a; scroll-snap-align: start;
         }
         .carousel-slide img { width: 100%; max-height: 400px; object-fit: contain; }
         .carousel-arrow {
@@ -199,9 +218,9 @@
         .carousel-dots { display: flex; justify-content: center; gap: 6px; padding: 10px 0; }
         .carousel-dot {
             width: 7px; height: 7px; border-radius: 50%;
-            background: rgba(255,255,255,0.25); transition: all 0.2s; cursor: pointer;
+            background: rgba(255,255,255,0.25); transition: all 0.3s; cursor: pointer;
         }
-        .carousel-dot.active { background: #3b82f6; transform: scale(1.2); }
+        .carousel-dot.active { background: #3b82f6; transform: scale(1.3); }
         .carousel-counter {
             position: absolute; top: 12px; left: 12px;
             background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
@@ -354,10 +373,10 @@
             </div>
 
             <!-- Hidden file inputs -->
-            <input type="file" id="imageFile" accept="image/*" class="hidden" multiple>
-            <input type="file" id="videoFile" accept="video/*" class="hidden">
-            <input type="file" id="audioFile" accept="audio/*" class="hidden">
-            <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="hidden">
+            <input type="file" id="imageFile" accept="image/*" class="file-input-hidden" multiple>
+            <input type="file" id="videoFile" accept="video/*" class="file-input-hidden">
+            <input type="file" id="audioFile" accept="audio/*" class="file-input-hidden">
+            <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="file-input-hidden">
 
             <!-- Media Tabs -->
             <div class="media-tabs">
@@ -551,13 +570,13 @@
             if (selectedMediaType === 'image') { selectedMediaType = null; syncMediaFile(null); }
         } else if (type === 'video') {
             videoFileInput.value = '';
-            document.getElementById('videoPreviewCard').style.display = 'none';
+            document.getElementById('videoPreviewCard').classList.add('hidden');
             document.getElementById('videoUploadZone').style.display = '';
             var vid = document.getElementById('videoPreviewEl'); vid.pause(); vid.src = '';
             if (selectedMediaType === 'video') { selectedMediaType = null; syncMediaFile(null); }
         } else if (type === 'audio') {
             audioFileInput.value = '';
-            document.getElementById('audioPreviewCard').style.display = 'none';
+            document.getElementById('audioPreviewCard').classList.add('hidden');
             document.getElementById('audioUploadZone').style.display = '';
             var aud = document.getElementById('audioPreviewEl'); aud.pause(); aud.src = '';
             if (selectedMediaType === 'audio') { selectedMediaType = null; syncMediaFile(null); }
@@ -571,32 +590,36 @@
 
     // ======== SYNC MEDIA FILE ========
     function syncMediaFile(file) {
-        if (!file) { mediaFile.value = ''; return; }
-        var dt = new DataTransfer();
-        dt.items.add(file);
-        mediaFile.files = dt.files;
+        if (!file) { try { mediaFile.value = ''; } catch(e) {} return; }
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            mediaFile.files = dt.files;
+        } catch(e) {
+            // DataTransfer not supported on some mobile browsers
+            console.warn('syncMediaFile fallback:', e);
+        }
     }
 
     // ======== IMAGE HANDLING (MULTI) ========
     imageFileInput.addEventListener('change', function(e) {
         if (e.target.files.length > 0) {
             var files = Array.from(e.target.files);
-            var loaded = 0;
             files.forEach(function(file) {
-                var reader = new FileReader();
-                reader.onload = function(ev) {
-                    selectedImages.push({ file: file, dataUrl: ev.target.result });
-                    loaded++;
-                    if (loaded === files.length) {
-                        renderCarousel();
-                        selectedMediaType = 'image';
-                        syncMediaFile(selectedImages[0].file);
-                        clearOtherMedia('image');
-                        checkInputs();
-                    }
-                };
-                reader.readAsDataURL(file);
+                try {
+                    var blobUrl = URL.createObjectURL(file);
+                    selectedImages.push({ file: file, dataUrl: blobUrl });
+                } catch(err) {
+                    console.error('Error creating image preview:', err);
+                }
             });
+            if (selectedImages.length > 0) {
+                renderCarousel();
+                selectedMediaType = 'image';
+                syncMediaFile(selectedImages[0].file);
+                clearOtherMedia('image');
+                checkInputs();
+            }
         }
     });
 
@@ -679,17 +702,15 @@
     }
 
     function carouselGo(dir) {
-        var isRTL = document.documentElement.getAttribute('dir') === 'rtl';
-        var newSlide = currentSlide + (isRTL ? -dir : dir);
+        var newSlide = currentSlide + dir;
         if (newSlide < 0 || newSlide >= selectedImages.length) return;
         goToSlide(newSlide);
     }
 
     function updateCarouselPosition() {
         var track = document.getElementById('carouselTrack');
-        var isRTL = document.documentElement.getAttribute('dir') === 'rtl';
-        var offset = currentSlide * 100;
-        track.style.transform = isRTL ? 'translateX(' + offset + '%)' : 'translateX(-' + offset + '%)';
+        var slideWidth = track.offsetWidth;
+        track.scrollTo({ left: currentSlide * slideWidth, behavior: 'smooth' });
     }
 
     function updateCarouselUI() {
@@ -699,7 +720,10 @@
     }
 
     function removeImage(index) {
-        selectedImages.splice(index, 1);
+        var removed = selectedImages.splice(index, 1);
+        if (removed[0] && removed[0].dataUrl) {
+            try { URL.revokeObjectURL(removed[0].dataUrl); } catch(e) {}
+        }
         if (currentSlide >= selectedImages.length) currentSlide = Math.max(0, selectedImages.length - 1);
         if (selectedImages.length === 0) {
             selectedMediaType = null; syncMediaFile(null); imageFileInput.value = '';
@@ -710,27 +734,23 @@
         checkInputs();
     }
 
-    // Touch swipe for carousel
+    // Scroll-snap based swipe detection for carousel
     (function() {
-        var container = document.getElementById('carouselContainer');
-        var startX = 0, diffX = 0, dragging = false;
-        container.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; dragging = true; }, { passive: true });
-        container.addEventListener('touchmove', function(e) { if (dragging) diffX = e.touches[0].clientX - startX; }, { passive: true });
-        container.addEventListener('touchend', function() {
-            if (!dragging) return;
-            dragging = false;
-            var isRTL = document.documentElement.getAttribute('dir') === 'rtl';
-            if (Math.abs(diffX) > 50) {
-                if (isRTL) {
-                    if (diffX > 0 && currentSlide < selectedImages.length - 1) goToSlide(currentSlide + 1);
-                    else if (diffX < 0 && currentSlide > 0) goToSlide(currentSlide - 1);
-                } else {
-                    if (diffX < 0 && currentSlide < selectedImages.length - 1) goToSlide(currentSlide + 1);
-                    else if (diffX > 0 && currentSlide > 0) goToSlide(currentSlide - 1);
+        var track = document.getElementById('carouselTrack');
+        var scrollTimeout;
+        track.addEventListener('scroll', function() {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(function() {
+                var slideWidth = track.offsetWidth;
+                if (slideWidth > 0) {
+                    var newSlide = Math.round(track.scrollLeft / slideWidth);
+                    if (newSlide !== currentSlide && newSlide >= 0 && newSlide < selectedImages.length) {
+                        currentSlide = newSlide;
+                        updateCarouselUI();
+                    }
                 }
-            }
-            diffX = 0;
-        });
+            }, 80);
+        }, { passive: true });
     })();
 
     // ======== VIDEO HANDLING ========
@@ -739,7 +759,7 @@
             var file = e.target.files[0];
             document.getElementById('videoPreviewEl').src = URL.createObjectURL(file);
             document.getElementById('videoFileName').textContent = file.name;
-            document.getElementById('videoPreviewCard').style.display = '';
+            document.getElementById('videoPreviewCard').classList.remove('hidden');
             document.getElementById('videoUploadZone').style.display = 'none';
             selectedMediaType = 'video'; syncMediaFile(file); clearOtherMedia('video');
         }
@@ -754,7 +774,7 @@
             document.getElementById('audioPreviewName').textContent = file.name;
             document.getElementById('audioPreviewType').textContent = file.type || 'audio';
             document.getElementById('audioFileName').textContent = file.name;
-            document.getElementById('audioPreviewCard').style.display = '';
+            document.getElementById('audioPreviewCard').classList.remove('hidden');
             document.getElementById('audioUploadZone').style.display = 'none';
             selectedMediaType = 'audio'; syncMediaFile(file); clearOtherMedia('audio');
         }
@@ -770,13 +790,13 @@
         }
         if (keepType !== 'video' && videoFileInput.files.length > 0) {
             videoFileInput.value = '';
-            document.getElementById('videoPreviewCard').style.display = 'none';
+            document.getElementById('videoPreviewCard').classList.add('hidden');
             document.getElementById('videoUploadZone').style.display = '';
             var vid = document.getElementById('videoPreviewEl'); vid.pause(); vid.src = '';
         }
         if (keepType !== 'audio' && audioFileInput.files.length > 0) {
             audioFileInput.value = '';
-            document.getElementById('audioPreviewCard').style.display = 'none';
+            document.getElementById('audioPreviewCard').classList.add('hidden');
             document.getElementById('audioUploadZone').style.display = '';
             var aud = document.getElementById('audioPreviewEl'); aud.pause(); aud.src = '';
         }

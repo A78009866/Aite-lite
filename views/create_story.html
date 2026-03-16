@@ -1562,8 +1562,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                 <span class="text-gray-500 text-xs">MP4, MOV, WEBM</span>
             </div>
         </div>
-        <input type="file" id="storyImageInput" accept="image/*" class="hidden" multiple onchange="handleMediaSelect(this, 'image')">
-        <input type="file" id="storyVideoInput" accept="video/*" class="hidden" onchange="handleMediaSelect(this, 'video')">
+        <input type="file" id="storyImageInput" accept="image/*" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;opacity:0;" multiple onchange="handleMediaSelect(this, 'image')">
+        <input type="file" id="storyVideoInput" accept="video/*" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;opacity:0;" onchange="handleMediaSelect(this, 'video')">
 
         <!-- Media Preview -->
         <div id="mediaPreviewArea" class="media-preview-area mb-5" style="display:none;">
@@ -1669,22 +1669,40 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         });
     }
 
+    function isImageFile(file) {
+        if (file.type && file.type.startsWith('image/')) return true;
+        var name = (file.name || '').toLowerCase();
+        return /\.(jpg|jpeg|png|gif|webp|bmp|svg|heic|heif|avif|tiff?)$/i.test(name);
+    }
+
+    function isVideoFile(file) {
+        if (file.type && file.type.startsWith('video/')) return true;
+        var name = (file.name || '').toLowerCase();
+        return /\.(mp4|mov|webm|avi|mkv|3gp|ogv|flv|wmv|mpeg?)$/i.test(name);
+    }
+
     function handleMediaSelect(input, type) {
         if (!input.files || !input.files[0]) return;
         var file = input.files[0];
-        if (type === 'image' && !file.type.startsWith('image/')) {
+        if (type === 'image' && !isImageFile(file)) {
             showToast('يرجى اختيار ملف صورة صالح');
             input.value = '';
             return;
         }
-        if (type === 'video' && !file.type.startsWith('video/')) {
+        if (type === 'video' && !isVideoFile(file)) {
             showToast('يرجى اختيار ملف فيديو صالح');
             input.value = '';
             return;
         }
         selectedMediaFile = file;
         selectedMediaType = type;
-        var url = URL.createObjectURL(file);
+        try {
+            var url = URL.createObjectURL(file);
+        } catch(e) {
+            console.error('Error creating preview URL:', e);
+            showToast('تعذر معاينة الملف');
+            return;
+        }
         var previewArea = document.getElementById('mediaPreviewArea');
         var imgEl = document.getElementById('previewImage');
         var vidEl = document.getElementById('previewVideo');
