@@ -372,10 +372,10 @@
                     class="glass-input custom-scroll" style="width:100%;padding:16px;border-radius:16px;font-size:16px;resize:none;line-height:1.6;"></textarea>
             </div>
 
-            <!-- Hidden file inputs -->
-            <input type="file" id="imageFile" accept="image/*" class="file-input-hidden" multiple>
-            <input type="file" id="videoFile" accept="video/*" class="file-input-hidden">
-            <input type="file" id="audioFile" accept="audio/*" class="file-input-hidden">
+            <!-- Hidden file inputs (WebView compatible) -->
+            <input type="file" id="imageFile" accept="image/*,image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif" class="file-input-hidden" multiple>
+            <input type="file" id="videoFile" accept="video/*,video/mp4,video/webm,video/quicktime" class="file-input-hidden">
+            <input type="file" id="audioFile" accept="audio/*,audio/mpeg,audio/wav,audio/ogg" class="file-input-hidden">
             <input type="file" id="mediaFile" name="media" accept="image/*,audio/*,video/*" class="file-input-hidden">
 
             <!-- Media Tabs -->
@@ -396,7 +396,7 @@
 
             <!-- ====== IMAGE SECTION (Multi-image + Carousel) ====== -->
             <div id="section-image" class="media-section" style="margin-bottom:20px;">
-                <div id="imageUploadZone" class="upload-zone" onclick="document.getElementById('imageFile').click()">
+                <div id="imageUploadZone" class="upload-zone" style="cursor:pointer;">
                     <div class="upload-zone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار صور</p>
                     <p style="font-size:12px;color:#555;margin:0;">يمكنك اختيار عدة صور - PNG, JPG, GIF, WEBP</p>
@@ -421,7 +421,7 @@
 
             <!-- Video Section -->
             <div id="section-video" class="media-section" style="margin-bottom:20px;">
-                <div id="videoUploadZone" class="upload-zone" onclick="document.getElementById('videoFile').click()">
+                <div id="videoUploadZone" class="upload-zone" style="cursor:pointer;">
                     <div class="upload-zone-icon"><i class="fas fa-film"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار فيديو</p>
                     <p style="font-size:12px;color:#555;margin:0;">MP4, MOV, WEBM</p>
@@ -439,7 +439,7 @@
 
             <!-- Audio Section -->
             <div id="section-audio" class="media-section" style="margin-bottom:20px;">
-                <div id="audioUploadZone" class="upload-zone" onclick="document.getElementById('audioFile').click()">
+                <div id="audioUploadZone" class="upload-zone" style="cursor:pointer;">
                     <div class="upload-zone-icon"><i class="fas fa-headphones"></i></div>
                     <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار ملف صوتي</p>
                     <p style="font-size:12px;color:#555;margin:0;">MP3, WAV, OGG, M4A</p>
@@ -541,6 +541,33 @@
     // ======== MULTI-IMAGE STATE ========
     var selectedImages = [];
     var currentSlide = 0;
+
+    // ======== WEBVIEW FILE INPUT FIX ========
+    // Some WebView implementations don't trigger file inputs via <label for="...">
+    // We add explicit click handlers as fallback
+    (function fixWebViewFileInputs() {
+        var zones = [
+            { zone: 'imageUploadZone', input: 'imageFile' },
+            { zone: 'videoUploadZone', input: 'videoFile' },
+            { zone: 'audioUploadZone', input: 'audioFile' }
+        ];
+        zones.forEach(function(z) {
+            var zoneEl = document.getElementById(z.zone);
+            var inputEl = document.getElementById(z.input);
+            if (zoneEl && inputEl) {
+                zoneEl.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputEl.click();
+                });
+                // Touch support for WebView
+                zoneEl.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    inputEl.click();
+                }, { passive: false });
+            }
+        });
+    })();
 
     // ======== TAB SWITCHING ========
     function switchMediaTab(tab) {
@@ -683,7 +710,13 @@
         var addBtn = document.createElement('div');
         addBtn.className = 'add-more-btn';
         addBtn.innerHTML = '<i class="fas fa-plus"></i>';
-        addBtn.onclick = function() { imageFileInput.click(); };
+        var addLabel = document.createElement('label');
+        addLabel.setAttribute('for', 'imageFile');
+        addLabel.style.cssText = 'display:flex;align-items:center;justify-content:center;cursor:pointer;width:100%;height:100%;';
+        addLabel.appendChild(document.createTextNode(''));
+        addBtn.innerHTML = '';
+        addBtn.appendChild(addLabel);
+        addLabel.innerHTML = '<i class="fas fa-plus"></i>';
         thumbs.appendChild(addBtn);
 
         prevBtn.style.display = selectedImages.length > 1 ? '' : 'none';
@@ -886,26 +919,25 @@
     startRecordingBtn.addEventListener('click', startRecording);
     stopRecordingBtn.addEventListener('click', stopRecording);
 
-    // ======== IMAGE COMPRESSION ========
+    // ======== IMAGE COMPRESSION (AGGRESSIVE - very small files) ========
     async function compressImage(file, maxWidth, maxHeight, quality) {
-        maxWidth = maxWidth || 1920; maxHeight = maxHeight || 1920; quality = quality || 0.85;
+        maxWidth = maxWidth || 800; maxHeight = maxHeight || 800; quality = quality || 0.45;
         if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
-        if (file.size < 500 * 1024) return file;
         return new Promise(function(resolve) {
             var img = new Image();
             img.onload = function() {
                 var w = img.width, h = img.height;
-                if (w <= maxWidth && h <= maxHeight && file.size < 2 * 1024 * 1024) { resolve(file); return; }
                 var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
                 var canvas = document.createElement('canvas');
                 canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio);
                 canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
                 canvas.toBlob(function(blob) {
-                    resolve(blob && blob.size < file.size ? new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }) : file);
+                    resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }) : file);
                 }, 'image/jpeg', quality);
             };
             img.onerror = function() { resolve(file); };
-            img.src = URL.createObjectURL(file);
+            var objUrl = URL.createObjectURL(file);
+            img.src = objUrl;
         });
     }
 
@@ -1020,7 +1052,6 @@
 
     document.addEventListener('DOMContentLoaded', function() { checkInputs(); });
 </script>
-<script src="/lang.js"></script>
 <script>
 (function() {
     var path = window.location.pathname;

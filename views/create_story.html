@@ -1547,23 +1547,23 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 
         <!-- Upload Buttons -->
         <div id="uploadButtonsArea" class="flex gap-3 mb-5">
-            <div class="upload-btn" onclick="document.getElementById('storyImageInput').click()">
+            <label for="storyImageInput" class="upload-btn">
                 <div class="icon-circle bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30">
                     <i class="fas fa-image text-pink-400"></i>
                 </div>
                 <span class="text-white font-bold text-sm">اختر صورة</span>
                 <span class="text-gray-500 text-xs">JPG, PNG, WEBP</span>
-            </div>
-            <div class="upload-btn" onclick="document.getElementById('storyVideoInput').click()">
+            </label>
+            <label for="storyVideoInput" class="upload-btn">
                 <div class="icon-circle bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30">
                     <i class="fas fa-video text-blue-400"></i>
                 </div>
                 <span class="text-white font-bold text-sm">اختر فيديو</span>
                 <span class="text-gray-500 text-xs">MP4, MOV, WEBM</span>
-            </div>
+            </label>
         </div>
-        <input type="file" id="storyImageInput" accept="image/*" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;opacity:0;" multiple onchange="handleMediaSelect(this, 'image')">
-        <input type="file" id="storyVideoInput" accept="video/*" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;opacity:0;" onchange="handleMediaSelect(this, 'video')">
+        <input type="file" id="storyImageInput" accept="image/*,image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);border:0;opacity:0;" onchange="handleMediaSelect(this, 'image')">
+        <input type="file" id="storyVideoInput" accept="video/*,video/mp4,video/webm,video/quicktime" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);border:0;opacity:0;" onchange="handleMediaSelect(this, 'video')">
 
         <!-- Media Preview -->
         <div id="mediaPreviewArea" class="media-preview-area mb-5" style="display:none;">
@@ -1646,6 +1646,33 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     var previewAudio = new Audio();
     var currentPlayingUrl = '';
     var searchTimeout;
+
+    // ======== WEBVIEW FILE INPUT FIX ========
+    // WebView apps often fail to trigger file inputs via <label for="...">
+    // We add explicit click/touch handlers as fallback
+    (function fixWebViewFileInputs() {
+        var pairs = [
+            { labelFor: 'storyImageInput' },
+            { labelFor: 'storyVideoInput' }
+        ];
+        pairs.forEach(function(p) {
+            var inputEl = document.getElementById(p.labelFor);
+            if (!inputEl) return;
+            // Find all labels that reference this input
+            var labels = document.querySelectorAll('label[for="' + p.labelFor + '"]');
+            labels.forEach(function(label) {
+                label.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputEl.click();
+                });
+                label.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    inputEl.click();
+                }, { passive: false });
+            });
+        });
+    })();
 
     function showToast(msg) {
         var t = document.getElementById('toastEl');
@@ -1827,20 +1854,16 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         document.getElementById('selectedTrackUI').style.display = 'none';
     }
 
-    // Smart client-side image compression before upload
+    // Aggressive client-side image compression - very small files for fast upload
     async function compressImage(file, maxWidth, maxHeight, quality) {
-        maxWidth = maxWidth || 1920;
-        maxHeight = maxHeight || 1920;
-        quality = quality || 0.85;
+        maxWidth = maxWidth || 800;
+        maxHeight = maxHeight || 800;
+        quality = quality || 0.45;
         if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
-        if (file.size < 500 * 1024) return file; // skip small images
         return new Promise(function(resolve) {
             var img = new Image();
             img.onload = function() {
                 var w = img.width, h = img.height;
-                if (w <= maxWidth && h <= maxHeight && file.size < 2 * 1024 * 1024) {
-                    resolve(file); return;
-                }
                 var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
                 var newW = Math.round(w * ratio);
                 var newH = Math.round(h * ratio);
@@ -1850,15 +1873,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                 var ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, newW, newH);
                 canvas.toBlob(function(blob) {
-                    if (blob && blob.size < file.size) {
-                        resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
-                    } else {
-                        resolve(file);
-                    }
+                    resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }) : file);
                 }, 'image/jpeg', quality);
             };
             img.onerror = function() { resolve(file); };
-            img.src = URL.createObjectURL(file);
+            var objUrl = URL.createObjectURL(file);
+            img.src = objUrl;
         });
     }
 

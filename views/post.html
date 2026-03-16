@@ -223,6 +223,20 @@
         /* Media Viewer */
         .media-container { max-height: 80vh; width: auto; }
 
+        /* Post multi-image carousel */
+        .post-carousel-wrapper { position: relative; overflow: hidden; }
+        .post-carousel-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -ms-overflow-style: none; }
+        .post-carousel-track::-webkit-scrollbar { display: none; }
+        .post-carousel-slide { min-width: 100%; scroll-snap-align: start; }
+        .post-carousel-counter { position: absolute; top: 8px; left: 8px; z-index: 2; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 10px; border-radius: 10px; font-size: 12px; }
+        .post-carousel-dots { display: flex; justify-content: center; gap: 5px; padding: 8px 0; }
+        .post-carousel-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: all 0.2s; }
+        .post-carousel-dot.active { background: #3b82f6; width: 8px; height: 8px; }
+        .post-carousel-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; background: rgba(0,0,0,0.5); color: #fff; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; opacity: 0.7; transition: opacity 0.2s; }
+        .post-carousel-arrow:hover { opacity: 1; }
+        .post-carousel-arrow.arrow-left { left: 8px; }
+        .post-carousel-arrow.arrow-right { right: 8px; }
+
         /* --- Fullscreen Media Viewer (Image + Video) --- */
         .media-viewer-overlay {
             position: fixed; inset: 0; z-index: 9999;
@@ -2077,11 +2091,60 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             return '';
         }
 
+        function handlePostCarouselScroll(track, postId, total) {
+            var scrollLeft = track.scrollLeft;
+            var width = track.offsetWidth;
+            var idx = Math.round(scrollLeft / width);
+            if (idx < 0) idx = 0;
+            if (idx >= total) idx = total - 1;
+            var counter = track.parentElement.querySelector('.post-carousel-counter');
+            if (counter) counter.textContent = (idx + 1) + ' / ' + total;
+            var dots = document.getElementById('dots-' + postId);
+            if (dots) {
+                dots.querySelectorAll('.post-carousel-dot').forEach(function(d, i) {
+                    d.classList.toggle('active', i === idx);
+                });
+            }
+        }
+
+        function scrollPostCarousel(trackId, direction, total) {
+            var track = document.getElementById(trackId);
+            if (!track) return;
+            var width = track.offsetWidth;
+            var currentIdx = Math.round(track.scrollLeft / width);
+            var newIdx = currentIdx + direction;
+            if (newIdx < 0) newIdx = 0;
+            if (newIdx >= total) newIdx = total - 1;
+            track.scrollTo({ left: newIdx * width, behavior: 'smooth' });
+        }
+
         function renderPost(post) {
             let mediaContent = '';
             
             if (post.media) {
-                if (post.media.type === 'image') {
+                // Multi-image carousel (Instagram-style)
+                if (post.media.type === 'image' && post.mediaUrls && post.mediaUrls.length > 1) {
+                    const carouselId = 'post-carousel-' + post.postId;
+                    let slidesHtml = '';
+                    let dotsHtml = '';
+                    post.mediaUrls.forEach(function(url, idx) {
+                        slidesHtml += '<div class="post-carousel-slide" style="min-width:100%;scroll-snap-align:start;"><img src="' + url + '" alt="صورة ' + (idx+1) + '" class="w-full object-cover" style="border-radius:0;cursor:pointer;" onclick="openMediaViewer(\'' + url + '\', \'image\', event)" onerror="this.onerror=null;this.src=\'/images/default-avatar.png\'"></div>';
+                        dotsHtml += '<span class="post-carousel-dot' + (idx === 0 ? ' active' : '') + '" data-idx="' + idx + '"></span>';
+                    });
+                    mediaContent = `
+                        <div class="post-carousel-wrapper">
+                            <div class="post-carousel-counter">1 / ${post.mediaUrls.length}</div>
+                            <button class="post-carousel-arrow arrow-left" onclick="scrollPostCarousel('${carouselId}', -1, ${post.mediaUrls.length})" style="${post.mediaUrls.length > 1 ? '' : 'display:none'}"><i class="fas fa-chevron-left"></i></button>
+                            <button class="post-carousel-arrow arrow-right" onclick="scrollPostCarousel('${carouselId}', 1, ${post.mediaUrls.length})" style="${post.mediaUrls.length > 1 ? '' : 'display:none'}"><i class="fas fa-chevron-right"></i></button>
+                            <div id="${carouselId}" class="post-carousel-track" onscroll="handlePostCarouselScroll(this, '${post.postId}', ${post.mediaUrls.length})">
+                                ${slidesHtml}
+                            </div>
+                            <div class="post-carousel-dots" id="dots-${post.postId}">
+                                ${dotsHtml}
+                            </div>
+                        </div>
+                    `;
+                } else if (post.media.type === 'image') {
                     mediaContent = `
                         <div class="cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)">
                             <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0">

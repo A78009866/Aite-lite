@@ -63,15 +63,15 @@ const storage = new CloudinaryStorage({
       .replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
       .substring(0, 100);
 
-    // Smart compression: optimize quality while preserving visual fidelity
+    // Aggressive compression: small file sizes for fast upload/display
     let transformation = [];
     if (file.mimetype && file.mimetype.startsWith('image/')) {
       transformation = [
-        { quality: 'auto:good', fetch_format: 'auto' }
+        { width: 1200, height: 1200, crop: 'limit', quality: 'auto:low', fetch_format: 'auto' }
       ];
     } else if (file.mimetype && file.mimetype.startsWith('video/')) {
       transformation = [
-        { quality: 'auto:good', fetch_format: 'auto' }
+        { quality: 'auto:low', fetch_format: 'auto' }
       ];
     }
 
@@ -2932,10 +2932,19 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
   const content = truncateText(req.body.content ? req.body.content.trim() : '', 5000);
   let mediaUrl = req.body.mediaUrl || null;
   let mediaType = req.body.mediaType || null;
+  let mediaUrls = req.body.mediaUrls || null;
 
   // Validate Cloudinary URL when provided directly
   if (mediaUrl && !isValidCloudinaryUrl(mediaUrl)) {
     return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
+  }
+
+  // Validate mediaUrls array if provided
+  if (mediaUrls && Array.isArray(mediaUrls)) {
+    mediaUrls = mediaUrls.filter(u => typeof u === 'string' && isValidCloudinaryUrl(u));
+    if (mediaUrls.length === 0) mediaUrls = null;
+  } else {
+    mediaUrls = null;
   }
 
   // If files were uploaded via multer (backward compatibility)
@@ -2966,6 +2975,11 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
       commentsCount: 0,
       media: mediaUrl ? { url: mediaUrl, type: mediaType } : null,
     };
+
+    // Save multi-image URLs if provided
+    if (mediaUrls && mediaUrls.length > 1) {
+      postData.mediaUrls = mediaUrls;
+    }
 
     await newPostRef.set(postData);
 
