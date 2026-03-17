@@ -283,6 +283,14 @@
     html[data-theme="light"] .search-input {
         color: #1c1e21 !important;
     }
+    html[data-theme="light"] #suggestionsDropdown {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+    }
+    html[data-theme="light"] #suggestionsDropdown > div:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
+    }
 
     /* --- User Result Rows --- */
     html[data-theme="light"] .user-result-row {
@@ -1556,10 +1564,16 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             <button onclick="window.history.back()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition">
                 <i class="fas fa-arrow-right text-lg"></i>
             </button>
-            <div class="flex-grow search-input-container">
+            <div class="flex-grow search-input-container relative">
                 <i class="fas fa-search text-gray-400"></i>
                 <input type="text" id="searchInput" class="search-input" placeholder="ابحث عن أشخاص، منشورات، ريلز..." autocomplete="off">
+                <!-- Suggestions dropdown -->
+                <div id="suggestionsDropdown" class="hidden absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-50" style="background:rgba(30,30,30,0.95);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.1);max-height:300px;overflow-y:auto;">
+                </div>
             </div>
+            <button id="searchBtn" onclick="doFullSearch()" class="w-10 h-10 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 transition flex-shrink-0">
+                <i class="fas fa-search"></i>
+            </button>
         </div>
     </header>
 
@@ -1585,7 +1599,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                 <div id="postsList" class="space-y-4"></div>
             </div>
             
-            <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-gray-500">
+            <div id="emptyState" class="flex flex-col items-center justify-center py-20 text-gray-500">
                 <i class="fas fa-search text-5xl mb-4 opacity-50"></i>
                 <p>اكتب شيئاً للبحث...</p>
             </div>
@@ -1597,31 +1611,152 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         const loadingIndicator = document.getElementById('loadingIndicator');
         const resultsContainer = document.getElementById('resultsContainer');
         const emptyState = document.getElementById('emptyState');
+        const suggestionsDropdown = document.getElementById('suggestionsDropdown');
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png";
         
         let debounceTimer;
-        let activeWaveSurfer = null; // Single active audio
+        let activeWaveSurfer = null;
+        let lastSearchData = null; // Cache last API response for full search
 
         searchInput.focus();
-        emptyState.classList.remove('hidden');
 
+        // --- While typing: show text suggestions only ---
         searchInput.addEventListener('input', (e) => {
             clearTimeout(debounceTimer);
             const query = e.target.value.trim();
             
             if (!query) {
+                suggestionsDropdown.classList.add('hidden');
+                suggestionsDropdown.innerHTML = '';
                 clearResults();
                 emptyState.classList.remove('hidden');
                 return;
             }
 
+            debounceTimer = setTimeout(() => {
+                fetchSuggestions(query);
+            }, 400);
+        });
+
+        // --- Press Enter to search ---
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                doFullSearch();
+            }
+        });
+
+        // --- Close suggestions when clicking outside ---
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-input-container')) {
+                suggestionsDropdown.classList.add('hidden');
+            }
+        });
+
+        // --- Fetch text suggestions (people names + post snippets) ---
+        async function fetchSuggestions(query) {
+            try {
+                const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                lastSearchData = data;
+
+                if (!data.ok) return;
+
+                const suggestions = [];
+
+                // Add people as suggestions
+                if (data.people && data.people.length > 0) {
+                    data.people.slice(0, 4).forEach(u => {
+                        suggestions.push({
+                            type: 'person',
+                            text: u.username,
+                            sub: u.full_name || '',
+                            icon: 'fas fa-user',
+                            url: `/profile?userId=${u.id}`,
+                            pic: u.profile_picture_url
+                        });
+                    });
+                }
+
+                // Add post content snippets as suggestions
+                if (data.posts && data.posts.length > 0) {
+                    data.posts.slice(0, 3).forEach(p => {
+                        const snippet = (p.content || '').substring(0, 60) + ((p.content || '').length > 60 ? '...' : '');
+                        suggestions.push({
+                            type: 'post',
+                            text: snippet,
+                            sub: p.user.username,
+                            icon: 'fas fa-file-alt'
+                        });
+                    });
+                }
+
+                // Add reel descriptions as suggestions
+                if (data.reels && data.reels.length > 0) {
+                    data.reels.slice(0, 2).forEach(r => {
+                        const snippet = (r.description || '').substring(0, 60) + ((r.description || '').length > 60 ? '...' : '');
+                        if (snippet.trim()) {
+                            suggestions.push({
+                                type: 'reel',
+                                text: snippet,
+                                sub: r.user.username,
+                                icon: 'fas fa-clapperboard'
+                            });
+                        }
+                    });
+                }
+
+                renderSuggestions(suggestions, query);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function renderSuggestions(suggestions, query) {
+            if (suggestions.length === 0) {
+                suggestionsDropdown.classList.add('hidden');
+                return;
+            }
+
+            suggestionsDropdown.innerHTML = suggestions.map(s => {
+                const picHtml = s.pic ? `<img src="${s.pic}" class="w-8 h-8 rounded-full object-cover flex-shrink-0">` : `<div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.08);"><i class="${s.icon} text-gray-400 text-xs"></i></div>`;
+                const clickAction = s.url ? `window.location.href='${s.url}'` : `searchInput.value='${s.text.replace(/'/g, "\\'").replace(/\n/g, ' ')}';doFullSearch()`;
+                return `
+                    <div class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/10 transition" onclick="${clickAction}">
+                        ${picHtml}
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm text-white truncate">${s.text}</div>
+                            ${s.sub ? `<div class="text-xs text-gray-400 truncate">${s.sub}</div>` : ''}
+                        </div>
+                        <i class="fas fa-arrow-left text-gray-600 text-xs flex-shrink-0"></i>
+                    </div>
+                `;
+            }).join('') + `
+                <div class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/10 transition border-t border-gray-700/50" onclick="doFullSearch()">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-blue-600/20"><i class="fas fa-search text-blue-400 text-xs"></i></div>
+                    <div class="text-sm text-blue-400">عرض كل النتائج لـ "${query}"</div>
+                </div>
+            `;
+            suggestionsDropdown.classList.remove('hidden');
+        }
+
+        // --- Full search: triggered by button or Enter ---
+        function doFullSearch() {
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            suggestionsDropdown.classList.add('hidden');
             emptyState.classList.add('hidden');
             loadingIndicator.classList.remove('hidden');
-            
-            debounceTimer = setTimeout(() => {
+
+            // If we already have cached data for this query, use it
+            if (lastSearchData && lastSearchData.ok) {
+                loadingIndicator.classList.add('hidden');
+                renderFullResults(lastSearchData);
+            } else {
                 performSearch(query);
-            }, 600);
-        });
+            }
+        }
 
         function clearResults() {
             document.getElementById('peopleList').innerHTML = '';
@@ -1636,83 +1771,110 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             try {
                 const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
                 const data = await res.json();
+                lastSearchData = data;
                 
                 loadingIndicator.classList.add('hidden');
-                clearResults();
 
                 if (data.ok) {
-                    // Render People
-                    if (data.people && data.people.length > 0) {
-                        document.getElementById('peopleSection').classList.remove('hidden');
-                        document.getElementById('peopleList').innerHTML = data.people.map(u => `
-                            <div class="user-result-row" onclick="window.location.href='/profile?userId=${u.id}'">
-                                <div class="flex items-center gap-3">
-                                    <img src="${u.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full object-cover">
-                                    <div>
-                                        <div class="font-bold text-sm text-white">${u.username}</div>
-                                        <div class="text-xs text-gray-400">${u.full_name || ''}</div>
-                                    </div>
-                                </div>
-                                <i class="fas fa-chevron-left text-gray-500 text-xs"></i>
-                            </div>
-                        `).join('');
-                    }
-
-                    // Render Reels
-                    if (data.reels && data.reels.length > 0) {
-                        document.getElementById('reelsSection').classList.remove('hidden');
-                        document.getElementById('reelsGrid').innerHTML = data.reels.map(r => `
-                            <div class="reel-item" onclick="window.location.href='/reels?id=${r.reelId}'">
-                                <video src="${r.videoUrl}" muted></video>
-                                <div class="absolute bottom-1 right-1">
-                                    <i class="fas fa-play text-white text-xs drop-shadow-md"></i>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-
-                    // Render Posts
-                    if (data.posts && data.posts.length > 0) {
-                        document.getElementById('postsSection').classList.remove('hidden');
-                        const postsContainer = document.getElementById('postsList');
-                        
-                        data.posts.forEach(post => {
-                            // Check verification (simple mock if missing)
-                            post.user.is_verified = post.user.is_verified || false;
-                            postsContainer.innerHTML += createPostCardHtml(post);
-                        });
-
-                        // Initialize WaveSurfers for audio posts
-                        data.posts.forEach(post => {
-                            if (post.media && post.media.type === 'audio') {
-                                initWaveSurfer(post.postId, post.media.url);
-                            }
-                        });
-                    }
+                    renderFullResults(data);
                 }
-
             } catch (err) {
                 console.error(err);
                 loadingIndicator.classList.add('hidden');
             }
         }
 
+        function renderFullResults(data) {
+            clearResults();
+
+            let hasResults = false;
+
+            // Render People
+            if (data.people && data.people.length > 0) {
+                hasResults = true;
+                document.getElementById('peopleSection').classList.remove('hidden');
+                document.getElementById('peopleList').innerHTML = data.people.map(u => `
+                    <div class="user-result-row" onclick="window.location.href='/profile?userId=${u.id}'">
+                        <div class="flex items-center gap-3">
+                            <img src="${u.profile_picture_url || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full object-cover">
+                            <div>
+                                <div class="font-bold text-sm text-white">${u.username}</div>
+                                <div class="text-xs text-gray-400">${u.full_name || ''}</div>
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-left text-gray-500 text-xs"></i>
+                    </div>
+                `).join('');
+            }
+
+            // Render Reels with thumbnail
+            if (data.reels && data.reels.length > 0) {
+                hasResults = true;
+                document.getElementById('reelsSection').classList.remove('hidden');
+                document.getElementById('reelsGrid').innerHTML = data.reels.map(r => `
+                    <div class="reel-item" onclick="window.location.href='/reels?id=${r.reelId}'" style="position:relative;">
+                        <video src="${r.videoUrl}" muted preload="metadata" style="pointer-events:none;"></video>
+                        <div class="absolute inset-0 flex items-center justify-center" style="background:rgba(0,0,0,0.2);">
+                            <i class="fas fa-play text-white text-lg drop-shadow-lg"></i>
+                        </div>
+                        <div class="absolute bottom-0 left-0 right-0 p-1.5" style="background:linear-gradient(transparent,rgba(0,0,0,0.7));">
+                            <div class="flex items-center gap-1">
+                                <img src="${r.user.profile_picture_url || ''}" class="w-4 h-4 rounded-full object-cover">
+                                <span class="text-white text-[10px] truncate">${r.user.username}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+                // Load video thumbnails (seek to 1s to get a frame)
+                setTimeout(() => {
+                    document.querySelectorAll('.reel-item video').forEach(v => {
+                        v.currentTime = 1;
+                    });
+                }, 100);
+            }
+
+            // Render Posts (full card like other pages)
+            if (data.posts && data.posts.length > 0) {
+                hasResults = true;
+                document.getElementById('postsSection').classList.remove('hidden');
+                const postsContainer = document.getElementById('postsList');
+                
+                data.posts.forEach(post => {
+                    post.user.is_verified = post.user.is_verified || false;
+                    postsContainer.innerHTML += createPostCardHtml(post);
+                });
+
+                // Initialize WaveSurfers for audio posts
+                data.posts.forEach(post => {
+                    if (post.media && post.media.type === 'audio') {
+                        initWaveSurfer(post.postId, post.media.url);
+                    }
+                });
+            }
+
+            if (!hasResults) {
+                emptyState.innerHTML = '<i class="fas fa-search text-5xl mb-4 opacity-50"></i><p>لا توجد نتائج</p>';
+                emptyState.classList.remove('hidden');
+            }
+        }
+
         // --- Helpers reused from Chat List ---
 
         function createPostCardHtml(post) {
-            // Note: In search we link to the post page
             let mediaContent = '';
             if (post.media) {
                 if (post.media.type === 'image' && post.mediaUrls && post.mediaUrls.length > 1) {
-                    // Multi-image: show first image with count badge
                     mediaContent = `<div class="relative mt-3"><img src="${post.mediaUrls[0]}" class="w-full rounded-lg max-h-80 object-cover border border-gray-800"><span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;">1 / ${post.mediaUrls.length}</span></div>`;
                 } else if (post.media.type === 'image') {
                     mediaContent = `<img src="${post.media.url}" class="w-full rounded-lg mt-3 max-h-80 object-cover border border-gray-800">`;
                 } else if (post.media.type === 'video') {
-                    mediaContent = `<div class="mt-3 relative aspect-video bg-black rounded-lg flex items-center justify-center border border-gray-800">
-                        <i class="fas fa-play-circle text-4xl text-white opacity-80"></i>
-                        <video src="${post.media.url}" class="absolute inset-0 w-full h-full object-contain opacity-60"></video>
-                    </div>`; // Simplified for search view
+                    mediaContent = `<div class="mt-3 relative aspect-video bg-black rounded-lg overflow-hidden border border-gray-800">
+                        <video src="${post.media.url}" class="w-full h-full object-contain" preload="metadata"></video>
+                        <div class="absolute inset-0 flex items-center justify-center" style="background:rgba(0,0,0,0.3);">
+                            <i class="fas fa-play-circle text-4xl text-white opacity-90"></i>
+                        </div>
+                    </div>`;
                 } else if (post.media.type === 'audio') {
                     mediaContent = `
                         <div class="mt-3 audio-play-wrapper">
@@ -1725,18 +1887,31 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             }
 
             const verifiedBadge = post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : '';
+            const postContent = (post.content || '').length > 200 
+                ? post.content.substring(0, 200) + `<span class="text-blue-400 text-xs cursor-pointer">...عرض المزيد</span>` 
+                : (post.content || '');
+
+            // Count likes/comments if available
+            const likesCount = post.likesCount || (post.likes ? Object.keys(post.likes).length : 0);
+            const commentsCount = post.commentsCount || 0;
 
             return `
-                <div class="glass-post-card p-4 cursor-pointer hover:bg-white/5 transition" onclick="window.location.href='/post.html?id=${post.postId}'">
-                    <div class="flex items-center mb-2">
-                        <img src="${post.user.profile_picture_url}" class="w-10 h-10 rounded-full border border-gray-700 object-cover ml-3">
-                        <div>
-                            <div class="text-white font-bold text-sm">${post.user.username} ${verifiedBadge}</div>
-                            <div class="text-gray-500 text-xs">${new Date(post.timestamp).toLocaleDateString('ar-EG')}</div>
+                <div class="glass-post-card overflow-hidden" onclick="window.location.href='/post.html?id=${post.postId}'" style="cursor:pointer;">
+                    <div class="p-4">
+                        <div class="flex items-center mb-3">
+                            <img src="${post.user.profile_picture_url}" class="w-10 h-10 rounded-full border border-gray-700 object-cover ml-3" onerror="this.src='https://via.placeholder.com/40'">
+                            <div class="flex-1">
+                                <div class="text-white font-bold text-sm flex items-center gap-1">${post.user.username} ${verifiedBadge}</div>
+                                <div class="text-gray-500 text-xs">${new Date(post.timestamp).toLocaleDateString('ar-EG')}</div>
+                            </div>
                         </div>
+                        <div class="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed">${postContent}</div>
                     </div>
-                    <div class="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed">${post.content}</div>
                     ${mediaContent}
+                    <div class="px-4 py-2 flex items-center gap-4 border-t border-gray-800/50">
+                        <span class="text-gray-400 text-xs flex items-center gap-1"><i class="far fa-heart"></i> ${likesCount}</span>
+                        <span class="text-gray-400 text-xs flex items-center gap-1"><i class="far fa-comment"></i> ${commentsCount}</span>
+                    </div>
                 </div>
             `;
         }
@@ -1753,7 +1928,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                     barWidth: 2,
                     barGap: 1,
                     cursorWidth: 0,
-                    interact: false // Disable interaction in search preview
+                    interact: false
                 });
                 ws.load(url);
                 container.wsInstance = ws;
@@ -1761,7 +1936,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         }
 
         function toggleAudio(id, e) {
-            e.stopPropagation(); // Prevent navigating to post
+            e.stopPropagation();
             const container = document.getElementById(`wave-${id}`);
             const btnIcon = document.querySelector(`#btn-${id} i`);
             if(!container || !container.wsInstance) return;
@@ -1770,7 +1945,6 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 
             if (activeWaveSurfer && activeWaveSurfer !== ws) {
                 activeWaveSurfer.pause();
-                // Reset icon for previous (simplified)
             }
 
             if(ws.isPlaying()) {
