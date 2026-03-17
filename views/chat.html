@@ -4382,63 +4382,107 @@ async function compressImage(file, maxWidth, maxHeight, quality) {
 
 // --- Sending ---
 // --- Direct Cloudinary Upload (bypass server size limits) ---
-async function uploadToCloudinary(file) {
-  var resourceType = 'auto';
-  if (file.type.startsWith('image')) resourceType = 'image';
-  else if (file.type.startsWith('video')) resourceType = 'video';
-  else if (file.type.startsWith('audio') || file.name.endsWith('.webm')) resourceType = 'video';
-  else resourceType = 'raw';
+// Single attempt to upload to Cloudinary
+function _cloudinaryUploadOnce(file, signData, resourceType) {
+  var fd = new FormData();
+  fd.append('file', file);
+  fd.append('api_key', signData.api_key);
+  fd.append('timestamp', signData.timestamp);
+  fd.append('signature', signData.signature);
+  fd.append('folder', signData.folder);
 
-  try {
-    var signRes = await fetch('/api/cloudinary/sign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: 'chat_media', resource_type: resourceType }),
-      credentials: 'same-origin'
-    });
-    if (!signRes.ok) throw new Error('فشل الاتصال بالخادم (HTTP ' + signRes.status + ')');
-    var signData = await signRes.json();
-    if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+  var uploadResourceType = (resourceType === 'raw') ? 'auto' : resourceType;
+  var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + uploadResourceType + '/upload';
 
-    var fd = new FormData();
-    fd.append('file', file);
-    fd.append('api_key', signData.api_key);
-    fd.append('timestamp', signData.timestamp);
-    fd.append('signature', signData.signature);
-    fd.append('folder', signData.folder);
-
-    // For raw files, use 'auto' as the upload resource type
-    var uploadResourceType = (resourceType === 'raw') ? 'auto' : resourceType;
-    var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + uploadResourceType + '/upload';
-
-    // Use XMLHttpRequest for upload progress tracking
-    return new Promise(function(resolve, reject) {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', uploadUrl, true);
-      xhr.upload.onprogress = function(e) {
-        if (e.lengthComputable) {
-          var pct = Math.round((e.loaded / e.total) * 100);
-          sendBtn.innerHTML = '<div style="font-size:11px;line-height:1;">' + pct + '%</div>';
-        }
-      };
-      xhr.onload = function() {
-        if (xhr.status >= 200 && xhr.status < 300) {
+  return new Promise(function(resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl, true);
+    xhr.timeout = 60000; // 60 second timeout
+    xhr.upload.onprogress = function(e) {
+      if (e.lengthComputable && sendBtn) {
+        var pct = Math.round((e.loaded / e.total) * 100);
+        sendBtn.innerHTML = '<div style="font-size:11px;line-height:1;">' + pct + '%</div>';
+      }
+    };
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
           var uploadData = JSON.parse(xhr.responseText);
           if (uploadData.error) return reject(new Error(uploadData.error.message || 'فشل رفع الملف'));
           resolve({ url: uploadData.secure_url, type: file.type });
-        } else {
-          var errText = 'فشل رفع الملف (HTTP ' + xhr.status + ')';
-          try { var errJson = JSON.parse(xhr.responseText); errText = (errJson.error && errJson.error.message) || errText; } catch(e) {}
-          reject(new Error(errText));
+        } catch(parseErr) {
+          reject(new Error('استجابة غير صالحة من خدمة الرفع'));
         }
-      };
-      xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
-      xhr.send(fd);
-    });
-  } catch(err) {
-    console.error('Cloudinary upload error:', err);
-    throw err;
+      } else {
+        var errText = 'فشل رفع الملف (HTTP ' + xhr.status + ')';
+        try { var errJson = JSON.parse(xhr.responseText); errText = (errJson.error && errJson.error.message) || errText; } catch(e) {}
+        reject(new Error(errText));
+      }
+    };
+    xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
+    xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
+    xhr.send(fd);
+  });
+}
+
+async function uploadToCloudinary(file) {
+  var resourceType = 'auto';
+  if (file.type && file.type.startsWith('image')) resourceType = 'image';
+  else if (file.type && file.type.startsWith('video')) resourceType = 'video';
+  else if ((file.type && file.type.startsWith('audio')) || file.name.endsWith('.webm')) resourceType = 'video';
+  else resourceType = 'raw';
+
+  var maxRetries = 3;
+  var lastError = null;
+
+  for (var attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Wait before retry (exponential backoff)
+      if (attempt > 0) {
+        if (sendBtn) sendBtn.innerHTML = '<div style="font-size:11px;line-height:1;">إعادة...</div>';
+        await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
+      }
+
+      // Get fresh signature for each attempt
+      var signRes = await fetch('/api/cloudinary/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: 'chat_media', resource_type: resourceType }),
+        credentials: 'same-origin'
+      });
+      if (!signRes.ok) throw new Error('فشل الاتصال بالخادم (HTTP ' + signRes.status + ')');
+      var signData = await signRes.json();
+      if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+
+      var result = await _cloudinaryUploadOnce(file, signData, resourceType);
+      return result; // Success
+    } catch(err) {
+      console.warn('Cloudinary upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
+      lastError = err;
+    }
   }
+
+  console.error('All Cloudinary upload attempts failed:', lastError);
+  throw lastError;
+}
+
+// Fallback: upload file through the server (works for files under Vercel's body limit ~4.5MB)
+async function _sendMessageWithServerUpload(file, content, otherId, replyData) {
+  var fd = new FormData();
+  fd.append('other_id', otherId);
+  if (content) fd.append('content', content);
+  fd.append('media', file);
+  if (replyData) {
+    if (replyData.id) fd.append('replied_to_id', replyData.id);
+    if (replyData.sender) fd.append('replied_to_sender', replyData.sender);
+    if (replyData.content) fd.append('replied_to_content', replyData.content);
+  }
+  var res = await fetch('/api/messages/send', {
+    method: 'POST',
+    body: fd,
+    credentials: 'same-origin'
+  });
+  return await res.json();
 }
 
 sendBtn.onclick = async () => {
@@ -4455,6 +4499,7 @@ sendBtn.onclick = async () => {
     var mediaUrl = null;
     var mediaType = null;
     var mediaFilename = null;
+    var usedServerFallback = false;
 
     // Upload file directly to Cloudinary if present (compress images first)
     if (uploadedFile) {
@@ -4462,63 +4507,89 @@ sendBtn.onclick = async () => {
       if (uploadedFile.type && uploadedFile.type.startsWith('image/')) {
         fileToSend = await compressImage(uploadedFile);
       }
-      var result = await uploadToCloudinary(fileToSend);
-      mediaUrl = result.url;
-      var ft = uploadedFile.type || '';
-      if (ft.startsWith('image')) mediaType = 'image';
-      else if (ft.startsWith('video')) mediaType = 'video';
-      else if (ft.startsWith('audio') || uploadedFile.name.endsWith('.webm')) mediaType = 'audio';
-      else mediaType = 'file';
-      mediaFilename = uploadedFile.name;
+
+      try {
+        var result = await uploadToCloudinary(fileToSend);
+        mediaUrl = result.url;
+        var ft = uploadedFile.type || '';
+        if (ft.startsWith('image')) mediaType = 'image';
+        else if (ft.startsWith('video')) mediaType = 'video';
+        else if (ft.startsWith('audio') || uploadedFile.name.endsWith('.webm')) mediaType = 'audio';
+        else mediaType = 'file';
+        mediaFilename = uploadedFile.name;
+      } catch(cloudErr) {
+        // Fallback: try sending file through the server directly
+        console.warn('Direct Cloudinary upload failed, using server fallback:', cloudErr.message);
+        if (sendBtn) sendBtn.innerHTML = '<div class="sending-spinner"></div>';
+        try {
+          var fallbackRes = await _sendMessageWithServerUpload(fileToSend, content, otherId, replyData);
+          if (fallbackRes.ok) {
+            usedServerFallback = true;
+          } else {
+            throw new Error(fallbackRes.error || 'فشل إرسال الرسالة عبر الخادم');
+          }
+        } catch(fallbackErr) {
+          throw new Error('فشل رفع الملف: ' + cloudErr.message);
+        }
+      }
     }
 
-    // Send JSON (small payload) to server
-    var body = { other_id: otherId };
-    if (content) body.content = content;
-    if (mediaUrl) {
-      body.mediaUrl = mediaUrl;
-      body.mediaType = mediaType;
-      body.mediaFilename = mediaFilename;
-    }
-    if (replyData) {
-      body.replied_to_id = replyData.id;
-      body.replied_to_sender = replyData.sender;
-      body.replied_to_content = replyData.content;
-    }
+    // If server fallback handled the message, skip the JSON send
+    if (!usedServerFallback) {
+      // Send JSON (small payload) to server
+      var body = { other_id: otherId };
+      if (content) body.content = content;
+      if (mediaUrl) {
+        body.mediaUrl = mediaUrl;
+        body.mediaType = mediaType;
+        body.mediaFilename = mediaFilename;
+      }
+      if (replyData) {
+        body.replied_to_id = replyData.id;
+        body.replied_to_sender = replyData.sender;
+        body.replied_to_content = replyData.content;
+      }
 
-    const res = await fetch('/api/messages/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const d = await res.json();
-    if(d.ok) {
-      scrollToBottom();
-      msgInput.value = '';
-      msgInput.style.height = '38px';
-      
-      uploadedFile = null;
-      filePreviewArea.style.display = 'none';
-      if(composerWaveSurfer) { composerWaveSurfer.destroy(); composerWaveSurfer = null; }
-      
-      replyData = null;
-      replyContainer.style.display = 'none';
-      
-      // Clear typing status on send
-      isTypingSent = false;
-      clearTimeout(typingTimeout);
-      fetch('/api/typing', {
+      const res = await fetch('/api/messages/send', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ contact_id: otherId, typing: false })
-      }).catch(() => {});
-      
-      toggleSendButton();
-    } else {
-      showToast(d.error || 'فشل إرسال الرسالة');
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        credentials: 'same-origin'
+      });
+      const d = await res.json();
+      if(!d.ok) {
+        showToast(d.error || 'فشل إرسال الرسالة');
+        sendBtn.innerHTML = originalIcon;
+        sendBtn.disabled = false;
+        return;
+      }
     }
+
+    // Success - reset UI
+    scrollToBottom();
+    msgInput.value = '';
+    msgInput.style.height = '38px';
+    
+    uploadedFile = null;
+    filePreviewArea.style.display = 'none';
+    if(composerWaveSurfer) { composerWaveSurfer.destroy(); composerWaveSurfer = null; }
+    
+    replyData = null;
+    replyContainer.style.display = 'none';
+    
+    // Clear typing status on send
+    isTypingSent = false;
+    clearTimeout(typingTimeout);
+    fetch('/api/typing', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ contact_id: otherId, typing: false }),
+      credentials: 'same-origin'
+    }).catch(() => {});
+    
+    toggleSendButton();
   } catch(e) {
-    console.error(e);
+    console.error('Send message error:', e);
     showToast('خطأ في الإرسال: ' + (e.message || ''));
   }
   
