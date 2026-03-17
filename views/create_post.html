@@ -211,11 +211,15 @@
         .carousel-dot.active { background: #3b82f6; transform: scale(1.3); }
         .carousel-counter {
             position: absolute; top: 12px; left: 12px;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
-            color: #fff; font-size: 12px; font-weight: 600;
-            padding: 4px 10px; border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.1); z-index: 5;
+            background: rgba(0,0,0,0.65); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            color: #fff; font-size: 12px; font-weight: 700;
+            padding: 5px 12px; border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.15); z-index: 5;
+            display: flex; align-items: center; gap: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: opacity 0.3s;
         }
+        .carousel-counter i { font-size: 11px; opacity: 0.85; }
 
         /* ===== LIGHT MODE ===== */
         [data-theme="light"] { color-scheme: light; }
@@ -382,10 +386,10 @@
             <!-- ====== IMAGE SECTION (Multi-image + Carousel) ====== -->
             <div id="section-image" class="media-section" style="margin-bottom:20px;">
                 <div id="imageUploadZone" class="upload-zone" style="cursor:pointer;position:relative;overflow:hidden;">
-                    <input type="file" id="imageFile" accept="image/*" onchange="handleImageChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
+                    <input type="file" id="imageFile" accept="image/*" multiple onchange="handleImageChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
                     <div class="upload-zone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
-                    <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار صورة</p>
-                    <p style="font-size:12px;color:#555;margin:0;">PNG, JPG, GIF, WEBP - يمكنك إضافة المزيد بعد الاختيار</p>
+                    <p style="font-size:14px;color:#999;margin:0 0 4px;">اضغط لاختيار صورة أو أكثر</p>
+                    <p style="font-size:12px;color:#555;margin:0;">PNG, JPG, GIF, WEBP - يمكنك اختيار عدة صور دفعة واحدة</p>
                 </div>
 
                 <!-- Carousel Preview -->
@@ -612,17 +616,23 @@
     }
 
     function handleImageChange(input) {
-        if (!input.files || !input.files[0]) return;
-        var file = input.files[0];
-        readFileAsDataUrl(file, function(dataUrl) {
-            if (dataUrl) {
-                selectedImages.push({ file: file, dataUrl: dataUrl });
-                renderCarousel();
-                selectedMediaType = 'image';
-                syncMediaFile(selectedImages[0].file);
-                clearOtherMedia('image');
-                checkInputs();
-            }
+        if (!input.files || input.files.length === 0) return;
+        var files = Array.prototype.slice.call(input.files);
+        var processed = 0;
+        files.forEach(function(file) {
+            readFileAsDataUrl(file, function(dataUrl) {
+                if (dataUrl) {
+                    selectedImages.push({ file: file, dataUrl: dataUrl });
+                }
+                processed++;
+                if (processed === files.length) {
+                    renderCarousel();
+                    selectedMediaType = 'image';
+                    syncMediaFile(selectedImages[0].file);
+                    clearOtherMedia('image');
+                    checkInputs();
+                }
+            });
         });
         // Reset input so same file can be re-selected
         input.value = '';
@@ -694,18 +704,25 @@
         var addInput = document.createElement('input');
         addInput.type = 'file';
         addInput.accept = 'image/*';
+        addInput.multiple = true;
         addInput.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:5;font-size:200px;';
         addInput.onchange = function() {
-            if (!addInput.files || !addInput.files[0]) return;
-            var file = addInput.files[0];
-            readFileAsDataUrl(file, function(dataUrl) {
-                if (dataUrl) {
-                    selectedImages.push({ file: file, dataUrl: dataUrl });
-                    renderCarousel();
-                    selectedMediaType = 'image';
-                    syncMediaFile(selectedImages[0].file);
-                    checkInputs();
-                }
+            if (!addInput.files || addInput.files.length === 0) return;
+            var files = Array.prototype.slice.call(addInput.files);
+            var processed = 0;
+            files.forEach(function(file) {
+                readFileAsDataUrl(file, function(dataUrl) {
+                    if (dataUrl) {
+                        selectedImages.push({ file: file, dataUrl: dataUrl });
+                    }
+                    processed++;
+                    if (processed === files.length) {
+                        renderCarousel();
+                        selectedMediaType = 'image';
+                        syncMediaFile(selectedImages[0].file);
+                        checkInputs();
+                    }
+                });
             });
         };
         addBtn.appendChild(addInput);
@@ -714,7 +731,7 @@
         prevBtn.style.display = selectedImages.length > 1 ? '' : 'none';
         nextBtn.style.display = selectedImages.length > 1 ? '' : 'none';
 
-        counter.textContent = (currentSlide + 1) + ' / ' + selectedImages.length;
+        counter.innerHTML = '<i class="fas fa-images"></i>' + (currentSlide + 1) + ' / ' + selectedImages.length;
 
         // Add numbering badges on each slide
         var slides = track.querySelectorAll('.carousel-slide');
@@ -750,7 +767,7 @@
     function updateCarouselUI() {
         document.querySelectorAll('.carousel-dot').forEach(function(d, i) { d.classList.toggle('active', i === currentSlide); });
         document.querySelectorAll('.image-thumb-wrap').forEach(function(t, i) { t.classList.toggle('active-thumb', i === currentSlide); });
-        document.getElementById('carouselCounter').textContent = (currentSlide + 1) + ' / ' + selectedImages.length;
+        document.getElementById('carouselCounter').innerHTML = '<i class="fas fa-images"></i>' + (currentSlide + 1) + ' / ' + selectedImages.length;
     }
 
     function removeImage(index) {
