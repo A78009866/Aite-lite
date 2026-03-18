@@ -2524,6 +2524,73 @@ app.delete('/api/posts/:id', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: "فشل حذف المنشور" });
   }
 });
+// Edit/Update post
+app.put('/api/posts/:id', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const postId = req.params.id;
+    const { content, mediaUrl, mediaType, mediaUrls, removeMedia } = req.body;
+
+    // Check post exists and belongs to current user
+    const postSnap = await db.ref(`posts/${postId}`).once('value');
+    if (!postSnap.exists()) {
+      return res.status(404).json({ ok: false, error: 'المنشور غير موجود' });
+    }
+    const post = postSnap.val();
+    if (post.userId !== userId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بتعديل هذا المنشور' });
+    }
+
+    const updates = {};
+
+    // Update content
+    if (typeof content === 'string') {
+      updates.content = truncateText(content.trim(), 5000);
+    }
+
+    // Handle media changes
+    if (removeMedia) {
+      // User wants to remove media
+      updates.media = null;
+      updates.mediaUrls = null;
+    } else if (mediaUrl) {
+      // User wants to change media
+      if (!isValidCloudinaryUrl(mediaUrl)) {
+        return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
+      }
+      updates.media = { url: mediaUrl, type: mediaType || 'image' };
+      // Handle multi-image URLs
+      if (mediaUrls && Array.isArray(mediaUrls)) {
+        const validUrls = mediaUrls.filter(u => typeof u === 'string' && isValidCloudinaryUrl(u));
+        if (validUrls.length > 1) {
+          updates.mediaUrls = validUrls;
+        } else {
+          updates.mediaUrls = null;
+        }
+      } else {
+        updates.mediaUrls = null;
+      }
+    }
+
+    // Ensure post still has content or media
+    const finalContent = updates.content !== undefined ? updates.content : (post.content || '');
+    const finalMedia = updates.media !== undefined ? updates.media : post.media;
+    if (!finalContent && !finalMedia) {
+      return res.status(400).json({ ok: false, error: 'يجب أن يحتوي المنشور على نص أو وسائط.' });
+    }
+
+    // Add edit timestamp
+    updates.editedAt = admin.database.ServerValue.TIMESTAMP;
+
+    await db.ref(`posts/${postId}`).update(updates);
+
+    res.json({ ok: true, message: 'تم تعديل المنشور بنجاح' });
+  } catch (error) {
+    console.error('Error updating post:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تعديل المنشور.' });
+  }
+});
+
 // Reject/Decline friend request
 app.post('/api/friends/reject', requireAuth, async (req, res) => {
   const toId = req.session.userId;

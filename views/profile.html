@@ -2918,6 +2918,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         <div class="p-3">
           <div id="postOptionsMessage" class="text-sm text-gray-300 mb-2 hidden"></div>
           <div class="option-row">
+            <button id="postOptionsEditBtn" class="option-btn" onclick="openEditPostModal(event)">
+              <i class="fas fa-edit"></i>
+              <span>تعديل المنشور</span>
+            </button>
+          </div>
+          <div class="option-row">
             <button id="postOptionsDeleteBtn" class="option-btn danger" onclick="confirmDeleteFromOptions(event)">
               <i class="fas fa-trash"></i>
               <span>حذف المنشور</span>
@@ -2936,6 +2942,79 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Edit Post Modal -->
+    <div id="editPostModal" class="hidden fixed inset-0 z-[90] flex items-center justify-center p-4 glass-modal-bg" onclick="closeEditPostModal()">
+      <div class="glass-comment-modal-content p-6 rounded-3xl shadow-2xl max-w-sm w-full modal-animate-in border border-white/20" style="position:relative;max-height:90vh;overflow-y:auto;background-color:rgba(30,30,30,0.95);" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-white">تعديل المنشور</h3>
+          <button onclick="closeEditPostModal()" class="text-gray-400 hover:text-white transition text-xl"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="margin-bottom:16px;">
+          <textarea id="editPostContent" rows="4" placeholder="اكتب ما تفكر به..." class="glass-input custom-scroll" style="width:100%;padding:14px;border-radius:14px;font-size:15px;resize:none;line-height:1.6;"></textarea>
+        </div>
+        <input type="file" id="editMediaFile" accept="image/*,audio/*,video/*" style="display:none!important;">
+        <div class="media-tabs" style="display:flex;gap:6px;margin-bottom:14px;">
+          <button type="button" class="media-tab" data-tab="image" onclick="editSwitchMediaTab('image')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#888;cursor:pointer;font-size:12px;font-weight:500;transition:all 0.3s;"><i class="fas fa-image" style="font-size:17px;"></i><span>صورة</span></button>
+          <button type="button" class="media-tab" data-tab="video" onclick="editSwitchMediaTab('video')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#888;cursor:pointer;font-size:12px;font-weight:500;transition:all 0.3s;"><i class="fas fa-video" style="font-size:17px;"></i><span>فيديو</span></button>
+          <button type="button" class="media-tab" data-tab="audio" onclick="editSwitchMediaTab('audio')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#888;cursor:pointer;font-size:12px;font-weight:500;transition:all 0.3s;"><i class="fas fa-music" style="font-size:17px;"></i><span>ملف صوتي</span></button>
+        </div>
+        <div id="editSection-image" class="edit-media-section" style="display:none;margin-bottom:16px;">
+          <div id="editImageUploadZone" style="border:2px dashed rgba(255,255,255,0.12);border-radius:14px;padding:24px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,0.02);">
+            <input type="file" id="editImageFile" accept="image/*" onchange="editHandleImageChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:16px;color:#666;"><i class="fas fa-cloud-upload-alt"></i></div>
+            <p style="font-size:13px;color:#999;margin:0 0 4px;">اضغط لاختيار صورة</p><p style="font-size:11px;color:#555;margin:0;">PNG, JPG, GIF, WEBP</p>
+          </div>
+          <div id="editImagePreviewArea" style="display:none;"><div style="position:relative;width:100%;border-radius:14px;overflow:hidden;background:#0a0a0a;border:1px solid rgba(255,255,255,0.08);">
+            <img id="editImagePreviewEl" src="" alt="" style="width:100%;max-height:350px;object-fit:contain;display:block;">
+            <button type="button" onclick="editRemoveMedia('image')" style="position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.7);color:#fff;border:1px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;font-size:13px;"><i class="fas fa-times"></i></button>
+          </div></div>
+        </div>
+        <div id="editSection-video" class="edit-media-section" style="display:none;margin-bottom:16px;">
+          <div id="editVideoUploadZone" style="border:2px dashed rgba(255,255,255,0.12);border-radius:14px;padding:24px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,0.02);">
+            <input type="file" id="editVideoFile" accept="video/*" onchange="editHandleVideoChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:16px;color:#666;"><i class="fas fa-film"></i></div>
+            <p style="font-size:13px;color:#999;margin:0 0 4px;">اضغط لاختيار فيديو</p><p style="font-size:11px;color:#555;margin:0;">MP4, MOV, WEBM</p>
+          </div>
+          <div id="editVideoPreviewCard" class="hidden" style="margin-top:10px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.3);overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.05);">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#aaa;"><i class="fas fa-video" style="color:#60a5fa;"></i><span id="editVideoFileName">فيديو</span></div>
+              <button type="button" onclick="editRemoveMedia('video')" style="width:26px;height:26px;border-radius:50%;border:none;background:rgba(239,68,68,0.15);color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;min-height:100px;"><video id="editVideoPreviewEl" controls style="max-height:300px;width:100%;background:#000;"></video></div>
+          </div>
+        </div>
+        <div id="editSection-audio" class="edit-media-section" style="display:none;margin-bottom:16px;">
+          <div id="editAudioUploadZone" style="border:2px dashed rgba(255,255,255,0.12);border-radius:14px;padding:24px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,0.02);">
+            <input type="file" id="editAudioFile" accept="audio/*" onchange="editHandleAudioChange(this)" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;font-size:200px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:16px;color:#666;"><i class="fas fa-headphones"></i></div>
+            <p style="font-size:13px;color:#999;margin:0 0 4px;">اضغط لاختيار ملف صوتي</p><p style="font-size:11px;color:#555;margin:0;">MP3, WAV, OGG, M4A</p>
+          </div>
+          <div id="editAudioPreviewCard" class="hidden" style="margin-top:10px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.3);overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.05);">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#aaa;"><i class="fas fa-music" style="color:#60a5fa;"></i><span id="editAudioFileName">ملف صوتي</span></div>
+              <button type="button" onclick="editRemoveMedia('audio')" style="width:26px;height:26px;border-radius:50%;border:none;background:rgba(239,68,68,0.15);color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding:12px;"><audio id="editAudioPreviewEl" controls style="width:100%;height:40px;"></audio></div>
+          </div>
+        </div>
+        <div id="editExistingMediaPreview" style="display:none;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:13px;color:#aaa;">الوسائط الحالية</span>
+            <button type="button" onclick="editRemoveExistingMedia()" style="font-size:12px;color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);padding:4px 12px;border-radius:8px;cursor:pointer;">إزالة</button>
+          </div>
+          <div id="editExistingMediaContent" style="border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0a0a0a;"></div>
+        </div>
+        <div style="padding-top:14px;border-top:1px solid rgba(255,255,255,0.05);">
+          <button type="button" id="editPostSubmitBtn" onclick="submitEditPost()" class="submit-btn-premium" style="width:100%;padding:13px;border-radius:13px;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;background:#fff;color:#000;border:none;font-weight:600;" disabled>
+            <span id="editPostSubmitText">حفظ التعديلات</span>
+            <i class="fas fa-check" style="font-size:13px;"></i>
+            <i id="editPostLoadingIndicator" class="fas fa-spinner fa-spin" style="display:none;"></i>
+          </button>
+        </div>
+        <div id="editPostError" style="color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:10px;margin-top:12px;text-align:center;font-size:13px;display:none;"></div>
       </div>
     </div>
 
@@ -4435,12 +4514,15 @@ function openPostOptionsModal(postId, userId) {
     const postOptionsMessage = document.getElementById('postOptionsMessage');
     const postOptionsDeleteBtn = document.getElementById('postOptionsDeleteBtn');
     const postOptionsAddFriendBtn = document.getElementById('postOptionsAddFriendBtn');
+    const postOptionsEditBtn = document.getElementById('postOptionsEditBtn');
 
     if (postOptionsMessage) postOptionsMessage.classList.add('hidden');
+    if (postOptionsEditBtn) postOptionsEditBtn.parentElement.style.display = 'none';
 
-    // if owner -> show delete, hide add-friend
+    // if owner -> show delete + edit, hide add-friend
     if (currentUserId && userId === currentUserId) {
         if (postOptionsDeleteBtn) postOptionsDeleteBtn.style.display = 'flex';
+        if (postOptionsEditBtn) postOptionsEditBtn.parentElement.style.display = 'flex';
         if (postOptionsAddFriendBtn) postOptionsAddFriendBtn.style.display = 'none';
     } else {
         if (postOptionsDeleteBtn) postOptionsDeleteBtn.style.display = 'none';
@@ -4526,6 +4608,157 @@ async function addFriendFromOptions(e) {
     } finally {
         if (postOptionsAddFriendBtn) postOptionsAddFriendBtn.disabled = false;
     }
+}
+
+/* ----------------- Edit Post Logic ----------------- */
+let editPostId = null;
+let editSelectedImageFile = null;
+let editSelectedMediaFile = null;
+let editSelectedMediaType = null;
+let editExistingMediaUrl = null;
+let editExistingMediaType = null;
+let editRemoveExistingMediaFlag = false;
+let editActiveTab = null;
+
+function openEditPostModal(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (!currentOptionsPostId) return;
+    editPostId = currentOptionsPostId;
+    closePostOptionsModal();
+    editSelectedImageFile = null; editSelectedMediaFile = null; editSelectedMediaType = null;
+    editRemoveExistingMediaFlag = false; editActiveTab = null;
+    document.getElementById('editPostContent').value = '';
+    document.getElementById('editPostError').style.display = 'none';
+    document.getElementById('editPostSubmitBtn').disabled = true;
+    document.getElementById('editPostSubmitText').textContent = '\u062d\u0641\u0638 \u0627\u0644\u062a\u0639\u062f\u064a\u0644\u0627\u062a';
+    document.getElementById('editPostLoadingIndicator').style.display = 'none';
+    document.querySelectorAll('#editPostModal .edit-media-section').forEach(s => s.style.display = 'none');
+    document.querySelectorAll('#editPostModal .media-tab').forEach(t => { t.style.background = 'rgba(255,255,255,0.03)'; t.style.borderColor = 'rgba(255,255,255,0.08)'; t.style.color = '#888'; });
+    document.getElementById('editImageUploadZone').style.display = '';
+    document.getElementById('editImagePreviewArea').style.display = 'none';
+    document.getElementById('editVideoUploadZone').style.display = '';
+    document.getElementById('editVideoPreviewCard').classList.add('hidden');
+    document.getElementById('editAudioUploadZone').style.display = '';
+    document.getElementById('editAudioPreviewCard').classList.add('hidden');
+    document.getElementById('editExistingMediaPreview').style.display = 'none';
+    document.getElementById('editExistingMediaContent').innerHTML = '';
+
+    fetch(`/api/posts/one/${editPostId}`, { credentials: 'same-origin' })
+        .then(r => r.json()).then(data => {
+            if (!data.ok || !data.post) return;
+            const post = data.post;
+            document.getElementById('editPostContent').value = post.content || '';
+            if (post.media && post.media.url) {
+                editExistingMediaUrl = post.media.url; editExistingMediaType = post.media.type;
+                const container = document.getElementById('editExistingMediaContent');
+                if (post.media.type === 'image') container.innerHTML = `<img src="${post.media.url}" style="width:100%;max-height:300px;object-fit:contain;display:block;">`;
+                else if (post.media.type === 'video') container.innerHTML = `<video src="${post.media.url}" controls style="width:100%;max-height:300px;background:#000;"></video>`;
+                else if (post.media.type === 'audio') container.innerHTML = `<audio src="${post.media.url}" controls style="width:100%;padding:12px;"></audio>`;
+                document.getElementById('editExistingMediaPreview').style.display = 'block';
+            }
+            editCheckInputs();
+        }).catch(err => console.error('Error loading post for edit:', err));
+
+    document.getElementById('editPostModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeEditPostModal() {
+    document.getElementById('editPostModal').classList.add('hidden');
+    document.body.style.overflow = 'auto'; editPostId = null;
+}
+
+function editSwitchMediaTab(tab) {
+    editActiveTab = tab;
+    document.querySelectorAll('#editPostModal .edit-media-section').forEach(s => s.style.display = 'none');
+    document.querySelectorAll('#editPostModal .media-tab').forEach(t => { t.style.background = 'rgba(255,255,255,0.03)'; t.style.borderColor = 'rgba(255,255,255,0.08)'; t.style.color = '#888'; });
+    const section = document.getElementById('editSection-' + tab);
+    if (section) section.style.display = 'block';
+    const activeTabBtn = document.querySelector(`#editPostModal .media-tab[data-tab="${tab}"]`);
+    if (activeTabBtn) { activeTabBtn.style.background = 'rgba(59,130,246,0.12)'; activeTabBtn.style.borderColor = 'rgba(59,130,246,0.4)'; activeTabBtn.style.color = '#60a5fa'; }
+}
+
+function editHandleImageChange(input) {
+    if (input.files && input.files[0]) {
+        editSelectedImageFile = input.files[0]; editSelectedMediaType = 'image'; editSelectedMediaFile = null;
+        const reader = new FileReader();
+        reader.onload = function(e) { document.getElementById('editImagePreviewEl').src = e.target.result; document.getElementById('editImagePreviewArea').style.display = 'block'; document.getElementById('editImageUploadZone').style.display = 'none'; };
+        reader.readAsDataURL(input.files[0]); editCheckInputs();
+    }
+}
+function editHandleVideoChange(input) {
+    if (input.files && input.files[0]) {
+        editSelectedMediaFile = input.files[0]; editSelectedMediaType = 'video'; editSelectedImageFile = null;
+        document.getElementById('editVideoFileName').textContent = input.files[0].name;
+        document.getElementById('editVideoPreviewEl').src = URL.createObjectURL(input.files[0]);
+        document.getElementById('editVideoPreviewCard').classList.remove('hidden'); document.getElementById('editVideoUploadZone').style.display = 'none'; editCheckInputs();
+    }
+}
+function editHandleAudioChange(input) {
+    if (input.files && input.files[0]) {
+        editSelectedMediaFile = input.files[0]; editSelectedMediaType = 'audio'; editSelectedImageFile = null;
+        document.getElementById('editAudioFileName').textContent = input.files[0].name;
+        document.getElementById('editAudioPreviewEl').src = URL.createObjectURL(input.files[0]);
+        document.getElementById('editAudioPreviewCard').classList.remove('hidden'); document.getElementById('editAudioUploadZone').style.display = 'none'; editCheckInputs();
+    }
+}
+function editRemoveMedia(type) {
+    if (type === 'image') { editSelectedImageFile = null; document.getElementById('editImagePreviewArea').style.display = 'none'; document.getElementById('editImageUploadZone').style.display = ''; document.getElementById('editImageFile').value = ''; }
+    else if (type === 'video') { editSelectedMediaFile = null; document.getElementById('editVideoPreviewCard').classList.add('hidden'); document.getElementById('editVideoUploadZone').style.display = ''; document.getElementById('editVideoFile').value = ''; }
+    else if (type === 'audio') { editSelectedMediaFile = null; document.getElementById('editAudioPreviewCard').classList.add('hidden'); document.getElementById('editAudioUploadZone').style.display = ''; document.getElementById('editAudioFile').value = ''; }
+    if (editSelectedMediaType === type) editSelectedMediaType = null; editCheckInputs();
+}
+function editRemoveExistingMedia() {
+    editRemoveExistingMediaFlag = true; editExistingMediaUrl = null; editExistingMediaType = null;
+    document.getElementById('editExistingMediaPreview').style.display = 'none'; editCheckInputs();
+}
+function editCheckInputs() {
+    const hasContent = document.getElementById('editPostContent').value.trim().length > 0;
+    const hasNewMedia = editSelectedImageFile !== null || editSelectedMediaFile !== null;
+    const hasExistingMedia = editExistingMediaUrl !== null && !editRemoveExistingMediaFlag;
+    document.getElementById('editPostSubmitBtn').disabled = !(hasContent || hasNewMedia || hasExistingMedia);
+}
+document.getElementById('editPostContent').addEventListener('input', editCheckInputs);
+
+async function editUploadToCloudinary(file, resourceType) {
+    const signRes = await fetch('/api/cloudinary/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }), credentials: 'same-origin' });
+    const signData = await signRes.json();
+    if (!signData.ok) throw new Error(signData.error || '\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u062d\u0635\u0648\u0644 \u0639\u0644\u0649 \u062a\u0648\u0642\u064a\u0639 \u0627\u0644\u0631\u0641\u0639');
+    const fd = new FormData();
+    fd.append('file', file); fd.append('api_key', signData.api_key); fd.append('timestamp', signData.timestamp); fd.append('signature', signData.signature); fd.append('folder', signData.folder);
+    const uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+    return new Promise(function(resolve, reject) {
+        const xhr = new XMLHttpRequest(); xhr.open('POST', uploadUrl, true);
+        xhr.upload.onprogress = function(e) { if (e.lengthComputable) { document.getElementById('editPostSubmitText').textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0631\u0641\u0639 ' + Math.round((e.loaded/e.total)*100) + '%'; } };
+        xhr.onload = function() { if (xhr.status >= 200 && xhr.status < 300) { const data = JSON.parse(xhr.responseText); if (data.error) return reject(new Error(data.error.message || '\u0641\u0634\u0644 \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641')); resolve(data.secure_url); } else reject(new Error('\u0641\u0634\u0644 \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641')); };
+        xhr.onerror = function() { reject(new Error('\u062e\u0637\u0623 \u0641\u064a \u0627\u0644\u0627\u062a\u0635\u0627\u0644')); }; xhr.send(fd);
+    });
+}
+async function editCompressImage(file, maxW, maxH, q) {
+    maxW = maxW||1920; maxH = maxH||1920; q = q||0.85;
+    if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+    return new Promise(function(resolve) {
+        const img = new Image(); img.onload = function() { const w=img.width,h=img.height,ratio=Math.min(maxW/w,maxH/h,1),canvas=document.createElement('canvas'); canvas.width=Math.round(w*ratio); canvas.height=Math.round(h*ratio); canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height); canvas.toBlob(function(blob){ resolve(blob?new File([blob],file.name.replace(/\.[^.]+$/,'.jpg'),{type:'image/jpeg',lastModified:Date.now()}):file); },'image/jpeg',q); };
+        img.onerror = function(){ resolve(file); }; img.src = URL.createObjectURL(file);
+    });
+}
+async function submitEditPost() {
+    if (!editPostId) return;
+    const submitBtn = document.getElementById('editPostSubmitBtn'), submitText = document.getElementById('editPostSubmitText'), loadingEl = document.getElementById('editPostLoadingIndicator'), errorEl = document.getElementById('editPostError');
+    submitBtn.disabled = true; submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638...'; loadingEl.style.display = ''; errorEl.style.display = 'none';
+    const content = document.getElementById('editPostContent').value.trim();
+    let mediaUrl = null, mediaType = null, removeMedia = false;
+    try {
+        if (editSelectedImageFile) { mediaType = 'image'; submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0636\u063a\u0637...'; const compressed = await editCompressImage(editSelectedImageFile); submitText.textContent = '\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629...'; mediaUrl = await editUploadToCloudinary(compressed, 'image'); }
+        else if (editSelectedMediaFile) { const mt = editSelectedMediaFile.type||''; let rt = 'auto'; if(mt.startsWith('video/')){ rt='video'; mediaType='video'; } else if(mt.startsWith('audio/')){ rt='video'; mediaType='audio'; } else { rt='auto'; mediaType='raw'; } submitText.textContent='\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641...'; mediaUrl = await editUploadToCloudinary(editSelectedMediaFile, rt); }
+        if (editRemoveExistingMediaFlag && !mediaUrl) removeMedia = true;
+        submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638...';
+        const bodyData = { content }; if (mediaUrl) { bodyData.mediaUrl = mediaUrl; bodyData.mediaType = mediaType; } if (removeMedia) bodyData.removeMedia = true;
+        const response = await fetch(`/api/posts/${editPostId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData), credentials: 'same-origin' });
+        const result = await response.json();
+        if (response.ok && result.ok) { closeEditPostModal(); location.reload(); }
+        else { errorEl.textContent = result.error || '\u062d\u062f\u062b \u062e\u0637\u0623'; errorEl.style.display = 'block'; submitBtn.disabled = false; submitText.textContent = '\u062d\u0641\u0638 \u0627\u0644\u062a\u0639\u062f\u064a\u0644\u0627\u062a'; loadingEl.style.display = 'none'; }
+    } catch (error) { console.error('Error editing post:', error); errorEl.textContent = '\u062e\u0637\u0623: ' + (error.message||'\u0641\u0634\u0644 \u0627\u0644\u0627\u062a\u0635\u0627\u0644.'); errorEl.style.display = 'block'; submitBtn.disabled = false; submitText.textContent = '\u062d\u0641\u0638 \u0627\u0644\u062a\u0639\u062f\u064a\u0644\u0627\u062a'; loadingEl.style.display = 'none'; }
 }
 
 /* ----------------- Toggle post menu (updated to use bottom sheet on small screens) ----------------- */
