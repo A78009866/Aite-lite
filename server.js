@@ -6093,7 +6093,7 @@ app.post('/api/recovery-email', requireAuth, writeLimiter, async (req, res) => {
 // ================ PASSWORD RESET API ========================
 // ============================================================
 
-const crypto = require('crypto');
+// crypto already required at top of file
 
 // Forgot password - send reset email
 app.post('/api/forgot-password', authLimiter, async (req, res) => {
