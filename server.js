@@ -6133,9 +6133,12 @@ app.post('/api/forgot-password', authLimiter, async (req, res) => {
       }
     }
 
-    if (!targetUserId || !targetEmail) {
-      // Don't reveal whether user exists - always show success
-      return res.json({ ok: true, message: 'إذا كان الحساب موجوداً وله بريد استعادة، سيتم إرسال رابط إعادة التعيين.' });
+    if (!targetUserId) {
+      return res.status(404).json({ ok: false, error: 'لم يتم العثور على حساب بهذا الاسم أو البريد الإلكتروني.' });
+    }
+
+    if (!targetEmail) {
+      return res.status(400).json({ ok: false, error: 'هذا الحساب ليس مرتبطاً بأي بريد إلكتروني.' });
     }
 
     // Generate secure reset token
@@ -6178,7 +6181,7 @@ app.post('/api/forgot-password', authLimiter, async (req, res) => {
       // Still return success to not reveal info
     }
 
-    res.json({ ok: true, message: 'إذا كان الحساب موجوداً وله بريد استعادة، سيتم إرسال رابط إعادة التعيين.' });
+    res.json({ ok: true, message: 'تم إرسال رابط إعادة التعيين للإيميل المرتبط بالحساب.' });
   } catch (error) {
     console.error('Error in forgot-password:', error);
     res.status(500).json({ ok: false, error: 'حدث خطأ. حاول مرة أخرى.' });

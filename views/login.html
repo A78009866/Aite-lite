@@ -352,18 +352,32 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         // === Google Sign-In (WebView compatible) ===
         document.getElementById('googleSignInBtn').addEventListener('click', async function() {
             try {
-                // Use Google Sign-In for Web (GSI) - works in WebView
-                if (typeof google !== 'undefined' && google.accounts) {
-                    google.accounts.id.initialize({
-                        client_id: window.__GOOGLE_CLIENT_ID || '',
-                        callback: handleGoogleResponse,
-                        auto_select: false,
-                        cancel_on_tap_outside: true
-                    });
-                    google.accounts.id.prompt();
-                } else {
-                    showError('خدمة Google غير متاحة حالياً.');
+                // If GSI not loaded yet, try loading it now
+                if (typeof google === 'undefined' || !google.accounts) {
+                    if (!window.__GOOGLE_CLIENT_ID) {
+                        try {
+                            const r = await fetch('/api/google-client-id');
+                            const d = await r.json();
+                            if (d.ok && d.client_id) { window.__GOOGLE_CLIENT_ID = d.client_id; }
+                        } catch(e) {}
+                    }
+                    if (window.__GOOGLE_CLIENT_ID && typeof google === 'undefined') {
+                        showError('جاري تحميل خدمة Google... حاول مرة أخرى بعد لحظات.');
+                        const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; document.head.appendChild(s);
+                        return;
+                    }
+                    if (!window.__GOOGLE_CLIENT_ID) {
+                        showError('خدمة Google غير مهيأة حالياً.');
+                        return;
+                    }
                 }
+                google.accounts.id.initialize({
+                    client_id: window.__GOOGLE_CLIENT_ID || '',
+                    callback: handleGoogleResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
+                });
+                google.accounts.id.prompt();
             } catch (err) {
                 console.error('Google Sign-In error:', err);
                 showError('فشل في فتح تسجيل الدخول بـ Google.');
