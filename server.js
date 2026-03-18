@@ -68,7 +68,7 @@ async function uploadFileToImageKit(file, folder) {
   return result.url;
 }
 
-const upload = multer({ storage: memoryStorage, fileFilter: fileFilter, limits: { fileSize: 500 * 1024 * 1024 } });
+const upload = multer({ storage: memoryStorage, fileFilter: fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
 // Initialize Firebase Admin
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY || '{}');
@@ -124,8 +124,8 @@ const writeLimiter = rateLimit({
   message: { ok: false, error: 'Too many requests, please slow down.' }
 });
 
-app.use(express.urlencoded({ extended: true, limit: '500mb' }));
-app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
@@ -136,7 +136,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Helper: validate allowed MIME types for file uploads
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/tiff', 'image/x-icon', 'image/heic', 'image/heif', 'image/avif'];
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff', 'image/x-icon', 'image/heic', 'image/heif', 'image/avif'];
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/3gpp', 'video/3gpp2', 'video/ogg', 'video/x-flv', 'video/x-ms-wmv', 'video/mpeg'];
 const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/flac', 'audio/x-m4a', 'audio/opus', 'audio/amr', 'audio/x-wav', 'audio/midi', 'audio/x-midi'];
 const ALL_ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_AUDIO_TYPES];
@@ -226,7 +226,7 @@ function isValidMediaUrl(url) {
   // Accept Cloudinary URLs (existing uploads) and ImageKit URLs (new uploads)
   if (isValidUploadUrl(url)) return true;
   // Accept base64 data URLs (for fallback)
-  if (url.startsWith('data:image/') && url.includes(';base64,') && url.length < 3 * 1024 * 1024) return true;
+  if (url.startsWith('data:image/') && url.includes(';base64,') && url.length < 500 * 1024) return true;
   return false;
 }
 
@@ -262,6 +262,14 @@ function requireAdmin(req, res, next) {
   }
   next();
 }
+
+// Sanitize all named route parameters to prevent Firebase path injection
+['userId', 'postId', 'commentId', 'replyId', 'reelId', 'storyId', 'contactId', 'chatId', 'otherId', 'messageId', 'id', 'familyId'].forEach(function(param) {
+  app.param(param, function(req, res, next, val) {
+    req.params[param] = sanitizePathParam(val);
+    next();
+  });
+});
 
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
@@ -1428,13 +1436,11 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
     return next();
   }
   // Otherwise use multer for file upload (backward compatibility)
-  req.setTimeout(300000);
-  res.setTimeout(300000);
   upload.fields([{ name: 'story_media', maxCount: 1 }, { name: 'story_audio', maxCount: 1 }])(req, res, next);
 }, async (req, res) => {
   const userId = req.session.userId;
-  const text = (req.body.text || '').trim();
-  const storyColor = (req.body.story_color || '').trim();
+  const text = truncateText((req.body.text || '').trim(), 2000);
+  const storyColor = truncateText((req.body.story_color || '').trim(), 100);
 
   let mediaUrl = req.body.mediaUrl || null;
   let mediaType = req.body.mediaType || null;
@@ -1919,7 +1925,7 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
     let contact_id = req.body.other_id || req.body.contact_id || req.body.contactId;
     
     // تنظيف الـ ID
-    if (contact_id) contact_id = String(contact_id).replace(/['\"]+/g, '').trim();
+    if (contact_id) contact_id = sanitizePathParam(String(contact_id).replace(/['\"]+/g, '').trim());
 
     const content = truncateText(req.body.content || '', 5000);
     const reply_to_id = req.body.replied_to_id || null;
@@ -2971,9 +2977,9 @@ app.post('/api/profile/edit', requireAuth, (req, res, next) => {
   }
 
   const updates = {
-    full_name: full_name,
-    bio: bio,
-    username: username,
+    full_name: truncateText(full_name, 100),
+    bio: truncateText(bio, 500),
+    username: truncateText(username, 32),
   };
 
   try {
@@ -5875,6 +5881,21 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
 
 
 // ============================================================
+
+// Global error handler for multer and other middleware errors
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ ok: false, error: 'حجم الملف كبير جداً. الحد الأقصى 5 ميغابايت عبر السيرفر. استخدم الرفع المباشر للملفات الكبيرة.' });
+    }
+    return res.status(400).json({ ok: false, error: 'خطأ في رفع الملف: ' + err.message });
+  }
+  if (err && err.message && err.message.startsWith('File type not allowed')) {
+    return res.status(400).json({ ok: false, error: 'نوع الملف غير مسموح به.' });
+  }
+  console.error('Unhandled error:', err);
+  res.status(500).json({ ok: false, error: 'حدث خطأ في السيرفر.' });
+});
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);

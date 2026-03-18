@@ -1910,6 +1910,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         return new Promise(function(resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open('POST', uploadUrl, true);
+            xhr.timeout = 120000;
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable && _storyUploadBtn) {
                     var pct = Math.round((e.loaded / e.total) * 100);
@@ -1918,14 +1919,17 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             };
             xhr.onload = function() {
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    var uploadData = JSON.parse(xhr.responseText);
-                    if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
-                    resolve(uploadData.url);
+                    try {
+                        var uploadData = JSON.parse(xhr.responseText);
+                        if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
+                        resolve(uploadData.url);
+                    } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
                 } else {
                     reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
                 }
             };
             xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
+            xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
             xhr.send(fd);
         });
     }

@@ -258,10 +258,31 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
 
             var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
-            var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
-            var uploadData = await uploadRes.json();
-            if (uploadData.error) throw new Error(uploadData.error || 'فشل رفع الملف');
-            return uploadData.url;
+            return new Promise(function(resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', uploadUrl, true);
+                xhr.timeout = 120000;
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable && btnText) {
+                        var pct = Math.round((e.loaded / e.total) * 100);
+                        btnText.textContent = 'جاري الرفع ' + pct + '%';
+                    }
+                };
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var uploadData = JSON.parse(xhr.responseText);
+                            if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
+                            resolve(uploadData.url);
+                        } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
+                    } else {
+                        reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
+                    }
+                };
+                xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
+                xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
+                xhr.send(fd);
+            });
         }
 
         // مفتاح التخزين الموحد
