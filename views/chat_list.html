@@ -6355,18 +6355,23 @@ function handleNotifClick(el) {
               }
             }).catch(()=>{});
 
-          fetch('/api/chats', { credentials: 'same-origin' })
-            .then(r => r.ok ? r.json() : null)
-            .then(d => {
-              if (d && d.ok && Array.isArray(d.chats)) {
-                const totalUnread = d.chats.reduce((acc, c) => acc + (c.unread_count || 0), 0);
-                const msgBadge = document.getElementById('msgBadge');
-                if (totalUnread > 0) {
-                  msgBadge.style.display = 'inline-flex';
-                  msgBadge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
-                }
-              }
-            }).catch(()=>{});
+          Promise.all([
+            fetch('/api/chats', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null),
+            fetch('/api/groups', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null)
+          ]).then(([chatsData, groupsData]) => {
+            let totalUnread = 0;
+            if (chatsData && chatsData.ok && Array.isArray(chatsData.chats)) {
+              totalUnread += chatsData.chats.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+            }
+            if (groupsData && groupsData.ok && Array.isArray(groupsData.groups)) {
+              totalUnread += groupsData.groups.reduce((acc, g) => acc + (g.unread_count || 0), 0);
+            }
+            const msgBadge = document.getElementById('msgBadge');
+            if (totalUnread > 0) {
+              msgBadge.style.display = 'inline-flex';
+              msgBadge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
+            }
+          }).catch(()=>{});
 
           fetch('/api/friends/requests_count', { credentials: 'same-origin' })
             .then(r => r.ok ? r.json() : null)

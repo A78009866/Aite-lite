@@ -5129,13 +5129,34 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
         }
       });
 
+      // --- Include group unread counts ---
+      let unreadGroupMessagesCount = 0;
+      try {
+        // Find user's groups
+        const groupChatsSnap = await db.ref('groupChats').once('value');
+        const groupChats = groupChatsSnap.val() || {};
+        const userGroupIds = [];
+        for (const [gid, gdata] of Object.entries(groupChats)) {
+          if (gdata.members && gdata.members[userId]) {
+            userGroupIds.push(gid);
+          }
+        }
+        // Sum unread counts for each group
+        for (const gid of userGroupIds) {
+          const unreadSnap = await db.ref(`groupUnread/${gid}/${userId}`).once('value');
+          const count = unreadSnap.val() || 0;
+          unreadGroupMessagesCount += Number(count) || 0;
+        }
+      } catch(e) { /* ignore group unread errors */ }
+
       let pendingFriendRequestsCount = 0;
       friendSnap.forEach(() => pendingFriendRequestsCount++);
 
       const payload = {
         unread_count: unreadNotificationsCount,
         notifications: items,
-        unread_messages_count: unreadMessagesCount,
+        unread_messages_count: unreadMessagesCount + unreadGroupMessagesCount,
+        unread_group_messages_count: unreadGroupMessagesCount,
         pending_friend_requests_count: pendingFriendRequestsCount
       };
 
@@ -5165,12 +5186,16 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
   // إرسال حالة أولية مباشرة
   sendCombined();
 
+  // Periodically refresh for group unread changes (since we don't have a listener on groupUnread)
+  const groupUnreadInterval = setInterval(() => { sendCombined(); }, 10000);
+
   // تنظيف عند إغلاق الاتصال من قبل العميل
   req.on('close', () => {
     try {
       notifRef.off('value', sendCombined);
       chatsRef.off('value', sendCombined);
       friendReqRef.off('value', sendCombined);
+      clearInterval(groupUnreadInterval);
     } catch (e) { /* ignore */ }
     res.end();
   });
@@ -6190,6 +6215,28 @@ app.post('/api/groups/:groupId/messages/delete', requireAuth, async (req, res) =
   } catch (error) {
     console.error('Error deleting group message:', error);
     res.status(500).json({ ok: false, error: 'فشل في حذف الرسالة' });
+  }
+});
+
+// --- Edit group message ---
+app.post('/api/groups/:groupId/messages/edit', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const groupId = sanitizePathParam(req.params.groupId);
+    const { message_id, content } = req.body;
+    if (!message_id || !content) return res.status(400).json({ ok: false, error: 'message_id و content مطلوبان' });
+
+    const msgSnap = await db.ref(`groupMessages/${groupId}/${message_id}`).once('value');
+    const msg = msgSnap.val();
+    if (!msg) return res.status(404).json({ ok: false, error: 'الرسالة غير موجودة' });
+    if (msg.senderId !== userId) return res.status(403).json({ ok: false, error: 'لا يمكنك تعديل رسالة شخص آخر' });
+    if (msg.is_deleted) return res.status(400).json({ ok: false, error: 'لا يمكن تعديل رسالة محذوفة' });
+
+    await db.ref(`groupMessages/${groupId}/${message_id}`).update({ content: content.trim(), is_edited: true });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error editing group message:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تعديل الرسالة' });
   }
 });
 
