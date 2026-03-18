@@ -269,6 +269,24 @@ pre, code { white-space: pre-wrap; word-break: break-all; }
   touch-action: pan-y; 
 }
 
+/* Profile picture next to incoming messages */
+.msg-profile-pic {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-left: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.msg-profile-pic-placeholder {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
 .msg-wrapper {
   position: relative;
   max-width: 80%;
@@ -3383,6 +3401,16 @@ async function loadMessages(initial = false) {
 
     const isAtBottom = messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 60;
     
+    // Pre-compute which incoming messages should show avatar (last in consecutive group)
+    const msgs = data.messages;
+    const showAvatarSet = new Set();
+    for (let i = 0; i < msgs.length; i++) {
+      if (msgs[i].senderId !== myId) {
+        const isLast = (i === msgs.length - 1) || (msgs[i + 1].senderId !== msgs[i].senderId);
+        if (isLast) showAvatarSet.add(msgs[i].messageId);
+      }
+    }
+
     // Process messages intelligently (Diffing)
     data.messages.forEach(msg => {
         const existingMsg = document.querySelector(`[data-msg-id="${msg.messageId}"]`);
@@ -3390,7 +3418,7 @@ async function loadMessages(initial = false) {
         if (!existingMsg) {
             // New message: insert before typing indicator to keep it at bottom
             const typingEl = document.getElementById('typing-indicator');
-            const msgNode = createMsgElement(msg);
+            const msgNode = createMsgElement(msg, showAvatarSet.has(msg.messageId));
             if (typingEl && typingEl.parentNode === messagesEl) {
               messagesEl.insertBefore(msgNode, typingEl);
             } else {
@@ -3403,7 +3431,7 @@ async function loadMessages(initial = false) {
             // Handle deleted message
             if (msg.is_deleted && !existingMsg.classList.contains('msg-was-deleted')) {
                 existingMsg.classList.add('msg-was-deleted');
-                const newNode = createMsgElement(msg);
+                const newNode = createMsgElement(msg, showAvatarSet.has(msg.messageId));
                 existingMsg.replaceWith(newNode);
                 return;
             }
@@ -3412,7 +3440,7 @@ async function loadMessages(initial = false) {
             if (msg.is_edited) {
                 const contentEl = bubble.querySelector('.msg-content-text');
                 if (contentEl && contentEl.textContent !== msg.content) {
-                    const newNode = createMsgElement(msg);
+                    const newNode = createMsgElement(msg, showAvatarSet.has(msg.messageId));
                     existingMsg.replaceWith(newNode);
                     return;
                 }
@@ -3462,7 +3490,7 @@ async function markRead() {
 }
 
 // --- Message Builder ---
-function createMsgElement(msg) {
+function createMsgElement(msg, showAvatar) {
   const isMe = msg.senderId === myId;
   const wrapper = document.createElement('div');
   wrapper.className = `msg-container ${isMe ? 'outgoing-container' : 'incoming-container'}`;
@@ -3473,6 +3501,22 @@ function createMsgElement(msg) {
   icon.innerHTML = '<i class="fas fa-reply"></i>';
   if (isMe) icon.style.left = '10px'; else icon.style.right = '10px';
   wrapper.appendChild(icon);
+
+  // Profile picture for incoming messages
+  if (!isMe) {
+    if (showAvatar) {
+      const pic = document.createElement('img');
+      pic.className = 'msg-profile-pic';
+      pic.src = document.getElementById('header-avatar')?.src || 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+      pic.alt = '';
+      pic.loading = 'lazy';
+      wrapper.appendChild(pic);
+    } else {
+      const spacer = document.createElement('div');
+      spacer.className = 'msg-profile-pic-placeholder';
+      wrapper.appendChild(spacer);
+    }
+  }
 
   const inner = document.createElement('div');
   inner.className = 'msg-wrapper';
