@@ -20,6 +20,16 @@
       transition: 0.3s; background: #111; cursor: pointer;
     }
     .upload-area.active { border-color: #3b82f6; background: #1a1a1a; }
+    .upload-area.has-video { border-style: solid; border-color: rgba(255,255,255,0.1); position: relative; }
+    .remove-video-btn {
+      position: absolute; top: 12px; right: 12px; z-index: 10;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .remove-video-btn:hover { background: rgba(239,68,68,0.9); border-color: transparent; transform: scale(1.1); }
     
     /* سبينر التحميل */
     .loader {
@@ -1499,9 +1509,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         <div id="placeholder" class="text-center">
           <i class="fas fa-cloud-upload-alt text-4xl text-gray-500 mb-3"></i>
           <p class="text-gray-400 text-sm font-bold">اضغط لاختيار فيديو</p>
-          <p class="text-gray-600 text-xs mt-1">MP4, MOV</p>
+          <p class="text-gray-600 text-xs mt-1">MP4, MOV — يدعم الملفات الكبيرة</p>
         </div>
         <video id="previewVideo" class="w-full h-full object-contain rounded-lg hidden" controls></video>
+        <button type="button" id="removeVideoBtn" class="remove-video-btn" style="display:none;" title="إزالة الفيديو" onclick="clearVideo(event)">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
       <input type="file" id="fileInput" accept="video/*" class="hidden">
 
@@ -1534,8 +1547,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 
   let selectedFile = null;
 
-  // فتح اختيار الملف
-  uploadArea.addEventListener('click', () => fileInput.click());
+  // فتح اختيار الملف (فقط إذا لم يكن هناك فيديو محدد)
+  uploadArea.addEventListener('click', (e) => {
+    if (selectedFile) return; // don't open picker when video is loaded
+    fileInput.click();
+  });
 
   // معالجة اختيار الملف
   fileInput.addEventListener('change', (e) => {
@@ -1551,6 +1567,21 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     previewVideo.src = url;
     previewVideo.classList.remove('hidden');
     placeholder.classList.add('hidden');
+    uploadArea.classList.add('has-video');
+    document.getElementById('removeVideoBtn').style.display = 'flex';
+  }
+
+  function clearVideo(e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    previewVideo.pause();
+    previewVideo.removeAttribute('src');
+    previewVideo.load();
+    previewVideo.classList.add('hidden');
+    placeholder.classList.remove('hidden');
+    uploadArea.classList.remove('has-video');
+    document.getElementById('removeVideoBtn').style.display = 'none';
+    fileInput.value = '';
+    selectedFile = null;
   }
 
   function setLoading(loading) {
@@ -1591,7 +1622,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     return new Promise(function(resolve, reject) {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', uploadUrl, true);
-      xhr.timeout = 120000;
+      xhr.timeout = 600000; // 10 minutes for large files
       xhr.upload.onprogress = function(e) {
         if (e.lengthComputable) {
           var pct = Math.round((e.loaded / e.total) * 100);

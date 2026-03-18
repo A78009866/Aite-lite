@@ -178,6 +178,20 @@
             z-index: 20;
             word-break: break-word;
         }
+        /* Positioned text overlay (custom position from creator) */
+        .story-text-positioned {
+            position: absolute;
+            z-index: 20;
+            font-weight: 700;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+            text-align: center;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            max-width: 90%;
+            padding: 8px 16px;
+            pointer-events: none;
+        }
 
         /* Bottom section (like button + views) */
         .story-bottom {
@@ -1161,8 +1175,36 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             startTimer(STORY_DURATION);
         }
 
-        // Text
-        document.getElementById('storyText').textContent = story.text || '';
+        // Text - render at saved position/size/color if available
+        const storyTextEl = document.getElementById('storyText');
+        const storyText = story.text || '';
+        if (storyText && story.text_x !== undefined && story.text_y !== undefined) {
+            // Use positioned overlay on top of media
+            storyTextEl.textContent = '';
+            storyTextEl.style.display = 'none';
+            // Remove any previous positioned overlay
+            const oldOverlay = document.querySelector('.story-text-positioned');
+            if (oldOverlay) oldOverlay.remove();
+            // Create positioned text element
+            const posEl = document.createElement('div');
+            posEl.className = 'story-text-positioned';
+            posEl.textContent = storyText;
+            posEl.style.left = (story.text_x || 50) + '%';
+            posEl.style.top = (story.text_y || 50) + '%';
+            posEl.style.fontSize = (story.text_size || 20) + 'px';
+            posEl.style.color = story.text_color || '#ffffff';
+            if (story.text_bg) {
+                posEl.style.background = 'rgba(0,0,0,0.55)';
+                posEl.style.borderRadius = '8px';
+            }
+            mediaContainer.appendChild(posEl);
+        } else {
+            // Fallback: show text at default bottom position
+            storyTextEl.style.display = '';
+            storyTextEl.textContent = storyText;
+            const oldOverlay = document.querySelector('.story-text-positioned');
+            if (oldOverlay) oldOverlay.remove();
+        }
 
         // Audio
         const audioPlayer = document.getElementById('storyAudio');

@@ -1473,6 +1473,13 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
     const storyId = newStoryRef.key;
     const timestamp = admin.database.ServerValue.TIMESTAMP;
 
+    // Text overlay positioning & styling
+    const textX = parseInt(req.body.text_x) || 50;
+    const textY = parseInt(req.body.text_y) || 50;
+    const textSize = Math.min(Math.max(parseInt(req.body.text_size) || 20, 8), 72);
+    const textColor = truncateText((req.body.text_color || '#ffffff').trim(), 20);
+    const textBg = !!req.body.text_bg;
+
     const storyData = {
       id: storyId,
       userId: userId,
@@ -1481,6 +1488,11 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
       audioUrl: audioUrl,
       text: text,
       story_color: storyColor,
+      text_x: textX,
+      text_y: textY,
+      text_size: textSize,
+      text_color: textColor,
+      text_bg: textBg,
       timestamp: timestamp,
       expiresAt: Date.now() + (24 * 60 * 60 * 1000)
     };

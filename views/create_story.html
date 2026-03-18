@@ -1683,7 +1683,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         <div id="textControlsBar" class="text-controls-bar mb-5">
             <div style="display:flex;align-items:center;gap:6px;">
                 <i class="fas fa-text-height text-gray-400" style="font-size:11px;"></i>
-                <input type="range" id="textSizeSlider" class="text-size-slider" min="12" max="48" value="20" oninput="updateTextStyle()">
+                <input type="range" id="textSizeSlider" class="text-size-slider" min="12" max="72" value="20" oninput="updateTextStyle()">
             </div>
             <div style="display:flex;align-items:center;gap:5px;">
                 <div class="text-ctrl-color active" style="background:#ffffff;" data-tcolor="#ffffff" onclick="selectTextColor(this)" title="أبيض"></div>
@@ -1816,15 +1816,25 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         updateTextStyle();
     }
 
-    // Draggable text overlay logic (touch + mouse)
+    // Draggable + Pinch-to-zoom text overlay logic (touch + mouse)
     (function() {
         var overlay, container;
         var isDragging = false;
         var startX, startY, startLeft, startTop;
+        // Pinch-to-zoom state
+        var isPinching = false;
+        var pinchStartDist = 0;
+        var pinchStartSize = 20;
 
         function getOverlayEls() {
             overlay = document.getElementById('storyTextOverlay');
             container = document.getElementById('mediaPreviewArea');
+        }
+
+        function getTouchDistance(touches) {
+            var dx = touches[0].clientX - touches[1].clientX;
+            var dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
         }
 
         function pointerDown(clientX, clientY) {
@@ -1840,7 +1850,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         }
 
         function pointerMove(clientX, clientY) {
-            if (!isDragging) return;
+            if (!isDragging || isPinching) return;
             getOverlayEls();
             var rect = container.getBoundingClientRect();
             var dx = clientX - startX;
@@ -1859,8 +1869,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         }
 
         function pointerUp() {
-            if (!isDragging) return;
             isDragging = false;
+            isPinching = false;
             if (overlay) overlay.classList.remove('dragging');
         }
 
@@ -1876,16 +1886,52 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         document.addEventListener('mouseup', pointerUp);
 
         document.addEventListener('touchstart', function(e) {
-            if (e.target.id === 'storyTextOverlay' || e.target.closest('#storyTextOverlay')) {
-                e.preventDefault();
+            var isOverlay = e.target.id === 'storyTextOverlay' || e.target.closest('#storyTextOverlay');
+            if (!isOverlay) return;
+            e.preventDefault();
+            getOverlayEls();
+            if (!overlay || overlay.style.display === 'none') return;
+
+            if (e.touches.length === 2) {
+                // Start pinch-to-zoom
+                isPinching = true;
+                isDragging = false;
+                pinchStartDist = getTouchDistance(e.touches);
+                pinchStartSize = storyTextSize;
+            } else if (e.touches.length === 1) {
+                // Single finger drag
+                isPinching = false;
                 var t = e.touches[0];
                 pointerDown(t.clientX, t.clientY);
             }
         }, { passive: false });
+
         document.addEventListener('touchmove', function(e) {
-            if (isDragging) { e.preventDefault(); var t = e.touches[0]; pointerMove(t.clientX, t.clientY); }
+            getOverlayEls();
+            if (!overlay || overlay.style.display === 'none') return;
+
+            if (isPinching && e.touches.length === 2) {
+                e.preventDefault();
+                var currentDist = getTouchDistance(e.touches);
+                var scale = currentDist / pinchStartDist;
+                var newSize = Math.round(pinchStartSize * scale);
+                newSize = Math.max(12, Math.min(72, newSize));
+                storyTextSize = newSize;
+                overlay.style.fontSize = newSize + 'px';
+                // Sync slider
+                var slider = document.getElementById('textSizeSlider');
+                if (slider) slider.value = Math.min(newSize, parseInt(slider.max));
+            } else if (isDragging && !isPinching && e.touches.length === 1) {
+                e.preventDefault();
+                var t = e.touches[0];
+                pointerMove(t.clientX, t.clientY);
+            }
         }, { passive: false });
-        document.addEventListener('touchend', pointerUp);
+
+        document.addEventListener('touchend', function(e) {
+            if (e.touches.length < 2) isPinching = false;
+            if (e.touches.length === 0) pointerUp();
+        });
         document.addEventListener('touchcancel', pointerUp);
     })();
 
