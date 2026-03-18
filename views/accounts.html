@@ -53,13 +53,6 @@
             color: #9ca3af;
         }
         .add-account-btn:hover { border-color: #3982f7; color: #fff; background: rgba(57, 130, 247, 0.05); }
-        .btn-google {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
-            transition: all 0.3s ease;
-        }
-        .btn-google:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
-        .btn-google img { width: 20px; height: 20px; }
-
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
     
@@ -172,17 +165,6 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             <span>تسجيل الدخول بحساب آخر</span>
         </a>
         
-        <div class="flex items-center gap-4 text-gray-600 my-4">
-            <div class="h-px flex-1 bg-gray-800"></div>
-            <span class="text-xs uppercase tracking-wider font-semibold text-gray-500">أو</span>
-            <div class="h-px flex-1 bg-gray-800"></div>
-        </div>
-
-        <button type="button" id="googleSignInBtn" class="btn-google w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center gap-3">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
-            <span>تسجيل الدخول بـ Google</span>
-        </button>
-
         <div class="text-center mt-8">
             <a href="/register" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">إنشاء حساب جديد</a>
         </div>
@@ -308,53 +290,6 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         }
 
         document.addEventListener('DOMContentLoaded', renderAccounts);
-
-        // === Google Sign-In ===
-        document.getElementById('googleSignInBtn').addEventListener('click', function() {
-            try {
-                if (typeof google !== 'undefined' && google.accounts) {
-                    google.accounts.id.initialize({
-                        client_id: window.__GOOGLE_CLIENT_ID || '',
-                        callback: handleGoogleResponse,
-                        auto_select: false
-                    });
-                    google.accounts.id.prompt();
-                } else { alert('خدمة Google غير متاحة حالياً.'); }
-            } catch (err) { alert('فشل في فتح تسجيل Google.'); }
-        });
-
-        async function handleGoogleResponse(response) {
-            if (!response || !response.credential) return;
-            document.body.style.opacity = '0.5'; document.body.style.cursor = 'wait';
-            try {
-                const resp = await fetch('/api/auth/google', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                    body: JSON.stringify({ id_token: response.credential })
-                });
-                const data = await resp.json();
-                if (!data.ok) { alert(data.error || 'فشل.'); document.body.style.opacity = '1'; document.body.style.cursor = ''; return; }
-                if (data.is_new_user) {
-                    const params = new URLSearchParams();
-                    if (data.google_name) params.set('name', data.google_name);
-                    if (data.google_picture) params.set('picture', data.google_picture);
-                    window.location.href = '/google-complete-profile?' + params.toString();
-                } else {
-                    let accounts = loadAccounts().filter(a => a.username !== data.username);
-                    accounts.unshift({ username: data.username, full_name: data.full_name || '', profile_picture_url: data.profile_picture_url || DEFAULT_AVATAR, remember_token: data.remember_token || '' });
-                    saveAccounts(accounts.slice(0, 8));
-                    window.location.href = '/chat_list';
-                }
-            } catch (err) { alert('فشل في الاتصال بالخادم.'); document.body.style.opacity = '1'; document.body.style.cursor = ''; }
-        }
-
-        (function() {
-            fetch('/api/google-client-id').then(r => r.json()).then(d => {
-                if (d.ok && d.client_id) {
-                    window.__GOOGLE_CLIENT_ID = d.client_id;
-                    const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; document.head.appendChild(s);
-                }
-            }).catch(() => {});
-        })();
 
         // Global Function لاستقبال التوكن من الأندرويد
 window.receiveAndroidToken = function(token) {

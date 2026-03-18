@@ -72,12 +72,6 @@
             z-index: 10;
         }
         .error-box { background: rgba(255,0,0,0.06); border: 1px solid rgba(255,0,0,0.12); padding: 8px; border-radius: 8px; color: #ffdddd; display: none; margin-bottom: 12px;}
-        .btn-google {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
-            transition: all 0.3s ease; position: relative;
-        }
-        .btn-google:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
-        .btn-google img { width: 20px; height: 20px; }
     
     /* ===== DESKTOP RESPONSIVE ===== */
     @media (min-width: 768px) {
@@ -206,17 +200,6 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         </div>
 
         <div class="mt-6 flex flex-col gap-4 text-center">
-            <div class="flex items-center gap-4 text-gray-600">
-                <div class="h-px flex-1 bg-gray-800"></div>
-                <span class="text-xs uppercase tracking-wider font-semibold text-gray-500">أو</span>
-                <div class="h-px flex-1 bg-gray-800"></div>
-            </div>
-
-            <button type="button" id="googleSignInBtn" class="btn-google w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center gap-3">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
-                <span>تسجيل الدخول بـ Google</span>
-            </button>
-            
             <div class="grid grid-cols-2 gap-3">
                 <a href="/register" class="btn-secondary py-3 px-4 rounded-xl text-sm font-medium text-gray-300 flex items-center justify-center gap-2">
                     <i class="fas fa-user-plus text-blue-400"></i> إنشاء حساب
@@ -349,89 +332,6 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             errorBox.textContent = msg;
         }
 
-        // === Google Sign-In (WebView compatible) ===
-        document.getElementById('googleSignInBtn').addEventListener('click', async function() {
-            try {
-                // If GSI not loaded yet, try loading it now
-                if (typeof google === 'undefined' || !google.accounts) {
-                    if (!window.__GOOGLE_CLIENT_ID) {
-                        try {
-                            const r = await fetch('/api/google-client-id');
-                            const d = await r.json();
-                            if (d.ok && d.client_id) { window.__GOOGLE_CLIENT_ID = d.client_id; }
-                        } catch(e) {}
-                    }
-                    if (window.__GOOGLE_CLIENT_ID && typeof google === 'undefined') {
-                        showError('جاري تحميل خدمة Google... حاول مرة أخرى بعد لحظات.');
-                        const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; document.head.appendChild(s);
-                        return;
-                    }
-                    if (!window.__GOOGLE_CLIENT_ID) {
-                        showError('خدمة Google غير مهيأة حالياً.');
-                        return;
-                    }
-                }
-                google.accounts.id.initialize({
-                    client_id: window.__GOOGLE_CLIENT_ID || '',
-                    callback: handleGoogleResponse,
-                    auto_select: false,
-                    cancel_on_tap_outside: true
-                });
-                google.accounts.id.prompt();
-            } catch (err) {
-                console.error('Google Sign-In error:', err);
-                showError('فشل في فتح تسجيل الدخول بـ Google.');
-            }
-        });
-
-        async function handleGoogleResponse(response) {
-            if (!response || !response.credential) { showError('فشل في الحصول على بيانات Google.'); return; }
-            loginBtn.disabled = true;
-            loginSpinner.classList.remove('hidden');
-            loginBtnText.textContent = 'جاري تسجيل الدخول...';
-            try {
-                const resp = await fetch('/api/auth/google', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ id_token: response.credential })
-                });
-                const data = await resp.json();
-                if (!data.ok) { showError(data.error || 'فشل.'); resetLoginBtn(); return; }
-                if (data.is_new_user) {
-                    // New user - redirect to profile completion
-                    const params = new URLSearchParams();
-                    if (data.google_name) params.set('name', data.google_name);
-                    if (data.google_picture) params.set('picture', data.google_picture);
-                    window.location.href = '/google-complete-profile?' + params.toString();
-                } else {
-                    // Existing user - save and redirect
-                    let accounts = loadAccounts().filter(a => a.username !== data.username);
-                    accounts.unshift({ username: data.username, full_name: data.full_name || '', profile_picture_url: data.profile_picture_url || DEFAULT_PROFILE_PIC, remember_token: data.remember_token || '' });
-                    saveAccounts(accounts.slice(0, 8));
-                    window.location.href = '/chat_list';
-                }
-            } catch (err) { showError('فشل في الاتصال بالخادم.'); resetLoginBtn(); }
-        }
-
-        function resetLoginBtn() {
-            loginBtn.disabled = false;
-            loginSpinner.classList.add('hidden');
-            loginBtnText.textContent = 'دخول';
-        }
-
-        // Load Google GSI script
-        (function() {
-            fetch('/api/google-client-id').then(r => r.json()).then(d => {
-                if (d.ok && d.client_id) {
-                    window.__GOOGLE_CLIENT_ID = d.client_id;
-                    const s = document.createElement('script');
-                    s.src = 'https://accounts.google.com/gsi/client';
-                    s.async = true;
-                    document.head.appendChild(s);
-                }
-            }).catch(() => {});
-        })();
     </script>
 
 <script>
