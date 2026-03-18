@@ -122,6 +122,81 @@
         .toast.show { opacity: 1; }
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin-slow 3s linear infinite; }
+
+        /* Draggable text overlay */
+        .story-text-overlay {
+            position: absolute;
+            z-index: 4;
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-align: center;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-width: 90%;
+            transition: opacity 0.2s;
+            touch-action: none;
+        }
+        .story-text-overlay:active { cursor: grabbing; }
+        .story-text-overlay.dragging { opacity: 0.85; }
+
+        /* Text controls bar */
+        .text-controls-bar {
+            display: none;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 10px 14px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-top: 10px;
+        }
+        .text-controls-bar.active { display: flex; }
+        .text-ctrl-btn {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+        .text-ctrl-btn:hover { background: rgba(255,255,255,0.15); }
+        .text-ctrl-btn.active { background: rgba(59,130,246,0.4); border-color: rgba(59,130,246,0.6); }
+        .text-ctrl-color {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .text-ctrl-color:hover { transform: scale(1.15); }
+        .text-ctrl-color.active { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.4); transform: scale(1.15); }
+        .text-size-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 80px;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            outline: none;
+        }
+        .text-size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
     
 
     /* ============================================================
@@ -1591,6 +1666,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         <div id="mediaPreviewArea" class="media-preview-area mb-5" style="display:none;">
             <img id="previewImage" style="display:none;">
             <video id="previewVideo" style="display:none; background:#000;" muted loop playsinline></video>
+            <div id="storyTextOverlay" class="story-text-overlay" style="display:none; left:50%; top:50%; transform:translate(-50%,-50%); font-size:20px; color:#ffffff;"></div>
             <button type="button" onclick="clearMedia()" class="remove-media-btn" title="إزالة">
                 <i class="fas fa-times text-sm"></i>
             </button>
@@ -1600,9 +1676,26 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             </div>
         </div>
 
-        <!-- Text Input -->
+        <!-- Text Input + Controls -->
         <div class="mb-5">
-            <input type="text" id="storyTextInput" placeholder="أضف تعليقاً على القصة..." class="glass-input w-full rounded-2xl py-3.5 px-5 text-sm">
+            <input type="text" id="storyTextInput" placeholder="أضف نصاً على القصة..." class="glass-input w-full rounded-2xl py-3.5 px-5 text-sm" oninput="updateTextOverlay()">
+        </div>
+        <div id="textControlsBar" class="text-controls-bar mb-5">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-text-height text-gray-400" style="font-size:11px;"></i>
+                <input type="range" id="textSizeSlider" class="text-size-slider" min="12" max="48" value="20" oninput="updateTextStyle()">
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;">
+                <div class="text-ctrl-color active" style="background:#ffffff;" data-tcolor="#ffffff" onclick="selectTextColor(this)" title="أبيض"></div>
+                <div class="text-ctrl-color" style="background:#000000;" data-tcolor="#000000" onclick="selectTextColor(this)" title="أسود"></div>
+                <div class="text-ctrl-color" style="background:#ef4444;" data-tcolor="#ef4444" onclick="selectTextColor(this)" title="أحمر"></div>
+                <div class="text-ctrl-color" style="background:#f59e0b;" data-tcolor="#f59e0b" onclick="selectTextColor(this)" title="أصفر"></div>
+                <div class="text-ctrl-color" style="background:#22c55e;" data-tcolor="#22c55e" onclick="selectTextColor(this)" title="أخضر"></div>
+                <div class="text-ctrl-color" style="background:#3b82f6;" data-tcolor="#3b82f6" onclick="selectTextColor(this)" title="أزرق"></div>
+            </div>
+            <button type="button" class="text-ctrl-btn" id="textBgToggle" onclick="toggleTextBg()" title="خلفية النص">
+                <i class="fas fa-fill-drip"></i>
+            </button>
         </div>
 
         <!-- Music Section -->
@@ -1668,6 +1761,133 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     var previewAudio = new Audio();
     var currentPlayingUrl = '';
     var searchTimeout;
+
+    // Text overlay state
+    var storyTextColor = '#ffffff';
+    var storyTextSize = 20;
+    var storyTextBg = false;
+    var storyTextPosX = 50; // percentage
+    var storyTextPosY = 50; // percentage
+
+    function updateTextOverlay() {
+        var input = document.getElementById('storyTextInput');
+        var overlay = document.getElementById('storyTextOverlay');
+        var controls = document.getElementById('textControlsBar');
+        var previewArea = document.getElementById('mediaPreviewArea');
+        var text = input.value.trim();
+        if (text && previewArea.style.display !== 'none') {
+            overlay.textContent = text;
+            overlay.style.display = 'block';
+            controls.classList.add('active');
+            updateTextStyle();
+        } else {
+            overlay.style.display = 'none';
+            if (!text) controls.classList.remove('active');
+        }
+    }
+
+    function updateTextStyle() {
+        var overlay = document.getElementById('storyTextOverlay');
+        var slider = document.getElementById('textSizeSlider');
+        storyTextSize = parseInt(slider.value);
+        overlay.style.fontSize = storyTextSize + 'px';
+        overlay.style.color = storyTextColor;
+        if (storyTextBg) {
+            overlay.style.background = 'rgba(0,0,0,0.55)';
+            overlay.style.borderRadius = '8px';
+            overlay.style.padding = '8px 16px';
+        } else {
+            overlay.style.background = 'transparent';
+        }
+    }
+
+    function selectTextColor(el) {
+        document.querySelectorAll('.text-ctrl-color').forEach(function(c) { c.classList.remove('active'); });
+        el.classList.add('active');
+        storyTextColor = el.getAttribute('data-tcolor');
+        updateTextStyle();
+    }
+
+    function toggleTextBg() {
+        storyTextBg = !storyTextBg;
+        var btn = document.getElementById('textBgToggle');
+        if (storyTextBg) btn.classList.add('active');
+        else btn.classList.remove('active');
+        updateTextStyle();
+    }
+
+    // Draggable text overlay logic (touch + mouse)
+    (function() {
+        var overlay, container;
+        var isDragging = false;
+        var startX, startY, startLeft, startTop;
+
+        function getOverlayEls() {
+            overlay = document.getElementById('storyTextOverlay');
+            container = document.getElementById('mediaPreviewArea');
+        }
+
+        function pointerDown(clientX, clientY) {
+            getOverlayEls();
+            if (!overlay || overlay.style.display === 'none') return;
+            isDragging = true;
+            overlay.classList.add('dragging');
+            var rect = container.getBoundingClientRect();
+            startX = clientX;
+            startY = clientY;
+            startLeft = overlay.offsetLeft;
+            startTop = overlay.offsetTop;
+        }
+
+        function pointerMove(clientX, clientY) {
+            if (!isDragging) return;
+            getOverlayEls();
+            var rect = container.getBoundingClientRect();
+            var dx = clientX - startX;
+            var dy = clientY - startY;
+            var newLeft = startLeft + dx;
+            var newTop = startTop + dy;
+            // Clamp to container bounds
+            newLeft = Math.max(0, Math.min(newLeft, rect.width - overlay.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, rect.height - overlay.offsetHeight));
+            overlay.style.left = newLeft + 'px';
+            overlay.style.top = newTop + 'px';
+            overlay.style.transform = 'none';
+            // Store as percentage for submission
+            storyTextPosX = Math.round((newLeft / rect.width) * 100);
+            storyTextPosY = Math.round((newTop / rect.height) * 100);
+        }
+
+        function pointerUp() {
+            if (!isDragging) return;
+            isDragging = false;
+            if (overlay) overlay.classList.remove('dragging');
+        }
+
+        document.addEventListener('mousedown', function(e) {
+            if (e.target.id === 'storyTextOverlay' || e.target.closest('#storyTextOverlay')) {
+                e.preventDefault();
+                pointerDown(e.clientX, e.clientY);
+            }
+        });
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) { e.preventDefault(); pointerMove(e.clientX, e.clientY); }
+        });
+        document.addEventListener('mouseup', pointerUp);
+
+        document.addEventListener('touchstart', function(e) {
+            if (e.target.id === 'storyTextOverlay' || e.target.closest('#storyTextOverlay')) {
+                e.preventDefault();
+                var t = e.touches[0];
+                pointerDown(t.clientX, t.clientY);
+            }
+        }, { passive: false });
+        document.addEventListener('touchmove', function(e) {
+            if (isDragging) { e.preventDefault(); var t = e.touches[0]; pointerMove(t.clientX, t.clientY); }
+        }, { passive: false });
+        document.addEventListener('touchend', pointerUp);
+        document.addEventListener('touchcancel', pointerUp);
+    })();
 
     // ======== WEBVIEW FILE INPUT FIX ========
     // File inputs are now placed INSIDE the upload buttons as transparent overlays.
@@ -1757,6 +1977,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             badgeText.textContent = 'صورة';
         }
         badge.style.display = 'flex';
+        // Show text overlay if text exists
+        updateTextOverlay();
     }
 
     function clearMedia() {
@@ -1778,6 +2000,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         document.getElementById('storyVideoInput').value = '';
         selectedMediaFile = null;
         selectedMediaType = null;
+        // Reset text overlay
+        var overlay = document.getElementById('storyTextOverlay');
+        if (overlay) { overlay.style.display = 'none'; overlay.style.left = '50%'; overlay.style.top = '50%'; overlay.style.transform = 'translate(-50%,-50%)'; }
+        document.getElementById('textControlsBar').classList.remove('active');
+        storyTextPosX = 50;
+        storyTextPosY = 50;
     }
 
     function debounceSearch(query) {
@@ -1978,7 +2206,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                     mediaType: selectedMediaType,
                     audioUrl: audioUrl,
                     text: textInput.value,
-                    story_color: selectedStoryColor
+                    story_color: selectedStoryColor,
+                    text_x: storyTextPosX,
+                    text_y: storyTextPosY,
+                    text_size: storyTextSize,
+                    text_color: storyTextColor,
+                    text_bg: storyTextBg
                 }),
                 credentials: 'same-origin'
             });

@@ -1270,15 +1270,31 @@ html[data-theme="light"] #replyIndicator {
     }
   }
 
-  window.deleteReel = async function(reelId) {
-    if(!confirm('هل تريد حذف هذا الريل نهائياً؟')) return;
-    try {
-      const res = await fetch(`/api/reels/${reelId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json().catch(()=>({ ok: false }));
-      if(res.ok && data.ok) location.reload();
-      else { console.error('Delete reel failed', res.status, data); alert(data.error || 'خطأ في الحذف'); }
-    } catch(e) { console.error('Delete reel error', e); alert('فشل الاتصال بالسيرفر'); }
+  var _pendingDeleteReelId = null;
+  window.deleteReel = function(reelId) {
+    _pendingDeleteReelId = reelId;
+    var modal = document.getElementById('deleteReelModal');
+    if (modal) modal.classList.add('open');
   };
+  window.closeDeleteReelModal = function() {
+    var modal = document.getElementById('deleteReelModal');
+    if (modal) modal.classList.remove('open');
+    _pendingDeleteReelId = null;
+    var btn = document.getElementById('deleteReelConfirmBtn');
+    if (btn) { btn.disabled = false; btn.innerHTML = 'حذف'; }
+  };
+  document.getElementById('deleteReelConfirmBtn').addEventListener('click', async function() {
+    if (!_pendingDeleteReelId) return;
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحذف...';
+    try {
+      const res = await fetch('/api/reels/' + _pendingDeleteReelId, { method: 'DELETE', credentials: 'include' });
+      const data = await res.json().catch(()=>({ ok: false }));
+      if(res.ok && data.ok) { closeDeleteReelModal(); location.reload(); }
+      else { console.error('Delete reel failed', res.status, data); btn.disabled = false; btn.innerHTML = 'حذف'; alert(data.error || 'خطأ في الحذف'); }
+    } catch(e) { console.error('Delete reel error', e); btn.disabled = false; btn.innerHTML = 'حذف'; alert('فشل الاتصال بالسيرفر'); }
+  });
 
   async function handleLike(reelId, forceLike = false) {
     const icon = document.getElementById(`likeIcon-${reelId}`);
@@ -1997,6 +2013,19 @@ html[data-theme="light"] #likesListContent {
     <div class="ecm-actions">
       <button class="ecm-cancel" onclick="closeEditCommentModal()">إلغاء</button>
       <button class="ecm-save" id="ecmSaveBtn" onclick="saveEditComment()">حفظ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Reel Confirmation Modal -->
+<div id="deleteReelModal" class="delete-comment-modal-overlay" onclick="closeDeleteReelModal()">
+  <div class="delete-comment-modal-box" onclick="event.stopPropagation()">
+    <div class="dcm-icon" style="background:rgba(239,68,68,0.15)"><i class="fas fa-film" style="color:#ef4444;font-size:22px"></i></div>
+    <div class="dcm-title">حذف الريل</div>
+    <div class="dcm-desc">هل أنت متأكد من حذف هذا الريل نهائياً؟<br>لا يمكن التراجع عن هذا الإجراء.</div>
+    <div class="dcm-actions">
+      <button class="dcm-cancel" onclick="closeDeleteReelModal()">إلغاء</button>
+      <button class="dcm-confirm" id="deleteReelConfirmBtn">حذف</button>
     </div>
   </div>
 </div>
