@@ -427,6 +427,83 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   border-radius: 50%;
 }
 
+/* Delete comment/reply button */
+.fb-delete-action {
+  color: #ef4444 !important;
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.fb-delete-action:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+/* Delete confirmation modal */
+.delete-comment-modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+  padding: 16px;
+}
+.delete-comment-modal-overlay.open {
+  opacity: 1; pointer-events: auto;
+}
+.delete-comment-modal-box {
+  background: #1f2937;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 28px 24px;
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+  transform: scale(0.92);
+  transition: transform 0.25s ease;
+}
+.delete-comment-modal-overlay.open .delete-comment-modal-box {
+  transform: scale(1);
+}
+html[data-theme="light"] .delete-comment-modal-box {
+  background: #fff;
+  border-color: #e5e7eb;
+}
+.dcm-icon {
+  width: 56px; height: 56px;
+  margin: 0 auto 14px;
+  background: rgba(239,68,68,0.12);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.dcm-icon i { font-size: 24px; color: #ef4444; }
+.dcm-title { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+html[data-theme="light"] .dcm-title { color: #1c1e21; }
+.dcm-desc { font-size: 13px; color: #9ca3af; margin-bottom: 20px; }
+.dcm-actions { display: flex; gap: 10px; }
+.dcm-actions button {
+  flex: 1; padding: 10px; border-radius: 12px;
+  font-weight: 600; font-size: 14px;
+  border: none; cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.dcm-actions button:active { transform: scale(0.97); }
+.dcm-cancel {
+  background: rgba(255,255,255,0.08); color: #d1d5db;
+}
+html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
+.dcm-cancel:hover { background: rgba(255,255,255,0.14); }
+.dcm-confirm {
+  background: #ef4444; color: #fff;
+}
+.dcm-confirm:hover { background: #dc2626; }
+.dcm-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@keyframes deleteSlide {
+  to { opacity: 0; max-height: 0; padding: 0; margin: 0; overflow: hidden; transform: translateX(40px); }
+}
+.fb-comment-deleting {
+  animation: deleteSlide 0.35s ease forwards;
+}
+
 </style>
 </head>
 <body>
@@ -945,6 +1022,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             <span class="fb-time">${replyTime}</span>
             <button class="fb-action ${likedClass}" onclick="toggleReelReplyLike('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
             <button class="fb-action" onclick="startReelReplyToReply('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', '${escapeHtml(r.username)}')">رد</button>
+            ${(r.userId === currentUserId) ? `<button class="fb-action fb-delete-action" onclick="event.stopPropagation(); showDeleteCommentConfirm('reply', '${escapeAttr(reelId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}')"><i class="fas fa-trash-alt"></i></button>` : ''}
           </div>
         </div>
       </div>`;
@@ -992,6 +1070,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
               <span class="fb-time">${commentDate}</span>
               <button class="fb-action ${likedClass}" onclick="toggleReelCommentLike('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
               <button class="fb-action" onclick="setReplyMode('${escapeAttr(commentId)}', '${escapeHtml(username)}')">رد</button>
+              ${(userId === currentUserId) ? `<button class="fb-delete-action fb-action" onclick="event.stopPropagation(); showDeleteCommentConfirm('comment', '${escapeAttr(reelId)}', '${escapeAttr(commentId)}')"><i class="fas fa-trash-alt"></i></button>` : ''}
             </div>
           </div>
         </div>
@@ -1472,6 +1551,19 @@ html[data-theme="light"] #likesListContent {
     color: #1c1e21 !important;
 }
 </style>
+<!-- Delete Comment/Reply Confirmation Modal -->
+<div id="deleteCommentModal" class="delete-comment-modal-overlay" onclick="closeDeleteCommentModal()">
+  <div class="delete-comment-modal-box" onclick="event.stopPropagation()">
+    <div class="dcm-icon"><i class="fas fa-trash-alt"></i></div>
+    <div class="dcm-title">حذف التعليق</div>
+    <div class="dcm-desc">هل أنت متأكد من حذف هذا التعليق؟ لا يمكن التراجع عن هذا الإجراء.</div>
+    <div class="dcm-actions">
+      <button class="dcm-cancel" onclick="closeDeleteCommentModal()">إلغاء</button>
+      <button class="dcm-confirm" id="dcmConfirmBtn" onclick="confirmDeleteComment()">حذف</button>
+    </div>
+  </div>
+</div>
+
 <!-- Comment/Reply Likes Modal -->
 <div id="commentLikesModal" class="comment-likes-modal-overlay" onclick="closeCommentLikesModal()">
   <div class="comment-likes-modal-box" onclick="event.stopPropagation()">
@@ -1522,6 +1614,56 @@ async function showLikesList(id, type) {
 }
 function closeLikesModal() {
     document.getElementById('likesModal').classList.remove('open');
+}
+
+// ========== DELETE COMMENT/REPLY ==========
+var _deleteType = null, _deletePid = null, _deleteCid = null, _deleteRid = null;
+function showDeleteCommentConfirm(type, pid, cid, rid) {
+    _deleteType = type;
+    _deletePid = pid;
+    _deleteCid = cid;
+    _deleteRid = rid || null;
+    var modal = document.getElementById('deleteCommentModal');
+    if (modal) modal.classList.add('open');
+}
+function closeDeleteCommentModal() {
+    var modal = document.getElementById('deleteCommentModal');
+    if (modal) modal.classList.remove('open');
+    _deleteType = _deletePid = _deleteCid = _deleteRid = null;
+}
+async function confirmDeleteComment() {
+    var btn = document.getElementById('dcmConfirmBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+    try {
+        var url;
+        if (_deleteType === 'reply') {
+            url = '/api/reels/' + _deletePid + '/comments/' + _deleteCid + '/replies/' + _deleteRid;
+        } else {
+            url = '/api/reels/' + _deletePid + '/comments/' + _deleteCid;
+        }
+        var res = await fetch(url, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.ok) {
+            if (_deleteType === 'reply') {
+                var el = document.getElementById('reply-' + _deleteRid);
+                if (el) { el.classList.add('fb-comment-deleting'); setTimeout(function(){ el.remove(); }, 400); }
+            } else {
+                var el = document.getElementById('comment-' + _deleteCid);
+                if (el) { el.classList.add('fb-comment-deleting'); setTimeout(function(){ el.remove(); }, 400); }
+            }
+            // Update comment count badge
+            var badge = document.getElementById('commentCountBadge');
+            if (badge) {
+                var cur = parseInt(badge.textContent) || 0;
+                var deletedCount = data.deletedCount || 1;
+                badge.textContent = Math.max(0, cur - deletedCount);
+            }
+        }
+    } catch(e) {
+        console.error('Delete error:', e);
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = '\u062d\u0630\u0641'; }
+    closeDeleteCommentModal();
 }
 </script>
 

@@ -3538,7 +3538,8 @@ function createMsgElement(msg) {
     const type = msg.media.type || '';
     
     if (type.startsWith('image')) {
-        contentHtml += `<div class="msg-media-standalone"><img src="${url}" onclick="openChatMediaViewer('${url}', 'image')"></div>`;
+        var imgId = 'img-' + msg.messageId;
+        contentHtml += `<div class="msg-media-standalone"><img id="${imgId}" src="${url}" data-media-url="${url.startsWith('data:') ? '' : url}" onclick="openChatMediaViewer(this.dataset.mediaUrl || this.src, 'image')"></div>`;
     } else if (type.startsWith('video')) {
         const vidId = 'chatv-' + msg.messageId;
         const vidPoster = getVideoThumbnail(url);
@@ -4366,38 +4367,56 @@ function getVideoThumbnail(videoUrl) {
     return '';
 }
 
-// Smart client-side image compression before upload
+// Smart client-side image compression before upload (aggressive for chat)
 async function compressImage(file, maxWidth, maxHeight, quality) {
-    maxWidth = maxWidth || 1920;
-    maxHeight = maxHeight || 1920;
-    quality = quality || 0.85;
-    if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
-    if (file.size < 500 * 1024) return file;
+    maxWidth = maxWidth || 1280;
+    maxHeight = maxHeight || 1280;
+    quality = quality || 0.7;
+    if (!file || !file.type || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
     return new Promise(function(resolve) {
+        var blobUrl = null;
         var img = new Image();
         img.onload = function() {
-            var w = img.width, h = img.height;
-            if (w <= maxWidth && h <= maxHeight && file.size < 2 * 1024 * 1024) {
-                resolve(file); return;
+            try {
+                var w = img.width, h = img.height;
+                var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
+                var newW = Math.round(w * ratio);
+                var newH = Math.round(h * ratio);
+                var canvas = document.createElement('canvas');
+                canvas.width = newW;
+                canvas.height = newH;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, newW, newH);
+                canvas.toBlob(function(blob) {
+                    if (blobUrl) URL.revokeObjectURL(blobUrl);
+                    if (blob && blob.size < file.size) {
+                        resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }));
+                    } else {
+                        resolve(file);
+                    }
+                }, 'image/jpeg', quality);
+            } catch(e) {
+                if (blobUrl) URL.revokeObjectURL(blobUrl);
+                console.warn('Compression error:', e);
+                resolve(file);
             }
-            var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
-            var newW = Math.round(w * ratio);
-            var newH = Math.round(h * ratio);
-            var canvas = document.createElement('canvas');
-            canvas.width = newW;
-            canvas.height = newH;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, newW, newH);
-            canvas.toBlob(function(blob) {
-                if (blob && blob.size < file.size) {
-                    resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
-                } else {
-                    resolve(file);
-                }
-            }, 'image/jpeg', quality);
         };
-        img.onerror = function() { resolve(file); };
-        img.src = URL.createObjectURL(file);
+        img.onerror = function() {
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
+            resolve(file);
+        };
+        blobUrl = URL.createObjectURL(file);
+        img.src = blobUrl;
+    });
+}
+
+// Convert image file to base64 data URL for Firebase direct storage fallback
+async function fileToDataUrl(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result); };
+        reader.onerror = function() { reject(new Error('فشل قراءة الملف')); };
+        reader.readAsDataURL(file);
     });
 }
 
@@ -4525,32 +4544,53 @@ sendBtn.onclick = async () => {
     // Upload file directly to Cloudinary if present (compress images first)
     if (uploadedFile) {
       var fileToSend = uploadedFile;
-      if (uploadedFile.type && uploadedFile.type.startsWith('image/')) {
-        fileToSend = await compressImage(uploadedFile);
+      var ft = uploadedFile.type || '';
+      if (ft.startsWith('image')) mediaType = 'image';
+      else if (ft.startsWith('video')) mediaType = 'video';
+      else if (ft.startsWith('audio') || uploadedFile.name.endsWith('.webm')) mediaType = 'audio';
+      else mediaType = 'file';
+      mediaFilename = uploadedFile.name;
+
+      // Always compress images for chat (aggressive)
+      if (ft.startsWith('image/')) {
+        try {
+          fileToSend = await compressImage(uploadedFile, 1280, 1280, 0.7);
+        } catch(compErr) {
+          console.warn('Image compression failed, using original:', compErr);
+          fileToSend = uploadedFile;
+        }
       }
 
+      // Method 1: Direct Cloudinary upload
       try {
         var result = await uploadToCloudinary(fileToSend);
         mediaUrl = result.url;
-        var ft = uploadedFile.type || '';
-        if (ft.startsWith('image')) mediaType = 'image';
-        else if (ft.startsWith('video')) mediaType = 'video';
-        else if (ft.startsWith('audio') || uploadedFile.name.endsWith('.webm')) mediaType = 'audio';
-        else mediaType = 'file';
-        mediaFilename = uploadedFile.name;
       } catch(cloudErr) {
-        // Fallback: try sending file through the server directly
-        console.warn('Direct Cloudinary upload failed, using server fallback:', cloudErr.message);
+        console.warn('Direct Cloudinary upload failed:', cloudErr.message);
         if (sendBtn) sendBtn.innerHTML = '<div class="sending-spinner"></div>';
+
+        // Method 2: Server fallback upload
         try {
           var fallbackRes = await _sendMessageWithServerUpload(fileToSend, content, otherId, replyData);
           if (fallbackRes.ok) {
             usedServerFallback = true;
           } else {
-            throw new Error(fallbackRes.error || 'فشل إرسال الرسالة عبر الخادم');
+            throw new Error(fallbackRes.error || 'فشل عبر الخادم');
           }
         } catch(fallbackErr) {
-          throw new Error('فشل رفع الملف: ' + cloudErr.message);
+          console.warn('Server fallback failed:', fallbackErr.message);
+
+          // Method 3: Base64 data URL fallback (for images < 2MB only)
+          if (ft.startsWith('image') && fileToSend.size < 2 * 1024 * 1024) {
+            try {
+              if (sendBtn) sendBtn.innerHTML = '<div style="font-size:11px;line-height:1;">جاري...</div>';
+              mediaUrl = await fileToDataUrl(fileToSend);
+            } catch(b64Err) {
+              throw new Error('فشل رفع الصورة - تحقق من اتصالك بالإنترنت');
+            }
+          } else {
+            throw new Error('فشل رفع الملف - تحقق من اتصالك بالإنترنت');
+          }
         }
       }
     }

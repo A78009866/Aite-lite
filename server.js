@@ -221,6 +221,15 @@ function isValidCloudinaryUrl(url) {
   }
 }
 
+function isValidMediaUrl(url) {
+  if (!url) return false;
+  // Accept Cloudinary URLs
+  if (isValidCloudinaryUrl(url)) return true;
+  // Accept base64 data URLs (for fallback when Cloudinary is unavailable)
+  if (url.startsWith('data:image/') && url.includes(';base64,') && url.length < 3 * 1024 * 1024) return true;
+  return false;
+}
+
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
     return next();
@@ -1912,9 +1921,9 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Target user ID is missing' });
     }
 
-    // دعم روابط Cloudinary المباشرة (من chat.html الجديد) - validate URL
+    // دعم روابط Cloudinary المباشرة أو data URLs (من chat.html) - validate URL
     let mediaObject = null;
-    if (req.body.mediaUrl && isValidCloudinaryUrl(req.body.mediaUrl)) {
+    if (req.body.mediaUrl && isValidMediaUrl(req.body.mediaUrl)) {
       mediaObject = {
         url: req.body.mediaUrl,
         type: req.body.mediaType || 'file',
@@ -3419,6 +3428,103 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- Delete a comment (post) ----------------
+app.delete('/api/posts/:postId/comments/:commentId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { postId, commentId } = req.params;
+  if (!postId || !commentId) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`comments/${postId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const commentData = commentSnap.val();
+    const commentOwnerId = (commentData.user && commentData.user.userId) ? commentData.user.userId : (commentData.userId || '');
+
+    // Check if current user is the comment owner or the post owner
+    const postSnap = await db.ref(`posts/${postId}`).once('value');
+    const postOwnerId = postSnap.exists() ? (postSnap.val().userId || '') : '';
+
+    if (userId !== commentOwnerId && userId !== postOwnerId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا التعليق' });
+    }
+
+    // Count replies to subtract from total
+    const repliesSnap = await db.ref(`comment_replies/${postId}/${commentId}`).once('value');
+    let repliesCount = 0;
+    repliesSnap.forEach(() => { repliesCount++; });
+
+    // Delete comment, its replies, and likes
+    await commentRef.remove();
+    await db.ref(`comment_replies/${postId}/${commentId}`).remove();
+    await db.ref(`comment_likes/${postId}/${commentId}`).remove();
+
+    // Decrement commentsCount on post
+    if (postSnap.exists()) {
+      await db.ref(`posts/${postId}/commentsCount`).transaction((current) => {
+        const newCount = (current || 0) - 1 - repliesCount;
+        return newCount < 0 ? 0 : newCount;
+      });
+    }
+
+    res.json({ ok: true, deletedCount: 1 + repliesCount });
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف التعليق' });
+  }
+});
+
+// ---------------- Delete a reply (post) ----------------
+app.delete('/api/posts/:postId/comments/:commentId/replies/:replyId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { postId, commentId, replyId } = req.params;
+  if (!postId || !commentId || !replyId) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const replyRef = db.ref(`comment_replies/${postId}/${commentId}/${replyId}`);
+    const replySnap = await replyRef.once('value');
+    if (!replySnap.exists()) return res.status(404).json({ ok: false, error: 'Reply not found' });
+
+    const replyData = replySnap.val();
+    const replyOwnerId = replyData.userId || '';
+
+    // Check if current user is reply owner, comment owner, or post owner
+    const commentSnap = await db.ref(`comments/${postId}/${commentId}`).once('value');
+    const commentOwnerId = commentSnap.exists() ? ((commentSnap.val().user && commentSnap.val().user.userId) || commentSnap.val().userId || '') : '';
+    const postSnap = await db.ref(`posts/${postId}`).once('value');
+    const postOwnerId = postSnap.exists() ? (postSnap.val().userId || '') : '';
+
+    if (userId !== replyOwnerId && userId !== commentOwnerId && userId !== postOwnerId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا الرد' });
+    }
+
+    await replyRef.remove();
+    await db.ref(`reply_likes/${postId}/${commentId}/${replyId}`).remove();
+
+    // Decrement repliesCount on comment
+    if (commentSnap.exists()) {
+      await db.ref(`comments/${postId}/${commentId}/repliesCount`).transaction((current) => {
+        const newCount = (current || 0) - 1;
+        return newCount < 0 ? 0 : newCount;
+      });
+    }
+
+    // Decrement commentsCount on post
+    if (postSnap.exists()) {
+      await db.ref(`posts/${postId}/commentsCount`).transaction((current) => {
+        const newCount = (current || 0) - 1;
+        return newCount < 0 ? 0 : newCount;
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error deleting reply:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف الرد' });
+  }
+});
+
 // ---------------- New Feature: Like a comment ----------------
 // Toggle like/unlike on a comment, maintain likes count and notify owner
 app.post('/api/posts/:postId/comments/:commentId/like', requireAuth, async (req, res) => {
@@ -4375,6 +4481,103 @@ app.post('/api/reels/:reelId/like', requireAuth, async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ ok: false });
+  }
+});
+
+// ---------------- Delete a comment (reel) ----------------
+app.delete('/api/reels/:reelId/comments/:commentId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId, commentId } = req.params;
+  if (!reelId || !commentId) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`reels_comments/${reelId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const commentData = commentSnap.val();
+    const commentOwnerId = commentData.userId || '';
+
+    // Check if current user is the comment owner or the reel owner
+    const reelSnap = await db.ref(`reels/${reelId}`).once('value');
+    const reelOwnerId = reelSnap.exists() ? (reelSnap.val().userId || '') : '';
+
+    if (userId !== commentOwnerId && userId !== reelOwnerId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا التعليق' });
+    }
+
+    // Count replies to subtract from total
+    const repliesSnap = await db.ref(`reels_comment_replies/${reelId}/${commentId}`).once('value');
+    let repliesCount = 0;
+    repliesSnap.forEach(() => { repliesCount++; });
+
+    // Delete comment, its replies, and likes
+    await commentRef.remove();
+    await db.ref(`reels_comment_replies/${reelId}/${commentId}`).remove();
+    await db.ref(`reels_comment_likes/${reelId}/${commentId}`).remove();
+
+    // Decrement commentsCount on reel
+    if (reelSnap.exists()) {
+      await db.ref(`reels/${reelId}/commentsCount`).transaction((current) => {
+        const newCount = (current || 0) - 1 - repliesCount;
+        return newCount < 0 ? 0 : newCount;
+      });
+    }
+
+    res.json({ ok: true, deletedCount: 1 + repliesCount });
+  } catch (error) {
+    console.error('Error deleting reel comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف التعليق' });
+  }
+});
+
+// ---------------- Delete a reply (reel) ----------------
+app.delete('/api/reels/:reelId/comments/:commentId/replies/:replyId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId, commentId, replyId } = req.params;
+  if (!reelId || !commentId || !replyId) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const replyRef = db.ref(`reels_comment_replies/${reelId}/${commentId}/${replyId}`);
+    const replySnap = await replyRef.once('value');
+    if (!replySnap.exists()) return res.status(404).json({ ok: false, error: 'Reply not found' });
+
+    const replyData = replySnap.val();
+    const replyOwnerId = replyData.userId || '';
+
+    // Check if current user is reply owner, comment owner, or reel owner
+    const commentSnap = await db.ref(`reels_comments/${reelId}/${commentId}`).once('value');
+    const commentOwnerId = commentSnap.exists() ? (commentSnap.val().userId || '') : '';
+    const reelSnap = await db.ref(`reels/${reelId}`).once('value');
+    const reelOwnerId = reelSnap.exists() ? (reelSnap.val().userId || '') : '';
+
+    if (userId !== replyOwnerId && userId !== commentOwnerId && userId !== reelOwnerId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا الرد' });
+    }
+
+    await replyRef.remove();
+    await db.ref(`reels_reply_likes/${reelId}/${commentId}/${replyId}`).remove();
+
+    // Decrement repliesCount on comment
+    if (commentSnap.exists()) {
+      await db.ref(`reels_comments/${reelId}/${commentId}/repliesCount`).transaction((current) => {
+        const newCount = (current || 0) - 1;
+        return newCount < 0 ? 0 : newCount;
+      });
+    }
+
+    // Decrement commentsCount on reel
+    if (reelSnap.exists()) {
+      await db.ref(`reels/${reelId}/commentsCount`).transaction((current) => {
+        const newCount = (current || 0) - 1;
+        return newCount < 0 ? 0 : newCount;
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error deleting reel reply:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حذف الرد' });
   }
 });
 
