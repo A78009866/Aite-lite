@@ -17,8 +17,22 @@ const rateLimit = require('express-rate-limit');
 
 const multer = require('multer');
 const ImageKit = require('imagekit');
+const nodemailer = require('nodemailer');
+const { OAuth2Client } = require('google-auth-library');
 
 const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+
+// Google OAuth client
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Nodemailer transporter
+const mailTransporter = nodemailer.createTransport({
+  service: process.env.MAIL_SERVICE || 'gmail',
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS
+  }
+});
 
 // إعدادات ImageKit
 const imagekit = new ImageKit({
@@ -968,6 +982,85 @@ function countSnapshotChildren(snap) {
   return c;
 }
 
+// ---------------- @ Mention System ----------------
+// Parse @username mentions from text, returns array of unique usernames
+function parseMentions(text) {
+  if (!text || typeof text !== 'string') return [];
+  const mentionRegex = /@([A-Za-z0-9._-]{3,32})/g;
+  const mentions = new Set();
+  let match;
+  while ((match = mentionRegex.exec(text)) !== null) {
+    mentions.add(match[1].toLowerCase());
+  }
+  return Array.from(mentions);
+}
+
+// Process mentions: look up usernames, create notifications for valid mentioned users
+async function processMentions(text, fromUserId, context) {
+  const usernames = parseMentions(text);
+  if (usernames.length === 0) return;
+
+  try {
+    const fromProfileSnap = await db.ref(`profiles/${fromUserId}`).once('value');
+    const fromProfile = fromProfileSnap.val() || {};
+
+    for (const username of usernames) {
+      try {
+        // Look up user by username
+        const usersSnap = await db.ref('profiles').orderByChild('username').equalTo(username).limitToFirst(1).once('value');
+        if (!usersSnap.exists()) continue;
+
+        let mentionedUserId = null;
+        usersSnap.forEach(child => { mentionedUserId = child.key; });
+
+        // Don't notify self
+        if (!mentionedUserId || mentionedUserId === fromUserId) continue;
+
+        // Check block status
+        const blocked = await isBlocked(fromUserId, mentionedUserId);
+        if (blocked) continue;
+
+        // Create mention notification
+        const notifRef = db.ref(`notifications/${mentionedUserId}`).push();
+        const notifData = {
+          id: notifRef.key,
+          type: 'mention',
+          from_user_id: fromUserId,
+          from_username: fromProfile.username || 'مستخدم',
+          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          context_type: context.type || 'post',
+          postId: context.postId || null,
+          reelId: context.reelId || null,
+          commentId: context.commentId || null,
+          chatId: context.chatId || null,
+          storyId: context.storyId || null,
+          content_preview: truncateText(text, 100),
+          timestamp: admin.database.ServerValue.TIMESTAMP,
+          is_read: false
+        };
+        await notifRef.set(notifData);
+
+        // Build notification URL
+        let url = 'https://aite-lite.vercel.app/';
+        if (context.postId) url = `https://aite-lite.vercel.app/post?id=${context.postId}`;
+        else if (context.reelId) url = 'https://aite-lite.vercel.app/reels';
+
+        sendPushNotification(mentionedUserId, `${fromProfile.username || 'شخص ما'}`, `أشار إليك: ${truncateText(text, 50)}`, { type: 'mention', url });
+      } catch (innerErr) {
+        console.error('Error processing mention for username:', username, innerErr);
+      }
+    }
+  } catch (err) {
+    console.error('Error in processMentions:', err);
+  }
+}
+
+// Render mentions as styled links in text (for server-side rendered HTML)
+function renderMentions(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text.replace(/@([A-Za-z0-9._-]{3,32})/g, '<a href="/profile?username=$1" class="mention-link" style="color:#3982f7;font-weight:600;">@$1</a>');
+}
+
 // ---------------- Cascading User Data Purge ----------------
 // Deletes ALL data associated with a user from Firebase
 async function purgeUserData(uid) {
@@ -1498,6 +1591,12 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
     };
 
     await newStoryRef.set(storyData);
+
+    // Process @ mentions in story text
+    if (text) {
+      try { await processMentions(text, userId, { type: 'story', storyId }); } catch (e) { console.error('Mention processing error:', e); }
+    }
+
     res.json({ ok: true, storyId });
   } catch (error) {
     console.error('Error creating story:', error);
@@ -2048,6 +2147,11 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       sendPushNotification(contact_id, senderName, pushBody, { type: 'new_message', url: `https://aite-lite.vercel.app/chat?id=${senderId}` });
     } catch (pushErr) {
       console.error('Failed to send message push notification:', pushErr);
+    }
+
+    // Process @ mentions in message content
+    if (content) {
+      try { await processMentions(content, senderId, { type: 'message', chatId: chatRoomId }); } catch (e) { console.error('Mention processing error:', e); }
     }
 
     // 5. إرسال استجابة بنجاح
@@ -3124,6 +3228,9 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
     const userPostsCountRef = db.ref(`profiles/${userId}/postsCount`);
     await userPostsCountRef.transaction((currentCount) => (currentCount || 0) + 1);
 
+    // Process @ mentions in post content
+    try { await processMentions(content, userId, { type: 'post', postId }); } catch (e) { console.error('Mention processing error:', e); }
+
     res.json({ ok: true, message: 'تم النشر', postId: postId });
 
   } catch (error) {
@@ -3544,6 +3651,9 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       console.error('Failed to create post_comment notification:', nerr);
     }
 
+    // Process @ mentions in comment content
+    try { await processMentions(commentData.content, userId, { type: 'comment', postId, commentId }); } catch (e) { console.error('Mention processing error:', e); }
+
     // Read back the stored comment (so timestamp is resolved) and return normalized
     const savedSnap = await db.ref(`comments/${postId}`).child(commentId).once('value');
     const savedVal = savedSnap.val() || commentData;
@@ -3822,6 +3932,9 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
     } catch (nerr) {
       console.error('Failed to create comment_reply notification:', nerr);
     }
+
+    // Process @ mentions in reply content
+    try { await processMentions(replyData.content, userId, { type: 'reply', postId, commentId }); } catch (e) { console.error('Mention processing error:', e); }
 
     res.json({ ok: true, reply: savedReply, repliesCount: newRepliesCount });
 
@@ -4818,6 +4931,9 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
       console.error('Failed to create reel_comment notification:', nerr);
     }
 
+    // Process @ mentions in reel comment
+    try { await processMentions(content, userId, { type: 'reel_comment', reelId, commentId: commentData.id }); } catch (e) { console.error('Mention processing error:', e); }
+
     res.json({ ok: true, comment: commentData });
   } catch (error) {
     console.error(error);
@@ -4964,6 +5080,9 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
     } catch (nerr) {
       console.error('Failed to create reels comment_reply notification:', nerr);
     }
+
+    // Process @ mentions in reel reply content
+    try { await processMentions(replyData.content, userId, { type: 'reel_reply', reelId, commentId }); } catch (e) { console.error('Mention processing error:', e); }
 
     res.json({ ok: true, reply: savedReelReply, repliesCount: newRepliesCount });
   } catch (error) {
@@ -5889,6 +6008,490 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
     clearInterval(keepAlive);
     res.end();
   });
+});
+
+
+// ============================================================
+// ==================== MENTION SEARCH API ====================
+// ============================================================
+
+// Mention search - search users by username for @ mention autocomplete
+app.get('/api/mention-search', requireAuth, async (req, res) => {
+  try {
+    const query = (req.query.q || '').trim().toLowerCase();
+    if (!query || query.length < 1) return res.json({ ok: true, users: [] });
+
+    const sanitizedQuery = query.replace(/[^a-z0-9._-]/gi, '');
+    if (!sanitizedQuery) return res.json({ ok: true, users: [] });
+
+    const currentUserId = req.session.userId;
+    const blockedIds = new Set([...(await getBlockedUserIds(currentUserId)), ...(await getBlockedByUserIds(currentUserId))]);
+
+    const profilesSnap = await db.ref('profiles').orderByChild('username').startAt(sanitizedQuery).endAt(sanitizedQuery + '\uf8ff').limitToFirst(10).once('value');
+    const results = [];
+    profilesSnap.forEach(child => {
+      const uid = child.key;
+      if (uid === currentUserId || blockedIds.has(uid)) return;
+      const p = child.val();
+      results.push({
+        userId: uid,
+        username: p.username || '',
+        full_name: p.full_name || '',
+        profile_picture_url: p.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+      });
+    });
+
+    res.json({ ok: true, users: results });
+  } catch (error) {
+    console.error('Error in mention search:', error);
+    res.status(500).json({ ok: false, error: 'فشل في البحث.' });
+  }
+});
+
+// ============================================================
+// ================ RECOVERY EMAIL API ========================
+// ============================================================
+
+// Check recovery email status
+app.get('/api/recovery-email', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const snap = await db.ref(`profiles/${userId}/recovery_email`).once('value');
+    const recoveryEmail = snap.val();
+    res.json({ ok: true, has_recovery_email: !!recoveryEmail, recovery_email: recoveryEmail || null });
+  } catch (error) {
+    console.error('Error checking recovery email:', error);
+    res.status(500).json({ ok: false, error: 'فشل في التحقق.' });
+  }
+});
+
+// Save recovery email
+app.post('/api/recovery-email', requireAuth, writeLimiter, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const { email } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ ok: false, error: 'البريد الإلكتروني مطلوب.' });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    if (!emailRegex.test(trimmedEmail) || trimmedEmail.length > 254) {
+      return res.status(400).json({ ok: false, error: 'صيغة البريد الإلكتروني غير صحيحة.' });
+    }
+
+    await db.ref(`profiles/${userId}/recovery_email`).set(trimmedEmail);
+    res.json({ ok: true, message: 'تم حفظ بريد الاستعادة بنجاح.' });
+  } catch (error) {
+    console.error('Error saving recovery email:', error);
+    res.status(500).json({ ok: false, error: 'فشل في حفظ البريد.' });
+  }
+});
+
+// ============================================================
+// ================ PASSWORD RESET API ========================
+// ============================================================
+
+const crypto = require('crypto');
+
+// Forgot password - send reset email
+app.post('/api/forgot-password', authLimiter, async (req, res) => {
+  try {
+    const { identifier } = req.body;
+    if (!identifier || typeof identifier !== 'string') {
+      return res.status(400).json({ ok: false, error: 'أدخل اسم المستخدم أو البريد الإلكتروني.' });
+    }
+
+    const trimmed = identifier.trim().toLowerCase();
+    if (!trimmed) return res.status(400).json({ ok: false, error: 'أدخل اسم المستخدم أو البريد الإلكتروني.' });
+
+    // Find user by username or recovery email
+    let targetUserId = null;
+    let targetEmail = null;
+    let targetUsername = null;
+
+    // Try username first
+    const byUsername = await db.ref('profiles').orderByChild('username').equalTo(trimmed).limitToFirst(1).once('value');
+    if (byUsername.exists()) {
+      byUsername.forEach(child => {
+        targetUserId = child.key;
+        const p = child.val();
+        targetEmail = p.recovery_email || null;
+        targetUsername = p.username;
+      });
+    } else {
+      // Try by recovery email
+      const byEmail = await db.ref('profiles').orderByChild('recovery_email').equalTo(trimmed).limitToFirst(1).once('value');
+      if (byEmail.exists()) {
+        byEmail.forEach(child => {
+          targetUserId = child.key;
+          const p = child.val();
+          targetEmail = p.recovery_email;
+          targetUsername = p.username;
+        });
+      }
+    }
+
+    if (!targetUserId || !targetEmail) {
+      // Don't reveal whether user exists - always show success
+      return res.json({ ok: true, message: 'إذا كان الحساب موجوداً وله بريد استعادة، سيتم إرسال رابط إعادة التعيين.' });
+    }
+
+    // Generate secure reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const expiresAt = Date.now() + (60 * 60 * 1000); // 1 hour
+
+    // Store in Firebase
+    await db.ref(`password_resets/${hashedToken}`).set({
+      userId: targetUserId,
+      expiresAt: expiresAt,
+      used: false
+    });
+
+    // Send email
+    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
+    const mailOptions = {
+      from: process.env.MAIL_USER || 'noreply@app.com',
+      to: targetEmail,
+      subject: 'إعادة تعيين كلمة المرور - Aite',
+      html: `
+        <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f9f9f9;border-radius:10px;">
+          <h2 style="color:#3982f7;text-align:center;">إعادة تعيين كلمة المرور</h2>
+          <p>مرحباً <strong>${escapeHtml(targetUsername)}</strong>،</p>
+          <p>لقد طلبت إعادة تعيين كلمة المرور. اضغط على الزر أدناه:</p>
+          <div style="text-align:center;margin:30px 0;">
+            <a href="${resetUrl}" style="background:#3982f7;color:#fff;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">إعادة تعيين كلمة المرور</a>
+          </div>
+          <p style="color:#888;font-size:13px;">هذا الرابط صالح لمدة ساعة واحدة فقط. إذا لم تطلب هذا، تجاهل هذا البريد.</p>
+          <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+          <p style="color:#aaa;font-size:11px;text-align:center;">Aite App &copy; ${new Date().getFullYear()}</p>
+        </div>
+      `
+    };
+
+    try {
+      await mailTransporter.sendMail(mailOptions);
+    } catch (mailErr) {
+      console.error('Failed to send reset email:', mailErr);
+      // Still return success to not reveal info
+    }
+
+    res.json({ ok: true, message: 'إذا كان الحساب موجوداً وله بريد استعادة، سيتم إرسال رابط إعادة التعيين.' });
+  } catch (error) {
+    console.error('Error in forgot-password:', error);
+    res.status(500).json({ ok: false, error: 'حدث خطأ. حاول مرة أخرى.' });
+  }
+});
+
+// Reset password with token
+app.post('/api/reset-password', authLimiter, async (req, res) => {
+  try {
+    const { token, new_password } = req.body;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ ok: false, error: 'رمز إعادة التعيين غير صالح.' });
+    }
+    if (!new_password || typeof new_password !== 'string' || new_password.length < 6) {
+      return res.status(400).json({ ok: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.' });
+    }
+    if (new_password.length > 128) {
+      return res.status(400).json({ ok: false, error: 'كلمة المرور طويلة جداً.' });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token.trim()).digest('hex');
+    const resetSnap = await db.ref(`password_resets/${hashedToken}`).once('value');
+
+    if (!resetSnap.exists()) {
+      return res.status(400).json({ ok: false, error: 'رمز إعادة التعيين غير صالح أو منتهي الصلاحية.' });
+    }
+
+    const resetData = resetSnap.val();
+    if (resetData.used) {
+      return res.status(400).json({ ok: false, error: 'تم استخدام هذا الرمز مسبقاً.' });
+    }
+    if (Date.now() > resetData.expiresAt) {
+      await db.ref(`password_resets/${hashedToken}`).remove();
+      return res.status(400).json({ ok: false, error: 'انتهت صلاحية رمز إعادة التعيين.' });
+    }
+
+    // Update password in Firebase Auth
+    await admin.auth().updateUser(resetData.userId, { password: new_password });
+
+    // Mark token as used and remove
+    await db.ref(`password_resets/${hashedToken}`).update({ used: true });
+
+    // Clean up all remember tokens for this user (force re-login)
+    await db.ref(`remember_tokens`).orderByChild('userId').equalTo(resetData.userId).once('value', snap => {
+      const updates = {};
+      snap.forEach(child => { updates[`remember_tokens/${child.key}`] = null; });
+      if (Object.keys(updates).length > 0) db.ref().update(updates);
+    });
+
+    res.json({ ok: true, message: 'تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.' });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إعادة تعيين كلمة المرور.' });
+  }
+});
+
+// Serve forgot password page
+app.get('/forgot-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'forgot-password.html'));
+});
+
+// Serve reset password page
+app.get('/reset-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'reset-password.html'));
+});
+
+// ============================================================
+// ================ GOOGLE SIGN-IN API ========================
+// ============================================================
+
+// Google Sign-in / Sign-up
+app.post('/api/auth/google', authLimiter, async (req, res) => {
+  try {
+    const { id_token } = req.body;
+    if (!id_token || typeof id_token !== 'string') {
+      return res.status(400).json({ ok: false, error: 'رمز Google غير صالح.' });
+    }
+
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    if (!googleClientId) {
+      return res.status(500).json({ ok: false, error: 'خدمة Google غير مهيأة.' });
+    }
+
+    // Verify Google ID token
+    const { OAuth2Client } = require('google-auth-library');
+    const client = new OAuth2Client(googleClientId);
+    let payload;
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken: id_token,
+        audience: googleClientId,
+      });
+      payload = ticket.getPayload();
+    } catch (verifyErr) {
+      console.error('Google token verification failed:', verifyErr);
+      return res.status(401).json({ ok: false, error: 'فشل في التحقق من حساب Google.' });
+    }
+
+    const googleEmail = payload.email;
+    const googleName = payload.name || '';
+    const googlePicture = payload.picture || '';
+    const googleSub = payload.sub; // Google user ID
+
+    if (!googleEmail) {
+      return res.status(400).json({ ok: false, error: 'لم يتم العثور على بريد إلكتروني في حساب Google.' });
+    }
+
+    // Check if user already exists with this Google account
+    let existingUserId = null;
+
+    // Search by google_sub first
+    const byGoogleSub = await db.ref('profiles').orderByChild('google_sub').equalTo(googleSub).limitToFirst(1).once('value');
+    if (byGoogleSub.exists()) {
+      byGoogleSub.forEach(child => { existingUserId = child.key; });
+    }
+
+    // If not found by google_sub, try by recovery email
+    if (!existingUserId) {
+      const byEmail = await db.ref('profiles').orderByChild('recovery_email').equalTo(googleEmail.toLowerCase()).limitToFirst(1).once('value');
+      if (byEmail.exists()) {
+        byEmail.forEach(child => { existingUserId = child.key; });
+        // Link Google account
+        if (existingUserId) {
+          await db.ref(`profiles/${existingUserId}/google_sub`).set(googleSub);
+        }
+      }
+    }
+
+    if (existingUserId) {
+      // Existing user - log them in
+      const profileSnap = await db.ref(`profiles/${existingUserId}`).once('value');
+      const profile = profileSnap.val() || {};
+
+      req.session.userId = existingUserId;
+      req.session.username = profile.username;
+
+      // Generate remember token
+      const rememberToken = await generateRememberToken(existingUserId);
+
+      return res.json({
+        ok: true,
+        is_new_user: false,
+        userId: existingUserId,
+        username: profile.username,
+        full_name: profile.full_name || '',
+        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        remember_token: rememberToken
+      });
+    }
+
+    // New user - need profile completion
+    // Create Firebase Auth user
+    let firebaseUser;
+    try {
+      firebaseUser = await admin.auth().createUser({
+        email: googleEmail,
+        emailVerified: true,
+        displayName: googleName
+      });
+    } catch (createErr) {
+      // If user already exists in Auth but not in profiles
+      if (createErr.code === 'auth/email-already-exists') {
+        firebaseUser = await admin.auth().getUserByEmail(googleEmail);
+      } else {
+        throw createErr;
+      }
+    }
+
+    const newUserId = firebaseUser.uid;
+
+    // Store temporary Google data for profile completion
+    await db.ref(`google_pending/${newUserId}`).set({
+      google_sub: googleSub,
+      google_email: googleEmail,
+      google_name: googleName,
+      google_picture: googlePicture,
+      created_at: admin.database.ServerValue.TIMESTAMP
+    });
+
+    // Set session
+    req.session.userId = newUserId;
+    req.session.google_pending = true;
+
+    res.json({
+      ok: true,
+      is_new_user: true,
+      userId: newUserId,
+      google_name: googleName,
+      google_email: googleEmail,
+      google_picture: googlePicture
+    });
+
+  } catch (error) {
+    console.error('Error in Google auth:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تسجيل الدخول بـ Google.' });
+  }
+});
+
+// Complete Google sign-up profile
+app.post('/api/auth/google/complete-profile', requireAuth, upload.fields([
+  { name: 'profile_picture', maxCount: 1 },
+  { name: 'cover_photo', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const { full_name, username, profile_picture_url, cover_photo_url } = req.body;
+
+    if (!full_name || typeof full_name !== 'string' || full_name.trim().length < 2) {
+      return res.status(400).json({ ok: false, error: 'الاسم الكامل مطلوب (حرفين على الأقل).' });
+    }
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ ok: false, error: 'اسم المستخدم مطلوب.' });
+    }
+
+    const trimmedUsername = username.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,32}$/.test(trimmedUsername)) {
+      return res.status(400).json({ ok: false, error: 'اسم المستخدم يجب أن يكون 3-32 حرف (أحرف إنجليزية، أرقام، نقاط، شرطات).' });
+    }
+
+    // Check if username is taken
+    const existingSnap = await db.ref('profiles').orderByChild('username').equalTo(trimmedUsername).limitToFirst(1).once('value');
+    let taken = false;
+    existingSnap.forEach(child => {
+      if (child.key !== userId) taken = true;
+    });
+    if (taken) {
+      return res.status(409).json({ ok: false, error: 'اسم المستخدم مستخدم بالفعل.' });
+    }
+
+    // Get Google pending data
+    const pendingSnap = await db.ref(`google_pending/${userId}`).once('value');
+    const pendingData = pendingSnap.val() || {};
+
+    // Handle profile picture
+    let finalProfilePic = DEFAULT_PROFILE_PIC_URL;
+    if (req.files && req.files.profile_picture && req.files.profile_picture[0]) {
+      finalProfilePic = await uploadFileToImageKit(req.files.profile_picture[0], getUploadFolder(req, req.files.profile_picture[0]));
+    } else if (profile_picture_url && isValidUploadUrl(profile_picture_url)) {
+      finalProfilePic = profile_picture_url;
+    } else if (pendingData.google_picture) {
+      finalProfilePic = pendingData.google_picture;
+    }
+
+    // Handle cover photo
+    let finalCoverPhoto = '';
+    if (req.files && req.files.cover_photo && req.files.cover_photo[0]) {
+      finalCoverPhoto = await uploadFileToImageKit(req.files.cover_photo[0], getUploadFolder(req, req.files.cover_photo[0]));
+    } else if (cover_photo_url && isValidUploadUrl(cover_photo_url)) {
+      finalCoverPhoto = cover_photo_url;
+    }
+
+    // Create profile
+    const profileData = {
+      username: trimmedUsername,
+      full_name: full_name.trim(),
+      profile_picture_url: finalProfilePic,
+      cover_photo_url: finalCoverPhoto,
+      bio: '',
+      google_sub: pendingData.google_sub || null,
+      recovery_email: pendingData.google_email || null,
+      is_private: false,
+      is_verified: false,
+      is_admin: false,
+      postsCount: 0,
+      friendsCount: 0,
+      reelsCount: 0,
+      created_at: admin.database.ServerValue.TIMESTAMP
+    };
+
+    await db.ref(`profiles/${userId}`).set(profileData);
+
+    // Clean up pending data
+    await db.ref(`google_pending/${userId}`).remove();
+
+    // Update session
+    req.session.username = trimmedUsername;
+    delete req.session.google_pending;
+
+    // Generate remember token
+    const rememberToken = await generateRememberToken(userId);
+
+    res.json({
+      ok: true,
+      message: 'تم إنشاء الحساب بنجاح.',
+      userId: userId,
+      username: trimmedUsername,
+      full_name: full_name.trim(),
+      profile_picture_url: finalProfilePic,
+      remember_token: rememberToken
+    });
+
+  } catch (error) {
+    console.error('Error completing Google profile:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إكمال الملف الشخصي.' });
+  }
+});
+
+// Serve Google profile completion page
+app.get('/google-complete-profile', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'google-complete-profile.html'));
+});
+
+// Get Google Client ID for frontend (public, non-sensitive)
+app.get('/api/google-client-id', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
+  res.json({ ok: !!clientId, client_id: clientId });
+});
+
+// Serve recovery email modal script
+app.get('/js/recovery-email-modal.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.join(__dirname, 'views', 'recovery-email-modal.js'));
 });
 
 

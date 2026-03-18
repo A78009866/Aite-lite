@@ -72,6 +72,12 @@
         }
         .preview-img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; display: none; }
         .error-box { background: rgba(255,0,0,0.08); border: 1px solid rgba(255,0,0,0.12); padding: 10px; border-radius: 8px; color: #ffdddd; display: none; }
+        .btn-google {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
+            transition: all 0.3s ease;
+        }
+        .btn-google:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+        .btn-google img { width: 20px; height: 20px; }
     
     /* ===== DESKTOP RESPONSIVE ===== */
     @media (min-width: 768px) {
@@ -203,6 +209,17 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                 <i id="btnSpinner" class="fas fa-spinner fa-spin hidden"></i>
             </button>
         </form>
+
+        <div class="flex items-center gap-4 text-gray-600 my-5">
+            <div class="h-px flex-1 bg-gray-800"></div>
+            <span class="text-xs uppercase tracking-wider font-semibold text-gray-500">أو</span>
+            <div class="h-px flex-1 bg-gray-800"></div>
+        </div>
+
+        <button type="button" id="googleSignUpBtn" class="btn-google w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center gap-3">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+            <span>التسجيل بـ Google</span>
+        </button>
 
         <div class="text-center mt-6 text-sm text-gray-400">
             لديك حساب بالفعل؟ <a href="/login" class="text-[#3982f7] font-semibold hover:text-white transition-colors">تسجيل الدخول</a>
@@ -399,6 +416,54 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             errorBox.style.display = 'block';
             errorBox.textContent = msg;
         }
+
+        // === Google Sign-Up ===
+        document.getElementById('googleSignUpBtn').addEventListener('click', function() {
+            try {
+                if (typeof google !== 'undefined' && google.accounts) {
+                    google.accounts.id.initialize({
+                        client_id: window.__GOOGLE_CLIENT_ID || '',
+                        callback: handleGoogleResponse,
+                        auto_select: false
+                    });
+                    google.accounts.id.prompt();
+                } else { showError('خدمة Google غير متاحة حالياً.'); }
+            } catch (err) { showError('فشل في فتح تسجيل Google.'); }
+        });
+
+        async function handleGoogleResponse(response) {
+            if (!response || !response.credential) { showError('فشل في الحصول على بيانات Google.'); return; }
+            submitBtn.disabled = true; btnSpinner.classList.remove('hidden'); btnText.textContent = 'جاري التسجيل...';
+            try {
+                const resp = await fetch('/api/auth/google', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({ id_token: response.credential })
+                });
+                const data = await resp.json();
+                if (!data.ok) { showError(data.error || 'فشل.'); submitBtn.disabled = false; btnText.textContent = 'إنشاء حساب'; btnSpinner.classList.add('hidden'); return; }
+                if (data.is_new_user) {
+                    const params = new URLSearchParams();
+                    if (data.google_name) params.set('name', data.google_name);
+                    if (data.google_picture) params.set('picture', data.google_picture);
+                    window.location.href = '/google-complete-profile?' + params.toString();
+                } else {
+                    let accounts = loadAccounts().filter(a => a.username !== data.username);
+                    accounts.unshift({ username: data.username, full_name: data.full_name || '', profile_picture_url: data.profile_picture_url || DEFAULT_PROFILE_IMG, remember_token: data.remember_token || '' });
+                    saveAccounts(accounts.slice(0, 8));
+                    window.location.href = '/chat_list';
+                }
+            } catch (err) { showError('فشل في الاتصال بالخادم.'); submitBtn.disabled = false; btnText.textContent = 'إنشاء حساب'; btnSpinner.classList.add('hidden'); }
+        }
+
+        // Load Google GSI script
+        (function() {
+            fetch('/api/google-client-id').then(r => r.json()).then(d => {
+                if (d.ok && d.client_id) {
+                    window.__GOOGLE_CLIENT_ID = d.client_id;
+                    const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; document.head.appendChild(s);
+                }
+            }).catch(() => {});
+        })();
     </script>
 
 <script>
