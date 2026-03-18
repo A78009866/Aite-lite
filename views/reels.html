@@ -73,18 +73,19 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%) scale(1);
+      transform: translate(-50%, -50%) scale(0.8);
       z-index: 30;
-      width: 84px;
-      height: 84px;
+      width: 72px;
+      height: 72px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(0,0,0,0.45);
-      backdrop-filter: blur(4px);
-      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-      transition: opacity 0.25s ease, transform 0.18s ease;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
       opacity: 0;
       pointer-events: none;
     }
@@ -94,9 +95,97 @@
       transform: translate(-50%, -50%) scale(1);
     }
     .play-btn i {
-      font-size: 34px;
+      font-size: 28px;
       color: white;
-      text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+
+    /* --- Reel Action Buttons (side bar) --- */
+    .reel-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+    .reel-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .reel-action-btn:active {
+      transform: scale(0.85);
+    }
+    .reel-action-btn .action-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: background 0.2s ease, transform 0.15s ease;
+    }
+    .reel-action-btn:hover .action-icon {
+      background: rgba(255,255,255,0.2);
+    }
+    .reel-action-btn .action-icon i {
+      font-size: 20px;
+      color: white;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    }
+    .reel-action-btn .action-icon.liked i {
+      color: #ef4444;
+    }
+    .reel-action-btn .action-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    }
+    @keyframes like-bounce {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.3); }
+      60% { transform: scale(0.9); }
+      100% { transform: scale(1); }
+    }
+    .reel-action-btn .action-icon.like-animate {
+      animation: like-bounce 0.4s ease;
+    }
+
+    /* --- Sound / Mute Button --- */
+    .sound-btn {
+      position: absolute;
+      top: 54px;
+      left: 12px;
+      z-index: 60;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      pointer-events: auto;
+      transition: background 0.2s ease, transform 0.15s ease;
+    }
+    .sound-btn:active {
+      transform: scale(0.88);
+    }
+    .sound-btn:hover {
+      background: rgba(0,0,0,0.6);
+    }
+    .sound-btn i {
+      font-size: 15px;
+      color: white;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
     }
 
     /* شريط التقدم (RTL) */
@@ -922,20 +1011,32 @@ html[data-theme="light"] #replyIndicator {
         </div>
         <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 pointer-events-none"></div>
 
-        <div class="absolute left-4 bottom-24 flex flex-col items-center gap-6 z-20 pointer-events-auto">
-          <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="handleLike('${reel.reelId}')">
-            <i class="${reel.is_liked ? 'fas text-red-500' : 'far text-white'} fa-heart text-3xl drop-shadow-md" id="likeIcon-${reel.reelId}"></i>
-            <span class="text-xs font-bold cursor-pointer" id="likeCount-${reel.reelId}" onclick="event.stopPropagation(); showLikesList('${reel.reelId}', 'reel')">${reel.likes}</span>
+        <div class="absolute left-4 bottom-24 z-20 pointer-events-auto reel-actions">
+          <div class="reel-action-btn" onclick="handleLike('${reel.reelId}')">
+            <div class="action-icon ${reel.is_liked ? 'liked' : ''}" id="likeIconWrap-${reel.reelId}">
+              <i class="${reel.is_liked ? 'fas' : 'far'} fa-heart" id="likeIcon-${reel.reelId}"></i>
+            </div>
+            <span class="action-label cursor-pointer" id="likeCount-${reel.reelId}" onclick="event.stopPropagation(); showLikesList('${reel.reelId}', 'reel')">${reel.likes}</span>
           </div>
-          <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="openComments('${reel.reelId}')">
-            <i class="fa-solid fa-comment text-3xl text-white drop-shadow-md"></i>
-            <span class="text-xs font-bold" id="commentCount-${reel.reelId}">${reel.commentsCount}</span>
+          <div class="reel-action-btn" onclick="openComments('${reel.reelId}')">
+            <div class="action-icon">
+              <i class="fa-solid fa-comment"></i>
+            </div>
+            <span class="action-label" id="commentCount-${reel.reelId}">${reel.commentsCount}</span>
           </div>
-          <div class="flex flex-col items-center gap-1 cursor-pointer" onclick="shareReel('${reel.reelId}')">
-            <i class="fas fa-share-nodes text-3xl text-white drop-shadow-md"></i>
-            <span class="text-xs font-bold">مشاركة</span>
+          <div class="reel-action-btn" onclick="shareReel('${reel.reelId}')">
+            <div class="action-icon">
+              <i class="fas fa-share-nodes"></i>
+            </div>
+            <span class="action-label">مشاركة</span>
           </div>
-          ${isOwner ? `<div class="flex flex-col items-center gap-1 cursor-pointer text-red-500" onclick="deleteReel('${reel.reelId}')"><i class="fas fa-trash-can text-2xl drop-shadow-md"></i><span class="text-[10px] font-bold">حذف</span></div>` : ''}
+          <div class="reel-action-btn" onclick="toggleMute('${reel.reelId}')">
+            <div class="action-icon" id="soundIconWrap-${reel.reelId}">
+              <i class="fas fa-volume-high" id="soundIcon-${reel.reelId}"></i>
+            </div>
+            <span class="action-label" id="soundLabel-${reel.reelId}">الصوت</span>
+          </div>
+          ${isOwner ? `<div class="reel-action-btn" onclick="deleteReel('${reel.reelId}')"><div class="action-icon" style="background:rgba(239,68,68,0.2)"><i class="fas fa-trash-can" style="color:#ef4444"></i></div><span class="action-label" style="color:#ef4444">حذف</span></div>` : ''}
         </div>
 
         <div class="absolute right-4 bottom-8 left-16 z-20 text-right">
@@ -1065,8 +1166,8 @@ html[data-theme="light"] #replyIndicator {
     const activeSlide = swiper.slides[swiper.activeIndex];
     const video = activeSlide && activeSlide.querySelector('video');
     if (video) {
-      video.muted = false;
-      video.play().catch(() => { video.muted = true; video.play().catch(()=>{}); });
+      video.muted = isGlobalMuted;
+      video.play().catch(() => { video.muted = true; isGlobalMuted = true; updateAllSoundIcons(); video.play().catch(()=>{}); });
       const reelId = activeSlide.getAttribute('data-id');
       showPlayBtnTemporarily(reelId, false);
     }
@@ -1088,21 +1189,38 @@ html[data-theme="light"] #replyIndicator {
     });
   }
 
+  let isGlobalMuted = false;
+  let playBtnTimer = null;
+
   function togglePlayPause(videoEl, reelId, showButton) {
     const playBtn = document.getElementById(`playBtn-${reelId}`);
     try {
-      if (videoEl.paused) {
+      if (videoEl.paused || videoEl.ended) {
+        if (videoEl.ended) videoEl.currentTime = 0;
+        videoEl.muted = isGlobalMuted;
         videoEl.play().catch(()=>{});
-        if (playBtn) { playBtn.classList.remove('show'); playBtn.querySelector('i').className = 'fas fa-pause'; }
+        showPlayBtnFeedback(reelId, false);
       } else {
         videoEl.pause();
-        if (playBtn) { playBtn.querySelector('i').className = 'fas fa-play'; showPlayBtnTemporarily(reelId, true); }
-      }
-      if (showButton && playBtn) {
-        playBtn.classList.add('show');
-        setTimeout(() => { playBtn.classList.remove('show'); }, 1400);
+        showPlayBtnFeedback(reelId, true);
       }
     } catch(e) {}
+  }
+
+  function showPlayBtnFeedback(reelId, isPaused) {
+    const playBtn = document.getElementById(`playBtn-${reelId}`);
+    if (!playBtn) return;
+    const icon = playBtn.querySelector('i');
+    if (playBtnTimer) clearTimeout(playBtnTimer);
+
+    if (isPaused) {
+      icon.className = 'fas fa-play';
+      playBtn.classList.add('show');
+    } else {
+      icon.className = 'fas fa-pause';
+      playBtn.classList.add('show');
+      playBtnTimer = setTimeout(() => { playBtn.classList.remove('show'); }, 800);
+    }
   }
 
   function showPlayBtnTemporarily(reelId, isPaused) {
@@ -1110,8 +1228,25 @@ html[data-theme="light"] #replyIndicator {
     if (!playBtn) return;
     const icon = playBtn.querySelector('i');
     if (isPaused) { icon.className = 'fas fa-play'; playBtn.classList.add('show'); }
-    else { icon.className = 'fas fa-pause'; playBtn.classList.remove('show'); }
-    if (isPaused) setTimeout(() => { playBtn.classList.remove('show'); }, 1400);
+    else { playBtn.classList.remove('show'); }
+  }
+
+  // --- Sound / Mute ---
+  function toggleMute(reelId) {
+    isGlobalMuted = !isGlobalMuted;
+    // Apply to all videos
+    document.querySelectorAll('video').forEach(v => { v.muted = isGlobalMuted; });
+    // Update all sound icons
+    updateAllSoundIcons();
+  }
+
+  function updateAllSoundIcons() {
+    document.querySelectorAll('[id^="soundIcon-"]').forEach(icon => {
+      icon.className = isGlobalMuted ? 'fas fa-volume-xmark' : 'fas fa-volume-high';
+    });
+    document.querySelectorAll('[id^="soundLabel-"]').forEach(label => {
+      label.textContent = isGlobalMuted ? 'صامت' : 'الصوت';
+    });
   }
 
   function animateHeart(reelId) {
@@ -1121,9 +1256,10 @@ html[data-theme="light"] #replyIndicator {
     void heart.offsetWidth;
     heart.classList.add('animate');
     const icon = document.getElementById(`likeIcon-${reelId}`);
-    if(icon && !icon.classList.contains('text-red-500')) {
-      icon.classList.remove('far');
-      icon.classList.add('fas', 'text-red-500');
+    const wrap = document.getElementById(`likeIconWrap-${reelId}`);
+    if(icon && !icon.classList.contains('fas')) {
+      icon.className = 'fas fa-heart';
+      if (wrap) { wrap.classList.add('liked'); wrap.classList.add('like-animate'); setTimeout(() => wrap.classList.remove('like-animate'), 400); }
       const countEl = document.getElementById(`likeCount-${reelId}`);
       if(countEl) countEl.textContent = parseInt(countEl.textContent || '0') + 1;
     }
@@ -1141,15 +1277,18 @@ html[data-theme="light"] #replyIndicator {
 
   async function handleLike(reelId, forceLike = false) {
     const icon = document.getElementById(`likeIcon-${reelId}`);
+    const wrap = document.getElementById(`likeIconWrap-${reelId}`);
     const countSpan = document.getElementById(`likeCount-${reelId}`);
-    const isLiked = icon.classList.contains('text-red-500');
+    const isLiked = icon.classList.contains('fas');
     if (forceLike && isLiked) return;
 
     if (isLiked) {
-      icon.className = 'far fa-heart text-3xl text-white drop-shadow-md';
+      icon.className = 'far fa-heart';
+      if (wrap) wrap.classList.remove('liked');
       countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
     } else {
-      icon.className = 'fas fa-heart text-3xl text-red-500 drop-shadow-md';
+      icon.className = 'fas fa-heart';
+      if (wrap) { wrap.classList.add('liked'); wrap.classList.add('like-animate'); setTimeout(() => wrap.classList.remove('like-animate'), 400); }
       countSpan.textContent = parseInt(countSpan.textContent) + 1;
     }
     try { await fetch(`/api/reels/${reelId}/like`, { method: 'POST', credentials: 'include' }); } catch(e) { console.error('like error', e); }
