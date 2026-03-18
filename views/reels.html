@@ -29,6 +29,9 @@
     body.modal-open { overflow: hidden !important; position: fixed; width: 100%; }
 
     .swiper { width: 100%; height: 100%; }
+    .swiper-wrapper {
+      will-change: transform;
+    }
     .swiper-slide {
       background: #000;
       display: flex;
@@ -36,12 +39,19 @@
       align-items: center;
       overflow: hidden;
       position: relative;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
     }
 
     video {
       -webkit-user-select: none;
       user-select: none;
       background: black;
+      will-change: transform;
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
     }
 
     .big-heart {
@@ -1005,17 +1015,43 @@ html[data-theme="light"] #replyIndicator {
     
     swiperInstance = new Swiper(".mySwiper", {
       direction: "vertical",
-      mousewheel: true,
+      speed: 300,
+      initialSlide: initialIndex,
+      threshold: 15,
+      touchRatio: 1.2,
+      shortSwipes: true,
+      longSwipes: true,
+      longSwipesRatio: 0.2,
+      longSwipesMs: 100,
+      followFinger: true,
+      resistance: true,
+      resistanceRatio: 0.65,
+      touchStartPreventDefault: false,
+      passiveListeners: true,
+      mousewheel: {
+        sensitivity: 1,
+        thresholdDelta: 30,
+        thresholdTime: 300,
+        forceToAxis: true
+      },
       keyboard: { enabled: true },
-      speed: 400,
-      initialSlide: initialIndex, // ضبط الشريحة الابتدائية
       on: {
         init: function() { 
-            playCurrentVideo(this); 
+            playCurrentVideo(this);
+            preloadAdjacentVideos(this);
         },
         slideChange: function () {
           pauseAllVideos();
           playCurrentVideo(this);
+          preloadAdjacentVideos(this);
+        },
+        slideChangeTransitionEnd: function() {
+          // Ensure video plays smoothly after transition completes
+          const activeSlide = this.slides[this.activeIndex];
+          const video = activeSlide && activeSlide.querySelector('video');
+          if (video && video.paused) {
+            video.play().catch(() => {});
+          }
         }
       }
     });
@@ -1027,13 +1063,29 @@ html[data-theme="light"] #replyIndicator {
 
   function playCurrentVideo(swiper) {
     const activeSlide = swiper.slides[swiper.activeIndex];
-    const video = activeSlide.querySelector('video');
+    const video = activeSlide && activeSlide.querySelector('video');
     if (video) {
       video.muted = false;
       video.play().catch(() => { video.muted = true; video.play().catch(()=>{}); });
       const reelId = activeSlide.getAttribute('data-id');
       showPlayBtnTemporarily(reelId, false);
     }
+  }
+
+  // Preload adjacent videos for seamless transitions
+  function preloadAdjacentVideos(swiper) {
+    const idx = swiper.activeIndex;
+    const slides = swiper.slides;
+    // Preload next and previous slides
+    [-1, 1, 2].forEach(offset => {
+      const targetIdx = idx + offset;
+      if (targetIdx >= 0 && targetIdx < slides.length) {
+        const video = slides[targetIdx].querySelector('video');
+        if (video && video.preload !== 'auto') {
+          video.preload = 'auto';
+        }
+      }
+    });
   }
 
   function togglePlayPause(videoEl, reelId, showButton) {
