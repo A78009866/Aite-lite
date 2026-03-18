@@ -3911,28 +3911,22 @@ html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
     };
 
     // Attach long-press to comments container
-    const observer = new MutationObserver(() => {
-        const container = document.getElementById('commentsContainer');
+    function tryAttach() {
+        const container = document.getElementById('inlineCommentsList');
         if (container && !container._lpAttached) {
             container._lpAttached = true;
             attachLongPress(container);
         }
-    });
+    }
+    const observer = new MutationObserver(tryAttach);
     observer.observe(document.body, { childList: true, subtree: true });
-
-    // Also attach on load
-    document.addEventListener('DOMContentLoaded', () => {
-        const container = document.getElementById('commentsContainer');
-        if (container && !container._lpAttached) {
-            container._lpAttached = true;
-            attachLongPress(container);
-        }
-    });
+    document.addEventListener('DOMContentLoaded', tryAttach);
+    tryAttach();
 
     // Desktop: right-click support
     document.addEventListener('contextmenu', function(e) {
         const el = e.target.closest('[data-ctx-type]');
-        if (el && el.closest('#commentsContainer')) {
+        if (el && el.closest('#inlineCommentsList')) {
             e.preventDefault();
             showCtx(el);
         }
