@@ -2199,6 +2199,20 @@ app.delete('/api/messages/:otherId/:messageId', requireAuth, async (req, res) =>
       deleted_at: admin.database.ServerValue.TIMESTAMP
     });
 
+    // تحديث قائمة المحادثات إذا كانت هذه آخر رسالة
+    try {
+      const allMsgsSnap = await db.ref(`messages/${chatId}`).orderByChild('timestamp').limitToLast(1).once('value');
+      let lastMsg = null;
+      allMsgsSnap.forEach(s => { lastMsg = s.val(); });
+      if (lastMsg && lastMsg.messageId === messageId) {
+        const previewText = 'تم حذف هذه الرسالة';
+        const chatUpdates = {};
+        chatUpdates[`chats/${userId}/${otherId}/last_message_content`] = previewText;
+        chatUpdates[`chats/${otherId}/${userId}/last_message_content`] = previewText;
+        await db.ref().update(chatUpdates);
+      }
+    } catch (e) { console.error('Failed to update chat list after delete:', e); }
+
     res.json({ ok: true });
   } catch (error) {
     console.error('Delete message error:', error);
@@ -2238,11 +2252,25 @@ app.put('/api/messages/:otherId/:messageId', requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'لا يمكن تعديل رسالة محذوفة' });
     }
 
+    const trimmedContent = content.trim();
     await messageRef.update({
-      content: content.trim(),
+      content: trimmedContent,
       is_edited: true,
       edited_at: admin.database.ServerValue.TIMESTAMP
     });
+
+    // تحديث قائمة المحادثات إذا كانت هذه آخر رسالة
+    try {
+      const allMsgsSnap = await db.ref(`messages/${chatId}`).orderByChild('timestamp').limitToLast(1).once('value');
+      let lastMsg = null;
+      allMsgsSnap.forEach(s => { lastMsg = s.val(); });
+      if (lastMsg && lastMsg.messageId === messageId) {
+        const chatUpdates = {};
+        chatUpdates[`chats/${userId}/${otherId}/last_message_content`] = trimmedContent;
+        chatUpdates[`chats/${otherId}/${userId}/last_message_content`] = trimmedContent;
+        await db.ref().update(chatUpdates);
+      }
+    } catch (e) { console.error('Failed to update chat list after edit:', e); }
 
     res.json({ ok: true });
   } catch (error) {
@@ -3428,6 +3456,33 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------- Edit a comment (post) ----------------
+app.put('/api/posts/:postId/comments/:commentId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { postId, commentId } = req.params;
+  const { content } = req.body;
+  if (!postId || !commentId || !content || !content.trim()) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`comments/${postId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const commentData = commentSnap.val();
+    const commentOwnerId = (commentData.user && commentData.user.userId) ? commentData.user.userId : (commentData.userId || '');
+
+    if (userId !== commentOwnerId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بتعديل هذا التعليق' });
+    }
+
+    await commentRef.update({ content: truncateText(content.trim(), 2000) });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error editing comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تعديل التعليق' });
+  }
+});
+
 // ---------------- Delete a comment (post) ----------------
 app.delete('/api/posts/:postId/comments/:commentId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
@@ -4481,6 +4536,33 @@ app.post('/api/reels/:reelId/like', requireAuth, async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ ok: false });
+  }
+});
+
+// ---------------- Edit a comment (reel) ----------------
+app.put('/api/reels/:reelId/comments/:commentId', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { reelId, commentId } = req.params;
+  const { content } = req.body;
+  if (!reelId || !commentId || !content || !content.trim()) return res.status(400).json({ ok: false, error: 'Missing parameters' });
+
+  try {
+    const commentRef = db.ref(`reels_comments/${reelId}/${commentId}`);
+    const commentSnap = await commentRef.once('value');
+    if (!commentSnap.exists()) return res.status(404).json({ ok: false, error: 'Comment not found' });
+
+    const commentData = commentSnap.val();
+    const commentOwnerId = commentData.userId || '';
+
+    if (userId !== commentOwnerId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بتعديل هذا التعليق' });
+    }
+
+    await commentRef.update({ content: truncateText(content.trim(), 2000) });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error editing reel comment:', error);
+    res.status(500).json({ ok: false, error: 'فشل في تعديل التعليق' });
   }
 });
 

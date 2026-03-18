@@ -1929,15 +1929,119 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   border-radius: 50%;
 }
 
-/* Delete comment/reply button */
-.fb-delete-action {
-  color: #ef4444 !important;
-  opacity: 0.7;
-  transition: opacity 0.2s, transform 0.2s;
+/* Comment context menu */
+.comment-ctx-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s ease;
 }
-.fb-delete-action:hover {
-  opacity: 1;
-  transform: scale(1.15);
+.comment-ctx-overlay.open {
+  opacity: 1; pointer-events: auto;
+}
+.comment-ctx-menu {
+  background: #1f2937;
+  border-radius: 18px 18px 0 0;
+  width: 100%; max-width: 420px;
+  padding: 10px 0 env(safe-area-inset-bottom, 8px);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+}
+.comment-ctx-overlay.open .comment-ctx-menu {
+  transform: translateY(0);
+}
+html[data-theme="light"] .comment-ctx-menu {
+  background: #fff;
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.12);
+}
+.comment-ctx-handle {
+  width: 36px; height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  margin: 4px auto 8px;
+}
+html[data-theme="light"] .comment-ctx-handle {
+  background: rgba(0,0,0,0.15);
+}
+.comment-ctx-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 22px;
+  color: #e5e7eb;
+  font-size: 15px; font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: none; background: none; width: 100%; text-align: right;
+}
+.comment-ctx-item:hover, .comment-ctx-item:active {
+  background: rgba(255,255,255,0.06);
+}
+html[data-theme="light"] .comment-ctx-item {
+  color: #1f2937;
+}
+html[data-theme="light"] .comment-ctx-item:hover,
+html[data-theme="light"] .comment-ctx-item:active {
+  background: rgba(0,0,0,0.04);
+}
+.comment-ctx-item i {
+  width: 22px; text-align: center; font-size: 17px;
+}
+.comment-ctx-item.ctx-delete { color: #ef4444; }
+.comment-ctx-item.ctx-delete i { color: #ef4444; }
+/* Edit comment modal */
+.edit-comment-modal-overlay {
+  position: fixed; inset: 0; z-index: 210;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+  padding: 16px;
+}
+.edit-comment-modal-overlay.open {
+  opacity: 1; pointer-events: auto;
+}
+.edit-comment-modal-box {
+  background: #1f2937;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 24px 20px;
+  max-width: 380px; width: 100%;
+}
+html[data-theme="light"] .edit-comment-modal-box {
+  background: #fff;
+  border-color: #e5e7eb;
+}
+.edit-comment-modal-box h3 {
+  font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 14px; text-align: center;
+}
+html[data-theme="light"] .edit-comment-modal-box h3 {
+  color: #111;
+}
+.edit-comment-modal-box textarea {
+  width: 100%; min-height: 80px; max-height: 200px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 12px; color: #fff; font-size: 15px;
+  resize: vertical; outline: none; direction: rtl;
+}
+html[data-theme="light"] .edit-comment-modal-box textarea {
+  background: #f3f4f6; border-color: #d1d5db; color: #111;
+}
+.edit-comment-modal-box .ecm-actions {
+  display: flex; gap: 10px; margin-top: 14px; justify-content: center;
+}
+.edit-comment-modal-box .ecm-cancel {
+  padding: 9px 22px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  background: rgba(255,255,255,0.08); color: #d1d5db; border: none; cursor: pointer;
+}
+html[data-theme="light"] .edit-comment-modal-box .ecm-cancel {
+  background: #f3f4f6; color: #374151;
+}
+.edit-comment-modal-box .ecm-save {
+  padding: 9px 22px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  background: #3b82f6; color: #fff; border: none; cursor: pointer;
+}
+.edit-comment-modal-box .ecm-save:disabled {
+  opacity: 0.5; cursor: not-allowed;
 }
 /* Delete confirmation modal */
 .delete-comment-modal-overlay {
@@ -3140,7 +3244,7 @@ html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
             const likeBadge = likesCount > 0 ? `<span class="fb-like-badge" onclick="event.stopPropagation(); showCommentLikesList('/api/posts/${pid}/comments/${commentId}/replies/${rId}/likes')" style="cursor:pointer"><i class="fas fa-heart"></i> ${likesCount}</span>` : '';
 
             return `
-                <div class="fb-reply-item" id="reply-${rId}">
+                <div class="fb-reply-item" id="reply-${rId}" data-ctx-type="reply" data-ctx-pid="${pid}" data-ctx-cid="${commentId}" data-ctx-rid="${rId}" data-ctx-owner="${r.userId || ''}" data-ctx-content="${(r.content || '').replace(/"/g, '&quot;')}">
                     <img src="${r.profile_picture_url || DEFAULT_AVATAR}" class="fb-reply-avatar" onclick="window.location.href='/profile?userId=${r.userId || ''}'">
                     <div style="flex:1;min-width:0">
                         <div class="fb-reply-bubble">
@@ -3152,7 +3256,6 @@ html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
                             <span class="fb-time">${replyTime}</span>
                             <button class="fb-action ${likedClass}" onclick="toggleReplyLike('${pid}', '${commentId}', '${rId}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
                             <button class="fb-action" onclick="setReplyMode('${commentId}', '${r.username}', '${rId}')">رد</button>
-                            ${(r.userId === currentUserId) ? `<button class="fb-action fb-delete-action" onclick="event.stopPropagation(); showDeleteCommentConfirm('reply', '${pid}', '${commentId}', '${rId}')"><i class="fas fa-trash-alt"></i></button>` : ''}
                         </div>
                     </div>
                 </div>`;
@@ -3184,7 +3287,7 @@ html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
 
             return `
                 <div class="fb-comment-thread" id="comment-${c.commentId}">
-                    <div class="fb-comment">
+                    <div class="fb-comment" data-ctx-type="comment" data-ctx-pid="${pid}" data-ctx-cid="${c.commentId}" data-ctx-owner="${c.user.userId}" data-ctx-content="${(c.content || '').replace(/"/g, '&quot;')}">
                         <img src="${c.user.profile_picture_url || DEFAULT_AVATAR}" class="fb-comment-avatar" onclick="window.location.href='/profile?userId=${c.user.userId}'">
                         <div class="fb-comment-body">
                             <div class="fb-comment-bubble">
@@ -3196,7 +3299,6 @@ html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
                                 <span class="fb-time">${commentDate}</span>
                                 <button class="fb-action ${likedClass}" onclick="toggleCommentLike('${pid}', '${c.commentId}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
                                 <button class="fb-action" onclick="setReplyMode('${c.commentId}', '${c.user.username}')">رد</button>
-                                ${(c.user.userId === currentUserId) ? `<button class="fb-delete-action fb-action" onclick="event.stopPropagation(); showDeleteCommentConfirm('comment', '${pid}', '${c.commentId}')"><i class="fas fa-trash-alt"></i></button>` : ''}
                             </div>
                         </div>
                     </div>
@@ -3655,6 +3757,28 @@ html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
 })();
 </script>
 
+<!-- Comment Context Menu (long-press) -->
+<div id="commentCtxOverlay" class="comment-ctx-overlay" onclick="closeCommentCtx()">
+  <div class="comment-ctx-menu" onclick="event.stopPropagation()">
+    <div class="comment-ctx-handle"></div>
+    <button class="comment-ctx-item" id="ctxCopyBtn" onclick="ctxCopyComment()"><i class="far fa-copy"></i> نسخ التعليق</button>
+    <button class="comment-ctx-item" id="ctxEditBtn" onclick="ctxEditComment()" style="display:none"><i class="far fa-pen-to-square"></i> تعديل التعليق</button>
+    <button class="comment-ctx-item ctx-delete" id="ctxDeleteBtn" onclick="ctxDeleteComment()" style="display:none"><i class="far fa-trash-can"></i> حذف التعليق</button>
+  </div>
+</div>
+
+<!-- Edit Comment Modal -->
+<div id="editCommentModal" class="edit-comment-modal-overlay" onclick="closeEditCommentModal()">
+  <div class="edit-comment-modal-box" onclick="event.stopPropagation()">
+    <h3>تعديل التعليق</h3>
+    <textarea id="editCommentTextarea" placeholder="اكتب التعليق..."></textarea>
+    <div class="ecm-actions">
+      <button class="ecm-cancel" onclick="closeEditCommentModal()">إلغاء</button>
+      <button class="ecm-save" id="ecmSaveBtn" onclick="saveEditComment()">حفظ</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delete Comment/Reply Confirmation Modal -->
 <div id="deleteCommentModal" class="delete-comment-modal-overlay" onclick="closeDeleteCommentModal()">
   <div class="delete-comment-modal-box" onclick="event.stopPropagation()">
@@ -3667,6 +3791,154 @@ html[data-theme="light"] .dcm-cancel { background: #f3f4f6; color: #374151; }
     </div>
   </div>
 </div>
+
+<script>
+// ========== LONG-PRESS CONTEXT MENU FOR COMMENTS ==========
+(function() {
+    let _ctxData = null;
+    let _lpTimer = null;
+    const LP_DELAY = 500;
+
+    function attachLongPress(container) {
+        if (!container) return;
+        container.addEventListener('touchstart', onTouchStart, { passive: false });
+        container.addEventListener('touchend', cancelLp);
+        container.addEventListener('touchmove', cancelLp);
+        container.addEventListener('contextmenu', function(e) {
+            const el = e.target.closest('[data-ctx-type]');
+            if (el) { e.preventDefault(); }
+        });
+    }
+
+    function onTouchStart(e) {
+        const el = e.target.closest('[data-ctx-type]');
+        if (!el) return;
+        _lpTimer = setTimeout(() => {
+            e.preventDefault();
+            if (navigator.vibrate) navigator.vibrate(30);
+            showCtx(el);
+        }, LP_DELAY);
+    }
+
+    function cancelLp() {
+        if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+    }
+
+    function showCtx(el) {
+        _ctxData = {
+            type: el.dataset.ctxType,
+            pid: el.dataset.ctxPid,
+            cid: el.dataset.ctxCid,
+            rid: el.dataset.ctxRid || null,
+            owner: el.dataset.ctxOwner,
+            content: el.dataset.ctxContent
+        };
+        const isOwner = (_ctxData.owner === currentUserId);
+        document.getElementById('ctxEditBtn').style.display = isOwner ? 'flex' : 'none';
+        document.getElementById('ctxDeleteBtn').style.display = isOwner ? 'flex' : 'none';
+        document.getElementById('commentCtxOverlay').classList.add('open');
+    }
+
+    window.closeCommentCtx = function() {
+        document.getElementById('commentCtxOverlay').classList.remove('open');
+        _ctxData = null;
+    };
+
+    window.ctxCopyComment = function() {
+        if (!_ctxData) return;
+        const text = _ctxData.content || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).catch(() => {});
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = text; document.body.appendChild(ta);
+            ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+        closeCommentCtx();
+    };
+
+    window.ctxEditComment = function() {
+        if (!_ctxData) return;
+        const data = { ..._ctxData };
+        closeCommentCtx();
+        document.getElementById('editCommentTextarea').value = data.content || '';
+        document.getElementById('editCommentModal').classList.add('open');
+        document.getElementById('editCommentModal')._editData = data;
+        setTimeout(() => document.getElementById('editCommentTextarea').focus(), 150);
+    };
+
+    window.closeEditCommentModal = function() {
+        document.getElementById('editCommentModal').classList.remove('open');
+    };
+
+    window.saveEditComment = async function() {
+        const modal = document.getElementById('editCommentModal');
+        const data = modal._editData;
+        if (!data) return;
+        const newContent = document.getElementById('editCommentTextarea').value.trim();
+        if (!newContent) return;
+        const btn = document.getElementById('ecmSaveBtn');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        try {
+            const url = `/api/posts/${data.pid}/comments/${data.cid}`;
+            const res = await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newContent })
+            });
+            const result = await res.json();
+            if (result.ok) {
+                // Update the comment text in DOM
+                const elId = data.type === 'reply' ? 'reply-' + data.rid : 'comment-' + data.cid;
+                const el = document.getElementById(elId);
+                if (el) {
+                    const textEl = el.querySelector('.fb-comment-text, .fb-reply-text');
+                    if (textEl) textEl.innerHTML = formatAndEscapeContent(newContent);
+                    el.dataset.ctxContent = newContent;
+                }
+                closeEditCommentModal();
+            }
+        } catch(e) { console.error('Edit comment error:', e); }
+        btn.disabled = false; btn.innerHTML = 'حفظ';
+    };
+
+    window.ctxDeleteComment = function() {
+        if (!_ctxData) return;
+        const data = { ..._ctxData };
+        closeCommentCtx();
+        showDeleteCommentConfirm(data.type, data.pid, data.cid, data.rid);
+    };
+
+    // Attach long-press to comments container
+    const observer = new MutationObserver(() => {
+        const container = document.getElementById('commentsContainer');
+        if (container && !container._lpAttached) {
+            container._lpAttached = true;
+            attachLongPress(container);
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Also attach on load
+    document.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('commentsContainer');
+        if (container && !container._lpAttached) {
+            container._lpAttached = true;
+            attachLongPress(container);
+        }
+    });
+
+    // Desktop: right-click support
+    document.addEventListener('contextmenu', function(e) {
+        const el = e.target.closest('[data-ctx-type]');
+        if (el && el.closest('#commentsContainer')) {
+            e.preventDefault();
+            showCtx(el);
+        }
+    });
+})();
+</script>
 
 <!-- Comment/Reply Likes Modal -->
 <div id="commentLikesModal" class="comment-likes-modal-overlay" onclick="closeCommentLikesModal()">
