@@ -3573,18 +3573,41 @@ html[data-theme="light"] #editPostError {
         }
         document.getElementById('editPostContent').addEventListener('input', editCheckInputs);
 
-        async function editUploadToCloudinary(file, resourceType) {
-            const signRes = await fetch('/api/cloudinary/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }), credentials: 'same-origin' });
-            const signData = await signRes.json();
-            if (!signData.ok) throw new Error(signData.error || '\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u062d\u0635\u0648\u0644 \u0639\u0644\u0649 \u062a\u0648\u0642\u064a\u0639 \u0627\u0644\u0631\u0641\u0639');
+        async function editUploadToImageKit(file, resourceType) {
+            const authRes = await fetch('/api/imagekit/auth', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }),
+                credentials: 'same-origin'
+            });
+            const authData = await authRes.json();
+            if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
             const fd = new FormData();
-            fd.append('file', file); fd.append('api_key', signData.api_key); fd.append('timestamp', signData.timestamp); fd.append('signature', signData.signature); fd.append('folder', signData.folder);
-            const uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+            fd.append('file', file);
+            fd.append('publicKey', authData.publicKey);
+            fd.append('signature', authData.signature);
+            fd.append('expire', authData.expire);
+            fd.append('token', authData.token);
+            fd.append('folder', authData.folder);
+            fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
+            const uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
             return new Promise(function(resolve, reject) {
-                const xhr = new XMLHttpRequest(); xhr.open('POST', uploadUrl, true);
-                xhr.upload.onprogress = function(e) { if (e.lengthComputable) { document.getElementById('editPostSubmitText').textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0631\u0641\u0639 ' + Math.round((e.loaded/e.total)*100) + '%'; } };
-                xhr.onload = function() { if (xhr.status >= 200 && xhr.status < 300) { const data = JSON.parse(xhr.responseText); if (data.error) return reject(new Error(data.error.message || '\u0641\u0634\u0644 \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641')); resolve(data.secure_url); } else reject(new Error('\u0641\u0634\u0644 \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641')); };
-                xhr.onerror = function() { reject(new Error('\u062e\u0637\u0623 \u0641\u064a \u0627\u0644\u0627\u062a\u0635\u0627\u0644')); }; xhr.send(fd);
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', uploadUrl, true);
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const pct = Math.round((e.loaded / e.total) * 100);
+                        document.getElementById('editPostSubmitText').textContent = 'جاري الرفع ' + pct + '%';
+                    }
+                };
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data.error) return reject(new Error(data.error || 'فشل رفع الملف'));
+                        resolve(data.url);
+                    } else reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
+            };
+                xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
+                xhr.send(fd);
             });
         }
         async function editCompressImage(file, maxW, maxH, q) {
@@ -3602,8 +3625,8 @@ html[data-theme="light"] #editPostError {
             const content = document.getElementById('editPostContent').value.trim();
             let mediaUrl = null, mediaType = null, removeMedia = false;
             try {
-                if (editSelectedImageFile) { mediaType = 'image'; submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0636\u063a\u0637...'; const compressed = await editCompressImage(editSelectedImageFile); submitText.textContent = '\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629...'; mediaUrl = await editUploadToCloudinary(compressed, 'image'); }
-                else if (editSelectedMediaFile) { const mt = editSelectedMediaFile.type||''; let rt = 'auto'; if(mt.startsWith('video/')){ rt='video'; mediaType='video'; } else if(mt.startsWith('audio/')){ rt='video'; mediaType='audio'; } else { rt='auto'; mediaType='raw'; } submitText.textContent='\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641...'; mediaUrl = await editUploadToCloudinary(editSelectedMediaFile, rt); }
+                if (editSelectedImageFile) { mediaType = 'image'; submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0636\u063a\u0637...'; const compressed = await editCompressImage(editSelectedImageFile); submitText.textContent = '\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629...'; mediaUrl = await editUploadToImageKit(compressed, 'image'); }
+                else if (editSelectedMediaFile) { const mt = editSelectedMediaFile.type||''; let rt = 'auto'; if(mt.startsWith('video/')){ rt='video'; mediaType='video'; } else if(mt.startsWith('audio/')){ rt='video'; mediaType='audio'; } else { rt='auto'; mediaType='raw'; } submitText.textContent='\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641...'; mediaUrl = await editUploadToImageKit(editSelectedMediaFile, rt); }
                 if (editRemoveExistingMediaFlag && !mediaUrl) removeMedia = true;
                 submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638...';
                 const bodyData = { content }; if (mediaUrl) { bodyData.mediaUrl = mediaUrl; bodyData.mediaType = mediaType; } if (removeMedia) bodyData.removeMedia = true;

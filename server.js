@@ -16,76 +16,59 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const ImageKit = require('imagekit');
 
 const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
 
-// إعدادات Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true
+// إعدادات ImageKit
+const imagekit = new ImageKit({
+  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/Aite'
 });
 
-// إعدادات Multer مع CloudinaryStorage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    let folderName = 'general';
+// إعدادات Multer مع تخزين مؤقت في الذاكرة ثم رفع إلى ImageKit
+const memoryStorage = multer.memoryStorage();
 
-    // تحسين منطق تحديد المجلد
-    const url = (req && req.originalUrl) ? req.originalUrl : '';
-    if (file.fieldname === 'profile_picture') {
-      folderName = 'profile_pics';
-    } else if (file.fieldname === 'cover_photo') {
-      folderName = 'cover_photos';
-    } else if (file.fieldname === 'story_media' || file.fieldname === 'story_audio') {
-      folderName = 'stories';
-    } else if (url.includes('/messages/send')) {
-      folderName = 'chat_media';
-    } else if (url.includes('/api/posts/create')) {
-      folderName = 'post_media';
-    } else if (url.includes('/register')) {
-      folderName = 'profile_pics';
-    } else if (url.includes('/api/reels') || url.includes('/create-reel') || url.includes('/api/reels/create')) {
-      folderName = 'reels';
-    }
+// Helper: determine folder name from request context
+function getUploadFolder(req, file) {
+  let folderName = 'general';
+  const url = (req && req.originalUrl) ? req.originalUrl : '';
+  if (file.fieldname === 'profile_picture') {
+    folderName = 'profile_pics';
+  } else if (file.fieldname === 'cover_photo') {
+    folderName = 'cover_photos';
+  } else if (file.fieldname === 'story_media' || file.fieldname === 'story_audio') {
+    folderName = 'stories';
+  } else if (url.includes('/messages/send')) {
+    folderName = 'chat_media';
+  } else if (url.includes('/api/posts/create')) {
+    folderName = 'post_media';
+  } else if (url.includes('/register')) {
+    folderName = 'profile_pics';
+  } else if (url.includes('/api/reels') || url.includes('/create-reel') || url.includes('/api/reels/create')) {
+    folderName = 'reels';
+  }
+  return folderName;
+}
 
-    let format = undefined;
-    if (file.mimetype && file.mimetype.startsWith('audio/')) {
-      format = 'webm';
-    }
+// Helper: upload a multer file buffer to ImageKit
+async function uploadFileToImageKit(file, folder) {
+  const safeName = path.parse(file.originalname).name
+    .replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
+    .substring(0, 100);
+  const fileName = Date.now() + '-' + (safeName || 'file') + path.extname(file.originalname);
 
-    // Sanitize filename: remove special chars, keep only safe characters
-    const safeName = path.parse(file.originalname).name
-      .replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
-      .substring(0, 100);
+  const result = await imagekit.upload({
+    file: file.buffer,
+    fileName: fileName,
+    folder: '/' + folder,
+    useUniqueFileName: false
+  });
+  return result.url;
+}
 
-    // Aggressive compression: small file sizes for fast upload/display
-    let transformation = [];
-    if (file.mimetype && file.mimetype.startsWith('image/')) {
-      transformation = [
-        { width: 1200, height: 1200, crop: 'limit', quality: 'auto:low', fetch_format: 'auto' }
-      ];
-    } else if (file.mimetype && file.mimetype.startsWith('video/')) {
-      transformation = [
-        { quality: 'auto:low', fetch_format: 'auto' }
-      ];
-    }
-
-    return {
-      folder: folderName,
-      public_id: Date.now() + '-' + (safeName || 'file'),
-      resource_type: 'auto',
-      format: format,
-      transformation: transformation.length > 0 ? transformation : undefined
-    };
-  },
-});
-
-const upload = multer({ storage: storage, fileFilter: fileFilter, limits: { fileSize: 500 * 1024 * 1024 } });
+const upload = multer({ storage: memoryStorage, fileFilter: fileFilter, limits: { fileSize: 500 * 1024 * 1024 } });
 
 // Initialize Firebase Admin
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY || '{}');
@@ -210,7 +193,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Validate that a URL is a legitimate Cloudinary URL (prevent arbitrary URL injection)
+// Validate that a URL is a legitimate Cloudinary URL (keep for backward compatibility with existing uploads)
 function isValidCloudinaryUrl(url) {
   if (!url) return false;
   try {
@@ -221,11 +204,28 @@ function isValidCloudinaryUrl(url) {
   }
 }
 
+// Validate that a URL is a legitimate ImageKit URL
+function isValidImageKitUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'ik.imagekit.io' && parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+// Accept both Cloudinary (old) and ImageKit (new) URLs
+function isValidUploadUrl(url) {
+  if (!url) return false;
+  return isValidCloudinaryUrl(url) || isValidImageKitUrl(url);
+}
+
 function isValidMediaUrl(url) {
   if (!url) return false;
-  // Accept Cloudinary URLs
-  if (isValidCloudinaryUrl(url)) return true;
-  // Accept base64 data URLs (for fallback when Cloudinary is unavailable)
+  // Accept Cloudinary URLs (existing uploads) and ImageKit URLs (new uploads)
+  if (isValidUploadUrl(url)) return true;
+  // Accept base64 data URLs (for fallback)
   if (url.startsWith('data:image/') && url.includes(';base64,') && url.length < 3 * 1024 * 1024) return true;
   return false;
 }
@@ -639,17 +639,23 @@ app.post('/register', authLimiter, (req, res, next) => {
     const email = `${username}@trimer.io`;
 
     // Support direct Cloudinary URLs (from client-side upload) - validate URL origin
-    if (req.body.profile_picture_url && isValidCloudinaryUrl(req.body.profile_picture_url)) {
+    if (req.body.profile_picture_url && isValidUploadUrl(req.body.profile_picture_url)) {
       profile_picture_url = req.body.profile_picture_url;
     }
-    if (req.body.cover_photo_url && isValidCloudinaryUrl(req.body.cover_photo_url)) {
+    if (req.body.cover_photo_url && isValidUploadUrl(req.body.cover_photo_url)) {
       cover_photo_url = req.body.cover_photo_url;
     }
 
-    // process uploaded files via multer (backward compatibility)
+    // process uploaded files via multer (backward compatibility) - upload to ImageKit
     if (req.files) {
-      if (req.files.profile_picture) profile_picture_url = req.files.profile_picture[0].path;
-      if (req.files.cover_photo) cover_photo_url = req.files.cover_photo[0].path;
+      if (req.files.profile_picture) {
+        const f = req.files.profile_picture[0];
+        profile_picture_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
+      }
+      if (req.files.cover_photo) {
+        const f = req.files.cover_photo[0];
+        cover_photo_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
+      }
     }
 
     const userRecord = await firebaseAuth.createUser({
@@ -1373,9 +1379,9 @@ app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, re
 
 // ---------------- API: Stories (القصص) ----------------
 
-// API: توقيع رفع مباشر إلى Cloudinary (لتجاوز حد Vercel 4.5MB)
+// API: مصادقة رفع مباشر إلى ImageKit (لتجاوز حد Vercel 4.5MB)
 // Allows unauthenticated access for registration-related folders only
-app.post('/api/cloudinary/sign', (req, res, next) => {
+app.post('/api/imagekit/auth', (req, res, next) => {
   // Allow unauthenticated uploads for registration (profile_pics, cover_photos)
   const folder = String(req.body.folder || '');
   const UNAUTHENTICATED_FOLDERS = ['profile_pics', 'cover_photos'];
@@ -1388,25 +1394,30 @@ app.post('/api/cloudinary/sign', (req, res, next) => {
   return res.status(401).json({ ok: false, error: 'يجب تسجيل الدخول' });
 }, (req, res) => {
   try {
-    const timestamp = Math.round(Date.now() / 1000);
     const ALLOWED_FOLDERS = ['stories', 'post_media', 'profile_pics', 'profile_pictures', 'cover_photos', 'reels', 'chat_media', 'general'];
     const rawFolder = String(req.body.folder || 'stories').replace(/[^a-zA-Z0-9_-]/g, '');
     const folder = ALLOWED_FOLDERS.includes(rawFolder) ? rawFolder : 'stories';
-    const resourceType = req.body.resource_type || 'auto';
-    const paramsToSign = { timestamp: timestamp, folder: folder };
-    const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET);
+    const authParams = imagekit.getAuthenticationParameters();
     res.json({
       ok: true,
-      timestamp: timestamp,
-      signature: signature,
-      folder: folder,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME
+      token: authParams.token,
+      expire: authParams.expire,
+      signature: authParams.signature,
+      folder: '/' + folder,
+      publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+      urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/Aite'
     });
   } catch (error) {
-    console.error('Error signing cloudinary upload:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إنشاء توقيع الرفع' });
+    console.error('Error generating ImageKit auth:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء مصادقة الرفع' });
   }
+});
+
+// Keep old endpoint as alias for backward compatibility
+app.post('/api/cloudinary/sign', (req, res) => {
+  // Redirect to new ImageKit auth endpoint
+  req.url = '/api/imagekit/auth';
+  return app.handle(req, res);
 });
 
 // 1. إنشاء قصة جديدة (تقبل روابط Cloudinary مباشرة أو رفع ملفات)
@@ -1429,21 +1440,21 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
   let mediaType = req.body.mediaType || null;
   let audioUrl = req.body.audioUrl || null;
 
-  // Validate Cloudinary URLs when provided directly
-  if (mediaUrl && !isValidCloudinaryUrl(mediaUrl)) {
+  // Validate upload URLs when provided directly
+  if (mediaUrl && !isValidUploadUrl(mediaUrl)) {
     return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
   }
-  if (audioUrl && !isValidCloudinaryUrl(audioUrl)) {
+  if (audioUrl && !isValidUploadUrl(audioUrl)) {
     return res.status(400).json({ ok: false, error: 'رابط الصوت غير صالح.' });
   }
 
-  // If files were uploaded via multer (backward compatibility)
+  // If files were uploaded via multer (backward compatibility) - upload to ImageKit
   if (!mediaUrl && req.files && req.files.story_media) {
     const mediaFile = req.files.story_media[0];
-    mediaUrl = mediaFile.path;
+    mediaUrl = await uploadFileToImageKit(mediaFile, getUploadFolder(req, mediaFile));
     mediaType = mediaFile.mimetype.startsWith('video/') ? 'video' : 'image';
     if (req.files.story_audio) {
-      audioUrl = req.files.story_audio[0].path;
+      audioUrl = await uploadFileToImageKit(req.files.story_audio[0], 'stories');
     }
   }
 
@@ -1951,8 +1962,10 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       else if (file.mimetype.startsWith('video/')) type = 'video';
       else if (file.mimetype.startsWith('audio/') || file.mimetype === 'audio/webm') type = 'audio';
       
+      // Upload to ImageKit
+      const uploadedUrl = await uploadFileToImageKit(file, getUploadFolder(req, file));
       mediaObject = {
-        url: file.path, 
+        url: uploadedUrl, 
         type: type,
         filename: file.originalname
       };
@@ -2555,13 +2568,13 @@ app.put('/api/posts/:id', requireAuth, async (req, res) => {
       updates.mediaUrls = null;
     } else if (mediaUrl) {
       // User wants to change media
-      if (!isValidCloudinaryUrl(mediaUrl)) {
+      if (!isValidUploadUrl(mediaUrl)) {
         return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
       }
       updates.media = { url: mediaUrl, type: mediaType || 'image' };
       // Handle multi-image URLs
       if (mediaUrls && Array.isArray(mediaUrls)) {
-        const validUrls = mediaUrls.filter(u => typeof u === 'string' && isValidCloudinaryUrl(u));
+        const validUrls = mediaUrls.filter(u => typeof u === 'string' && isValidUploadUrl(u));
         if (validUrls.length > 1) {
           updates.mediaUrls = validUrls;
         } else {
@@ -2992,20 +3005,22 @@ app.post('/api/profile/edit', requireAuth, (req, res, next) => {
       updates.email = newEmail;
     }
 
-    // Support direct Cloudinary URLs (from client-side upload) - validate URL origin
-    if (req.body.profile_picture_url && isValidCloudinaryUrl(req.body.profile_picture_url)) {
+    // Support direct upload URLs (from client-side upload) - validate URL origin
+    if (req.body.profile_picture_url && isValidUploadUrl(req.body.profile_picture_url)) {
       updates.profile_picture_url = req.body.profile_picture_url;
     }
-    if (req.body.cover_photo_url && isValidCloudinaryUrl(req.body.cover_photo_url)) {
+    if (req.body.cover_photo_url && isValidUploadUrl(req.body.cover_photo_url)) {
       updates.cover_photo_url = req.body.cover_photo_url;
     }
 
-    // Support multer file upload (backward compatibility)
+    // Support multer file upload (backward compatibility) - upload to ImageKit
     if (req.files && req.files.profile_picture) {
-      updates.profile_picture_url = req.files.profile_picture[0].path;
+      const f = req.files.profile_picture[0];
+      updates.profile_picture_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
     }
     if (req.files && req.files.cover_photo) {
-      updates.cover_photo_url = req.files.cover_photo[0].path;
+      const f = req.files.cover_photo[0];
+      updates.cover_photo_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
     }
 
     await db.ref(`profiles/${userId}`).update(updates);
@@ -3039,22 +3054,22 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
   let mediaType = req.body.mediaType || null;
   let mediaUrls = req.body.mediaUrls || null;
 
-  // Validate Cloudinary URL when provided directly
-  if (mediaUrl && !isValidCloudinaryUrl(mediaUrl)) {
+  // Validate upload URL when provided directly
+  if (mediaUrl && !isValidUploadUrl(mediaUrl)) {
     return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
   }
 
   // Validate mediaUrls array if provided
   if (mediaUrls && Array.isArray(mediaUrls)) {
-    mediaUrls = mediaUrls.filter(u => typeof u === 'string' && isValidCloudinaryUrl(u));
+    mediaUrls = mediaUrls.filter(u => typeof u === 'string' && isValidUploadUrl(u));
     if (mediaUrls.length === 0) mediaUrls = null;
   } else {
     mediaUrls = null;
   }
 
-  // If files were uploaded via multer (backward compatibility)
+  // If files were uploaded via multer (backward compatibility) - upload to ImageKit
   if (!mediaUrl && req.file) {
-    mediaUrl = req.file.path;
+    mediaUrl = await uploadFileToImageKit(req.file, getUploadFolder(req, req.file));
     const mimeType = req.file.mimetype || '';
     if (mimeType.startsWith('image/')) mediaType = 'image';
     else if (mimeType.startsWith('video/')) mediaType = 'video';
@@ -4421,14 +4436,14 @@ app.post('/api/reels/create', requireAuth, writeLimiter, (req, res, next) => {
   let videoUrl = req.body.videoUrl || null;
   let mimeType = req.body.mimeType || 'video/mp4';
 
-  // Validate Cloudinary URL when provided directly
-  if (videoUrl && !isValidCloudinaryUrl(videoUrl)) {
+  // Validate upload URL when provided directly
+  if (videoUrl && !isValidUploadUrl(videoUrl)) {
     return res.status(400).json({ ok: false, error: 'رابط الفيديو غير صالح.' });
   }
 
-  // If file was uploaded via multer (backward compatibility)
+  // If file was uploaded via multer (backward compatibility) - upload to ImageKit
   if (!videoUrl && req.file) {
-    videoUrl = req.file.path;
+    videoUrl = await uploadFileToImageKit(req.file, getUploadFolder(req, req.file));
     mimeType = req.file.mimetype;
   }
 
@@ -5371,7 +5386,7 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(413).json({ ok: false, error: 'خطأ في رفع الملف: ' + err.message });
   }
-  // Catch Cloudinary and other upload errors
+  // Catch ImageKit and other upload errors
   if (err && (err.message || '').toLowerCase().includes('upload')) {
     return res.status(500).json({ ok: false, error: 'فشل في رفع الملف إلى الخادم.' });
   }

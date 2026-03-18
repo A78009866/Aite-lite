@@ -1881,28 +1881,30 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         });
     }
 
-    // رفع ملف مباشرة إلى Cloudinary باستخدام توقيع من السيرفر مع شريط تقدم
+    // رفع ملف مباشرة إلى ImageKit باستخدام مصادقة من السيرفر مع شريط تقدم
     var _storyUploadBtn = null;
-    async function uploadToCloudinary(file, resourceType) {
-        // 1. Get signature from server
-        var signRes = await fetch('/api/cloudinary/sign', {
+    async function uploadToImageKit(file, resourceType) {
+        // 1. Get auth from server
+        var authRes = await fetch('/api/imagekit/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ folder: 'stories', resource_type: resourceType }),
             credentials: 'same-origin'
         });
-        var signData = await signRes.json();
-        if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+        var authData = await authRes.json();
+        if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
 
-        // 2. Upload directly to Cloudinary
+        // 2. Upload directly to ImageKit
         var fd = new FormData();
         fd.append('file', file);
-        fd.append('api_key', signData.api_key);
-        fd.append('timestamp', signData.timestamp);
-        fd.append('signature', signData.signature);
-        fd.append('folder', signData.folder);
+        fd.append('publicKey', authData.publicKey);
+        fd.append('signature', authData.signature);
+        fd.append('expire', authData.expire);
+        fd.append('token', authData.token);
+        fd.append('folder', authData.folder);
+        fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
 
-        var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+        var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
 
         // Use XMLHttpRequest for upload progress tracking
         return new Promise(function(resolve, reject) {
@@ -1917,8 +1919,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             xhr.onload = function() {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     var uploadData = JSON.parse(xhr.responseText);
-                    if (uploadData.error) return reject(new Error(uploadData.error.message || 'فشل رفع الملف'));
-                    resolve(uploadData.secure_url);
+                    if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
+                    resolve(uploadData.url);
                 } else {
                     reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
                 }
@@ -1943,20 +1945,20 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         _storyUploadBtn = btn;
 
         try {
-            // Step 1: Compress image if needed, then upload to Cloudinary
+            // Step 1: Compress image if needed, then upload to ImageKit
             var mediaResourceType = selectedMediaType === 'video' ? 'video' : 'image';
             var fileToUpload = selectedMediaFile;
             if (mediaResourceType === 'image') {
                 btn.innerHTML = '<i class="fas fa-compress"></i> جاري الضغط...';
                 fileToUpload = await compressImage(selectedMediaFile);
             }
-            var mediaUrl = await uploadToCloudinary(fileToUpload, mediaResourceType);
+            var mediaUrl = await uploadToImageKit(fileToUpload, mediaResourceType);
 
             // Step 2: Upload audio if selected
             var audioUrl = null;
             if (selectedAudioBlob) {
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الموسيقى...';
-                audioUrl = await uploadToCloudinary(
+                audioUrl = await uploadToImageKit(
                     new File([selectedAudioBlob], "story_music.m4a", { type: selectedAudioBlob.type || "audio/mp4" }),
                     'video'
                 );

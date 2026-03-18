@@ -1565,25 +1565,27 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     }
   }
 
-  // رفع ملف مباشرة إلى Cloudinary باستخدام توقيع من السيرفر مع شريط تقدم
-  async function uploadToCloudinary(file, resourceType) {
-    var signRes = await fetch('/api/cloudinary/sign', {
+  // رفع ملف مباشرة إلى ImageKit باستخدام مصادقة من السيرفر مع شريط تقدم
+  async function uploadToImageKit(file, resourceType) {
+    var authRes = await fetch('/api/imagekit/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folder: 'reels', resource_type: resourceType }),
       credentials: 'same-origin'
     });
-    var signData = await signRes.json();
-    if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+    var authData = await authRes.json();
+    if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
 
     var fd = new FormData();
     fd.append('file', file);
-    fd.append('api_key', signData.api_key);
-    fd.append('timestamp', signData.timestamp);
-    fd.append('signature', signData.signature);
-    fd.append('folder', signData.folder);
+    fd.append('publicKey', authData.publicKey);
+    fd.append('signature', authData.signature);
+    fd.append('expire', authData.expire);
+    fd.append('token', authData.token);
+    fd.append('folder', authData.folder);
+    fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
 
-    var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+    var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
 
     // Use XMLHttpRequest for upload progress tracking
     return new Promise(function(resolve, reject) {
@@ -1599,8 +1601,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
           var uploadData = JSON.parse(xhr.responseText);
-          if (uploadData.error) return reject(new Error(uploadData.error.message || 'فشل رفع الملف'));
-          resolve(uploadData.secure_url);
+          if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
+          resolve(uploadData.url);
         } else {
           reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
         }
@@ -1619,9 +1621,9 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     setLoading(true);
 
     try {
-      // رفع الفيديو مباشرة إلى Cloudinary (يتجاوز حد حجم Vercel)
+      // رفع الفيديو مباشرة إلى ImageKit (يتجاوز حد حجم Vercel)
       publishBtn.querySelector('span').textContent = 'جاري رفع الفيديو...';
-      const videoUrl = await uploadToCloudinary(selectedFile, 'video');
+      const videoUrl = await uploadToImageKit(selectedFile, 'video');
 
       // إرسال الرابط فقط إلى السيرفر (JSON صغير، بدون ملف)
       publishBtn.querySelector('span').textContent = 'جاري النشر...';

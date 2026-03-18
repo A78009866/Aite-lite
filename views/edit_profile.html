@@ -1628,35 +1628,36 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         }
         
         /**
-         * رفع ملف مباشرة إلى Cloudinary (يتجاوز حد حجم السيرفر)
+         * رفع ملف مباشرة إلى ImageKit (يتجاوز حد حجم السيرفر)
          */
-        async function uploadToCloudinary(file, folder) {
-            var signRes = await fetch('/api/cloudinary/sign', {
+        async function uploadToImageKit(file, folder) {
+            var authRes = await fetch('/api/imagekit/auth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ folder: folder })
             });
-            var signData = await signRes.json();
-            if (!signData.ok) throw new Error('فشل في الحصول على توقيع الرفع');
+            var authData = await authRes.json();
+            if (!authData.ok) throw new Error('فشل في الحصول على مصادقة الرفع');
 
             var fd = new FormData();
             fd.append('file', file);
-            fd.append('timestamp', signData.timestamp);
-            fd.append('signature', signData.signature);
-            fd.append('api_key', signData.api_key);
-            fd.append('folder', signData.folder);
+            fd.append('publicKey', authData.publicKey);
+            fd.append('signature', authData.signature);
+            fd.append('expire', authData.expire);
+            fd.append('token', authData.token);
+            fd.append('folder', authData.folder);
+            fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
 
-            var resourceType = file.type.startsWith('image/') ? 'image' : 'auto';
-            var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+            var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
             var uploadRes = await fetch(uploadUrl, { method: 'POST', body: fd });
             var uploadData = await uploadRes.json();
-            if (uploadData.error) throw new Error(uploadData.error.message || 'فشل رفع الملف');
-            return uploadData.secure_url;
+            if (uploadData.error) throw new Error(uploadData.error || 'فشل رفع الملف');
+            return uploadData.url;
         }
 
         /**
-         * التعامل مع إرسال النموذج - رفع الصور مباشرة إلى Cloudinary
+         * التعامل مع إرسال النموذج - رفع الصور مباشرة إلى ImageKit
          */
         async function handleFormSubmission(event) {
             event.preventDefault();
@@ -1672,18 +1673,18 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                     bio: document.getElementById('bio').value
                 };
 
-                // رفع صورة البروفايل مباشرة إلى Cloudinary إذا تم اختيارها
+                // رفع صورة البروفايل مباشرة إلى ImageKit إذا تم اختيارها
                 var profilePicInput = document.getElementById('profilePicInput');
                 if (profilePicInput.files && profilePicInput.files[0]) {
                     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع صورة البروفايل...';
-                    bodyData.profile_picture_url = await uploadToCloudinary(profilePicInput.files[0], 'profile_pics');
+                    bodyData.profile_picture_url = await uploadToImageKit(profilePicInput.files[0], 'profile_pics');
                 }
 
-                // رفع صورة الغلاف مباشرة إلى Cloudinary إذا تم اختيارها
+                // رفع صورة الغلاف مباشرة إلى ImageKit إذا تم اختيارها
                 var coverPhotoInput = document.getElementById('coverPhotoInput');
                 if (coverPhotoInput.files && coverPhotoInput.files[0]) {
                     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع صورة الغلاف...';
-                    bodyData.cover_photo_url = await uploadToCloudinary(coverPhotoInput.files[0], 'cover_photos');
+                    bodyData.cover_photo_url = await uploadToImageKit(coverPhotoInput.files[0], 'cover_photos');
                 }
 
                 saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';

@@ -4379,13 +4379,18 @@ function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Helper: convert Cloudinary video URL to a thumbnail image URL
+// Helper: convert video URL to a thumbnail image URL (supports both Cloudinary and ImageKit)
 function getVideoThumbnail(videoUrl) {
     if (!videoUrl) return '';
+    // Cloudinary video thumbnail (backward compat)
     const cloudinaryVideoRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(v[0-9]+\/)(.+)\.(mp4|mov|avi|webm|mkv|m4v)/i;
     const match = videoUrl.match(cloudinaryVideoRegex);
     if (match) {
         return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
+    }
+    // ImageKit video thumbnail
+    if (videoUrl.includes('ik.imagekit.io')) {
+        return videoUrl.replace(/\.(mp4|mov|avi|webm|mkv|m4v)(\?.*)?$/i, '.jpg') + '?tr=so-1,w-640';
     }
     return '';
 }
@@ -4444,18 +4449,19 @@ async function fileToDataUrl(file) {
 }
 
 // --- Sending ---
-// --- Direct Cloudinary Upload (bypass server size limits) ---
-// Single attempt to upload to Cloudinary
-function _cloudinaryUploadOnce(file, signData, resourceType) {
+// --- Direct ImageKit Upload (bypass server size limits) ---
+// Single attempt to upload to ImageKit
+function _imageKitUploadOnce(file, authData) {
   var fd = new FormData();
   fd.append('file', file);
-  fd.append('api_key', signData.api_key);
-  fd.append('timestamp', signData.timestamp);
-  fd.append('signature', signData.signature);
-  fd.append('folder', signData.folder);
+  fd.append('publicKey', authData.publicKey);
+  fd.append('signature', authData.signature);
+  fd.append('expire', authData.expire);
+  fd.append('token', authData.token);
+  fd.append('folder', authData.folder);
+  fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
 
-  var uploadResourceType = (resourceType === 'raw') ? 'auto' : resourceType;
-  var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + uploadResourceType + '/upload';
+  var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
 
   return new Promise(function(resolve, reject) {
     var xhr = new XMLHttpRequest();
@@ -4471,14 +4477,14 @@ function _cloudinaryUploadOnce(file, signData, resourceType) {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           var uploadData = JSON.parse(xhr.responseText);
-          if (uploadData.error) return reject(new Error(uploadData.error.message || 'فشل رفع الملف'));
-          resolve({ url: uploadData.secure_url, type: file.type });
+          if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
+          resolve({ url: uploadData.url, type: file.type });
         } catch(parseErr) {
           reject(new Error('استجابة غير صالحة من خدمة الرفع'));
         }
       } else {
         var errText = 'فشل رفع الملف (HTTP ' + xhr.status + ')';
-        try { var errJson = JSON.parse(xhr.responseText); errText = (errJson.error && errJson.error.message) || errText; } catch(e) {}
+        try { var errJson = JSON.parse(xhr.responseText); errText = errJson.message || errText; } catch(e) {}
         reject(new Error(errText));
       }
     };
@@ -4488,7 +4494,7 @@ function _cloudinaryUploadOnce(file, signData, resourceType) {
   });
 }
 
-async function uploadToCloudinary(file) {
+async function uploadToImageKit(file) {
   var resourceType = 'auto';
   if (file.type && file.type.startsWith('image')) resourceType = 'image';
   else if (file.type && file.type.startsWith('video')) resourceType = 'video';
@@ -4506,26 +4512,26 @@ async function uploadToCloudinary(file) {
         await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
       }
 
-      // Get fresh signature for each attempt
-      var signRes = await fetch('/api/cloudinary/sign', {
+      // Get fresh auth for each attempt
+      var authRes = await fetch('/api/imagekit/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder: 'chat_media', resource_type: resourceType }),
         credentials: 'same-origin'
       });
-      if (!signRes.ok) throw new Error('فشل الاتصال بالخادم (HTTP ' + signRes.status + ')');
-      var signData = await signRes.json();
-      if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+      if (!authRes.ok) throw new Error('فشل الاتصال بالخادم (HTTP ' + authRes.status + ')');
+      var authData = await authRes.json();
+      if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
 
-      var result = await _cloudinaryUploadOnce(file, signData, resourceType);
+      var result = await _imageKitUploadOnce(file, authData);
       return result; // Success
     } catch(err) {
-      console.warn('Cloudinary upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
+      console.warn('ImageKit upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
       lastError = err;
     }
   }
 
-  console.error('All Cloudinary upload attempts failed:', lastError);
+  console.error('All ImageKit upload attempts failed:', lastError);
   throw lastError;
 }
 
@@ -4564,7 +4570,7 @@ sendBtn.onclick = async () => {
     var mediaFilename = null;
     var usedServerFallback = false;
 
-    // Upload file directly to Cloudinary if present (compress images first)
+    // Upload file directly to ImageKit if present (compress images first)
     if (uploadedFile) {
       var fileToSend = uploadedFile;
       var ft = uploadedFile.type || '';
@@ -4584,12 +4590,12 @@ sendBtn.onclick = async () => {
         }
       }
 
-      // Method 1: Direct Cloudinary upload
+      // Method 1: Direct ImageKit upload
       try {
-        var result = await uploadToCloudinary(fileToSend);
+        var result = await uploadToImageKit(fileToSend);
         mediaUrl = result.url;
-      } catch(cloudErr) {
-        console.warn('Direct Cloudinary upload failed:', cloudErr.message);
+      } catch(ikErr) {
+        console.warn('Direct ImageKit upload failed:', ikErr.message);
         if (sendBtn) sendBtn.innerHTML = '<div class="sending-spinner"></div>';
 
         // Method 2: Server fallback upload

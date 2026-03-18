@@ -742,20 +742,24 @@
         });
     }
 
-    // ======== CLOUDINARY UPLOAD ========
-    async function uploadToCloudinary(file, resourceType) {
-        var signRes = await fetch('/api/cloudinary/sign', {
+    // ======== IMAGEKIT UPLOAD ========
+    async function uploadToImageKit(file, resourceType) {
+        var authRes = await fetch('/api/imagekit/auth', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }),
             credentials: 'same-origin'
         });
-        var signData = await signRes.json();
-        if (!signData.ok) throw new Error(signData.error || 'فشل في الحصول على توقيع الرفع');
+        var authData = await authRes.json();
+        if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
         var fd = new FormData();
-        fd.append('file', file); fd.append('api_key', signData.api_key);
-        fd.append('timestamp', signData.timestamp); fd.append('signature', signData.signature);
-        fd.append('folder', signData.folder);
-        var uploadUrl = 'https://api.cloudinary.com/v1_1/' + signData.cloud_name + '/' + resourceType + '/upload';
+        fd.append('file', file);
+        fd.append('publicKey', authData.publicKey);
+        fd.append('signature', authData.signature);
+        fd.append('expire', authData.expire);
+        fd.append('token', authData.token);
+        fd.append('folder', authData.folder);
+        fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
+        var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
         return new Promise(function(resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open('POST', uploadUrl, true);
@@ -768,8 +772,8 @@
             xhr.onload = function() {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     var data = JSON.parse(xhr.responseText);
-                    if (data.error) return reject(new Error(data.error.message || 'فشل رفع الملف'));
-                    resolve(data.secure_url);
+                    if (data.error) return reject(new Error(data.error || 'فشل رفع الملف'));
+                    resolve(data.url);
                 } else reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
             };
             xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
@@ -795,7 +799,7 @@
                 submitBtnText.textContent = 'جاري الضغط...';
                 var compressed = await compressImage(selectedImageFile);
                 submitBtnText.textContent = 'جاري رفع الصورة...';
-                mediaUrl = await uploadToCloudinary(compressed, 'image');
+                mediaUrl = await uploadToImageKit(compressed, 'image');
             } else if (mediaFile.files.length > 0) {
                 var file = mediaFile.files[0];
                 var mimeType = file.type || '';
@@ -809,7 +813,7 @@
                     file = await compressImage(file);
                 }
                 submitBtnText.textContent = 'جاري رفع الملف...';
-                mediaUrl = await uploadToCloudinary(file, resourceType);
+                mediaUrl = await uploadToImageKit(file, resourceType);
             }
 
             submitBtnText.textContent = 'جاري النشر...';

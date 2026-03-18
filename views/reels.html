@@ -939,13 +939,18 @@ html[data-theme="light"] #replyIndicator {
   let replyingToUsername = null;
   const BLACK_POSTER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" viewBox="0 0 16 9"><rect width="16" height="9" fill="black"/></svg>');
 
-  // Helper: convert Cloudinary video URL to a thumbnail image URL
+  // Helper: convert video URL to a thumbnail image URL (supports both Cloudinary and ImageKit)
   function getVideoThumbnail(videoUrl) {
       if (!videoUrl) return '';
+      // Cloudinary video thumbnail (backward compat)
       const cloudinaryVideoRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(v[0-9]+\/)(.+)\.(mp4|mov|avi|webm|mkv|m4v)/i;
       const match = videoUrl.match(cloudinaryVideoRegex);
       if (match) {
           return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
+      }
+      // ImageKit video thumbnail
+      if (videoUrl.includes('ik.imagekit.io')) {
+          return videoUrl.replace(/\.(mp4|mov|avi|webm|mkv|m4v)(\?.*)?$/i, '.jpg') + '?tr=so-1,w-640';
       }
       return '';
   }
