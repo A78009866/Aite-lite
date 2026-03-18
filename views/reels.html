@@ -1283,9 +1283,10 @@ html[data-theme="light"] #replyIndicator {
     var btn = document.getElementById('deleteReelConfirmBtn');
     if (btn) { btn.disabled = false; btn.innerHTML = 'حذف'; }
   };
-  document.getElementById('deleteReelConfirmBtn').addEventListener('click', async function() {
+  window.confirmDeleteReel = async function() {
     if (!_pendingDeleteReelId) return;
-    var btn = this;
+    var btn = document.getElementById('deleteReelConfirmBtn');
+    if (!btn) return;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحذف...';
     try {
@@ -1294,7 +1295,7 @@ html[data-theme="light"] #replyIndicator {
       if(res.ok && data.ok) { closeDeleteReelModal(); location.reload(); }
       else { console.error('Delete reel failed', res.status, data); btn.disabled = false; btn.innerHTML = 'حذف'; alert(data.error || 'خطأ في الحذف'); }
     } catch(e) { console.error('Delete reel error', e); btn.disabled = false; btn.innerHTML = 'حذف'; alert('فشل الاتصال بالسيرفر'); }
-  });
+  };
 
   async function handleLike(reelId, forceLike = false) {
     const icon = document.getElementById(`likeIcon-${reelId}`);
@@ -2025,7 +2026,7 @@ html[data-theme="light"] #likesListContent {
     <div class="dcm-desc">هل أنت متأكد من حذف هذا الريل نهائياً؟<br>لا يمكن التراجع عن هذا الإجراء.</div>
     <div class="dcm-actions">
       <button class="dcm-cancel" onclick="closeDeleteReelModal()">إلغاء</button>
-      <button class="dcm-confirm" id="deleteReelConfirmBtn">حذف</button>
+      <button class="dcm-confirm" id="deleteReelConfirmBtn" onclick="confirmDeleteReel()">حذف</button>
     </div>
   </div>
 </div>
