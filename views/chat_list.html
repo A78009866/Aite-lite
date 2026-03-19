@@ -493,6 +493,153 @@
         html[data-theme="light"] .bottom-nav-item:hover { color: #1c1e21; }
         html[data-theme="light"] .bottom-nav-item.active { color: #2563eb; }
 
+        /* ============ Notification Toast ============ */
+        .notif-toast-container {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+            width: 380px;
+            max-width: 94vw;
+        }
+        .notif-toast {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(22, 22, 26, 0.96);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04);
+            cursor: pointer;
+            pointer-events: auto;
+            animation: notifToastIn 0.35s cubic-bezier(0.16,1,0.3,1);
+            transition: opacity 0.3s, transform 0.3s;
+            text-decoration: none;
+            color: inherit;
+        }
+        .notif-toast.hiding {
+            opacity: 0;
+            transform: translateY(-12px) scale(0.96);
+        }
+        @keyframes notifToastIn {
+            from { opacity: 0; transform: translateY(-20px) scale(0.92); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .notif-toast .notif-t-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        .notif-toast .notif-t-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .notif-toast .notif-t-text {
+            font-size: 13.5px;
+            color: #e4e6eb;
+            line-height: 1.45;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .notif-toast .notif-t-text strong {
+            font-weight: 700;
+            color: #fff;
+        }
+        .notif-toast .notif-t-time {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        .notif-toast .notif-t-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 13px;
+        }
+        .notif-toast .notif-t-close {
+            position: absolute;
+            top: -6px;
+            left: -6px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: rgba(50,50,55,0.95);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #adb5bd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .notif-toast:hover .notif-t-close {
+            opacity: 1;
+        }
+        .notif-toast .notif-t-progress {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            left: 0;
+            height: 3px;
+            border-radius: 0 0 16px 16px;
+            overflow: hidden;
+        }
+        .notif-toast .notif-t-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            border-radius: 0 0 16px 16px;
+            animation: notifProgressShrink 5s linear forwards;
+        }
+        @keyframes notifProgressShrink {
+            from { width: 100%; }
+            to   { width: 0%; }
+        }
+
+        /* ============ Notification Toast LIGHT MODE ============ */
+        html[data-theme="light"] .notif-toast {
+            background: rgba(255, 255, 255, 0.97);
+            border-color: rgba(0,0,0,0.08);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+        }
+        html[data-theme="light"] .notif-toast .notif-t-text {
+            color: #1c1e21;
+        }
+        html[data-theme="light"] .notif-toast .notif-t-text strong {
+            color: #000;
+        }
+        html[data-theme="light"] .notif-toast .notif-t-time {
+            color: #8a8d91;
+        }
+        html[data-theme="light"] .notif-toast .notif-t-avatar {
+            border-color: rgba(0,0,0,0.08);
+        }
+        html[data-theme="light"] .notif-toast .notif-t-close {
+            background: rgba(240,240,242,0.95);
+            border-color: rgba(0,0,0,0.08);
+            color: #65676b;
+        }
+
         /* Badges - attached to nav-icon-circle */
         #notifBadge, #msgBadge, #friendReqBadge {
           position: absolute;
@@ -3325,7 +3472,7 @@ html[data-theme="light"] #editPostError {
                 <i class="fas fa-search text-xl"></i>
             </button>
 
-            <a id="notifBtnTop" href="/notifications" class="action-btn p-2 text-gray-300 hover:text-white transition relative" title="الإشعارات">
+            <a href="/notifications" id="notifBtnTop" class="action-btn p-2 text-gray-300 hover:text-white transition relative" title="الإشعارات" onclick="handleNotifClick(this)">
                 <i class="fas fa-bell text-xl"></i>
                 <span id="notifBadge" style="display:none">0</span>
             </a>
@@ -3659,9 +3806,166 @@ html[data-theme="light"] #editPostError {
         </nav>
     </div>
 
+<!-- Notification Toast Container -->
+<div id="notifToastContainer" class="notif-toast-container"></div>
+
 <script>
+/* ============ Notification Toast Logic ============ */
+const NOTIF_TOAST_DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
+const NOTIF_TOAST_DURATION = 5000;
+let _notifToastQueue = [];
+let _notifToastShowing = 0;
+const NOTIF_TOAST_MAX = 3;
+
+function getNotifToastIcon(type) {
+    const icons = {
+        'post_like':        { icon: 'fas fa-heart',        bg: 'rgba(239,68,68,0.15)',  color: '#ef4444' },
+        'post_comment':     { icon: 'fas fa-comment',      bg: 'rgba(59,130,246,0.15)', color: '#3b82f6' },
+        'comment_reply':    { icon: 'fas fa-reply',         bg: 'rgba(139,92,246,0.15)', color: '#8b5cf6' },
+        'comment_like':     { icon: 'fas fa-heart',         bg: 'rgba(239,68,68,0.12)', color: '#f87171' },
+        'reply_like':       { icon: 'fas fa-heart',         bg: 'rgba(239,68,68,0.12)', color: '#f87171' },
+        'reply_reply':      { icon: 'fas fa-reply-all',     bg: 'rgba(139,92,246,0.15)', color: '#8b5cf6' },
+        'reel_like':        { icon: 'fas fa-heart',         bg: 'rgba(239,68,68,0.15)', color: '#ef4444' },
+        'reel_comment':     { icon: 'fas fa-comment',       bg: 'rgba(59,130,246,0.15)', color: '#3b82f6' },
+        'story_like':       { icon: 'fas fa-star',          bg: 'rgba(250,204,21,0.15)', color: '#facc15' },
+        'friend_request':   { icon: 'fas fa-user-plus',     bg: 'rgba(34,197,94,0.15)',  color: '#22c55e' },
+        'friend_accept':    { icon: 'fas fa-user-check',    bg: 'rgba(34,197,94,0.15)',  color: '#22c55e' },
+        'message':          { icon: 'fab fa-facebook-messenger', bg: 'rgba(59,130,246,0.15)', color: '#3b82f6' },
+        'message_reaction': { icon: 'fas fa-face-smile',    bg: 'rgba(250,204,21,0.15)', color: '#facc15' },
+        'family_post_like': { icon: 'fas fa-heart',         bg: 'rgba(239,68,68,0.12)', color: '#f87171' },
+        'family_post_comment': { icon: 'fas fa-comment',    bg: 'rgba(59,130,246,0.12)', color: '#60a5fa' },
+        'family_comment_like': { icon: 'fas fa-heart',      bg: 'rgba(239,68,68,0.12)', color: '#f87171' },
+        'family_comment_reply': { icon: 'fas fa-reply',     bg: 'rgba(139,92,246,0.12)', color: '#a78bfa' },
+    };
+    return icons[type] || { icon: 'fas fa-bell', bg: 'rgba(107,114,128,0.15)', color: '#6b7280' };
+}
+
+function getNotifToastText(n) {
+    const name = escapeHtml(n.from_username || 'مستخدم');
+    let snippet = n.commentContent || n.replyContent || n.preview || '';
+    if (snippet.length > 35) snippet = snippet.substring(0, 35) + '...';
+    snippet = escapeHtml(snippet);
+
+    switch (n.type) {
+        case 'post_like':        return '<strong>' + name + '</strong> أعجب بمنشورك';
+        case 'post_comment':     return '<strong>' + name + '</strong> علّق: "' + snippet + '"';
+        case 'comment_reply':    return '<strong>' + name + '</strong> ردّ على تعليقك';
+        case 'comment_like':     return '<strong>' + name + '</strong> أعجب بتعليقك';
+        case 'reply_like':       return '<strong>' + name + '</strong> أعجب بردك';
+        case 'reply_reply':      return '<strong>' + name + '</strong> ردّ على ردك';
+        case 'reel_like':        return '<strong>' + name + '</strong> أعجب بالريل';
+        case 'reel_comment':     return '<strong>' + name + '</strong> علّق على الريل';
+        case 'story_like':       return '<strong>' + name + '</strong> تفاعل مع قصتك';
+        case 'friend_request':   return '<strong>' + name + '</strong> أرسل طلب صداقة';
+        case 'friend_accept':    return '<strong>' + name + '</strong> قبل طلب صداقتك';
+        case 'message':          return '<strong>' + name + '</strong> أرسل رسالة';
+        case 'message_reaction': return '<strong>' + name + '</strong> تفاعل مع رسالتك';
+        case 'family_post_like': return '<strong>' + name + '</strong> أعجب بمنشورك العائلي';
+        case 'family_post_comment': return '<strong>' + name + '</strong> علّق في العائلة';
+        case 'family_comment_like': return '<strong>' + name + '</strong> أعجب بتعليقك العائلي';
+        case 'family_comment_reply': return '<strong>' + name + '</strong> ردّ عليك في العائلة';
+        default:                 return '<strong>' + name + '</strong> إشعار جديد';
+    }
+}
+
+function getNotifToastLink(n) {
+    var postId = n.postId || '', reelId = n.reelId || '', familyId = n.familyId || '';
+    var fromUser = n.from_user_id || '', commentId = n.commentId || '', replyId = n.replyId || '';
+    var storyId = n.storyId || '';
+
+    if (['post_like','post_comment','comment_like','comment_reply','reply_like','reply_reply'].indexOf(n.type) !== -1) {
+        if (postId) {
+            var u = '/post?id=' + encodeURIComponent(postId);
+            if (commentId) u += '&commentId=' + encodeURIComponent(commentId);
+            if (replyId) u += '&replyId=' + encodeURIComponent(replyId);
+            return u;
+        }
+        if (reelId) return '/reels?id=' + encodeURIComponent(reelId);
+        if (familyId) return '/family/' + encodeURIComponent(familyId);
+        return '/chat_list';
+    }
+    if (n.type === 'story_like') return storyId ? '/stories?storyId=' + encodeURIComponent(storyId) : '/stories';
+    if (n.type === 'reel_like' || n.type === 'reel_comment') return reelId ? '/reels?id=' + encodeURIComponent(reelId) : '/reels';
+    if (n.type && n.type.indexOf('family_') === 0) return familyId ? '/family/' + encodeURIComponent(familyId) : '/chat_list';
+    if (n.type === 'friend_request') return '/all_users';
+    if (n.type === 'friend_accept') return fromUser ? '/profile?userId=' + encodeURIComponent(fromUser) : '/users_list';
+    if (n.type === 'message' || n.type === 'message_reaction') return fromUser ? '/chat?contactId=' + encodeURIComponent(fromUser) : '/chat_list';
+    return '/notifications';
+}
+
+function showNotifToast(n) {
+    var container = document.getElementById('notifToastContainer');
+    if (!container) return;
+
+    var pic = n.from_profile_picture_url || NOTIF_TOAST_DEFAULT_AVATAR;
+    var iconInfo = getNotifToastIcon(n.type);
+    var text = getNotifToastText(n);
+    var link = getNotifToastLink(n);
+
+    var toast = document.createElement('div');
+    toast.className = 'notif-toast';
+    toast.style.position = 'relative';
+    toast.innerHTML = '<img src="' + escapeHtml(pic) + '" class="notif-t-avatar" alt="" onerror="this.src=\'' + NOTIF_TOAST_DEFAULT_AVATAR + '\'">'
+        + '<div class="notif-t-body">'
+        + '<div class="notif-t-text">' + text + '</div>'
+        + '<div class="notif-t-time">الآن</div>'
+        + '</div>'
+        + '<div class="notif-t-icon" style="background:' + iconInfo.bg + ';color:' + iconInfo.color + ';"><i class="' + iconInfo.icon + '"></i></div>'
+        + '<div class="notif-t-close" onclick="event.stopPropagation(); dismissNotifToast(this.parentElement);"><i class="fas fa-times"></i></div>'
+        + '<div class="notif-t-progress"><div class="notif-t-progress-bar"></div></div>';
+
+    toast.addEventListener('click', function() {
+        if (n.id) {
+            fetch('/api/notifications/mark_read', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: n.id })
+            }).catch(function(){});
+        }
+        window.location.href = link;
+    });
+
+    container.appendChild(toast);
+    _notifToastShowing++;
+
+    // Remove oldest if too many
+    while (container.children.length > NOTIF_TOAST_MAX) {
+        dismissNotifToast(container.children[0]);
+    }
+
+    // Auto-dismiss
+    toast._dismissTimer = setTimeout(function() {
+        dismissNotifToast(toast);
+    }, NOTIF_TOAST_DURATION);
+
+    // Pause timer on hover
+    toast.addEventListener('mouseenter', function() {
+        if (toast._dismissTimer) { clearTimeout(toast._dismissTimer); toast._dismissTimer = null; }
+        var bar = toast.querySelector('.notif-t-progress-bar');
+        if (bar) bar.style.animationPlayState = 'paused';
+    });
+    toast.addEventListener('mouseleave', function() {
+        var bar = toast.querySelector('.notif-t-progress-bar');
+        if (bar) bar.style.animationPlayState = 'running';
+        toast._dismissTimer = setTimeout(function() {
+            dismissNotifToast(toast);
+        }, 2000);
+    });
+}
+
+function dismissNotifToast(el) {
+    if (!el || el._dismissed) return;
+    el._dismissed = true;
+    if (el._dismissTimer) clearTimeout(el._dismissTimer);
+    el.classList.add('hiding');
+    setTimeout(function() {
+        if (el.parentElement) el.parentElement.removeChild(el);
+        _notifToastShowing--;
+    }, 300);
+}
+
 function handleNotifClick(el) {
-    const badge = document.getElementById('notifBadge');
+    var badge = document.getElementById('notifBadge');
     if (badge) {
         badge.style.display = 'none';
         badge.textContent = '0';
@@ -7011,6 +7315,8 @@ function handleNotifClick(el) {
           if (!window.EventSource) return;
           const es = new EventSource('/api/notifications/stream', { withCredentials: true });
           let _lastUnread = -1, _lastUnreadMsg = -1;
+          let _seenNotifIds = new Set();
+          let _firstLoad = true;
 
           es.addEventListener('notifications', (e) => {
             try {
@@ -7018,6 +7324,20 @@ function handleNotifClick(el) {
               const unread = payload.unread_count || 0;
               const unreadMessages = payload.unread_messages_count || 0;
               const pendingFR = payload.pending_friend_requests_count || 0;
+              const allNotifs = payload.notifications || [];
+
+              // On first load, just record all existing IDs without showing toasts
+              if (_firstLoad) {
+                allNotifs.forEach(function(n) { if (n.id) _seenNotifIds.add(n.id); });
+                _firstLoad = false;
+              } else {
+                // Show toast for each truly new notification
+                var newOnes = allNotifs.filter(function(n) { return n.id && !_seenNotifIds.has(n.id) && !n.is_read; });
+                newOnes.forEach(function(n) {
+                  _seenNotifIds.add(n.id);
+                  if (typeof showNotifToast === 'function') showNotifToast(n);
+                });
+              }
 
               if ((_lastUnread >= 0 && unread > _lastUnread) || (_lastUnreadMsg >= 0 && unreadMessages > _lastUnreadMsg)) {
                 document.dispatchEvent(new CustomEvent('aite-new-notification'));
