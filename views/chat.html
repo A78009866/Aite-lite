@@ -4,7 +4,7 @@
 <script>(function(){var t=localStorage.getItem("aite-theme")||"dark";document.documentElement.setAttribute("data-theme",t)})()</script>
 
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#000000">
@@ -874,6 +874,7 @@ pre, code { white-space: pre-wrap; word-break: break-all; }
   background-color: var(--bg);
   border-top: 1px solid var(--glass-border);
   padding: 8px 10px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -2343,15 +2344,15 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 #aite-progress-bar {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   height: 5px;
   width: 0;
-  background: linear-gradient(90deg, #64B5F6, #90CAF9, #BBDEFB);
+  background: linear-gradient(270deg, #64B5F6, #90CAF9, #BBDEFB);
   z-index: 999999;
   pointer-events: none;
   opacity: 0;
   transition: width 150ms ease-out;
-  border-radius: 0 3px 3px 0;
+  border-radius: 3px 0 0 3px;
 }
 #aite-progress-bar.active {
   opacity: 1;
@@ -2384,6 +2385,9 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   img {
     -webkit-user-drag: none !important;
     user-drag: none !important;
+  }
+  .composer {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 #aite-offline-overlay {
@@ -3619,8 +3623,27 @@ async function loadMessages(initial = false) {
     });
 
     if (initial) {
+      // Wait for all media (images/videos) to load before scrolling to prevent
+      // the glitch where chat sticks at the last media instead of the last message
+      const mediaElements = messagesEl.querySelectorAll('img[src], video[src]');
+      const mediaPromises = Array.from(mediaElements).map(el => {
+        if (el.tagName === 'IMG') {
+          if (el.complete) return Promise.resolve();
+          return new Promise(resolve => { el.onload = resolve; el.onerror = resolve; });
+        } else {
+          if (el.readyState >= 1) return Promise.resolve();
+          return new Promise(resolve => { el.onloadedmetadata = resolve; el.onerror = resolve; });
+        }
+      });
+      // Scroll immediately and again after media loads
       messagesEl.scrollTop = messagesEl.scrollHeight;
       messagesEl.style.opacity = '1';
+      Promise.all(mediaPromises).then(() => {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+      // Fallback: scroll again after a short delay to catch any late-loading media
+      setTimeout(() => { messagesEl.scrollTop = messagesEl.scrollHeight; }, 300);
+      setTimeout(() => { messagesEl.scrollTop = messagesEl.scrollHeight; }, 800);
       markRead();
     } else if (isAtBottom) {
       scrollToBottom();

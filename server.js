@@ -22,9 +22,13 @@ const webpush = require('web-push');
 const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
 
 // ---------------- Web Push (VAPID) Setup ----------------
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BOzRVUrLN_jk6oTbu9fuqCVYsEliLNgl-83XyF2sIFzMCgBtuFWq9ZONvMZ9u_F-xu_bD6vOhNCBnocoHNMBp90';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'MJTfIx-jqV8L6IogzJy-0ikBJYI8uaMTsZjmxJTBEkk';
-webpush.setVapidDetails('mailto:aite@aite-lite.vercel.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails('mailto:aite@aite-lite.vercel.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+  console.warn('VAPID keys not configured – web push notifications disabled');
+}
 
 // Nodemailer transporter
 const mailTransporter = nodemailer.createTransport({
@@ -108,8 +112,17 @@ app.set('trust proxy', 1);
 app.use(helmet({
   contentSecurityPolicy: false, // Disabled because app uses inline scripts/CDN
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' }
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
 }));
+// Prevent clickjacking
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Permissions-Policy', 'camera=self, microphone=self, geolocation=()');
+  next();
+});
 
 // Rate limiting - general
 const generalLimiter = rateLimit({
@@ -546,6 +559,7 @@ async function sendPushNotification(targetUserId, title, body, extraData = {}) {
   }
 
   // إرسال Web Push (لتطبيق PWA)
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return; // skip if VAPID not configured
   try {
     const webSubsSnap = await db.ref(`web_push_subs/${targetUserId}`).once('value');
     const webSubs = webSubsSnap.val();
@@ -662,6 +676,14 @@ app.post('/login', authLimiter, async (req, res) => {
     }
 
     const userRecord = await firebaseAuth.getUserByEmail(email);
+    // Regenerate session to prevent session fixation
+    const oldSession = req.session;
+    await new Promise((resolve, reject) => {
+      req.session.regenerate((err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
     req.session.userId = userRecord.uid;
     req.session.email = userRecord.email;
     await req.session.save();
@@ -5621,10 +5643,14 @@ app.use((err, req, res, next) => {
 // 2. API لتغيير كلمة المرور
 app.post('/api/change-password', requireAuth, authLimiter, async (req, res) => {
   const userId = req.session.userId;
-  const { newPassword } = req.body;
+  const { currentPassword, newPassword } = req.body;
 
   if (!userId) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+
+  if (!currentPassword) {
+    return res.status(400).json({ ok: false, error: 'كلمة المرور الحالية مطلوبة' });
   }
 
   if (!newPassword || newPassword.length < 6) {
@@ -5632,13 +5658,29 @@ app.post('/api/change-password', requireAuth, authLimiter, async (req, res) => {
   }
 
   try {
-    // التأكد من تحديث كلمة المرور للمستخدم الحالي (باستخدام uid الصحيح)
+    // Verify current password before allowing change
+    const userEmail = req.session.email;
+    if (!userEmail) return res.status(400).json({ ok: false, error: 'لا يمكن التحقق من الهوية' });
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) return res.status(500).json({ ok: false, error: 'Server misconfiguration' });
+    const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
+    const verifyResp = await fetch(verifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: userEmail, password: currentPassword, returnSecureToken: false })
+    });
+    if (!verifyResp.ok) {
+      return res.status(403).json({ ok: false, error: 'كلمة المرور الحالية غير صحيحة' });
+    }
+
     await admin.auth().updateUser(userId, { password: newPassword });
+
+    // Invalidate all remember tokens after password change
+    await db.ref(`remember_tokens/${userId}`).remove();
 
     res.json({ ok: true, message: 'تم تحديث كلمة المرور بنجاح' });
   } catch (err) {
     console.error('Error changing password:', err);
-    // تعامل مع أخطاء Firebase Auth المحتملة
     const msg = err && err.message ? err.message : 'فشل تغيير كلمة المرور';
     res.status(500).json({ ok: false, error: msg });
   }

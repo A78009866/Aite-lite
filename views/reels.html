@@ -855,18 +855,27 @@ html[data-theme="light"] #replyIndicator {
 #aite-progress-bar {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   height: 5px;
   width: 0;
-  background: linear-gradient(90deg, #64B5F6, #90CAF9, #BBDEFB);
+  background: linear-gradient(270deg, #64B5F6, #90CAF9, #BBDEFB);
   z-index: 999999;
   pointer-events: none;
   opacity: 0;
   transition: width 150ms ease-out;
-  border-radius: 0 3px 3px 0;
+  border-radius: 3px 0 0 3px;
 }
 #aite-progress-bar.active {
   opacity: 1;
+}
+@keyframes notif-highlight-pulse {
+  0% { background-color: rgba(59,130,246,0.35); }
+  50% { background-color: rgba(59,130,246,0.15); }
+  100% { background-color: transparent; }
+}
+.notif-highlight {
+  animation: notif-highlight-pulse 2s ease-in-out;
+  border-radius: 12px;
 }
 @media (display-mode: standalone) {
   * {
@@ -1130,6 +1139,8 @@ html[data-theme="light"] #replyIndicator {
         // --- التعديل الجديد: قراءة الـ id من الرابط ---
         const urlParams = new URLSearchParams(window.location.search);
         const targetReelId = urlParams.get('id');
+        const highlightCommentId = urlParams.get('commentId');
+        const highlightReplyId = urlParams.get('replyId');
         let initialIndex = 0;
 
         if (targetReelId) {
@@ -1142,6 +1153,11 @@ html[data-theme="light"] #replyIndicator {
         
         // تمرير الفهرس (Index) للدالة
         initSwiper(initialIndex);
+
+        // Auto-open comments if navigating from notification with commentId/replyId
+        if (targetReelId && (highlightCommentId || highlightReplyId)) {
+          setTimeout(() => { openComments(targetReelId); }, 500);
+        }
       } else {
         document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
       }
@@ -1574,11 +1590,46 @@ html[data-theme="light"] #replyIndicator {
       } else {
         commentsList.innerHTML = comments.map(c => createCommentHtml(c, reelId)).join('');
         updateCommentBadges(comments);
+        // Scroll to and highlight specific comment/reply from notification
+        scrollToHighlightedReelComment();
       }
     } catch (e) {
       console.error(e);
       commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
     }
+  }
+
+  // Navigate to and highlight a specific comment or reply from notification URL params
+  function scrollToHighlightedReelComment() {
+    if (!highlightCommentId && !highlightReplyId) return;
+    setTimeout(() => {
+      let targetEl = null;
+      if (highlightReplyId) {
+        // Expand the replies section first
+        if (highlightCommentId) {
+          const section = document.getElementById('replies-section-' + highlightCommentId);
+          const btn = document.getElementById('toggle-replies-btn-' + highlightCommentId);
+          if (section) {
+            section.style.display = '';
+            section.classList.remove('collapsed');
+            section.classList.add('expanded');
+          }
+          if (btn) {
+            btn.classList.add('expanded');
+            const spanEl = btn.querySelector('span:not(.toggle-replies-count)');
+            if (spanEl) spanEl.textContent = 'إخفاء الردود';
+          }
+        }
+        targetEl = document.getElementById('reply-' + highlightReplyId);
+      } else if (highlightCommentId) {
+        targetEl = document.getElementById('comment-' + highlightCommentId);
+      }
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetEl.classList.add('notif-highlight');
+        setTimeout(() => targetEl.classList.remove('notif-highlight'), 2500);
+      }
+    }, 300);
   }
 
   function timeAgo(ts) {

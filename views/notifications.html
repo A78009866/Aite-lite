@@ -1399,15 +1399,15 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 #aite-progress-bar {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   height: 5px;
   width: 0;
-  background: linear-gradient(90deg, #64B5F6, #90CAF9, #BBDEFB);
+  background: linear-gradient(270deg, #64B5F6, #90CAF9, #BBDEFB);
   z-index: 999999;
   pointer-events: none;
   opacity: 0;
   transition: width 150ms ease-out;
-  border-radius: 0 3px 3px 0;
+  border-radius: 3px 0 0 3px;
 }
 #aite-progress-bar.active {
   opacity: 1;
@@ -1865,6 +1865,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         `data-family-id="${escapeHtml(familyId)}"`, 
         `data-from="${escapeHtml(n.from_user_id || '')}"`,
         `data-comment-id="${escapeHtml(commentId)}"`,
+        `data-reply-id="${escapeHtml(replyId)}"`,
         `data-story-id="${escapeHtml(storyId)}"`
       ].join(' ');
 
@@ -1901,6 +1902,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
       const reelId = card.dataset.reelId;
       const familyId = card.dataset.familyId;
       const fromUser = card.dataset.from;
+      const commentId = card.dataset.commentId;
+      const replyId = card.dataset.replyId;
 
       // 1. تعليم الإشعار كمقروء في الخلفية
       if (id) {
@@ -1917,13 +1920,16 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
       try {
         // -- منشورات عامة --
         if (['post_like', 'post_comment', 'comment_like', 'comment_reply', 'reply_like', 'reply_reply'].includes(type)) {
-            // الأفضل التوجيه لصفحة المنشور المفردة بدلاً من البحث عنه في القائمة
             if (postId) {
-                // إذا كان تعليق، يمكننا تمرير معرف التعليق لتمييزه (اختياري)
-                window.location.href = `/post?id=${encodeURIComponent(postId)}`;
+                let url = `/post?id=${encodeURIComponent(postId)}`;
+                if (commentId) url += `&commentId=${encodeURIComponent(commentId)}`;
+                if (replyId) url += `&replyId=${encodeURIComponent(replyId)}`;
+                window.location.href = url;
             } else if (reelId) {
-                // حالة خاصة: رد على تعليق قد يكون في ريل
-                window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+                let url = `/reels?id=${encodeURIComponent(reelId)}`;
+                if (commentId) url += `&commentId=${encodeURIComponent(commentId)}`;
+                if (replyId) url += `&replyId=${encodeURIComponent(replyId)}`;
+                window.location.href = url;
             } else if (familyId) {
                  window.location.href = `/family/${encodeURIComponent(familyId)}`;
             } else {
@@ -1946,7 +1952,10 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         // -- ريلز --
         if (['reel_like', 'reel_comment', 'reel_comment_like', 'reel_comment_reply', 'reel_reply_like', 'reel_reply_reply'].includes(type)) {
             if (reelId) {
-                window.location.href = `/reels?id=${encodeURIComponent(reelId)}`;
+                let url = `/reels?id=${encodeURIComponent(reelId)}`;
+                if (commentId) url += `&commentId=${encodeURIComponent(commentId)}`;
+                if (replyId) url += `&replyId=${encodeURIComponent(replyId)}`;
+                window.location.href = url;
             } else {
                 window.location.href = '/reels';
             }
