@@ -2379,7 +2379,7 @@ html[data-theme="light"] #editPostError {
 #aite-progress-bar {
   position: fixed;
   top: 0;
-  right: 0;
+  left: 0;
   height: 5px;
   width: 0;
   background: linear-gradient(90deg, #64B5F6, #90CAF9, #BBDEFB);
@@ -2387,7 +2387,7 @@ html[data-theme="light"] #editPostError {
   pointer-events: none;
   opacity: 0;
   transition: width 150ms ease-out;
-  border-radius: 3px 0 0 3px;
+  border-radius: 0 3px 3px 0;
 }
 #aite-progress-bar.active {
   opacity: 1;
@@ -2825,8 +2825,6 @@ html[data-theme="light"] #editPostError {
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const postId = urlParams.get('id');
-        const targetCommentId = urlParams.get('commentId');
-        const targetReplyId = urlParams.get('replyId');
         const postContainer = document.getElementById('postContainer');
         const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png";
         const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
@@ -2871,33 +2869,6 @@ html[data-theme="light"] #editPostError {
             loadPost();
         } else {
             postContainer.innerHTML = '<p class="text-center text-red-500 mt-10">رابط غير صالح</p>';
-        }
-
-        function scrollToTargetComment() {
-            if (!targetCommentId && !targetReplyId) return;
-            if (targetReplyId && targetCommentId) {
-                expandRepliesSection(targetCommentId);
-                setTimeout(() => {
-                    const replyEl = document.getElementById('reply-' + targetReplyId);
-                    if (replyEl) {
-                        replyEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        replyEl.style.transition = 'box-shadow 0.3s, background 0.3s';
-                        replyEl.style.boxShadow = '0 0 0 2px #3b82f6, 0 0 16px rgba(59,130,246,0.3)';
-                        replyEl.style.background = 'rgba(59,130,246,0.12)';
-                        setTimeout(() => { replyEl.style.boxShadow = ''; replyEl.style.background = ''; }, 3000);
-                    }
-                }, 400);
-            } else if (targetCommentId) {
-                const commentEl = document.getElementById('comment-' + targetCommentId);
-                if (commentEl) {
-                    commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    const bubble = commentEl.querySelector('.fb-comment') || commentEl;
-                    bubble.style.transition = 'box-shadow 0.3s, background 0.3s';
-                    bubble.style.boxShadow = '0 0 0 2px #3b82f6, 0 0 16px rgba(59,130,246,0.3)';
-                    bubble.style.background = 'rgba(59,130,246,0.12)';
-                    setTimeout(() => { bubble.style.boxShadow = ''; bubble.style.background = ''; }, 3000);
-                }
-            }
         }
 
         async function loadPost() {
@@ -3897,7 +3868,6 @@ html[data-theme="light"] #editPostError {
                     } else {
                         list.innerHTML = data.comments.map(c => createCommentHtml(c, id)).join('');
                         updateBadges(data.comments);
-                        setTimeout(() => scrollToTargetComment(), 200);
                     }
                 } else {
                     list.innerHTML = '<p class="text-center text-red-400">فشل التحميل</p>';

@@ -1,5 +1,5 @@
 // Service Worker - Smart Offline Caching + PWA Support
-const CACHE_NAME = 'aite-cache-v6';
+const CACHE_NAME = 'aite-cache-v5';
 const OFFLINE_PAGE = '/offline';
 
 // Assets to pre-cache (app shell)
@@ -191,20 +191,19 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   if (event.action === 'close') return;
 
-  const rawUrl = (event.notification.data && event.notification.data.url) || '/chat_list';
-  // تحويل المسار النسبي إلى رابط كامل
-  const targetUrl = rawUrl.startsWith('http') ? rawUrl : (self.location.origin + rawUrl);
-
+  const url = (event.notification.data && event.notification.data.url) || '/chat_list';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // إذا كان التطبيق مفتوحاً بالفعل، انتقل إليه
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus().then(() => client.navigate(targetUrl));
+          client.focus();
+          client.navigate(url);
+          return;
         }
       }
       // فتح نافذة جديدة
-      return clients.openWindow(targetUrl);
+      return clients.openWindow(url);
     })
   );
 });
