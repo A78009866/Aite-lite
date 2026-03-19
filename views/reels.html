@@ -855,7 +855,7 @@ html[data-theme="light"] #replyIndicator {
 #aite-progress-bar {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   height: 5px;
   width: 0;
   background: linear-gradient(90deg, #64B5F6, #90CAF9, #BBDEFB);
@@ -863,7 +863,7 @@ html[data-theme="light"] #replyIndicator {
   pointer-events: none;
   opacity: 0;
   transition: width 150ms ease-out;
-  border-radius: 0 3px 3px 0;
+  border-radius: 3px 0 0 3px;
 }
 #aite-progress-bar.active {
   opacity: 1;
@@ -1130,6 +1130,8 @@ html[data-theme="light"] #replyIndicator {
         // --- التعديل الجديد: قراءة الـ id من الرابط ---
         const urlParams = new URLSearchParams(window.location.search);
         const targetReelId = urlParams.get('id');
+        const targetCommentId = urlParams.get('commentId');
+        const targetReplyId = urlParams.get('replyId');
         let initialIndex = 0;
 
         if (targetReelId) {
@@ -1142,6 +1144,14 @@ html[data-theme="light"] #replyIndicator {
         
         // تمرير الفهرس (Index) للدالة
         initSwiper(initialIndex);
+
+        // If navigating from a notification with commentId, auto-open comments and scroll to target
+        if (targetReelId && (targetCommentId || targetReplyId)) {
+            setTimeout(async () => {
+                await openComments(targetReelId);
+                setTimeout(() => scrollToReelComment(targetCommentId, targetReplyId), 400);
+            }, 500);
+        }
       } else {
         document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
       }
@@ -1554,6 +1564,33 @@ html[data-theme="light"] #replyIndicator {
   document.getElementById('commentModal').addEventListener('click', function(e) {
     if (e.target === this) closeCommentsSheet();
   });
+
+  function scrollToReelComment(commentId, replyId) {
+      if (!commentId && !replyId) return;
+      if (replyId && commentId) {
+          expandRepliesSection(commentId);
+          setTimeout(() => {
+              const replyEl = document.getElementById('reply-' + replyId);
+              if (replyEl) {
+                  replyEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  replyEl.style.transition = 'box-shadow 0.3s, background 0.3s';
+                  replyEl.style.boxShadow = '0 0 0 2px #3b82f6, 0 0 16px rgba(59,130,246,0.3)';
+                  replyEl.style.background = 'rgba(59,130,246,0.12)';
+                  setTimeout(() => { replyEl.style.boxShadow = ''; replyEl.style.background = ''; }, 3000);
+              }
+          }, 400);
+      } else if (commentId) {
+          const commentEl = document.getElementById('comment-' + commentId);
+          if (commentEl) {
+              commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const bubble = commentEl.querySelector('.fb-comment') || commentEl;
+              bubble.style.transition = 'box-shadow 0.3s, background 0.3s';
+              bubble.style.boxShadow = '0 0 0 2px #3b82f6, 0 0 16px rgba(59,130,246,0.3)';
+              bubble.style.background = 'rgba(59,130,246,0.12)';
+              setTimeout(() => { bubble.style.boxShadow = ''; bubble.style.background = ''; }, 3000);
+          }
+      }
+  }
 
   async function fetchAndRenderReelComments(reelId) {
     commentsList.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>';
