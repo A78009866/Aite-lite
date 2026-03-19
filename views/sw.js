@@ -1,9 +1,13 @@
-// Service Worker - Smart Offline Caching
-const CACHE_NAME = 'trimer-cache-v1';
+// Service Worker - Smart Offline Caching + PWA Support
+const CACHE_NAME = 'aite-cache-v2';
 const OFFLINE_PAGE = '/offline';
 
 // Assets to pre-cache (app shell)
 const PRECACHE_URLS = [
+  '/',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
 ];

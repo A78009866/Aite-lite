@@ -280,6 +280,16 @@ function requireAdmin(req, res, next) {
   });
 });
 
+// ---------------- PWA Static Assets ----------------
+app.get('/manifest.json', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'manifest.json')); });
+app.get('/sw.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'sw.js')); });
+app.get('/icon-192.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'icon-192.png')); });
+app.get('/icon-512.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'icon-512.png')); });
+app.get('/apple-touch-icon.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'apple-touch-icon.png')); });
+app.get('/favicon.ico', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon.ico')); });
+app.get('/favicon-32.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-32.png')); });
+app.get('/favicon-16.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-16.png')); });
+
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
 

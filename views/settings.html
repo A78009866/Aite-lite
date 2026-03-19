@@ -5,6 +5,17 @@
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aite">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+    <link rel="shortcut icon" href="/favicon.ico">
     <title>الإعدادات - Aite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -1856,6 +1867,200 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   setTimeout(hideSkeleton, 4000);
 })();
 
+</script>
+
+
+
+
+<!-- PWA Install Prompt -->
+<div id="pwaInstallBar" style="display:none;">
+  <style>
+    #pwaInstallBar {
+      position:fixed; bottom:0; left:0; right:0; z-index:99999;
+      animation: pwaBarSlide 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+    #pwaInstallBar .pwa-bar-inner {
+      background: #111827;
+      margin: 10px;
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    #pwaInstallBar .pwa-bar-icon {
+      width: 46px; height: 46px;
+      border-radius: 12px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #pwaInstallBar .pwa-bar-text {
+      flex: 1; min-width: 0;
+    }
+    #pwaInstallBar .pwa-bar-title {
+      font-size: 15px; font-weight: 700; color: #fff;
+    }
+    #pwaInstallBar .pwa-bar-desc {
+      font-size: 12px; color: #9ca3af; margin-top: 1px;
+    }
+    #pwaInstallBar .pwa-bar-btn {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    #pwaInstallBar .pwa-bar-btn:active { background: #2563eb; }
+    #pwaInstallBar .pwa-bar-close {
+      background: none; border: none;
+      color: #6b7280; font-size: 22px;
+      cursor: pointer; padding: 2px 4px; line-height: 1;
+    }
+    @keyframes pwaBarSlide {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    /* iOS overlay */
+    #iosInstallOverlay {
+      position:fixed; inset:0; z-index:999999;
+      background:rgba(0,0,0,0.88);
+      display:flex; align-items:center; justify-content:center;
+      padding:20px; animation: fadeInOverlay 0.3s ease;
+    }
+    @keyframes fadeInOverlay {
+      from { opacity:0; } to { opacity:1; }
+    }
+    .ios-install-box {
+      background:#1a1a2e; border-radius:20px; padding:28px 24px;
+      max-width:340px; width:100%; text-align:center;
+      border:1px solid rgba(255,255,255,0.1);
+      box-shadow:0 16px 48px rgba(0,0,0,0.5);
+    }
+    .ios-step {
+      background:rgba(255,255,255,0.05); border-radius:12px;
+      padding:12px 16px; margin-bottom:8px; text-align:right;
+      direction:rtl; color:#cbd5e1; font-size:14px;
+    }
+  </style>
+
+  <div class="pwa-bar-inner">
+    <img src="/icon-192.png" alt="Aite" class="pwa-bar-icon">
+    <div class="pwa-bar-text">
+      <div class="pwa-bar-title">Aite</div>
+      <div class="pwa-bar-desc" id="pwaBarDesc">تثبيت التطبيق على جهازك</div>
+    </div>
+    <button class="pwa-bar-btn" id="pwaBarInstallBtn" onclick="pwaInstallApp()">تثبيت</button>
+    <button class="pwa-bar-close" onclick="pwaDismiss()">&times;</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ===== PWA Full App Install =====
+  var DISMISS_KEY = 'aite_install_dismiss_v2';
+  var bar = document.getElementById('pwaInstallBar');
+  var desc = document.getElementById('pwaBarDesc');
+  var btn = document.getElementById('pwaBarInstallBtn');
+  var _prompt = null;
+
+  // Is app already running in standalone (installed)?
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+  }
+
+  // Was banner dismissed in last 12 hours?
+  function wasDismissed() {
+    try {
+      var t = localStorage.getItem(DISMISS_KEY);
+      if (!t) return false;
+      return (Date.now() - parseInt(t)) < 12*60*60*1000;
+    } catch(e){ return false; }
+  }
+
+  // Don't show if already installed or dismissed
+  if (isStandalone()) return;
+
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) && !window.MSStream;
+
+  // ---- Android / Chrome / Edge / Desktop: Native install ----
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    _prompt = e;
+    if (!wasDismissed()) {
+      bar.style.display = 'block';
+    }
+  });
+
+  // ---- iOS: Show after delay with custom instructions ----
+  if (isIOS && !wasDismissed()) {
+    setTimeout(function(){
+      if (desc) desc.textContent = 'أضف Aite إلى الشاشة الرئيسية';
+      if (btn) btn.textContent = 'إضافة';
+      bar.style.display = 'block';
+    }, 2500);
+  }
+
+  // Install button click
+  window.pwaInstallApp = function() {
+    if (_prompt) {
+      // Native browser install prompt (Android/Chrome/Edge/Desktop)
+      _prompt.prompt();
+      _prompt.userChoice.then(function(result) {
+        if (result.outcome === 'accepted') {
+          bar.style.display = 'none';
+          try { localStorage.removeItem(DISMISS_KEY); } catch(e){}
+        }
+        _prompt = null;
+      });
+    } else if (isIOS) {
+      // Show iOS step-by-step instructions
+      var ov = document.createElement('div');
+      ov.id = 'iosInstallOverlay';
+      ov.innerHTML = '<div class="ios-install-box">'
+        + '<img src="/icon-192.png" style="width:60px;height:60px;border-radius:14px;margin:0 auto 14px;display:block;">'
+        + '<h3 style="color:#fff;font-size:19px;font-weight:700;margin:0 0 6px;">تثبيت Aite</h3>'
+        + '<p style="color:#9ca3af;font-size:13px;margin:0 0 18px;">اتبع الخطوات التالية لتثبيت التطبيق:</p>'
+        + '<div class="ios-step">1. اضغط على أيقونة المشاركة <span style="font-size:17px;">⬆️</span> في شريط Safari</div>'
+        + '<div class="ios-step">2. اختر <b style="color:#fff;">"إضافة إلى الشاشة الرئيسية"</b> <span style="font-size:15px;">📱</span></div>'
+        + '<div class="ios-step">3. اضغط <b style="color:#fff;">"إضافة"</b> في الأعلى</div>'
+        + '<button onclick="this.closest('#iosInstallOverlay').remove()" style="margin-top:18px;background:#3b82f6;color:#fff;border:none;padding:11px 34px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">فهمت</button>'
+        + '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(ev){ if(ev.target===ov) ov.remove(); });
+    }
+  };
+
+  // Dismiss for 12 hours
+  window.pwaDismiss = function() {
+    bar.style.display = 'none';
+    try { localStorage.setItem(DISMISS_KEY, Date.now().toString()); } catch(e){}
+  };
+
+  // Auto-hide on successful install
+  window.addEventListener('appinstalled', function() {
+    bar.style.display = 'none';
+    _prompt = null;
+  });
+})();
+</script>
+<script>
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(function(reg) { console.log('SW registered:', reg.scope); })
+      .catch(function(err) { console.log('SW registration failed:', err); });
+  });
+}
 </script>
 </body>
 </html>
