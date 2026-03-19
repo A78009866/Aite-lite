@@ -495,12 +495,10 @@
 
         /* ============ Notification Bubble (Instagram-style) ============ */
         .notif-bubble {
-            position: absolute;
-            top: calc(100% + 8px);
-            left: 50%;
-            transform: translateX(-50%);
+            position: fixed;
+            /* top & left set by JS */
             width: max-content;
-            max-width: 320px;
+            max-width: min(320px, calc(100vw - 20px));
             display: flex;
             align-items: center;
             gap: 10px;
@@ -515,7 +513,7 @@
             cursor: pointer;
             text-decoration: none;
             color: inherit;
-            transform-origin: top center;
+            /* transform-origin set by JS */
             animation: notifBubbleIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
             pointer-events: auto;
         }
@@ -523,25 +521,25 @@
             animation: notifBubbleOut 0.3s cubic-bezier(0.4,0,1,1) forwards;
         }
         @keyframes notifBubbleIn {
-            0%   { opacity: 0; transform: translateX(-50%) scale(0.3) translateY(-6px); }
-            100% { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+            0%   { opacity: 0; transform: scale(0.3) translateY(-6px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
         }
         @keyframes notifBubbleOut {
-            0%   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
-            100% { opacity: 0; transform: translateX(-50%) scale(0.5) translateY(-4px); }
+            0%   { opacity: 1; transform: scale(1) translateY(0); }
+            100% { opacity: 0; transform: scale(0.5) translateY(-4px); }
         }
-        /* Arrow pointing up toward bell icon */
-        .notif-bubble::before {
-            content: '';
+        /* Arrow pointing up toward bell icon (real element, positioned by JS) */
+        .notif-b-arrow {
             position: absolute;
             top: -6px;
-            left: 50%;
-            transform: translateX(-50%) rotate(45deg);
+            /* left set by JS */
+            transform: rotate(45deg);
             width: 12px;
             height: 12px;
             background: rgba(22,22,26,0.97);
             border-top: 1px solid rgba(255,255,255,0.1);
             border-left: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
         }
         .notif-bubble .notif-b-avatar {
             width: 36px;
@@ -584,7 +582,7 @@
             border-color: rgba(0,0,0,0.08);
             box-shadow: 0 8px 32px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.05);
         }
-        html[data-theme="light"] .notif-bubble::before {
+        html[data-theme="light"] .notif-b-arrow {
             background: rgba(255,255,255,0.98);
             border-top-color: rgba(0,0,0,0.08);
             border-left-color: rgba(0,0,0,0.08);
@@ -3850,11 +3848,43 @@ function getNotifBubbleLink(n) {
     return '/notifications';
 }
 
+function _positionNotifBubble() {
+    var bubble = _notifBubbleEl;
+    if (!bubble) return;
+    var wrapper = document.getElementById('notifBellWrapper');
+    if (!wrapper) return;
+
+    var bellRect = wrapper.getBoundingClientRect();
+    var bellCenterX = bellRect.left + bellRect.width / 2;
+    var bellBottom = bellRect.bottom;
+    var vw = window.innerWidth;
+    var margin = 10;
+
+    bubble.style.top = (bellBottom + 8) + 'px';
+
+    var bubbleRect = bubble.getBoundingClientRect();
+    var bubbleW = bubbleRect.width;
+
+    var idealLeft = bellCenterX - bubbleW / 2;
+    var clampedLeft = Math.max(margin, Math.min(idealLeft, vw - bubbleW - margin));
+    bubble.style.left = clampedLeft + 'px';
+
+    var arrow = bubble.querySelector('.notif-b-arrow');
+    if (arrow) {
+        var arrowLeft = bellCenterX - clampedLeft - 6;
+        arrowLeft = Math.max(12, Math.min(arrowLeft, bubbleW - 24));
+        arrow.style.left = arrowLeft + 'px';
+    }
+
+    bubble.style.transformOrigin = (bellCenterX - clampedLeft) + 'px top';
+}
+
+function _onScrollOrResize() { dismissNotifBubble(true); }
+
 function showNotifToast(n) {
     var wrapper = document.getElementById('notifBellWrapper');
     if (!wrapper) return;
 
-    // Remove existing bubble first
     dismissNotifBubble(true);
 
     var pic = n.from_profile_picture_url || NOTIF_BUBBLE_DEFAULT_AVATAR;
@@ -3864,7 +3894,8 @@ function showNotifToast(n) {
 
     var bubble = document.createElement('div');
     bubble.className = 'notif-bubble';
-    bubble.innerHTML = '<img src="' + escapeHtml(pic) + '" class="notif-b-avatar" alt="" onerror="this.src=\'' + NOTIF_BUBBLE_DEFAULT_AVATAR + '\'">'
+    bubble.innerHTML = '<div class="notif-b-arrow"></div>'
+        + '<img src="' + escapeHtml(pic) + '" class="notif-b-avatar" alt="" onerror="this.src=\'' + NOTIF_BUBBLE_DEFAULT_AVATAR + '\'">'
         + '<div class="notif-b-body">'
         + '<div class="notif-b-text">' + text + '</div>'
         + '</div>'
@@ -3884,10 +3915,14 @@ function showNotifToast(n) {
         window.location.href = link;
     });
 
-    wrapper.appendChild(bubble);
+    document.body.appendChild(bubble);
     _notifBubbleEl = bubble;
 
-    // Auto-dismiss after duration
+    _positionNotifBubble();
+
+    window.addEventListener('scroll', _onScrollOrResize, { passive: true });
+    window.addEventListener('resize', _onScrollOrResize, { passive: true });
+
     _notifBubbleTimer = setTimeout(function() {
         dismissNotifBubble(false);
     }, NOTIF_BUBBLE_DURATION);
@@ -3895,6 +3930,8 @@ function showNotifToast(n) {
 
 function dismissNotifBubble(immediate) {
     if (_notifBubbleTimer) { clearTimeout(_notifBubbleTimer); _notifBubbleTimer = null; }
+    window.removeEventListener('scroll', _onScrollOrResize);
+    window.removeEventListener('resize', _onScrollOrResize);
     if (!_notifBubbleEl) return;
     var el = _notifBubbleEl;
     _notifBubbleEl = null;
