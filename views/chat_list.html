@@ -3879,7 +3879,7 @@ function _positionNotifBubble() {
     bubble.style.transformOrigin = (bellCenterX - clampedLeft) + 'px top';
 }
 
-function _onScrollOrResize() { dismissNotifBubble(true); }
+function _onResizeReposition() { _positionNotifBubble(); }
 
 function showNotifToast(n) {
     var wrapper = document.getElementById('notifBellWrapper');
@@ -3911,6 +3911,17 @@ function showNotifToast(n) {
                 body: JSON.stringify({ id: n.id })
             }).catch(function(){});
         }
+        // Update badge count
+        var badge = document.getElementById('notifBadge');
+        if (badge) {
+            var count = parseInt(badge.textContent, 10) || 0;
+            if (count <= 1) {
+                badge.style.display = 'none';
+                badge.textContent = '0';
+            } else {
+                badge.textContent = (count - 1) > 99 ? '99+' : String(count - 1);
+            }
+        }
         dismissNotifBubble(true);
         window.location.href = link;
     });
@@ -3920,8 +3931,7 @@ function showNotifToast(n) {
 
     _positionNotifBubble();
 
-    window.addEventListener('scroll', _onScrollOrResize, { passive: true });
-    window.addEventListener('resize', _onScrollOrResize, { passive: true });
+    window.addEventListener('resize', _onResizeReposition, { passive: true });
 
     _notifBubbleTimer = setTimeout(function() {
         dismissNotifBubble(false);
@@ -3930,8 +3940,7 @@ function showNotifToast(n) {
 
 function dismissNotifBubble(immediate) {
     if (_notifBubbleTimer) { clearTimeout(_notifBubbleTimer); _notifBubbleTimer = null; }
-    window.removeEventListener('scroll', _onScrollOrResize);
-    window.removeEventListener('resize', _onScrollOrResize);
+    window.removeEventListener('resize', _onResizeReposition);
     if (!_notifBubbleEl) return;
     var el = _notifBubbleEl;
     _notifBubbleEl = null;
@@ -7307,10 +7316,17 @@ function handleNotifClick(el) {
               const pendingFR = payload.pending_friend_requests_count || 0;
               const allNotifs = payload.notifications || [];
 
-              // On first load, just record all existing IDs without showing toasts
+              // On first load, show bubble for latest unread notification
               if (_firstLoad) {
                 allNotifs.forEach(function(n) { if (n.id) _seenNotifIds.add(n.id); });
                 _firstLoad = false;
+                var latestUnread = null;
+                for (var i = 0; i < allNotifs.length; i++) {
+                  if (!allNotifs[i].is_read) { latestUnread = allNotifs[i]; break; }
+                }
+                if (latestUnread && typeof showNotifToast === 'function') {
+                  setTimeout(function() { showNotifToast(latestUnread); }, 1500);
+                }
               } else {
                 // Show toast for each truly new notification
                 var newOnes = allNotifs.filter(function(n) { return n.id && !_seenNotifIds.has(n.id) && !n.is_read; });
