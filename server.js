@@ -18,7 +18,13 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const ImageKit = require('imagekit');
 const nodemailer = require('nodemailer');
+const webpush = require('web-push');
 const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+
+// ---------------- Web Push (VAPID) Setup ----------------
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BOzRVUrLN_jk6oTbu9fuqCVYsEliLNgl-83XyF2sIFzMCgBtuFWq9ZONvMZ9u_F-xu_bD6vOhNCBnocoHNMBp90';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'MJTfIx-jqV8L6IogzJy-0ikBJYI8uaMTsZjmxJTBEkk';
+webpush.setVapidDetails('mailto:aite@aite-lite.vercel.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 // Nodemailer transporter
 const mailTransporter = nodemailer.createTransport({
@@ -289,6 +295,7 @@ app.get('/apple-touch-icon.png', (req, res) => { res.sendFile(path.join(__dirnam
 app.get('/favicon.ico', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon.ico')); });
 app.get('/favicon-32.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-32.png')); });
 app.get('/favicon-16.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-16.png')); });
+app.get('/notification.mp3', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notification.mp3')); });
 
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
@@ -489,59 +496,86 @@ function clientWantsJson(req) {
 }
 
 // ---------------- FCM Push Notifications Helper ----------------
-// دالة مساعدة لإرسال إشعار Push للجهاز عبر FCM
+// دالة مساعدة لإرسال إشعار Push للجهاز عبر FCM + Web Push
 async function sendPushNotification(targetUserId, title, body, extraData = {}) {
+  // إرسال FCM (للتطبيق الأصلي)
   try {
-    // جلب توكن FCM الخاص بالمستخدم من قاعدة البيانات
     const tokenSnap = await db.ref(`fcm_tokens/${targetUserId}`).once('value');
     const tokenData = tokenSnap.val();
-    if (!tokenData) return; // لا يوجد توكن مسجل لهذا المستخدم
 
-    const tokens = [];
-    if (typeof tokenData === 'string') {
-      tokens.push(tokenData);
-    } else if (typeof tokenData === 'object') {
-      // دعم تعدد الأجهزة: إذا كان المستخدم لديه أكثر من جهاز
-      Object.values(tokenData).forEach(t => {
-        if (t && typeof t === 'string') tokens.push(t);
-        else if (t && t.token) tokens.push(t.token);
-      });
-    }
-
-    if (tokens.length === 0) return;
-
-    // إرسال الإشعار لكل توكن
-    for (const token of tokens) {
-      try {
-        await admin.messaging().send({
-          token: token,
-          // إرسال كـ data فقط حتى يتم التعامل معه في onMessageReceived دائماً
-          data: {
-            title: String(title || 'إشعار جديد'),
-            body: String(body || ''),
-            url: String(extraData.url || ''),
-            type: String(extraData.type || 'general'),
-            click_action: 'OPEN_ACTIVITY'
-          },
-          // إعدادات أندرويد: أولوية عالية لضمان وصول الإشعار فوراً
-          android: {
-            priority: 'high',
-            ttl: 86400000, // صلاحية 24 ساعة
-          }
+    if (tokenData) {
+      const tokens = [];
+      if (typeof tokenData === 'string') {
+        tokens.push(tokenData);
+      } else if (typeof tokenData === 'object') {
+        Object.values(tokenData).forEach(t => {
+          if (t && typeof t === 'string') tokens.push(t);
+          else if (t && t.token) tokens.push(t.token);
         });
-      } catch (sendErr) {
-        // إذا كان التوكن غير صالح، نحذفه من قاعدة البيانات
-        if (sendErr.code === 'messaging/invalid-registration-token' ||
-            sendErr.code === 'messaging/registration-token-not-registered') {
-          console.log(`Removing invalid FCM token for user ${targetUserId}`);
-          await db.ref(`fcm_tokens/${targetUserId}`).remove();
-        } else {
-          console.error(`FCM send error for user ${targetUserId}:`, sendErr.message);
+      }
+
+      for (const token of tokens) {
+        try {
+          await admin.messaging().send({
+            token: token,
+            data: {
+              title: String(title || 'إشعار جديد'),
+              body: String(body || ''),
+              url: String(extraData.url || ''),
+              type: String(extraData.type || 'general'),
+              click_action: 'OPEN_ACTIVITY'
+            },
+            android: {
+              priority: 'high',
+              ttl: 86400000,
+            }
+          });
+        } catch (sendErr) {
+          if (sendErr.code === 'messaging/invalid-registration-token' ||
+              sendErr.code === 'messaging/registration-token-not-registered') {
+            console.log(`Removing invalid FCM token for user ${targetUserId}`);
+            await db.ref(`fcm_tokens/${targetUserId}`).remove();
+          } else {
+            console.error(`FCM send error for user ${targetUserId}:`, sendErr.message);
+          }
         }
       }
     }
   } catch (err) {
-    console.error('sendPushNotification error:', err.message);
+    console.error('FCM sendPushNotification error:', err.message);
+  }
+
+  // إرسال Web Push (لتطبيق PWA)
+  try {
+    const webSubsSnap = await db.ref(`web_push_subs/${targetUserId}`).once('value');
+    const webSubs = webSubsSnap.val();
+    if (!webSubs) return;
+
+    const notifPayload = JSON.stringify({
+      title: String(title || 'إشعار جديد'),
+      body: String(body || ''),
+      icon: '/icon-192.png',
+      badge: '/favicon-32.png',
+      url: String(extraData.url || '/chat_list'),
+      type: String(extraData.type || 'general'),
+      tag: String(extraData.type || 'general') + '-' + Date.now()
+    });
+
+    const subEntries = Object.entries(webSubs);
+    for (const [subKey, subscription] of subEntries) {
+      try {
+        await webpush.sendNotification(subscription, notifPayload);
+      } catch (wpErr) {
+        if (wpErr.statusCode === 404 || wpErr.statusCode === 410) {
+          console.log(`Removing expired web push sub for user ${targetUserId}/${subKey}`);
+          await db.ref(`web_push_subs/${targetUserId}/${subKey}`).remove();
+        } else {
+          console.error(`Web Push error for user ${targetUserId}:`, wpErr.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Web Push sendPushNotification error:', err.message);
   }
 }
 
@@ -559,6 +593,45 @@ app.post('/api/save-fcm-token', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error saving FCM token:', error);
     res.status(500).json({ ok: false, error: 'Failed to save token' });
+  }
+});
+
+// ---------------- Web Push API ----------------
+// إرجاع المفتاح العام لـ VAPID
+app.get('/api/vapid-public-key', (req, res) => {
+  res.json({ ok: true, publicKey: VAPID_PUBLIC_KEY });
+});
+
+// حفظ اشتراك Web Push للمستخدم
+app.post('/api/web-push/subscribe', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const subscription = req.body.subscription;
+  if (!subscription || !subscription.endpoint) {
+    return res.status(400).json({ ok: false, error: 'Invalid subscription' });
+  }
+  try {
+    // حفظ الاشتراك مع مفتاح فريد مبني على hash للـ endpoint
+    const subKey = crypto.createHash('md5').update(subscription.endpoint).digest('hex').substring(0, 12);
+    await db.ref(`web_push_subs/${userId}/${subKey}`).set(subscription);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error saving web push subscription:', error);
+    res.status(500).json({ ok: false, error: 'Failed to save subscription' });
+  }
+});
+
+// إلغاء اشتراك Web Push
+app.post('/api/web-push/unsubscribe', requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const { endpoint } = req.body;
+  if (!endpoint) return res.status(400).json({ ok: false, error: 'Endpoint required' });
+  try {
+    const subKey = crypto.createHash('md5').update(endpoint).digest('hex').substring(0, 12);
+    await db.ref(`web_push_subs/${userId}/${subKey}`).remove();
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error removing web push subscription:', error);
+    res.status(500).json({ ok: false, error: 'Failed to unsubscribe' });
   }
 });
 

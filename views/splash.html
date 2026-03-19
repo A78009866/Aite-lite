@@ -166,29 +166,143 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 
 </style>
 
-<!-- Page Transition Loading Bar -->
+<!-- Aite PWA Native App Features -->
 <style>
-#aite-page-loader {
+#aite-progress-bar {
   position: fixed;
   top: 0;
   left: 0;
+  height: 5px;
   width: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #3b82f6, #60a5fa, #2563eb, #818cf8, #3b82f6);
-  background-size: 300% 100%;
+  background: linear-gradient(90deg, #64B5F6, #90CAF9, #BBDEFB);
   z-index: 999999;
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 10px rgba(59,130,246,0.7), 0 0 5px rgba(59,130,246,0.5);
-  animation: aite-loader-gradient 1.5s linear infinite;
   pointer-events: none;
   opacity: 0;
+  transition: width 150ms ease-out;
+  border-radius: 0 3px 3px 0;
 }
-#aite-page-loader.active {
+#aite-progress-bar.active {
   opacity: 1;
 }
-@keyframes aite-loader-gradient {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 300% 50%; }
+@media (display-mode: standalone) {
+  * {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none !important;
+  }
+  *:not(input):not(textarea):not([contenteditable="true"]) {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+  }
+  ::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  body {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    overscroll-behavior: none !important;
+    -webkit-user-drag: none !important;
+    -webkit-text-size-adjust: none !important;
+  }
+  img {
+    -webkit-user-drag: none !important;
+    user-drag: none !important;
+  }
+}
+#aite-offline-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+  background: #000000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 30px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+#aite-offline-overlay.show {
+  display: flex;
+}
+#aite-offline-overlay::before {
+  content: "";
+  position: absolute;
+  top: -200px;
+  left: -200px;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(57,130,247,0.19) 0%, rgba(57,130,247,0.08) 50%, transparent 100%);
+  pointer-events: none;
+}
+#aite-offline-overlay::after {
+  content: "";
+  position: absolute;
+  bottom: -200px;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(120,50,220,0.13) 0%, rgba(120,50,220,0.06) 50%, transparent 100%);
+  pointer-events: none;
+}
+.aite-offline-logo {
+  width: 110px;
+  height: 110px;
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  animation: aite-float 2s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 1;
+}
+@keyframes aite-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-30px); }
+}
+.aite-offline-title {
+  font-size: 60px;
+  font-weight: 900;
+  margin-top: 25px;
+  background: linear-gradient(90deg, #FFFFFF, #3982f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.05em;
+  position: relative;
+  z-index: 1;
+}
+.aite-offline-msg {
+  color: rgba(255,255,255,0.6);
+  font-size: 18px;
+  margin-top: 5px;
+  letter-spacing: 0.1em;
+  font-weight: 300;
+  position: relative;
+  z-index: 1;
+}
+.aite-offline-btn {
+  margin-top: 40px;
+  background: linear-gradient(135deg, #3982f7, #7832dc);
+  color: #fff;
+  border: none;
+  padding: 0 30px;
+  height: 45px;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.aite-offline-btn:active {
+  transform: scale(0.95);
 }
 </style>
 </head>
@@ -468,62 +582,165 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
-<!-- Page Transition Loading Bar -->
-<div id="aite-page-loader"></div>
+<!-- Aite PWA Native App Features -->
+<div id="aite-progress-bar"></div>
+<div id="aite-offline-overlay">
+  <img src="/icon-192.png" alt="Aite" class="aite-offline-logo">
+  <div class="aite-offline-title">Aite</div>
+  <div class="aite-offline-msg">no internet connection</div>
+  <button class="aite-offline-btn" onclick="location.reload()">Try Again</button>
+</div>
 <script>
 (function(){
-  var loader = document.getElementById('aite-page-loader');
-  if (!loader) return;
-  // Only show in PWA standalone mode, not in WebView or normal browser
   var isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   if (!isPWA) return;
+
+  var bar = document.getElementById('aite-progress-bar');
+  var currentProgress = 0;
+  var progressTimer = null;
   var isNavigating = false;
 
-  function startLoader() {
-    if (isNavigating) return;
-    isNavigating = true;
-    loader.style.width = '0';
-    loader.classList.add('active');
-    // Force reflow
-    void loader.offsetWidth;
-    loader.style.width = '70%';
-    setTimeout(function(){ if (isNavigating) loader.style.width = '85%'; }, 500);
-    setTimeout(function(){ if (isNavigating) loader.style.width = '92%'; }, 1500);
+  function setProgress(value) {
+    currentProgress = Math.min(value, 100);
+    if (bar) bar.style.width = currentProgress + '%';
   }
 
-  // Intercept all link clicks
+  function startProgress() {
+    if (isNavigating) return;
+    isNavigating = true;
+    currentProgress = 0;
+    if (bar) {
+      bar.style.transition = 'none';
+      bar.style.width = '0';
+      bar.style.opacity = '0';
+      void bar.offsetWidth;
+      bar.classList.add('active');
+      bar.style.opacity = '1';
+      bar.style.transition = 'width 150ms ease-out';
+    }
+    setProgress(15);
+    if (progressTimer) clearInterval(progressTimer);
+    progressTimer = setInterval(function() {
+      if (currentProgress < 50) setProgress(currentProgress + 3);
+      else if (currentProgress < 75) setProgress(currentProgress + 1.5);
+      else if (currentProgress < 90) setProgress(currentProgress + 0.5);
+      if (currentProgress >= 92) { clearInterval(progressTimer); progressTimer = null; }
+    }, 150);
+  }
+
+  function completeProgress() {
+    if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+    if (!bar) return;
+    bar.style.transition = 'width 100ms ease-out';
+    setProgress(100);
+    setTimeout(function() {
+      bar.style.transition = 'opacity 200ms ease';
+      bar.style.opacity = '0';
+      setTimeout(function() {
+        bar.classList.remove('active');
+        bar.style.width = '0';
+        bar.style.transition = 'width 150ms ease-out';
+        bar.style.opacity = '';
+        currentProgress = 0;
+        isNavigating = false;
+      }, 200);
+    }, 150);
+  }
+
   document.addEventListener('click', function(e) {
     var link = e.target.closest('a[href]');
     if (!link) return;
     var href = link.getAttribute('href');
     if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
     if (link.target === '_blank') return;
-    startLoader();
+    startProgress();
   });
 
-  // Also trigger on form submissions and programmatic navigation
-  window.addEventListener('beforeunload', function() {
-    startLoader();
-  });
+  window.addEventListener('beforeunload', function() { startProgress(); });
+  window.addEventListener('pageshow', function() { completeProgress(); });
+  if (document.readyState === 'complete') completeProgress();
+  else window.addEventListener('load', function() { completeProgress(); });
 
-  // Complete the bar when page loads
-  window.addEventListener('pageshow', function() {
-    if (loader.classList.contains('active')) {
-      loader.style.transition = 'width 0.2s ease-out';
-      loader.style.width = '100%';
-      setTimeout(function(){
-        loader.style.transition = 'opacity 0.3s ease';
-        loader.style.opacity = '0';
-        setTimeout(function(){
-          loader.classList.remove('active');
-          loader.style.width = '0';
-          loader.style.transition = 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
-          loader.style.opacity = '';
-          isNavigating = false;
-        }, 300);
-      }, 200);
+  document.addEventListener('contextmenu', function(e) {
+    var tag = e.target.tagName.toLowerCase();
+    if (tag !== 'input' && tag !== 'textarea' && !e.target.isContentEditable) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('dragstart', function(e) { e.preventDefault(); }, { passive: false });
+
+  var offlineOverlay = document.getElementById('aite-offline-overlay');
+  function checkOnline() {
+    if (!navigator.onLine && offlineOverlay) offlineOverlay.classList.add('show');
+    else if (offlineOverlay) offlineOverlay.classList.remove('show');
+  }
+  window.addEventListener('online', checkOnline);
+  window.addEventListener('offline', checkOnline);
+
+  var notifSound = null;
+  try { notifSound = new Audio('/notification.mp3'); notifSound.volume = 1.0; notifSound.preload = 'auto'; } catch(e) {}
+  window.aitePlayNotificationSound = function() {
+    try {
+      if (notifSound) { notifSound.currentTime = 0; notifSound.play().catch(function(){}); }
+      if (navigator.vibrate) navigator.vibrate([0, 300, 200, 300]);
+    } catch(e) {}
+  };
+  document.addEventListener('aite-new-notification', function() { window.aitePlayNotificationSound(); });
+})();
+</script>
+
+<!-- Aite Web Push Subscription -->
+<script>
+(function(){
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  async function subscribeWebPush() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) return; // already subscribed
+
+      const resp = await fetch('/api/vapid-public-key');
+      const data = await resp.json();
+      if (!data.ok || !data.publicKey) return;
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      const applicationServerKey = urlBase64ToUint8Array(data.publicKey);
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey
+      });
+
+      await fetch('/api/web-push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ subscription: subscription.toJSON() })
+      });
+    } catch (e) {
+      console.warn('Web Push subscription failed:', e);
     }
-  });
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  // Subscribe after page loads (with small delay to not block rendering)
+  if (document.readyState === 'complete') {
+    setTimeout(subscribeWebPush, 2000);
+  } else {
+    window.addEventListener('load', function() {
+      setTimeout(subscribeWebPush, 2000);
+    });
+  }
 })();
 </script>
 </body>

@@ -1,5 +1,5 @@
 // Service Worker - Smart Offline Caching + PWA Support
-const CACHE_NAME = 'aite-cache-v3';
+const CACHE_NAME = 'aite-cache-v5';
 const OFFLINE_PAGE = '/offline';
 
 // Assets to pre-cache (app shell)
@@ -11,6 +11,7 @@ const PRECACHE_URLS = [
   '/favicon-16.png',
   '/favicon-32.png',
   '/apple-touch-icon.png',
+  '/notification.mp3',
   '/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
@@ -153,5 +154,56 @@ self.addEventListener('fetch', (event) => {
           );
         });
       })
+  );
+});
+
+// ================ Web Push Notifications ================
+// استقبال إشعار Push من السيرفر
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  try {
+    const data = event.data.json();
+    const title = data.title || 'Aite';
+    const options = {
+      body: data.body || '',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/favicon-32.png',
+      tag: data.tag || 'aite-notification',
+      renotify: true,
+      vibrate: [0, 300, 200, 300],
+      data: {
+        url: data.url || '/chat_list',
+        type: data.type || 'general'
+      },
+      actions: [
+        { action: 'open', title: 'فتح' },
+        { action: 'close', title: 'إغلاق' }
+      ]
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (e) {
+    console.error('Push event error:', e);
+  }
+});
+
+// عند النقر على الإشعار
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  if (event.action === 'close') return;
+
+  const url = (event.notification.data && event.notification.data.url) || '/chat_list';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // إذا كان التطبيق مفتوحاً بالفعل، انتقل إليه
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus();
+          client.navigate(url);
+          return;
+        }
+      }
+      // فتح نافذة جديدة
+      return clients.openWindow(url);
+    })
   );
 });
