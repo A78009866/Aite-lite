@@ -22,13 +22,9 @@ const webpush = require('web-push');
 const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
 
 // ---------------- Web Push (VAPID) Setup ----------------
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails('mailto:aite@aite-lite.vercel.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-} else {
-  console.warn('VAPID keys not configured. Web push notifications will be disabled.');
-}
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BOzRVUrLN_jk6oTbu9fuqCVYsEliLNgl-83XyF2sIFzMCgBtuFWq9ZONvMZ9u_F-xu_bD6vOhNCBnocoHNMBp90';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'MJTfIx-jqV8L6IogzJy-0ikBJYI8uaMTsZjmxJTBEkk';
+webpush.setVapidDetails('mailto:aite@aite-lite.vercel.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 // Nodemailer transporter
 const mailTransporter = nodemailer.createTransport({
@@ -110,23 +106,7 @@ app.set('trust proxy', 1);
 
 // Security headers
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://cdn.jsdelivr.net", "https://www.gstatic.com", "https://sdk.imagekit.io"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://ik.imagekit.io", "https://via.placeholder.com", "https://plus.unsplash.com", "https://images.unsplash.com"],
-      mediaSrc: ["'self'", "blob:", "https://res.cloudinary.com", "https://ik.imagekit.io"],
-      connectSrc: ["'self'", "https://identitytoolkit.googleapis.com", "https://upload.imagekit.io", "https://ik.imagekit.io", "https://api.imagekit.io", "https://fcm.googleapis.com"],
-      fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-      workerSrc: ["'self'"],
-      manifestSrc: ["'self'"]
-    }
-  },
+  contentSecurityPolicy: false, // Disabled because app uses inline scripts/CDN
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
@@ -162,11 +142,8 @@ const writeLimiter = rateLimit({
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
-const CORS_ORIGINS = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',')
-  : ['http://localhost:8100', 'https://chat-trimer.vercel.app'];
 const corsOptions = {
-  origin: CORS_ORIGINS,
+  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -286,8 +263,8 @@ function requireAdmin(req, res, next) {
     return res.redirect('/login');
   }
 
-  const adminUid = process.env.ADMIN_UID || null;
-  const adminUsername = process.env.ADMIN_USERNAME || null;
+  const adminUid = process.env.ADMIN_UID || null; // ضع UID الخاص بك في .env للاستخدام الأفضل
+  const adminUsername = process.env.ADMIN_USERNAME || 'brahim1582007'; // اسم المستخدم الافتراضي للأدمن
 
   const email = req.session.email || '';
   const usernameFromEmail = email.split('@')[0]; // username@trimer.io
@@ -521,7 +498,6 @@ function clientWantsJson(req) {
 // ---------------- FCM Push Notifications Helper ----------------
 // دالة مساعدة لإرسال إشعار Push للجهاز عبر FCM + Web Push
 async function sendPushNotification(targetUserId, title, body, extraData = {}) {
-  if (!targetUserId) return;
   // إرسال FCM (للتطبيق الأصلي)
   try {
     const tokenSnap = await db.ref(`fcm_tokens/${targetUserId}`).once('value');
@@ -570,7 +546,6 @@ async function sendPushNotification(targetUserId, title, body, extraData = {}) {
   }
 
   // إرسال Web Push (لتطبيق PWA)
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
   try {
     const webSubsSnap = await db.ref(`web_push_subs/${targetUserId}`).once('value');
     const webSubs = webSubsSnap.val();
@@ -1161,10 +1136,7 @@ async function processMentions(text, fromUserId, context) {
 // Render mentions as styled links in text (for server-side rendered HTML)
 function renderMentions(text) {
   if (!text || typeof text !== 'string') return text;
-  return text.replace(/@([A-Za-z0-9._-]{3,32})/g, function(match, username) {
-    const safeUser = escapeHtml(username);
-    return '<a href="/profile?username=' + encodeURIComponent(safeUser) + '" class="mention-link" style="color:#3982f7;font-weight:600;">@' + safeUser + '</a>';
-  });
+  return text.replace(/@([A-Za-z0-9._-]{3,32})/g, '<a href="/profile?username=$1" class="mention-link" style="color:#3982f7;font-weight:600;">@$1</a>');
 }
 
 // ---------------- Cascading User Data Purge ----------------
@@ -1588,7 +1560,7 @@ app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, re
 
 // API: مصادقة رفع مباشر إلى ImageKit (لتجاوز حد Vercel 4.5MB)
 // Allows unauthenticated access for registration-related folders only
-app.post('/api/imagekit/auth', writeLimiter, (req, res, next) => {
+app.post('/api/imagekit/auth', (req, res, next) => {
   // Allow unauthenticated uploads for registration (profile_pics, cover_photos)
   const folder = String(req.body.folder || '');
   const UNAUTHENTICATED_FOLDERS = ['profile_pics', 'cover_photos'];
@@ -1621,7 +1593,7 @@ app.post('/api/imagekit/auth', writeLimiter, (req, res, next) => {
 });
 
 // Keep old endpoint as alias for backward compatibility
-app.post('/api/cloudinary/sign', writeLimiter, (req, res) => {
+app.post('/api/cloudinary/sign', (req, res) => {
   // Redirect to new ImageKit auth endpoint
   req.url = '/api/imagekit/auth';
   return app.handle(req, res);
@@ -2030,8 +2002,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
 app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const contactId = req.params.contactId;
-  const rawLimit = Number(req.query.limit) || 50;
-  const limit = Math.min(Math.max(rawLimit, 1), 200);
+  const { limit = 50 } = req.query;
 
   if (!contactId) return res.status(400).json({ ok: false, error: 'Contact ID missing' });
 
@@ -2041,7 +2012,7 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
   try {
     const messagesSnap = await messagesRef
       .orderByChild('timestamp')
-      .limitToLast(limit)
+      .limitToLast(Number(limit))
       .once('value');
 
     const messages = [];
@@ -2127,7 +2098,7 @@ app.get('/api/typing', requireAuth, async (req, res) => {
 
 // استبدل هذا الجزء بالكامل في ملف server.js
 
-app.post('/api/messages/send', writeLimiter, requireAuth, (req, res, next) => {
+app.post('/api/messages/send', writeLimiter, (req, res, next) => {
   // If content-type is JSON, skip multer (direct Cloudinary URLs)
   const ct = req.headers['content-type'] || '';
   if (ct.indexOf('application/json') !== -1) {
@@ -2135,7 +2106,7 @@ app.post('/api/messages/send', writeLimiter, requireAuth, (req, res, next) => {
   }
   // Otherwise use multer for file upload (backward compatibility)
   upload.array('media')(req, res, next);
-}, async (req, res) => {
+}, requireAuth, async (req, res) => {
   try {
     const senderId = req.session.userId;
     
@@ -2155,13 +2126,6 @@ app.post('/api/messages/send', writeLimiter, requireAuth, (req, res, next) => {
 
     if (!contact_id) {
       return res.status(400).json({ ok: false, error: 'Target user ID is missing' });
-    }
-
-    // Block check: prevent messaging between blocked users
-    const senderBlocked = await isBlocked(senderId, contact_id);
-    const contactBlocked = await isBlocked(contact_id, senderId);
-    if (senderBlocked || contactBlocked) {
-      return res.status(403).json({ ok: false, error: 'لا يمكن إرسال رسائل لهذا المستخدم.' });
     }
 
     // دعم روابط Cloudinary المباشرة أو data URLs (من chat.html) - validate URL
@@ -2331,12 +2295,6 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
 
   if (!reaction) {
     return res.status(400).json({ ok: false, error: 'reaction required' });
-  }
-
-  // Validate reaction is a known emoji (prevent storing arbitrary data)
-  const ALLOWED_REACTIONS = ['\u2764\uFE0F','\uD83D\uDE02','\uD83D\uDE2E','\uD83D\uDE22','\uD83D\uDE21','\uD83D\uDC4D','\uD83D\uDC4E','\uD83D\uDE4F','\uD83D\uDD25','\uD83C\uDF89','\u2764','\uD83D\uDC94','\uD83D\uDE0D','\uD83E\uDD23','\uD83D\uDE14','\uD83D\uDE31','\uD83D\uDC4C','\uD83D\uDE09','\uD83D\uDE18','\uD83E\uDD70'];
-  if (typeof reaction !== 'string' || reaction.length > 10 || (!ALLOWED_REACTIONS.includes(reaction) && !/^\p{Emoji}/u.test(reaction))) {
-    return res.status(400).json({ ok: false, error: 'Invalid reaction' });
   }
 
   const chatId = [userId, otherId].sort().join('_');
@@ -4608,7 +4566,7 @@ app.get('/api/posts/:postId/comments/stream', requireAuth, async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
-    'Access-Control-Allow-Origin': CORS_ORIGINS.includes(req.headers.origin) ? req.headers.origin : CORS_ORIGINS[0],
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : corsOptions.origin[0],
   });
   res.write('\n');
 
@@ -5435,7 +5393,7 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': CORS_ORIGINS.includes(req.headers.origin) ? req.headers.origin : CORS_ORIGINS[0],
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
   });
   res.write('\n');
 
@@ -5663,47 +5621,26 @@ app.use((err, req, res, next) => {
 // 2. API لتغيير كلمة المرور
 app.post('/api/change-password', requireAuth, authLimiter, async (req, res) => {
   const userId = req.session.userId;
-  const { currentPassword, newPassword } = req.body;
+  const { newPassword } = req.body;
 
   if (!userId) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
-  if (!currentPassword) {
-    return res.status(400).json({ ok: false, error: 'كلمة المرور الحالية مطلوبة' });
-  }
-
   if (!newPassword || newPassword.length < 6) {
-    return res.status(400).json({ ok: false, error: 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل' });
-  }
-  if (newPassword.length > 128) {
-    return res.status(400).json({ ok: false, error: 'كلمة المرور طويلة جداً.' });
+    return res.status(400).json({ ok: false, error: 'كلمة المرور ضعيفة' });
   }
 
   try {
-    // Verify current password before allowing change
-    const email = req.session.email;
-    if (!email) return res.status(400).json({ ok: false, error: 'خطأ في الجلسة' });
-
-    const apiKey = process.env.FIREBASE_WEB_API_KEY;
-    if (!apiKey) return res.status(500).json({ ok: false, error: 'Server misconfiguration' });
-
-    const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
-    const verifyResp = await fetch(verifyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: currentPassword, returnSecureToken: false })
-    });
-    if (!verifyResp.ok) {
-      return res.status(403).json({ ok: false, error: 'كلمة المرور الحالية غير صحيحة.' });
-    }
-
+    // التأكد من تحديث كلمة المرور للمستخدم الحالي (باستخدام uid الصحيح)
     await admin.auth().updateUser(userId, { password: newPassword });
 
     res.json({ ok: true, message: 'تم تحديث كلمة المرور بنجاح' });
   } catch (err) {
     console.error('Error changing password:', err);
-    res.status(500).json({ ok: false, error: 'فشل تغيير كلمة المرور' });
+    // تعامل مع أخطاء Firebase Auth المحتملة
+    const msg = err && err.message ? err.message : 'فشل تغيير كلمة المرور';
+    res.status(500).json({ ok: false, error: msg });
   }
 });
 // إضافة: DELETE account endpoint (باستخدام تحقق بكلمة المرور عبر Firebase REST + حذف بواسطة Admin SDK)
@@ -6003,7 +5940,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': CORS_ORIGINS.includes(req.headers.origin) ? req.headers.origin : CORS_ORIGINS[0],
+    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : corsOptions.origin[0],
   });
   res.write('\n');
 
