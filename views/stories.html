@@ -616,6 +616,32 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 }
 
 </style>
+
+<!-- Page Transition Loading Bar -->
+<style>
+#aite-page-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa, #2563eb, #818cf8, #3b82f6);
+  background-size: 300% 100%;
+  z-index: 999999;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(59,130,246,0.7), 0 0 5px rgba(59,130,246,0.5);
+  animation: aite-loader-gradient 1.5s linear infinite;
+  pointer-events: none;
+  opacity: 0;
+}
+#aite-page-loader.active {
+  opacity: 1;
+}
+@keyframes aite-loader-gradient {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+</style>
 </head>
 <body>
 
@@ -1660,6 +1686,65 @@ if ('serviceWorker' in navigator) {
       .catch(function(err) { console.log('SW registration failed:', err); });
   });
 }
+</script>
+
+<!-- Page Transition Loading Bar -->
+<div id="aite-page-loader"></div>
+<script>
+(function(){
+  var loader = document.getElementById('aite-page-loader');
+  if (!loader) return;
+  // Only show in PWA standalone mode, not in WebView or normal browser
+  var isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (!isPWA) return;
+  var isNavigating = false;
+
+  function startLoader() {
+    if (isNavigating) return;
+    isNavigating = true;
+    loader.style.width = '0';
+    loader.classList.add('active');
+    // Force reflow
+    void loader.offsetWidth;
+    loader.style.width = '70%';
+    setTimeout(function(){ if (isNavigating) loader.style.width = '85%'; }, 500);
+    setTimeout(function(){ if (isNavigating) loader.style.width = '92%'; }, 1500);
+  }
+
+  // Intercept all link clicks
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+    if (link.target === '_blank') return;
+    startLoader();
+  });
+
+  // Also trigger on form submissions and programmatic navigation
+  window.addEventListener('beforeunload', function() {
+    startLoader();
+  });
+
+  // Complete the bar when page loads
+  window.addEventListener('pageshow', function() {
+    if (loader.classList.contains('active')) {
+      loader.style.transition = 'width 0.2s ease-out';
+      loader.style.width = '100%';
+      setTimeout(function(){
+        loader.style.transition = 'opacity 0.3s ease';
+        loader.style.opacity = '0';
+        setTimeout(function(){
+          loader.classList.remove('active');
+          loader.style.width = '0';
+          loader.style.transition = 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+          loader.style.opacity = '';
+          isNavigating = false;
+        }, 300);
+      }, 200);
+    }
+  });
+})();
 </script>
 </body>
 </html>
