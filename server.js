@@ -3282,9 +3282,9 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
     return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
   }
 
-  // Validate mediaUrls array if provided (max 10 images)
+  // Validate mediaUrls array if provided
   if (mediaUrls && Array.isArray(mediaUrls)) {
-    mediaUrls = mediaUrls.filter(u => typeof u === 'string' && isValidUploadUrl(u)).slice(0, 10);
+    mediaUrls = mediaUrls.filter(u => typeof u === 'string' && isValidUploadUrl(u));
     if (mediaUrls.length === 0) mediaUrls = null;
   } else {
     mediaUrls = null;
