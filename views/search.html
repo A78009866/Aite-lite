@@ -89,11 +89,137 @@
         /* Verified Badge */
         .verified-badge-img { width: 14px; height: 14px; margin-right: 4px; vertical-align: middle; }
 
+        /* Post multi-image carousel */
+                .post-carousel-wrapper { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; direction: ltr; }
+                .post-carousel-track { display: flex; scrollbar-width: none; -ms-overflow-style: none; transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; cursor: grab; direction: ltr; }
+        .post-carousel-track:active { cursor: grabbing; }
+        .post-carousel-track::-webkit-scrollbar { display: none; }
+        .post-carousel-slide { min-width: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #000; }
+        .post-carousel-counter {
+          position: absolute; top: 10px; left: 10px; z-index: 4;
+          background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+          color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+          display: flex; align-items: center; gap: 6px;
+          border: 1px solid rgba(255,255,255,0.12);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          transition: opacity 0.3s, transform 0.3s;
+        }
+        .post-carousel-counter i { font-size: 11px; opacity: 0.85; }
+        .post-carousel-dots {
+          display: flex; justify-content: center; align-items: center;
+          gap: 5px; padding: 10px 0;
+        }
+        .post-carousel-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: rgba(255,255,255,0.3);
+          transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+          cursor: pointer;
+        }
+        .post-carousel-dot.active {
+          background: #3b82f6;
+          width: 20px; border-radius: 4px; height: 6px;
+        }
+        .post-carousel-arrow {
+          position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+          background: rgba(0,0,0,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+          color: #fff; border: 1px solid rgba(255,255,255,0.12);
+          width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 13px; opacity: 0; transition: opacity 0.25s, transform 0.2s;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .post-carousel-wrapper:hover .post-carousel-arrow { opacity: 0.85; }
+        .post-carousel-arrow:hover { opacity: 1 !important; transform: translateY(-50%) scale(1.08); }
+        .post-carousel-arrow.arrow-left { left: 8px; }
+        .post-carousel-arrow.arrow-right { right: 8px; }
         /* Limit post image height to fit within viewport */
         .post-carousel-slide img, .glass-post-card img {
           max-height: 70vh;
           object-fit: contain;
           background: #000;
+          pointer-events: auto;
+        }
+        /* Fullscreen image viewer for carousel */
+        .carousel-fullscreen-overlay {
+          position: fixed; inset: 0; z-index: 9999;
+          background: rgba(0,0,0,0.97);
+          display: none; flex-direction: column;
+          align-items: center; justify-content: center;
+          opacity: 0; transition: opacity 0.3s;
+        }
+        .carousel-fullscreen-overlay.active { display: flex; opacity: 1; }
+        .carousel-fullscreen-overlay .cfs-close {
+          position: absolute; top: 16px; right: 16px;
+          width: 42px; height: 42px; border-radius: 50%;
+          background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15);
+          color: #fff; font-size: 18px; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          z-index: 10; transition: background 0.2s;
+        }
+        .carousel-fullscreen-overlay .cfs-close:hover { background: rgba(255,255,255,0.25); }
+        .carousel-fullscreen-overlay .cfs-counter {
+          position: absolute; top: 20px; left: 20px;
+          background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+          color: #fff; padding: 6px 14px; border-radius: 20px;
+          font-size: 14px; font-weight: 700; z-index: 10;
+          display: flex; align-items: center; gap: 6px;
+        }
+        .carousel-fullscreen-overlay .cfs-counter i { font-size: 12px; opacity: 0.8; }
+        .carousel-fullscreen-overlay img {
+          max-width: 95vw; max-height: 88vh;
+          object-fit: contain; border-radius: 6px;
+          transition: transform 0.25s;
+        }
+        .carousel-fullscreen-overlay .cfs-nav {
+          position: absolute; top: 50%; transform: translateY(-50%);
+          width: 44px; height: 44px; border-radius: 50%;
+          background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15);
+          color: #fff; font-size: 16px; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          z-index: 10; transition: all 0.2s;
+        }
+        .carousel-fullscreen-overlay .cfs-nav:hover { background: rgba(255,255,255,0.25); }
+        .carousel-fullscreen-overlay .cfs-nav.cfs-prev { left: 12px; }
+        .carousel-fullscreen-overlay .cfs-nav.cfs-next { right: 12px; }
+        .cfs-dots { position: absolute; bottom: 20px; display: flex; gap: 6px; z-index: 10; }
+        .cfs-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.35); transition: all 0.3s; cursor: pointer; }
+        .cfs-dots span.active { background: #3b82f6; width: 22px; border-radius: 4px; }
+
+        /* Post content show more/less */
+        .post-content { position: relative; }
+        .post-text {
+            color: #e6eefb;
+            line-height: 1.55;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            white-space: pre-wrap;
+            -webkit-font-smoothing: antialiased;
+        }
+        .post-text.collapsed {
+            max-height: 6.6em;
+            overflow: hidden;
+        }
+        .post-text.expanded { max-height: none; }
+        .post-text-fade {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 2.2em;
+            pointer-events: none;
+            background: linear-gradient(to top, rgba(24,25,26,1), rgba(24,25,26,0));
+        }
+        .read-more-btn {
+            display:inline-flex; align-items:center; justify-content:center;
+            gap:6px; margin-top:8px;
+            background: transparent; border: none;
+            color: #60a5fa; cursor: pointer;
+            font-weight: 700; font-size: 0.95rem;
+            padding: 4px 6px;
+        }
+        .post-text a {
+            color: #60a5fa;
+            text-decoration: underline;
+            word-break: break-all;
+            cursor: pointer;
         }
 
         /* Bottom Navbar */
@@ -870,6 +996,14 @@
     html[data-theme="light"] .post-text-fade {
         background: linear-gradient(transparent, #ffffff) !important;
     }
+    /* Light mode carousel */
+    html[data-theme="light"] .post-carousel-counter { background: rgba(255,255,255,0.85); color: #1c1e21; border-color: rgba(0,0,0,0.1); }
+    html[data-theme="light"] .post-carousel-dot { background: rgba(0,0,0,0.2); }
+    html[data-theme="light"] .post-carousel-dot.active { background: #2563eb; }
+    html[data-theme="light"] .post-carousel-arrow { background: rgba(255,255,255,0.85); color: #1c1e21; border-color: rgba(0,0,0,0.1); }
+    html[data-theme="light"] .post-carousel-slide { background: #f0f2f5; }
+    html[data-theme="light"] .post-carousel-slide img { background: #f0f2f5; }
+    html[data-theme="light"] .post-text { color: #1c1e21; }
 
     /* --- Composer (Chat) --- */
     html[data-theme="light"] .composer {
@@ -2232,12 +2366,16 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                     postsContainer.innerHTML += createPostCardHtml(post);
                 });
 
-                // Initialize WaveSurfers for audio posts
+                // Initialize carousels and show-more after rendering
                 data.posts.forEach(post => {
                     if (post.media && post.media.type === 'audio') {
                         initWaveSurfer(post.postId, post.media.url);
                     }
+                    if (post.media && post.media.type === 'image' && post.mediaUrls && post.mediaUrls.length > 1) {
+                        initPostCarouselTouch('post-carousel-' + post.postId, post.postId, post.mediaUrls.length);
+                    }
                 });
+                setTimeout(setupShowMoreButtons, 150);
             }
 
             if (!hasResults) {
@@ -2252,9 +2390,22 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             let mediaContent = '';
             if (post.media) {
                 if (post.media.type === 'image' && post.mediaUrls && post.mediaUrls.length > 1) {
-                    mediaContent = `<div class="relative mt-3"><img src="${post.mediaUrls[0]}" class="w-full rounded-lg max-h-80 object-cover border border-gray-800"><span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;">1 / ${post.mediaUrls.length}</span></div>`;
+                    var carouselId = 'post-carousel-' + post.postId;
+                    var slides = post.mediaUrls.map(function(u, i) {
+                        return '<div class="post-carousel-slide"><img src="' + u + '" alt="" style="width:100%;max-height:70vh;object-fit:contain;" onclick="openCarouselFullscreen(' + JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;') + ',' + i + ');event.stopPropagation();"></div>';
+                    }).join('');
+                    var dots = post.mediaUrls.map(function(_, i) {
+                        return '<span class="post-carousel-dot' + (i === 0 ? ' active' : '') + '" onclick="event.stopPropagation();scrollPostCarouselTo(\'' + carouselId + '\',' + i + ',' + post.mediaUrls.length + ')"></span>';
+                    }).join('');
+                    mediaContent = '<div class="post-carousel-wrapper mt-3 rounded-lg overflow-hidden border border-gray-800">' +
+                        '<div class="post-carousel-counter"><i class="fas fa-images"></i><span>1 / ' + post.mediaUrls.length + '</span></div>' +
+                        '<button class="post-carousel-arrow arrow-left" onclick="event.stopPropagation();scrollPostCarousel(\'' + carouselId + '\',-1,' + post.mediaUrls.length + ')"><i class="fas fa-chevron-left"></i></button>' +
+                        '<button class="post-carousel-arrow arrow-right" onclick="event.stopPropagation();scrollPostCarousel(\'' + carouselId + '\',1,' + post.mediaUrls.length + ')"><i class="fas fa-chevron-right"></i></button>' +
+                        '<div class="post-carousel-track" id="' + carouselId + '">' + slides + '</div>' +
+                        '<div class="post-carousel-dots" id="dots-' + post.postId + '">' + dots + '</div>' +
+                    '</div>';
                 } else if (post.media.type === 'image') {
-                    mediaContent = `<img src="${post.media.url}" class="w-full rounded-lg mt-3 max-h-80 object-cover border border-gray-800">`;
+                    mediaContent = `<img src="${post.media.url}" class="w-full rounded-lg mt-3 max-h-80 object-cover border border-gray-800" onclick="openCarouselFullscreen(['${post.media.url}'],0);event.stopPropagation();">`;
                 } else if (post.media.type === 'video') {
                     mediaContent = `<div class="mt-3 relative aspect-video bg-black rounded-lg overflow-hidden border border-gray-800">
                         <video src="${post.media.url}" class="w-full h-full object-contain" preload="metadata"></video>
@@ -2274,16 +2425,14 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             }
 
             const verifiedBadge = post.user.is_verified ? `<img src="${VERIFIED_IMG_URL}" class="verified-badge-img">` : '';
-            const postContent = (post.content || '').length > 200 
-                ? post.content.substring(0, 200) + `<span class="text-blue-400 text-xs cursor-pointer">...عرض المزيد</span>` 
-                : (post.content || '');
+            const postContent = post.content || '';
 
             // Count likes/comments if available
             const likesCount = post.likesCount || (post.likes ? Object.keys(post.likes).length : 0);
             const commentsCount = post.commentsCount || 0;
 
             return `
-                <div class="glass-post-card overflow-hidden" onclick="window.location.href='/post.html?id=${post.postId}'" style="cursor:pointer;">
+                <div class="glass-post-card overflow-hidden" data-post-id="${post.postId}" onclick="window.location.href='/post.html?id=${post.postId}'" style="cursor:pointer;">
                     <div class="p-4">
                         <div class="flex items-center mb-3">
                             <img src="${post.user.profile_picture_url}" class="w-10 h-10 rounded-full border border-gray-700 object-cover ml-3" onerror="this.src='https://via.placeholder.com/40'">
@@ -2292,7 +2441,9 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                                 <div class="text-gray-500 text-xs">${new Date(post.timestamp).toLocaleDateString('ar-EG')}</div>
                             </div>
                         </div>
-                        <div class="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed">${postContent}</div>
+                        <div class="post-content">
+                            <p class="post-text text-sm">${postContent}</p>
+                        </div>
                     </div>
                     ${mediaContent}
                     <div class="px-4 py-2 flex items-center gap-4 border-t border-gray-800/50">
@@ -2346,6 +2497,260 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             }
         }
 
+        // ======== CAROUSEL JS ========
+        var _carouselSlides = {};
+
+        function updatePostCarouselUI(track, postId, total) {
+            var idx = _carouselSlides[postId] || 0;
+            if (idx < 0) idx = 0;
+            if (idx >= total) idx = total - 1;
+            _carouselSlides[postId] = idx;
+            var counter = track.parentElement.querySelector('.post-carousel-counter');
+            if (counter) {
+                var span = counter.querySelector('span');
+                if (span) span.textContent = (idx + 1) + ' / ' + total;
+                else counter.innerHTML = '<i class="fas fa-images"></i><span>' + (idx + 1) + ' / ' + total + '</span>';
+                counter.style.transform = 'scale(1.1)';
+                setTimeout(function() { counter.style.transform = 'scale(1)'; }, 200);
+            }
+            var dots = document.getElementById('dots-' + postId);
+            if (dots) {
+                dots.querySelectorAll('.post-carousel-dot').forEach(function(d, i) {
+                    d.classList.toggle('active', i === idx);
+                });
+            }
+            track.style.transform = 'translateX(-' + (idx * 100) + '%)';
+        }
+
+        function scrollPostCarousel(trackId, direction, total) {
+            var track = document.getElementById(trackId);
+            if (!track) return;
+            var postId = trackId.replace('post-carousel-', '');
+            var currentIdx = _carouselSlides[postId] || 0;
+            var newIdx = currentIdx + direction;
+            if (newIdx < 0) newIdx = 0;
+            if (newIdx >= total) newIdx = total - 1;
+            _carouselSlides[postId] = newIdx;
+            track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            updatePostCarouselUI(track, postId, total);
+        }
+
+        function scrollPostCarouselTo(trackId, idx, total) {
+            var track = document.getElementById(trackId);
+            if (!track) return;
+            var postId = trackId.replace('post-carousel-', '');
+            if (idx < 0) idx = 0;
+            if (idx >= total) idx = total - 1;
+            _carouselSlides[postId] = idx;
+            track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            updatePostCarouselUI(track, postId, total);
+        }
+
+        function initPostCarouselTouch(trackId, postId, total) {
+            var track = document.getElementById(trackId);
+            if (!track) return;
+            if (track._carouselInitialized) return;
+            track._carouselInitialized = true;
+            var startX = 0, startY = 0, currentX = 0, isDragging = false, isHorizontal = null;
+            var startTime = 0;
+            var threshold = 40;
+
+            track.addEventListener('touchstart', function(e) {
+                if (total <= 1) return;
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                currentX = startX;
+                isDragging = true;
+                isHorizontal = null;
+                startTime = Date.now();
+                track.style.transition = 'none';
+            }, { passive: true });
+            track.addEventListener('touchmove', function(e) {
+                if (!isDragging) return;
+                var touchX = e.touches[0].clientX;
+                var touchY = e.touches[0].clientY;
+                var diffX = touchX - startX;
+                var diffY = touchY - startY;
+                if (isHorizontal === null && (Math.abs(diffX) > 5 || Math.abs(diffY) > 5)) {
+                    isHorizontal = Math.abs(diffX) > Math.abs(diffY);
+                }
+                if (!isHorizontal) return;
+                e.preventDefault();
+                currentX = touchX;
+                var dragOffset = currentX - startX;
+                var idx = _carouselSlides[postId] || 0;
+                var trackWidth = track.offsetWidth;
+                if ((idx === 0 && dragOffset > 0) || (idx === total - 1 && dragOffset < 0)) {
+                    dragOffset = dragOffset * 0.25;
+                }
+                var translateX = -(idx * trackWidth) + dragOffset;
+                track.style.transform = 'translateX(' + translateX + 'px)';
+            }, { passive: false });
+            track.addEventListener('touchend', function() {
+                if (!isDragging || !isHorizontal) { isDragging = false; return; }
+                isDragging = false;
+                var diffX = currentX - startX;
+                var elapsed = Date.now() - startTime;
+                var velocity = Math.abs(diffX) / (elapsed || 1);
+                var idx = _carouselSlides[postId] || 0;
+                track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                var shouldSwipe = (velocity > 0.3 && Math.abs(diffX) > 15) || Math.abs(diffX) > threshold;
+                if (shouldSwipe) {
+                    if (diffX < 0 && idx < total - 1) idx++;
+                    else if (diffX > 0 && idx > 0) idx--;
+                }
+                _carouselSlides[postId] = idx;
+                updatePostCarouselUI(track, postId, total);
+            }, { passive: true });
+
+            var mouseStartX = 0, mouseDown = false, mouseMoved = false;
+            track.addEventListener('mousedown', function(e) {
+                if (total <= 1) return;
+                e.preventDefault();
+                mouseDown = true;
+                mouseMoved = false;
+                mouseStartX = e.clientX;
+                currentX = mouseStartX;
+                startTime = Date.now();
+                track.style.transition = 'none';
+                track.style.cursor = 'grabbing';
+            });
+            track.addEventListener('mousemove', function(e) {
+                if (!mouseDown) return;
+                e.preventDefault();
+                mouseMoved = true;
+                currentX = e.clientX;
+                var dragOffset = currentX - mouseStartX;
+                var idx = _carouselSlides[postId] || 0;
+                var trackWidth = track.offsetWidth;
+                if ((idx === 0 && dragOffset > 0) || (idx === total - 1 && dragOffset < 0)) {
+                    dragOffset = dragOffset * 0.25;
+                }
+                var translateX = -(idx * trackWidth) + dragOffset;
+                track.style.transform = 'translateX(' + translateX + 'px)';
+            });
+            var mouseEndHandler = function() {
+                if (!mouseDown) return;
+                mouseDown = false;
+                track.style.cursor = 'grab';
+                if (!mouseMoved) return;
+                var diffX = currentX - mouseStartX;
+                var elapsed = Date.now() - startTime;
+                var velocity = Math.abs(diffX) / (elapsed || 1);
+                var idx = _carouselSlides[postId] || 0;
+                track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                var shouldSwipe = (velocity > 0.3 && Math.abs(diffX) > 15) || Math.abs(diffX) > threshold;
+                if (shouldSwipe) {
+                    if (diffX < 0 && idx < total - 1) idx++;
+                    else if (diffX > 0 && idx > 0) idx--;
+                }
+                _carouselSlides[postId] = idx;
+                updatePostCarouselUI(track, postId, total);
+            };
+            track.addEventListener('mouseup', mouseEndHandler);
+            track.addEventListener('mouseleave', mouseEndHandler);
+            track.addEventListener('click', function(e) {
+                if (mouseMoved) { e.preventDefault(); e.stopPropagation(); mouseMoved = false; }
+            }, true);
+        }
+
+        // ======== FULLSCREEN CAROUSEL VIEWER ========
+        var _cfsUrls = [];
+        var _cfsIdx = 0;
+        function openCarouselFullscreen(urls, startIdx) {
+            _cfsUrls = urls;
+            _cfsIdx = startIdx || 0;
+            var overlay = document.getElementById('carouselFullscreenOverlay');
+            if (!overlay) return;
+            renderCarouselFullscreen();
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeCarouselFullscreen(e) {
+            if (e) e.stopPropagation();
+            var overlay = document.getElementById('carouselFullscreenOverlay');
+            if (overlay) overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        function renderCarouselFullscreen() {
+            var content = document.getElementById('cfsContent');
+            var counter = document.getElementById('cfsCounter');
+            var dots = document.getElementById('cfsDots');
+            var prevBtn = document.getElementById('cfsPrev');
+            var nextBtn = document.getElementById('cfsNext');
+            if (!content) return;
+            content.innerHTML = '<img src="' + _cfsUrls[_cfsIdx] + '" alt="" style="max-width:95vw;max-height:88vh;object-fit:contain;border-radius:6px;" onclick="event.stopPropagation()">';
+            if (counter) counter.innerHTML = '<i class="fas fa-images"></i>' + (_cfsIdx + 1) + ' / ' + _cfsUrls.length;
+            if (dots) {
+                dots.innerHTML = '';
+                _cfsUrls.forEach(function(_, i) {
+                    var d = document.createElement('span');
+                    d.className = i === _cfsIdx ? 'active' : '';
+                    d.onclick = function(e) { e.stopPropagation(); _cfsIdx = i; renderCarouselFullscreen(); };
+                    dots.appendChild(d);
+                });
+            }
+            if (prevBtn) prevBtn.style.display = _cfsIdx > 0 ? '' : 'none';
+            if (nextBtn) nextBtn.style.display = _cfsIdx < _cfsUrls.length - 1 ? '' : 'none';
+        }
+        function cfsNav(dir, e) {
+            if (e) e.stopPropagation();
+            _cfsIdx += dir;
+            if (_cfsIdx < 0) _cfsIdx = 0;
+            if (_cfsIdx >= _cfsUrls.length) _cfsIdx = _cfsUrls.length - 1;
+            renderCarouselFullscreen();
+        }
+
+        // ======== SHOW MORE / SHOW LESS ========
+        function setupShowMoreButtons() {
+            document.querySelectorAll('.post-content').forEach(function(container) {
+                try {
+                    var textEl = container.querySelector('.post-text');
+                    if (!textEl) return;
+                    var existingBtn = container.querySelector('.read-more-btn');
+                    var existingFade = container.querySelector('.post-text-fade');
+                    if (existingBtn) existingBtn.remove();
+                    if (existingFade) existingFade.remove();
+                    textEl.classList.add('collapsed');
+                    textEl.classList.remove('expanded');
+                    setTimeout(function() {
+                        if (textEl.scrollHeight > textEl.clientHeight + 3) {
+                            var fade = document.createElement('div');
+                            fade.className = 'post-text-fade';
+                            container.appendChild(fade);
+                            var btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'read-more-btn';
+                            btn.innerText = 'عرض المزيد';
+                            btn.setAttribute('aria-expanded', 'false');
+                            btn.addEventListener('click', function(e) {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                var expanded = textEl.classList.toggle('expanded');
+                                if (expanded) {
+                                    textEl.classList.remove('collapsed');
+                                    btn.innerText = 'عرض أقل';
+                                    btn.setAttribute('aria-expanded', 'true');
+                                    if (fade) fade.style.display = 'none';
+                                } else {
+                                    textEl.classList.add('collapsed');
+                                    btn.innerText = 'عرض المزيد';
+                                    btn.setAttribute('aria-expanded', 'false');
+                                    if (fade) fade.style.display = '';
+                                    try { container.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(err){}
+                                }
+                            });
+                            container.appendChild(btn);
+                        } else {
+                            textEl.classList.remove('collapsed', 'expanded');
+                        }
+                    }, 80);
+                } catch (e) {
+                    console.warn('showMore setup failed', e);
+                }
+            });
+        }
+
     </script>
 
 
@@ -2393,6 +2798,16 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 
 
 
+
+<!-- Fullscreen Carousel Overlay -->
+<div id="carouselFullscreenOverlay" class="carousel-fullscreen-overlay" onclick="closeCarouselFullscreen(event)">
+    <button class="cfs-close" onclick="closeCarouselFullscreen(event)"><i class="fas fa-times"></i></button>
+    <div class="cfs-counter" id="cfsCounter"><i class="fas fa-images"></i>1 / 1</div>
+    <button class="cfs-nav cfs-prev" id="cfsPrev" onclick="cfsNav(-1,event)"><i class="fas fa-chevron-left"></i></button>
+    <div id="cfsContent" style="display:flex;align-items:center;justify-content:center;"></div>
+    <button class="cfs-nav cfs-next" id="cfsNext" onclick="cfsNav(1,event)"><i class="fas fa-chevron-right"></i></button>
+    <div class="cfs-dots" id="cfsDots"></div>
+</div>
 
 <!-- PWA Install Prompt -->
 <div id="pwaInstallBar" style="display:none;">

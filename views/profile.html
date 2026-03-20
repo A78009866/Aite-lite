@@ -2539,8 +2539,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
 }
 
 /* Post multi-image carousel */
-.post-carousel-wrapper { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; }
-.post-carousel-track { display: flex; scrollbar-width: none; -ms-overflow-style: none; transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1); will-change: transform; cursor: grab; direction: ltr; }
+.post-carousel-wrapper { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; direction: ltr; }
+.post-carousel-track { display: flex; scrollbar-width: none; -ms-overflow-style: none; transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; cursor: grab; direction: ltr; }
 .post-carousel-track:active { cursor: grabbing; }
 .post-carousel-track::-webkit-scrollbar { display: none; }
 .post-carousel-slide { min-width: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #000; }
@@ -3815,7 +3815,7 @@ function scrollPostCarousel(trackId, direction, total) {
     if (newIdx < 0) newIdx = 0;
     if (newIdx >= total) newIdx = total - 1;
     _carouselSlides[postId] = newIdx;
-    track.style.transition = 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)';
+    track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
     updatePostCarouselUI(track, postId, total);
 }
 
@@ -3868,7 +3868,7 @@ function initPostCarouselTouch(trackId, postId, total) {
         var elapsed = Date.now() - startTime;
         var velocity = Math.abs(diffX) / (elapsed || 1);
         var idx = _carouselSlides[postId] || 0;
-        track.style.transition = 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)';
+        track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         // Use velocity for quick swipes, distance for slow drags
         var shouldSwipe = (velocity > 0.3 && Math.abs(diffX) > 15) || Math.abs(diffX) > threshold;
         if (shouldSwipe) {
@@ -3915,7 +3915,7 @@ function initPostCarouselTouch(trackId, postId, total) {
         var elapsed = Date.now() - startTime;
         var velocity = Math.abs(diffX) / (elapsed || 1);
         var idx = _carouselSlides[postId] || 0;
-        track.style.transition = 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)';
+        track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         var shouldSwipe = (velocity > 0.3 && Math.abs(diffX) > 15) || Math.abs(diffX) > threshold;
         if (shouldSwipe) {
             if (diffX < 0 && idx < total - 1) idx++;
@@ -5553,23 +5553,27 @@ function setupShowMoreButtons() {
     document.querySelectorAll('.post-text').forEach(el => {
         if (el.dataset.smInit === '1') return;
         el.dataset.smInit = '1';
-        if (el.scrollHeight > 140) {
-            el.classList.add('collapsed');
-            const fade = document.createElement('div');
-            fade.className = 'post-text-fade';
-            el.parentElement.appendChild(fade);
-            const btn = document.createElement('button');
-            btn.className = 'read-more-btn';
-            btn.textContent = 'عرض المزيد';
-            btn.addEventListener('click', () => {
-                const isCollapsed = el.classList.contains('collapsed');
-                el.classList.toggle('collapsed');
-                el.classList.toggle('expanded');
-                fade.style.display = isCollapsed ? 'none' : 'block';
-                btn.textContent = isCollapsed ? 'عرض أقل' : 'عرض المزيد';
-            });
-            el.parentElement.appendChild(btn);
-        }
+        // Use requestAnimationFrame to ensure layout is calculated
+        requestAnimationFrame(function() {
+            var textLen = (el.textContent || el.innerText || '').length;
+            if (el.scrollHeight > 140 || textLen > 200) {
+                el.classList.add('collapsed');
+                var fade = document.createElement('div');
+                fade.className = 'post-text-fade';
+                el.parentElement.appendChild(fade);
+                var btn = document.createElement('button');
+                btn.className = 'read-more-btn';
+                btn.textContent = 'عرض المزيد';
+                btn.addEventListener('click', function() {
+                    var isCollapsed = el.classList.contains('collapsed');
+                    el.classList.toggle('collapsed');
+                    el.classList.toggle('expanded');
+                    fade.style.display = isCollapsed ? 'none' : 'block';
+                    btn.textContent = isCollapsed ? 'عرض أقل' : 'عرض المزيد';
+                });
+                el.parentElement.appendChild(btn);
+            }
+        });
     });
 }
 
