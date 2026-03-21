@@ -62,12 +62,12 @@
             position: relative; width: 100%; border-radius: 20px; overflow: hidden;
             background: #000; border: 1px solid rgba(255, 255, 255, 0.08);
         }
-        .media-preview-area img {
-            width: 100%; max-height: 340px; object-fit: contain; display: block; background: #000;
-        }
-        .media-preview-area video {
-            width: 100%; max-height: 340px; object-fit: contain; display: block; background: #000;
-        }
+                .media-preview-area img {
+                    width: 100%; max-height: 70vh; object-fit: contain; display: block; background: #000;
+                }
+                .media-preview-area video {
+                    width: 100%; max-height: 70vh; object-fit: contain; display: block; background: #000;
+                }
         .media-preview-area video::-webkit-media-controls-panel { background: transparent; }
         .remove-media-btn {
             position: absolute; top: 12px; right: 12px;
@@ -2277,30 +2277,46 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         document.getElementById('selectedTrackUI').style.display = 'none';
     }
 
-    // Aggressive client-side image compression - very small files for fast upload
+    // Client-side image compression for stories
     async function compressImage(file, maxWidth, maxHeight, quality) {
-        maxWidth = maxWidth || 800;
-        maxHeight = maxHeight || 800;
-        quality = quality || 0.45;
+        maxWidth = maxWidth || 1920;
+        maxHeight = maxHeight || 1920;
+        quality = quality || 0.65;
         if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
         return new Promise(function(resolve) {
             var img = new Image();
-            img.onload = function() {
-                var w = img.width, h = img.height;
-                var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
-                var newW = Math.round(w * ratio);
-                var newH = Math.round(h * ratio);
-                var canvas = document.createElement('canvas');
-                canvas.width = newW;
-                canvas.height = newH;
-                var ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, newW, newH);
-                canvas.toBlob(function(blob) {
-                    resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }) : file);
-                }, 'image/jpeg', quality);
-            };
-            img.onerror = function() { resolve(file); };
             var objUrl = URL.createObjectURL(file);
+            img.onload = function() {
+                try {
+                    var w = img.width, h = img.height;
+                    var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
+                    var newW = Math.round(w * ratio);
+                    var newH = Math.round(h * ratio);
+                    var canvas = document.createElement('canvas');
+                    canvas.width = newW;
+                    canvas.height = newH;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, newW, newH);
+                    canvas.toBlob(function(blob) {
+                        URL.revokeObjectURL(objUrl);
+                        if (blob && blob.size < file.size) {
+                            resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }));
+                        } else if (blob) {
+                            // Try lower quality if compressed is still larger
+                            canvas.toBlob(function(blob2) {
+                                resolve(blob2 ? new File([blob2], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }) : file);
+                            }, 'image/jpeg', 0.4);
+                        } else {
+                            resolve(file);
+                        }
+                    }, 'image/jpeg', quality);
+                } catch(e) {
+                    console.error('Compression error:', e);
+                    URL.revokeObjectURL(objUrl);
+                    resolve(file);
+                }
+            };
+            img.onerror = function() { URL.revokeObjectURL(objUrl); resolve(file); };
             img.src = objUrl;
         });
     }
