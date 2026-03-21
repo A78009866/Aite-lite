@@ -2859,9 +2859,32 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   border-radius: 50%;
 }
 
+/* Media Skeleton Loading */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.media-skeleton {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(90deg, #1a1a2e 25%, #252540 37%, #1a1a2e 63%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.media-skeleton-icon {
+  color: rgba(255,255,255,0.15);
+  font-size: 36px;
+}
+.media-skeleton-hide { display: none !important; }
+
 /* Post multi-image carousel */
-.post-carousel-wrapper { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; direction: ltr; width: 100%; }
-.post-carousel-track { display: flex; scrollbar-width: none; -ms-overflow-style: none; transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; cursor: grab; direction: ltr; width: 100%; }
+.post-carousel-wrapper { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; direction: rtl; width: 100%; }
+.post-carousel-track { display: flex; scrollbar-width: none; -ms-overflow-style: none; transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; cursor: grab; direction: rtl; width: 100%; }
 .post-carousel-track:active { cursor: grabbing; }
 .post-carousel-track::-webkit-scrollbar { display: none; }
 .post-carousel-slide { width: 100%; min-width: 100%; max-width: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
@@ -4330,7 +4353,7 @@ function handleNotifClick(el) {
                     d.classList.toggle('active', i === idx);
                 });
             }
-            track.style.transform = 'translateX(-' + (idx * 100) + '%)';
+            track.style.transform = 'translateX(' + (idx * 100) + '%)';
         }
 
         function scrollPostCarousel(trackId, direction, total) {
@@ -4385,7 +4408,7 @@ function handleNotifClick(el) {
                 if ((idx === 0 && dragOffset > 0) || (idx === total - 1 && dragOffset < 0)) {
                     dragOffset = dragOffset * 0.25;
                 }
-                var translateX = -(idx * trackWidth) + dragOffset;
+                var translateX = (idx * trackWidth) - dragOffset;
                 track.style.transform = 'translateX(' + translateX + 'px)';
             }, { passive: false });
             track.addEventListener('touchend', function() {
@@ -4430,7 +4453,7 @@ function handleNotifClick(el) {
                 if ((idx === 0 && dragOffset > 0) || (idx === total - 1 && dragOffset < 0)) {
                     dragOffset = dragOffset * 0.25;
                 }
-                var translateX = -(idx * trackWidth) + dragOffset;
+                var translateX = (idx * trackWidth) - dragOffset;
                 track.style.transform = 'translateX(' + translateX + 'px)';
             });
             var mouseEndHandler = function() {
@@ -5321,14 +5344,14 @@ function handleNotifClick(el) {
                     let dotsHtml = '';
                     post.mediaUrls.forEach(function(url, idx) {
                         const safeUrl = escapeAttr(url);
-                        slidesHtml += `<div class="post-carousel-slide"><img src="${safeUrl}" alt="صورة ${idx+1}" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;border-radius:0;cursor:pointer;" onclick="openCarouselFullscreen(${JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;')}, ${idx})" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'"></div>`;
+                        slidesHtml += `<div class="post-carousel-slide"><div class="media-skeleton" id="skel-${carouselId}-${idx}"><i class="fas fa-image media-skeleton-icon"></i></div><img src="${safeUrl}" alt="صورة ${idx+1}" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;border-radius:0;cursor:pointer;display:none;" onload="this.style.display='block';var s=document.getElementById('skel-${carouselId}-${idx}');if(s)s.classList.add('media-skeleton-hide');" onclick="openCarouselFullscreen(${JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;')}, ${idx})" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}';this.style.display='block';var s=document.getElementById('skel-${carouselId}-${idx}');if(s)s.classList.add('media-skeleton-hide');"></div>`;
                         dotsHtml += `<span class="post-carousel-dot${idx === 0 ? ' active' : ''}" data-idx="${idx}"></span>`;
                     });
                     mediaContent = `
                         <div class="post-carousel-wrapper">
                             <div class="post-carousel-counter"><i class="fas fa-images"></i><span>1 / ${post.mediaUrls.length}</span></div>
-                            <button class="post-carousel-arrow arrow-left" onclick="scrollPostCarousel('${carouselId}', -1, ${post.mediaUrls.length})"><i class="fas fa-chevron-left"></i></button>
-                            <button class="post-carousel-arrow arrow-right" onclick="scrollPostCarousel('${carouselId}', 1, ${post.mediaUrls.length})"><i class="fas fa-chevron-right"></i></button>
+                                                        <button class="post-carousel-arrow arrow-left" onclick="scrollPostCarousel('${carouselId}', 1, ${post.mediaUrls.length})"><i class="fas fa-chevron-left"></i></button>
+                                                        <button class="post-carousel-arrow arrow-right" onclick="scrollPostCarousel('${carouselId}', -1, ${post.mediaUrls.length})"><i class="fas fa-chevron-right"></i></button>
                             <div id="${carouselId}" class="post-carousel-track">
                                 ${slidesHtml}
                             </div>
@@ -5340,8 +5363,9 @@ function handleNotifClick(el) {
                 } else if (post.media.type === 'image') {
                     const imgUrl = escapeAttr(post.media.url || '');
                     mediaContent = `
-                        <div class="cursor-pointer" onclick="openMediaViewer('${imgUrl}', 'image', event)">
-                            <img src="${imgUrl}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'">
+                        <div class="cursor-pointer" onclick="openMediaViewer('${imgUrl}', 'image', event)" style="position:relative;">
+                            <div class="media-skeleton" id="skel-img-${escapeAttr(post.postId)}"><i class="fas fa-image media-skeleton-icon"></i></div>
+                            <img src="${imgUrl}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0;display:none;" onload="this.style.display='block';var s=document.getElementById('skel-img-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}';this.style.display='block';var s=document.getElementById('skel-img-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');">
                         </div>
                     `;
                 } else if (post.media.type === 'video') {
@@ -5351,12 +5375,14 @@ function handleNotifClick(el) {
                      const videoSrc = escapeAttr(post.media.url || '');
                      mediaContent = `
                         <div class="relative w-full video-large overflow-hidden bg-black group" id="video-container-${escapeAttr(post.postId)}" style="border-radius:0">
+                            <div class="media-skeleton" id="skel-vid-${escapeAttr(post.postId)}"><i class="fas fa-video media-skeleton-icon"></i></div>
                             <video id="video-${escapeAttr(post.postId)}" src="${videoSrc}" 
                                    class="w-full object-contain" 
                                    poster="${poster}" 
                                    preload="auto"
                                    playsinline
-                                   style="aspect-ratio:16/9;"
+                                   style="aspect-ratio:16/9;display:none;"
+                                   onloadeddata="this.style.display='block';var s=document.getElementById('skel-vid-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');"
                                    onclick="toggleVideoPlay('${escapeAttr(post.postId)}', event)">
                             </video>
                             

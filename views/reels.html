@@ -848,6 +848,29 @@ html[data-theme="light"] #replyIndicator {
     border-color: rgba(37,99,235,0.3) !important;
 }
 
+/* Media Skeleton Loading */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.media-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #1a1a2e 25%, #252540 37%, #1a1a2e 63%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  z-index: 1;
+}
+.media-skeleton-icon {
+  color: rgba(255,255,255,0.15);
+  font-size: 48px;
+}
+.media-skeleton-hide { display: none !important; }
+
 </style>
 
 <!-- Aite PWA Native App Features -->
@@ -1173,8 +1196,9 @@ html[data-theme="light"] #replyIndicator {
       const isOwner = reel.userId === currentUserId;
       const poster = reel.thumbnailUrl || getVideoThumbnail(reel.videoUrl) || BLACK_POSTER;
       return `
-      <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}">
-        <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-contain" playsinline preload="metadata" webkit-playsinline></video>
+      <div class="swiper-slide" data-index="${index}" data-id="${reel.reelId}" style="position:relative;">
+        <div class="media-skeleton" id="skel-reel-${reel.reelId}"><i class="fas fa-video media-skeleton-icon"></i></div>
+        <video src="${reel.videoUrl}" poster="${poster}" class="w-full h-full object-contain" playsinline preload="metadata" webkit-playsinline style="position:relative;z-index:2;" onloadeddata="var s=document.getElementById('skel-reel-${reel.reelId}');if(s)s.classList.add('media-skeleton-hide');">
         <i class="fas fa-heart big-heart" id="bigHeart-${reel.reelId}"></i>
         <div class="play-btn" id="playBtn-${reel.reelId}"><i class="fas fa-play"></i></div>
         <div class="video-progress" id="progress-${reel.reelId}">

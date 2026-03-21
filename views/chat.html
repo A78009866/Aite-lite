@@ -354,6 +354,30 @@ pre, code { white-space: pre-wrap; word-break: break-all; }
   z-index: 1;
 }
 
+/* Media Skeleton Loading */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.media-skeleton {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(90deg, #1a1a2e 25%, #252540 37%, #1a1a2e 63%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 16px;
+}
+.media-skeleton-icon {
+  color: rgba(255,255,255,0.15);
+  font-size: 36px;
+}
+.media-skeleton-hide { display: none !important; }
+
 /* Media Styles - Separate from bubble */
 .msg-media-standalone {
   margin-top: 4px;
@@ -3736,13 +3760,14 @@ function createMsgElement(msg, showAvatar) {
     
     if (type.startsWith('image')) {
         var imgId = 'img-' + msg.messageId;
-        contentHtml += `<div class="msg-media-standalone"><img id="${imgId}" src="${url}" data-media-url="${url.startsWith('data:') ? '' : url}" onclick="openChatMediaViewer(this.dataset.mediaUrl || this.src, 'image')"></div>`;
+        contentHtml += `<div class="msg-media-standalone"><div class="media-skeleton" id="skel-${imgId}"><i class="fas fa-image media-skeleton-icon"></i></div><img id="${imgId}" src="${url}" data-media-url="${url.startsWith('data:') ? '' : url}" style="display:none;" onload="this.style.display='block';var s=document.getElementById('skel-${imgId}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.style.display='block';var s=document.getElementById('skel-${imgId}');if(s)s.classList.add('media-skeleton-hide');" onclick="openChatMediaViewer(this.dataset.mediaUrl || this.src, 'image')"></div>`;
     } else if (type.startsWith('video')) {
         const vidId = 'chatv-' + msg.messageId;
         const vidPoster = getVideoThumbnail(url);
         contentHtml += `<div class="msg-media-standalone">
             <div class="chat-video-wrap">
-                <video id="${vidId}" src="${url}" playsinline preload="metadata" ${vidPoster ? 'poster="' + vidPoster + '"' : ''} onclick="toggleChatVideo('${vidId}')"></video>
+                <div class="media-skeleton" id="skel-${vidId}"><i class="fas fa-video media-skeleton-icon"></i></div>
+                <video id="${vidId}" src="${url}" playsinline preload="metadata" ${vidPoster ? 'poster="' + vidPoster + '"' : ''} style="display:none;" onloadeddata="this.style.display='block';var s=document.getElementById('skel-${vidId}');if(s)s.classList.add('media-skeleton-hide');" onclick="toggleChatVideo('${vidId}')"></video>
                 <div class="chat-video-overlay" id="overlay-${vidId}" onclick="toggleChatVideo('${vidId}')">
                     <div class="chat-video-play-circle"><i class="fas fa-play"></i></div>
                 </div>
