@@ -360,9 +360,11 @@ pre, code { white-space: pre-wrap; word-break: break-all; }
   100% { background-position: 200% 0; }
 }
 .media-skeleton {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 16/9;
+  height: 100%;
+  min-height: 200px;
   background: linear-gradient(90deg, #1a1a2e 25%, #252540 37%, #1a1a2e 63%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
@@ -371,12 +373,14 @@ pre, code { white-space: pre-wrap; word-break: break-all; }
   justify-content: center;
   overflow: hidden;
   border-radius: 16px;
+  z-index: 2;
+  transition: opacity 0.3s;
 }
 .media-skeleton-icon {
   color: rgba(255,255,255,0.15);
   font-size: 36px;
 }
-.media-skeleton-hide { display: none !important; }
+.media-skeleton-hide { opacity: 0; pointer-events: none; }
 
 /* Media Styles - Separate from bubble */
 .msg-media-standalone {
@@ -384,7 +388,8 @@ pre, code { white-space: pre-wrap; word-break: break-all; }
   border-radius: 16px;
   overflow: hidden;
   position: relative;
-  max-width: 280px;
+  max-width: 340px;
+  min-height: 200px;
 }
 .msg-media-standalone img {
   width: 100%;
@@ -392,7 +397,9 @@ pre, code { white-space: pre-wrap; word-break: break-all; }
   display: block;
   cursor: pointer;
   border-radius: 16px;
-  transition: opacity 0.2s, transform 0.2s;
+  transition: opacity 0.3s, transform 0.2s;
+  position: relative;
+  z-index: 1;
 }
 .msg-media-standalone img:active { opacity: 0.85; transform: scale(0.98); }
 
@@ -3760,14 +3767,14 @@ function createMsgElement(msg, showAvatar) {
     
     if (type.startsWith('image')) {
         var imgId = 'img-' + msg.messageId;
-        contentHtml += `<div class="msg-media-standalone"><div class="media-skeleton" id="skel-${imgId}"><i class="fas fa-image media-skeleton-icon"></i></div><img id="${imgId}" src="${url}" data-media-url="${url.startsWith('data:') ? '' : url}" style="display:none;" onload="this.style.display='block';var s=document.getElementById('skel-${imgId}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.style.display='block';var s=document.getElementById('skel-${imgId}');if(s)s.classList.add('media-skeleton-hide');" onclick="openChatMediaViewer(this.dataset.mediaUrl || this.src, 'image')"></div>`;
+        contentHtml += `<div class="msg-media-standalone"><div class="media-skeleton" id="skel-${imgId}"><i class="fas fa-image media-skeleton-icon"></i></div><img id="${imgId}" src="${url}" data-media-url="${url.startsWith('data:') ? '' : url}" style="opacity:0;" onload="this.style.opacity='1';var s=document.getElementById('skel-${imgId}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.style.opacity='1';var s=document.getElementById('skel-${imgId}');if(s)s.classList.add('media-skeleton-hide');" onclick="openChatMediaViewer(this.dataset.mediaUrl || this.src, 'image')"></div>`;
     } else if (type.startsWith('video')) {
         const vidId = 'chatv-' + msg.messageId;
         const vidPoster = getVideoThumbnail(url);
         contentHtml += `<div class="msg-media-standalone">
             <div class="chat-video-wrap">
                 <div class="media-skeleton" id="skel-${vidId}"><i class="fas fa-video media-skeleton-icon"></i></div>
-                <video id="${vidId}" src="${url}" playsinline preload="metadata" ${vidPoster ? 'poster="' + vidPoster + '"' : ''} style="display:none;" onloadeddata="this.style.display='block';var s=document.getElementById('skel-${vidId}');if(s)s.classList.add('media-skeleton-hide');" onclick="toggleChatVideo('${vidId}')"></video>
+                <video id="${vidId}" src="${url}" playsinline preload="metadata" ${vidPoster ? 'poster="' + vidPoster + '"' : ''} style="opacity:0;position:relative;z-index:1;transition:opacity 0.3s;" onloadeddata="this.style.opacity='1';var s=document.getElementById('skel-${vidId}');if(s)s.classList.add('media-skeleton-hide');" onclick="toggleChatVideo('${vidId}')"></video>
                 <div class="chat-video-overlay" id="overlay-${vidId}" onclick="toggleChatVideo('${vidId}')">
                     <div class="chat-video-play-circle"><i class="fas fa-play"></i></div>
                 </div>
