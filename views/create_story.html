@@ -207,6 +207,49 @@
             background: #3b82f6;
             cursor: pointer;
         }
+        /* Advanced text controls */
+        .text-controls-section {
+            display: flex; align-items: center; gap: 6px;
+            flex-wrap: wrap;
+        }
+        .text-controls-section-label {
+            font-size: 10px; color: #9ca3af; width: 100%;
+            margin-bottom: 2px; font-weight: 600;
+        }
+        .text-controls-divider {
+            width: 100%; height: 1px;
+            background: rgba(255,255,255,0.08);
+            margin: 6px 0;
+        }
+        .bg-color-row {
+            display: none; gap: 5px; align-items: center; flex-wrap: wrap;
+        }
+        .bg-color-row.active { display: flex; }
+        .bg-ctrl-color {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.2);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .bg-ctrl-color:hover { transform: scale(1.15); }
+        .bg-ctrl-color.active { border-color: #fff; box-shadow: 0 0 6px rgba(255,255,255,0.4); transform: scale(1.15); }
+        .opacity-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 70px;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            outline: none;
+        }
+        .opacity-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: #a855f7;
+            cursor: pointer;
+        }
     
 
     /* ============================================================
@@ -1831,21 +1874,62 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             <input type="text" id="storyTextInput" placeholder="أضف نصاً على القصة..." class="glass-input w-full rounded-2xl py-3.5 px-5 text-sm" oninput="updateTextOverlay()">
         </div>
         <div id="textControlsBar" class="text-controls-bar mb-5">
-            <div style="display:flex;align-items:center;gap:6px;">
-                <i class="fas fa-text-height text-gray-400" style="font-size:11px;"></i>
-                <input type="range" id="textSizeSlider" class="text-size-slider" min="12" max="72" value="20" oninput="updateTextStyle()">
+            <!-- حجم النص -->
+            <div class="text-controls-section">
+                <span class="text-controls-section-label"><i class="fas fa-text-height" style="margin-left:4px;"></i> حجم النص</span>
+                <input type="range" id="textSizeSlider" class="text-size-slider" min="12" max="72" value="20" oninput="updateTextStyle()" style="width:100%;">
             </div>
-            <div style="display:flex;align-items:center;gap:5px;">
+            <div class="text-controls-divider"></div>
+            <!-- لون النص -->
+            <div class="text-controls-section">
+                <span class="text-controls-section-label"><i class="fas fa-palette" style="margin-left:4px;"></i> لون النص</span>
                 <div class="text-ctrl-color active" style="background:#ffffff;" data-tcolor="#ffffff" onclick="selectTextColor(this)" title="أبيض"></div>
                 <div class="text-ctrl-color" style="background:#000000;" data-tcolor="#000000" onclick="selectTextColor(this)" title="أسود"></div>
                 <div class="text-ctrl-color" style="background:#ef4444;" data-tcolor="#ef4444" onclick="selectTextColor(this)" title="أحمر"></div>
                 <div class="text-ctrl-color" style="background:#f59e0b;" data-tcolor="#f59e0b" onclick="selectTextColor(this)" title="أصفر"></div>
                 <div class="text-ctrl-color" style="background:#22c55e;" data-tcolor="#22c55e" onclick="selectTextColor(this)" title="أخضر"></div>
                 <div class="text-ctrl-color" style="background:#3b82f6;" data-tcolor="#3b82f6" onclick="selectTextColor(this)" title="أزرق"></div>
+                <div class="text-ctrl-color" style="background:#a855f7;" data-tcolor="#a855f7" onclick="selectTextColor(this)" title="بنفسجي"></div>
+                <div class="text-ctrl-color" style="background:#ec4899;" data-tcolor="#ec4899" onclick="selectTextColor(this)" title="وردي"></div>
+                <input type="color" id="customTextColor" value="#ffffff" onchange="applyCustomTextColor(this.value)" style="width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;background:transparent;padding:0;" title="لون مخصص">
             </div>
-            <button type="button" class="text-ctrl-btn" id="textBgToggle" onclick="toggleTextBg()" title="خلفية النص">
-                <i class="fas fa-fill-drip"></i>
-            </button>
+            <div class="text-controls-divider"></div>
+            <!-- تنسيق النص -->
+            <div class="text-controls-section">
+                <span class="text-controls-section-label"><i class="fas fa-font" style="margin-left:4px;"></i> تنسيق</span>
+                <button type="button" class="text-ctrl-btn active" id="textBoldToggle" onclick="toggleTextBold()" title="عريض"><i class="fas fa-bold"></i></button>
+                <button type="button" class="text-ctrl-btn" id="textItalicToggle" onclick="toggleTextItalic()" title="مائل"><i class="fas fa-italic"></i></button>
+                <button type="button" class="text-ctrl-btn" id="textOutlineToggle" onclick="toggleTextOutline()" title="حدود النص"><i class="fas fa-border-all"></i></button>
+                <span style="color:#4b5563;margin:0 4px;">|</span>
+                <button type="button" class="text-ctrl-btn" id="textAlignRight" onclick="setTextAlign('right')" title="محاذاة يمين"><i class="fas fa-align-right"></i></button>
+                <button type="button" class="text-ctrl-btn active" id="textAlignCenter" onclick="setTextAlign('center')" title="محاذاة وسط"><i class="fas fa-align-center"></i></button>
+                <button type="button" class="text-ctrl-btn" id="textAlignLeft" onclick="setTextAlign('left')" title="محاذاة يسار"><i class="fas fa-align-left"></i></button>
+            </div>
+            <div class="text-controls-divider"></div>
+            <!-- خلفية النص -->
+            <div class="text-controls-section">
+                <span class="text-controls-section-label"><i class="fas fa-fill-drip" style="margin-left:4px;"></i> خلفية النص</span>
+                <button type="button" class="text-ctrl-btn" id="textBgToggle" onclick="toggleTextBg()" title="تفعيل/إلغاء الخلفية">
+                    <i class="fas fa-fill-drip"></i>
+                </button>
+                <span style="font-size:11px;color:#9ca3af;">تفعيل</span>
+            </div>
+            <!-- لون الخلفية -->
+            <div class="bg-color-row" id="bgColorRow">
+                <span class="text-controls-section-label"><i class="fas fa-swatchbook" style="margin-left:4px;"></i> لون الخلفية</span>
+                <div class="bg-ctrl-color active" style="background:rgba(0,0,0,0.55);" data-bgcolor="0,0,0" onclick="selectBgColor(this)" title="أسود"></div>
+                <div class="bg-ctrl-color" style="background:rgba(255,255,255,0.55);" data-bgcolor="255,255,255" onclick="selectBgColor(this)" title="أبيض"></div>
+                <div class="bg-ctrl-color" style="background:rgba(239,68,68,0.55);" data-bgcolor="239,68,68" onclick="selectBgColor(this)" title="أحمر"></div>
+                <div class="bg-ctrl-color" style="background:rgba(59,130,246,0.55);" data-bgcolor="59,130,246" onclick="selectBgColor(this)" title="أزرق"></div>
+                <div class="bg-ctrl-color" style="background:rgba(34,197,94,0.55);" data-bgcolor="34,197,94" onclick="selectBgColor(this)" title="أخضر"></div>
+                <div class="bg-ctrl-color" style="background:rgba(168,85,247,0.55);" data-bgcolor="168,85,247" onclick="selectBgColor(this)" title="بنفسجي"></div>
+                <div class="bg-ctrl-color" style="background:rgba(245,158,11,0.55);" data-bgcolor="245,158,11" onclick="selectBgColor(this)" title="برتقالي"></div>
+                <div class="bg-ctrl-color" style="background:rgba(236,72,153,0.55);" data-bgcolor="236,72,153" onclick="selectBgColor(this)" title="وردي"></div>
+                <input type="color" id="customBgColor" value="#000000" onchange="applyCustomBgColor(this.value)" style="width:24px;height:24px;border:none;border-radius:50%;cursor:pointer;background:transparent;padding:0;" title="لون مخصص">
+                <div class="text-controls-divider"></div>
+                <span class="text-controls-section-label"><i class="fas fa-eye" style="margin-left:4px;"></i> شفافية الخلفية</span>
+                <input type="range" id="bgOpacitySlider" class="opacity-slider" min="10" max="100" value="55" oninput="updateBgOpacity()" style="width:100%;">
+            </div>
         </div>
 
         <!-- Music Section -->
@@ -1916,6 +2000,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     var storyTextColor = '#ffffff';
     var storyTextSize = 20;
     var storyTextBg = false;
+    var storyTextBgColor = '0,0,0';
+    var storyTextBgOpacity = 55;
+    var storyTextAlign = 'center';
+    var storyTextBold = true;
+    var storyTextItalic = false;
+    var storyTextOutline = false;
     var storyTextPosX = 50; // percentage
     var storyTextPosY = 50; // percentage
 
@@ -1942,8 +2032,17 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         storyTextSize = parseInt(slider.value);
         overlay.style.fontSize = storyTextSize + 'px';
         overlay.style.color = storyTextColor;
+        overlay.style.textAlign = storyTextAlign;
+        overlay.style.fontWeight = storyTextBold ? '700' : '400';
+        overlay.style.fontStyle = storyTextItalic ? 'italic' : 'normal';
+        if (storyTextOutline) {
+            overlay.style.textShadow = '-1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.5)';
+        } else {
+            overlay.style.textShadow = '0 2px 8px rgba(0,0,0,0.7)';
+        }
         if (storyTextBg) {
-            overlay.style.background = 'rgba(0,0,0,0.55)';
+            var opacityVal = (storyTextBgOpacity / 100).toFixed(2);
+            overlay.style.background = 'rgba(' + storyTextBgColor + ',' + opacityVal + ')';
             overlay.style.borderRadius = '8px';
             overlay.style.padding = '8px 16px';
         } else {
@@ -1955,14 +2054,84 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         document.querySelectorAll('.text-ctrl-color').forEach(function(c) { c.classList.remove('active'); });
         el.classList.add('active');
         storyTextColor = el.getAttribute('data-tcolor');
+        document.getElementById('customTextColor').value = storyTextColor;
+        updateTextStyle();
+    }
+
+    function applyCustomTextColor(color) {
+        document.querySelectorAll('.text-ctrl-color').forEach(function(c) { c.classList.remove('active'); });
+        storyTextColor = color;
         updateTextStyle();
     }
 
     function toggleTextBg() {
         storyTextBg = !storyTextBg;
         var btn = document.getElementById('textBgToggle');
-        if (storyTextBg) btn.classList.add('active');
+        var bgRow = document.getElementById('bgColorRow');
+        if (storyTextBg) {
+            btn.classList.add('active');
+            bgRow.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+            bgRow.classList.remove('active');
+        }
+        updateTextStyle();
+    }
+
+    function selectBgColor(el) {
+        document.querySelectorAll('.bg-ctrl-color').forEach(function(c) { c.classList.remove('active'); });
+        el.classList.add('active');
+        storyTextBgColor = el.getAttribute('data-bgcolor');
+        updateTextStyle();
+    }
+
+    function applyCustomBgColor(hex) {
+        document.querySelectorAll('.bg-ctrl-color').forEach(function(c) { c.classList.remove('active'); });
+        var r = parseInt(hex.substr(1,2), 16);
+        var g = parseInt(hex.substr(3,2), 16);
+        var b = parseInt(hex.substr(5,2), 16);
+        storyTextBgColor = r + ',' + g + ',' + b;
+        updateTextStyle();
+    }
+
+    function updateBgOpacity() {
+        var slider = document.getElementById('bgOpacitySlider');
+        storyTextBgOpacity = parseInt(slider.value);
+        updateTextStyle();
+    }
+
+    function toggleTextBold() {
+        storyTextBold = !storyTextBold;
+        var btn = document.getElementById('textBoldToggle');
+        if (storyTextBold) btn.classList.add('active');
         else btn.classList.remove('active');
+        updateTextStyle();
+    }
+
+    function toggleTextItalic() {
+        storyTextItalic = !storyTextItalic;
+        var btn = document.getElementById('textItalicToggle');
+        if (storyTextItalic) btn.classList.add('active');
+        else btn.classList.remove('active');
+        updateTextStyle();
+    }
+
+    function toggleTextOutline() {
+        storyTextOutline = !storyTextOutline;
+        var btn = document.getElementById('textOutlineToggle');
+        if (storyTextOutline) btn.classList.add('active');
+        else btn.classList.remove('active');
+        updateTextStyle();
+    }
+
+    function setTextAlign(align) {
+        storyTextAlign = align;
+        document.getElementById('textAlignRight').classList.remove('active');
+        document.getElementById('textAlignCenter').classList.remove('active');
+        document.getElementById('textAlignLeft').classList.remove('active');
+        if (align === 'right') document.getElementById('textAlignRight').classList.add('active');
+        else if (align === 'center') document.getElementById('textAlignCenter').classList.add('active');
+        else document.getElementById('textAlignLeft').classList.add('active');
         updateTextStyle();
     }
 
@@ -2423,7 +2592,13 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                     text_y: storyTextPosY,
                     text_size: storyTextSize,
                     text_color: storyTextColor,
-                    text_bg: storyTextBg
+                    text_bg: storyTextBg,
+                    text_bg_color: storyTextBgColor,
+                    text_bg_opacity: storyTextBgOpacity,
+                    text_align: storyTextAlign,
+                    text_bold: storyTextBold,
+                    text_italic: storyTextItalic,
+                    text_outline: storyTextOutline
                 }),
                 credentials: 'same-origin'
             });

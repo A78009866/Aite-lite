@@ -299,7 +299,7 @@ function renderForm() {
                     '<i class="fas fa-cloud-upload-alt"></i>' +
                     '<p>إضافة صور جديدة</p>' +
                 '</div>' +
-                '<input type="file" id="newImages" accept="image/*" multiple style="display:none" onchange="handleNewImageSelect(event)">' +
+                '<input type="file" id="newImages" accept="image/*" style="display:none" onchange="handleNewImageSelect(event)">' +
                 '<div class="image-previews" id="newPreviews"></div>' +
             '</div>' +
             '<div class="form-group">' +
@@ -328,42 +328,66 @@ function removeExistingImage(index) {
     renderForm();
 }
 
+var newImagePreviews = [];
+
 function handleNewImageSelect(event) {
-    const files = Array.from(event.target.files);
-    const totalImages = existingImages.length + selectedNewImages.length + files.length;
-    if (totalImages > 5) {
+    var file = event.target.files[0];
+    if (!file) return;
+    var totalImages = existingImages.length + selectedNewImages.length;
+    if (totalImages >= 5) {
         showToast('الحد الأقصى 5 صور إجمالاً', 'error');
+        event.target.value = '';
         return;
     }
-    files.forEach(file => {
-        if (file.size > 5 * 1024 * 1024) {
-            showToast('حجم الصورة يجب أن يكون أقل من 5MB', 'error');
-            return;
-        }
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('حجم الصورة يجب أن يكون أقل من 5MB', 'error');
+        event.target.value = '';
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
         selectedNewImages.push(file);
-    });
-    renderNewPreviews();
+        newImagePreviews.push(e.target.result);
+        renderNewPreviews();
+    };
+    reader.readAsDataURL(file);
     event.target.value = '';
 }
 
 function renderNewPreviews() {
-    const container = document.getElementById('newPreviews');
+    var container = document.getElementById('newPreviews');
     if (!container) return;
     container.innerHTML = '';
-    selectedNewImages.forEach((file, index) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const div = document.createElement('div');
-            div.className = 'image-preview-item';
-            div.innerHTML = '<img src="' + e.target.result + '" alt="صورة جديدة"><button type="button" class="remove-img" onclick="removeNewImage(' + index + ')"><i class="fas fa-times"></i></button>';
-            container.appendChild(div);
-        };
-        reader.readAsDataURL(file);
+    newImagePreviews.forEach(function(src, index) {
+        var div = document.createElement('div');
+        div.className = 'image-preview-item';
+        var img = document.createElement('img');
+        img.src = src;
+        img.alt = 'صورة جديدة';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'remove-img';
+        btn.innerHTML = '<i class="fas fa-times"></i>';
+        btn.setAttribute('data-index', index);
+        btn.onclick = function() { removeNewImage(Number(this.getAttribute('data-index'))); };
+        div.appendChild(img);
+        div.appendChild(btn);
+        container.appendChild(div);
     });
+    var uploadArea = document.querySelector('.image-upload-area');
+    if (uploadArea) {
+        var total = existingImages.length + selectedNewImages.length;
+        if (total >= 5) {
+            uploadArea.style.display = 'none';
+        } else {
+            uploadArea.style.display = '';
+        }
+    }
 }
 
 function removeNewImage(index) {
     selectedNewImages.splice(index, 1);
+    newImagePreviews.splice(index, 1);
     renderNewPreviews();
 }
 
