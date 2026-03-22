@@ -372,6 +372,11 @@ app.get('/admin', requireAuth, requireAdmin, (req, res) => {
 app.get('/search', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'search.html'));
 });
+
+// Marketplace page
+app.get('/marketplace', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'marketplace.html'));
+});
 // إضافة ضمن قسم "Routes: Pages" (ضعه بجانب باقي app.get للـ views)
 app.get('/post.html', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'post.html'));
@@ -6376,6 +6381,104 @@ app.get('/js/recovery-email-modal.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'recovery-email-modal.js'));
 });
 
+
+// ============================================================
+
+// ---------------- Marketplace API ----------------
+
+// Update getUploadFolder to handle marketplace
+// (already handled via 'general' fallback, but let's be explicit)
+
+// Create a new product
+app.post('/api/marketplace/create', requireAuth, writeLimiter, upload.array('product_images', 5), async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const { title, description, price } = req.body;
+
+    if (!title || !price) {
+      return res.status(400).json({ ok: false, error: 'اسم المنتج والسعر مطلوبان.' });
+    }
+
+    const sanitizedTitle = escapeHtml(truncateText(title, 200));
+    const sanitizedDescription = escapeHtml(truncateText(description || '', 2000));
+    const numericPrice = parseFloat(price);
+    if (isNaN(numericPrice) || numericPrice <= 0) {
+      return res.status(400).json({ ok: false, error: 'السعر غير صالح.' });
+    }
+
+    // Upload images to ImageKit
+    const imageUrls = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const url = await uploadFileToImageKit(file, 'marketplace');
+        imageUrls.push(url);
+      }
+    }
+
+    // Get seller profile
+    const profileSnap = await db.ref('profiles/' + sanitizePathParam(userId)).once('value');
+    const profile = profileSnap.val() || {};
+
+    const productId = db.ref('marketplace').push().key;
+    const productData = {
+      id: productId,
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      price: numericPrice,
+      images: imageUrls,
+      sellerId: userId,
+      sellerUsername: profile.username || 'مستخدم',
+      sellerProfilePic: profile.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png',
+      sellerVerified: profile.verified || false,
+      createdAt: Date.now(),
+      status: 'active'
+    };
+
+    await db.ref('marketplace/' + productId).set(productData);
+
+    res.json({ ok: true, product: productData });
+  } catch (err) {
+    console.error('Marketplace create error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء إنشاء المنتج.' });
+  }
+});
+
+// Get all products
+app.get('/api/marketplace/products', requireAuth, async (req, res) => {
+  try {
+    const snap = await db.ref('marketplace').orderByChild('createdAt').once('value');
+    const products = [];
+    snap.forEach(child => {
+      const p = child.val();
+      if (p && p.status === 'active') {
+        products.push(p);
+      }
+    });
+    // Newest first
+    products.reverse();
+    res.json({ ok: true, products });
+  } catch (err) {
+    console.error('Marketplace list error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء جلب المنتجات.' });
+  }
+});
+
+// Delete a product (owner only)
+app.delete('/api/marketplace/:productId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const productId = sanitizePathParam(req.params.productId);
+    const snap = await db.ref('marketplace/' + productId).once('value');
+    const product = snap.val();
+    if (!product) return res.status(404).json({ ok: false, error: 'المنتج غير موجود.' });
+    if (product.sellerId !== userId) return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا المنتج.' });
+    await db.ref('marketplace/' + productId).remove();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Marketplace delete error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء حذف المنتج.' });
+  }
+});
 
 // ============================================================
 
