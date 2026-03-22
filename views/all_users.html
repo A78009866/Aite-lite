@@ -1791,10 +1791,13 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         </a>
       </div>
 
-      <!-- Left side: Search + Notifications -->
+      <!-- Left side: Search + Messages + Notifications -->
       <div style="display:flex; gap:8px; align-items:center;">
         <a href="/search" class="action-btn" title="بحث" style="padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);color:#e6eefb;text-decoration:none;display:flex;align-items:center;">
           <i class="fas fa-search text-xl"></i>
+        </a>
+        <a href="/users_list" class="action-btn" title="الرسائل" style="padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);color:#e6eefb;text-decoration:none;display:flex;align-items:center;">
+          <i class="fab fa-facebook-messenger text-xl"></i>
         </a>
         <a href="/notifications" class="action-btn" title="الإشعارات" style="padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);color:#e6eefb;text-decoration:none;display:flex;align-items:center;position:relative;">
           <i class="fas fa-bell text-xl"></i>
@@ -1805,6 +1808,12 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   </header>
 
   <main class="max-w-6xl mx-auto p-4">
+    <!-- Search Box -->
+    <div class="search-box" id="searchBox" style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:10px 16px;margin-bottom:14px;transition:border-color .2s, background .2s;">
+      <i class="fas fa-search" style="color:#9ca3af;font-size:15px;"></i>
+      <input type="text" id="userSearchInput" placeholder="ابحث عن مستخدم..." oninput="filterUsers(this.value)" style="background:transparent;border:none;outline:none;color:#fff;width:100%;font-size:15px;" autocomplete="off">
+    </div>
+
     <div class="flex gap-3 mb-4">
       <div id="tabAll" class="tab active">كل المستخدمين</div>
       <div id="tabRequests" class="tab">طلبات الصداقة</div>
@@ -1965,8 +1974,40 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
       // تحديث شارات التوثيق بعد العرض
       updateVerifiedBadges();
 
+      // تطبيق فلتر البحث إن كان هناك نص مكتوب
+      const currentQuery = document.getElementById('userSearchInput').value.trim();
+      if (currentQuery) filterUsers(currentQuery);
+
     } catch (e) {
       allUsersContainer.innerHTML = '<div class="text-center text-red-500 p-6">فشل في تحميل المستخدمين.</div>';
+    }
+  }
+
+  function filterUsers(query) {
+    const cards = allUsersContainer.querySelectorAll('.user-card');
+    const q = query.trim().toLowerCase();
+    let visibleCount = 0;
+    cards.forEach(card => {
+      const name = (card.querySelector('.user-name') || {}).textContent || '';
+      const sub = (card.querySelector('.user-sub') || {}).textContent || '';
+      const match = !q || name.toLowerCase().includes(q) || sub.toLowerCase().includes(q);
+      card.style.display = match ? '' : 'none';
+      if (match) visibleCount++;
+    });
+    // إظهار رسالة إن لم يتم العثور على نتائج
+    let noResult = allUsersContainer.querySelector('.no-search-result');
+    if (visibleCount === 0 && q) {
+      if (!noResult) {
+        noResult = document.createElement('div');
+        noResult.className = 'no-search-result text-center text-gray-500 p-6';
+        noResult.innerHTML = '<i class="fas fa-search" style="font-size:28px;opacity:0.4;margin-bottom:8px;"></i><br>لا توجد نتائج لـ "' + escapeHtml(q) + '"';
+        allUsersContainer.appendChild(noResult);
+      } else {
+        noResult.innerHTML = '<i class="fas fa-search" style="font-size:28px;opacity:0.4;margin-bottom:8px;"></i><br>لا توجد نتائج لـ "' + escapeHtml(q) + '"';
+        noResult.style.display = '';
+      }
+    } else if (noResult) {
+      noResult.style.display = 'none';
     }
   }
 
