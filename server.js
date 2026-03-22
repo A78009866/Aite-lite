@@ -323,6 +323,7 @@ app.get('/favicon.ico', (req, res) => { res.sendFile(path.join(__dirname, 'views
 app.get('/favicon-32.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-32.png')); });
 app.get('/favicon-16.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-16.png')); });
 app.get('/notification.mp3', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notification.mp3')); });
+app.get('/wilayas_data.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'wilayas_data.js')); });
 
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
@@ -6613,6 +6614,117 @@ app.delete('/api/marketplace/:productId', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Marketplace delete error:', err);
     res.status(500).json({ ok: false, error: 'حدث خطأ أثناء حذف المنتج.' });
+  }
+});
+
+// ============================================================
+
+// ---------------- Orders API ----------------
+
+// Create a new order
+app.post('/api/orders/create', requireAuth, writeLimiter, async (req, res) => {
+  try {
+    const buyerId = req.session.userId;
+    const { productId, fullName, phone, wilaya, commune } = req.body;
+
+    if (!productId || !fullName || !phone || !wilaya || !commune) {
+      return res.status(400).json({ ok: false, error: 'جميع الحقول مطلوبة.' });
+    }
+
+    const sanitizedProductId = sanitizePathParam(productId);
+    const snap = await db.ref('marketplace/' + sanitizedProductId).once('value');
+    const product = snap.val();
+    if (!product || product.status !== 'active') {
+      return res.status(404).json({ ok: false, error: 'المنتج غير موجود.' });
+    }
+
+    if (product.sellerId === buyerId) {
+      return res.status(400).json({ ok: false, error: 'لا يمكنك طلب منتجك الخاص.' });
+    }
+
+    // Get buyer profile
+    const buyerSnap = await db.ref('profiles/' + sanitizePathParam(buyerId)).once('value');
+    const buyerProfile = buyerSnap.val() || {};
+
+    const orderId = db.ref('orders').push().key;
+    const orderData = {
+      id: orderId,
+      productId: sanitizedProductId,
+      productTitle: product.title || '',
+      productPrice: product.price || 0,
+      productImage: (product.images && product.images.length > 0) ? product.images[0] : '',
+      sellerId: product.sellerId,
+      sellerUsername: product.sellerUsername || '',
+      buyerId: buyerId,
+      buyerUsername: buyerProfile.username || '',
+      buyerProfilePic: buyerProfile.profile_picture_url || '',
+      fullName: escapeHtml(truncateText(fullName, 100)),
+      phone: escapeHtml(truncateText(phone, 20)),
+      wilaya: escapeHtml(truncateText(wilaya, 100)),
+      commune: escapeHtml(truncateText(commune, 100)),
+      status: 'pending',
+      createdAt: Date.now()
+    };
+
+    await db.ref('orders/' + orderId).set(orderData);
+
+    res.json({ ok: true, order: orderData });
+  } catch (err) {
+    console.error('Order create error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء إنشاء الطلب.' });
+  }
+});
+
+// Get orders on my products (as seller)
+app.get('/api/orders/on-my-products', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const snap = await db.ref('orders').orderByChild('sellerId').equalTo(userId).once('value');
+    const orders = [];
+    snap.forEach(child => {
+      orders.push(child.val());
+    });
+    orders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json({ ok: true, orders });
+  } catch (err) {
+    console.error('Orders on my products error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء جلب الطلبات.' });
+  }
+});
+
+// Get my placed orders (as buyer)
+app.get('/api/orders/my-orders', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const snap = await db.ref('orders').orderByChild('buyerId').equalTo(userId).once('value');
+    const orders = [];
+    snap.forEach(child => {
+      orders.push(child.val());
+    });
+    orders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json({ ok: true, orders });
+  } catch (err) {
+    console.error('My orders error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء جلب الطلبات.' });
+  }
+});
+
+// Delete an order (seller or buyer can delete)
+app.delete('/api/orders/:orderId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const orderId = sanitizePathParam(req.params.orderId);
+    const snap = await db.ref('orders/' + orderId).once('value');
+    const order = snap.val();
+    if (!order) return res.status(404).json({ ok: false, error: 'الطلب غير موجود.' });
+    if (order.sellerId !== userId && order.buyerId !== userId) {
+      return res.status(403).json({ ok: false, error: 'غير مصرح لك بحذف هذا الطلب.' });
+    }
+    await db.ref('orders/' + orderId).remove();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Order delete error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء حذف الطلب.' });
   }
 });
 

@@ -229,6 +229,83 @@
         html[data-theme="light"] .page-header h1 { color: #1a1a2e; }
         .page-header h1 i { color: #3b82f6; }
 
+        /* Tabs */
+        .market-tabs {
+            display: flex; gap: 0; padding: 0 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        html[data-theme="light"] .market-tabs { border-bottom: 1px solid rgba(0,0,0,0.08); }
+        .market-tab {
+            padding: 12px 18px; font-size: 14px; font-weight: 600;
+            color: #6b7280; cursor: pointer; border: none; background: none;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .market-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+        .market-tab:hover { color: #9ca3af; }
+        html[data-theme="light"] .market-tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+
+        /* Orders List */
+        .orders-list { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .order-card {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px; padding: 14px; display: flex; gap: 12px;
+            transition: background 0.2s;
+        }
+        html[data-theme="light"] .order-card {
+            background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.08);
+        }
+        .order-card-img {
+            width: 70px; height: 70px; border-radius: 10px;
+            object-fit: cover; flex-shrink: 0;
+            background: rgba(255,255,255,0.02);
+        }
+        .order-card-info { flex: 1; min-width: 0; }
+        .order-card-title {
+            font-size: 15px; font-weight: 600; color: #fff;
+            margin-bottom: 4px; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        html[data-theme="light"] .order-card-title { color: #1a1a2e; }
+        .order-card-detail {
+            font-size: 12px; color: #9ca3af; margin-bottom: 2px;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .order-card-price { font-size: 14px; font-weight: 700; color: #3b82f6; }
+        .order-delete-btn {
+            align-self: flex-start; padding: 8px;
+            background: rgba(239,68,68,0.12); border: none;
+            border-radius: 8px; color: #ef4444; cursor: pointer;
+            font-size: 14px; transition: background 0.2s;
+        }
+        .order-delete-btn:hover { background: rgba(239,68,68,0.25); }
+
+        /* Confirm Modal */
+        .confirm-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); z-index: 200;
+            display: none; align-items: center; justify-content: center; padding: 20px;
+        }
+        .confirm-overlay.show { display: flex; }
+        .confirm-box {
+            background: #1a1a2e; border-radius: 16px;
+            padding: 24px; max-width: 340px; width: 100%;
+            text-align: center; border: 1px solid rgba(255,255,255,0.1);
+        }
+        html[data-theme="light"] .confirm-box { background: #fff; border: 1px solid rgba(0,0,0,0.1); }
+        .confirm-box h3 { font-size: 18px; font-weight: 700; color: #fff; margin: 0 0 10px; }
+        html[data-theme="light"] .confirm-box h3 { color: #1a1a2e; }
+        .confirm-box p { font-size: 14px; color: #9ca3af; margin: 0 0 20px; }
+        .confirm-actions { display: flex; gap: 10px; }
+        .confirm-actions button {
+            flex: 1; padding: 12px; border-radius: 10px;
+            font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
+        }
+        .confirm-cancel { background: rgba(255,255,255,0.08); color: #9ca3af; }
+        html[data-theme="light"] .confirm-cancel { background: rgba(0,0,0,0.06); color: #64748b; }
+        .confirm-delete-btn { background: #ef4444; color: #fff; }
+        .confirm-delete-btn:hover { background: #dc2626; }
+
         /* Toast */
         .toast {
             position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
@@ -314,6 +391,11 @@
     <div class="page-header">
         <h1><i class="fas fa-store"></i> المتجر</h1>
     </div>
+    <div class="market-tabs">
+        <button class="market-tab active" onclick="switchTab('all')" id="tabAll">كل المنتجات</button>
+        <button class="market-tab" onclick="switchTab('mine')" id="tabMine">منتجاتي</button>
+        <button class="market-tab" onclick="switchTab('orders')" id="tabOrders">الطلبات</button>
+    </div>
     <div id="productsContainer">
         <div class="empty-state" id="loadingState">
             <div class="spinner" style="width:40px;height:40px;border-width:3px;"></div>
@@ -321,6 +403,18 @@
         </div>
     </div>
 </main>
+
+<!-- Confirm Delete Order -->
+<div class="confirm-overlay" id="confirmOrderOverlay">
+    <div class="confirm-box">
+        <h3>حذف الطلب</h3>
+        <p>هل أنت متأكد من حذف هذا الطلب؟</p>
+        <div class="confirm-actions">
+            <button class="confirm-cancel" onclick="hideOrderConfirm()">إلغاء</button>
+            <button class="confirm-delete-btn" onclick="confirmDeleteOrder()">حذف</button>
+        </div>
+    </div>
+</div>
 
 <!-- Sell Product FAB -->
 <a href="/create_product" class="sell-fab" title="بيع منتج">
@@ -335,11 +429,30 @@
 // ============ Marketplace Logic ============
 
 let allProducts = [];
+let currentUserId = null;
+let currentTab = 'all';
+let deleteOrderId = null;
 
-// Load products on page load
-document.addEventListener('DOMContentLoaded', loadProducts);
+// Load on page load
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const meRes = await fetch('/api/me');
+        const meData = await meRes.json();
+        currentUserId = meData.userId || meData.id || null;
+    } catch(e) {}
+    loadProducts();
+});
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.market-tab').forEach(t => t.classList.remove('active'));
+    if (tab === 'all') { document.getElementById('tabAll').classList.add('active'); loadProducts(); }
+    else if (tab === 'mine') { document.getElementById('tabMine').classList.add('active'); loadMyProducts(); }
+    else if (tab === 'orders') { document.getElementById('tabOrders').classList.add('active'); loadOrders(); }
+}
 
 async function loadProducts() {
+    showLoading();
     try {
         const res = await fetch('/api/marketplace/products');
         const data = await res.json();
@@ -351,6 +464,45 @@ async function loadProducts() {
         }
     } catch (err) {
         console.error(err);
+        showEmptyState('تعذر الاتصال بالسيرفر');
+    }
+}
+
+async function loadMyProducts() {
+    showLoading();
+    try {
+        const res = await fetch('/api/marketplace/products');
+        const data = await res.json();
+        if (data.ok) {
+            const myProducts = data.products.filter(p => p.sellerId === currentUserId);
+            if (myProducts.length === 0) {
+                showEmptyStateCustom('fas fa-box-open', 'لا توجد منتجات لك بعد', 'أضف منتج جديد للبيع من زر +');
+            } else {
+                renderProducts(myProducts);
+            }
+        } else {
+            showEmptyState('حدث خطأ أثناء تحميل المنتجات');
+        }
+    } catch (err) {
+        showEmptyState('تعذر الاتصال بالسيرفر');
+    }
+}
+
+async function loadOrders() {
+    showLoading();
+    try {
+        const res = await fetch('/api/orders/on-my-products');
+        const data = await res.json();
+        if (data.ok) {
+            if (data.orders.length === 0) {
+                showEmptyStateCustom('fas fa-clipboard-list', 'لا توجد طلبات بعد', 'ستظهر هنا الطلبات على منتجاتك');
+            } else {
+                renderOrders(data.orders);
+            }
+        } else {
+            showEmptyState('حدث خطأ أثناء تحميل الطلبات');
+        }
+    } catch (err) {
         showEmptyState('تعذر الاتصال بالسيرفر');
     }
 }
@@ -399,9 +551,86 @@ function renderProducts(products) {
     container.innerHTML = html;
 }
 
+function renderOrders(orders) {
+    const container = document.getElementById('productsContainer');
+    let html = '<div class="orders-list">';
+    orders.forEach(order => {
+        const timeAgo = getTimeAgo(order.createdAt);
+        html += `
+            <div class="order-card">
+                ${order.productImage ? `<img src="${escapeAttr(order.productImage)}" class="order-card-img" alt="" onerror="this.style.display='none'">` : ''}
+                <div class="order-card-info">
+                    <div class="order-card-title">${escapeHtml(order.productTitle)}</div>
+                    <div class="order-card-price">${formatPrice(order.productPrice)} د.ج</div>
+                    <div class="order-card-detail"><i class="fas fa-user"></i> ${escapeHtml(order.fullName)}</div>
+                    <div class="order-card-detail"><i class="fas fa-phone"></i> <span dir="ltr">${escapeHtml(order.phone)}</span></div>
+                    <div class="order-card-detail"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(order.wilaya)} - ${escapeHtml(order.commune)}</div>
+                    <div class="order-card-detail"><i class="fas fa-clock"></i> ${timeAgo}</div>
+                    <div class="order-card-detail"><i class="fas fa-user-circle"></i> ${escapeHtml(order.buyerUsername || 'مستخدم')}</div>
+                </div>
+                <button class="order-delete-btn" onclick="showOrderConfirm('${order.id}')" title="حذف الطلب">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function showLoading() {
+    document.getElementById('productsContainer').innerHTML = `
+        <div class="empty-state">
+            <div class="spinner" style="width:40px;height:40px;border-width:3px;"></div>
+            <p style="margin-top:16px;">جاري التحميل...</p>
+        </div>
+    `;
+}
+
+// ===== Order Delete =====
+function showOrderConfirm(orderId) {
+    deleteOrderId = orderId;
+    document.getElementById('confirmOrderOverlay').classList.add('show');
+}
+function hideOrderConfirm() {
+    deleteOrderId = null;
+    document.getElementById('confirmOrderOverlay').classList.remove('show');
+}
+async function confirmDeleteOrder() {
+    if (!deleteOrderId) return;
+    const oid = deleteOrderId;
+    hideOrderConfirm();
+    try {
+        const res = await fetch('/api/orders/' + oid, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('تم حذف الطلب');
+            loadOrders();
+        } else {
+            showToast(data.error || 'حدث خطأ', 'error');
+        }
+    } catch (err) {
+        showToast('تعذر حذف الطلب', 'error');
+    }
+}
+
 function formatPrice(price) {
     if (!price) return '0';
     return Number(price).toLocaleString('ar-DZ');
+}
+
+function getTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const diff = Date.now() - timestamp;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'الآن';
+    if (mins < 60) return 'منذ ' + mins + ' دقيقة';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return 'منذ ' + hours + ' ساعة';
+    const days = Math.floor(hours / 24);
+    if (days < 30) return 'منذ ' + days + ' يوم';
+    const months = Math.floor(days / 30);
+    return 'منذ ' + months + ' شهر';
 }
 
 // ============ Utilities ============
@@ -421,6 +650,16 @@ function showEmptyState(message) {
         <div class="empty-state">
             <i class="fas fa-exclamation-circle" style="color:#ef4444;"></i>
             <h3>${message}</h3>
+        </div>
+    `;
+}
+
+function showEmptyStateCustom(icon, title, desc) {
+    document.getElementById('productsContainer').innerHTML = `
+        <div class="empty-state">
+            <i class="${icon}"></i>
+            <h3>${title}</h3>
+            <p>${desc}</p>
         </div>
     `;
 }
