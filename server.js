@@ -323,6 +323,11 @@ app.get('/check-status', (req, res) => {
   }
 });
 
+// Get current user info
+app.get('/api/me', requireAuth, (req, res) => {
+  res.json({ ok: true, userId: req.session.userId });
+});
+
 // مسار صفحة الحسابات (تُعرض عندما لا يكون المستخدم مسجلاً)
 app.get('/accounts', (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'accounts.html'));
@@ -373,9 +378,18 @@ app.get('/search', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'search.html'));
 });
 
-// Marketplace page
+// Marketplace pages
 app.get('/marketplace', requireAuth, (req, res) => {
   return res.sendFile(path.join(__dirname, 'views', 'marketplace.html'));
+});
+app.get('/create_product', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'create_product.html'));
+});
+app.get('/product/:productId', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'product_detail.html'));
+});
+app.get('/edit_product/:productId', requireAuth, (req, res) => {
+  return res.sendFile(path.join(__dirname, 'views', 'edit_product.html'));
 });
 // إضافة ضمن قسم "Routes: Pages" (ضعه بجانب باقي app.get للـ views)
 app.get('/post.html', requireAuth, (req, res) => {
@@ -6460,6 +6474,83 @@ app.get('/api/marketplace/products', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Marketplace list error:', err);
     res.status(500).json({ ok: false, error: 'حدث خطأ أثناء جلب المنتجات.' });
+  }
+});
+
+// Get a single product
+app.get('/api/marketplace/:productId', requireAuth, async (req, res) => {
+  try {
+    const productId = sanitizePathParam(req.params.productId);
+    const snap = await db.ref('marketplace/' + productId).once('value');
+    const product = snap.val();
+    if (!product || product.status !== 'active') {
+      return res.status(404).json({ ok: false, error: 'المنتج غير موجود.' });
+    }
+    res.json({ ok: true, product });
+  } catch (err) {
+    console.error('Marketplace get product error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء جلب المنتج.' });
+  }
+});
+
+// Update a product (owner only)
+app.put('/api/marketplace/:productId', requireAuth, upload.array('product_images', 5), async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const productId = sanitizePathParam(req.params.productId);
+    const snap = await db.ref('marketplace/' + productId).once('value');
+    const product = snap.val();
+    if (!product) return res.status(404).json({ ok: false, error: 'المنتج غير موجود.' });
+    if (product.sellerId !== userId) return res.status(403).json({ ok: false, error: 'غير مصرح لك بتعديل هذا المنتج.' });
+
+    const { title, description, price, existing_images } = req.body;
+
+    if (!title || !price) {
+      return res.status(400).json({ ok: false, error: 'اسم المنتج والسعر مطلوبان.' });
+    }
+
+    const sanitizedTitle = escapeHtml(truncateText(title, 200));
+    const sanitizedDescription = escapeHtml(truncateText(description || '', 2000));
+    const numericPrice = parseFloat(price);
+    if (isNaN(numericPrice) || numericPrice <= 0) {
+      return res.status(400).json({ ok: false, error: 'السعر غير صالح.' });
+    }
+
+    // Keep existing images that weren't removed
+    let imageUrls = [];
+    if (existing_images) {
+      try {
+        imageUrls = JSON.parse(existing_images);
+        if (!Array.isArray(imageUrls)) imageUrls = [];
+      } catch (e) { imageUrls = []; }
+    }
+
+    // Upload new images
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const url = await uploadFileToImageKit(file, 'marketplace');
+        imageUrls.push(url);
+      }
+    }
+
+    // Limit to 5 images
+    imageUrls = imageUrls.slice(0, 5);
+
+    const updates = {
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      price: numericPrice,
+      images: imageUrls,
+      updatedAt: Date.now()
+    };
+
+    await db.ref('marketplace/' + productId).update(updates);
+    const updatedSnap = await db.ref('marketplace/' + productId).once('value');
+
+    res.json({ ok: true, product: updatedSnap.val() });
+  } catch (err) {
+    console.error('Marketplace update error:', err);
+    res.status(500).json({ ok: false, error: 'حدث خطأ أثناء تعديل المنتج.' });
   }
 });
 
