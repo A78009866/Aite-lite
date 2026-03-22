@@ -229,6 +229,43 @@
         html[data-theme="light"] .page-header h1 { color: #1a1a2e; }
         .page-header h1 i { color: #3b82f6; }
 
+        /* Search Bar */
+        .market-search {
+            padding: 10px 16px 0;
+        }
+        .market-search-input {
+            width: 100%; padding: 10px 14px 10px 38px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; font-size: 14px;
+            color: #fff; outline: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .market-search-input::placeholder { color: #6b7280; }
+        .market-search-input:focus {
+            border-color: #3b82f6;
+            background: rgba(255,255,255,0.08);
+        }
+        html[data-theme="light"] .market-search-input {
+            background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.1); color: #1a1a2e;
+        }
+        html[data-theme="light"] .market-search-input:focus {
+            border-color: #2563eb; background: rgba(0,0,0,0.02);
+        }
+        .market-search-wrap {
+            position: relative;
+        }
+        .market-search-icon {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            color: #6b7280; font-size: 14px; pointer-events: none;
+        }
+        .market-search-clear {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; color: #6b7280; font-size: 14px;
+            cursor: pointer; padding: 4px; display: none;
+        }
+        .market-search-clear:hover { color: #fff; }
+
         /* Tabs */
         .market-tabs {
             display: flex; gap: 0; padding: 0 16px;
@@ -391,6 +428,13 @@
     <div class="page-header">
         <h1><i class="fas fa-store"></i> المتجر</h1>
     </div>
+    <div class="market-search" id="marketSearchWrap">
+        <div class="market-search-wrap">
+            <i class="fas fa-search market-search-icon"></i>
+            <input type="text" class="market-search-input" id="marketSearchInput" placeholder="ابحث عن منتج..." oninput="filterProducts()">
+            <button class="market-search-clear" id="searchClearBtn" onclick="clearSearch()"><i class="fas fa-times"></i></button>
+        </div>
+    </div>
     <div class="market-tabs">
         <button class="market-tab active" onclick="switchTab('all')" id="tabAll">كل المنتجات</button>
         <button class="market-tab" onclick="switchTab('mine')" id="tabMine">منتجاتي</button>
@@ -446,9 +490,41 @@ document.addEventListener('DOMContentLoaded', async function() {
 function switchTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.market-tab').forEach(t => t.classList.remove('active'));
+    // إظهار/إخفاء شريط البحث حسب التبويب
+    var searchWrap = document.getElementById('marketSearchWrap');
+    if (tab === 'orders') {
+        searchWrap.style.display = 'none';
+    } else {
+        searchWrap.style.display = 'block';
+    }
+    clearSearch();
     if (tab === 'all') { document.getElementById('tabAll').classList.add('active'); loadProducts(); }
     else if (tab === 'mine') { document.getElementById('tabMine').classList.add('active'); loadMyProducts(); }
     else if (tab === 'orders') { document.getElementById('tabOrders').classList.add('active'); loadOrders(); }
+}
+
+function filterProducts() {
+    var query = document.getElementById('marketSearchInput').value.trim().toLowerCase();
+    var clearBtn = document.getElementById('searchClearBtn');
+    clearBtn.style.display = query ? 'block' : 'none';
+    if (!query) {
+        if (currentTab === 'mine') { renderProducts(allProducts.filter(p => p.sellerId === currentUserId)); }
+        else { renderProducts(allProducts); }
+        return;
+    }
+    var source = currentTab === 'mine' ? allProducts.filter(p => p.sellerId === currentUserId) : allProducts;
+    var filtered = source.filter(function(p) {
+        return (p.title && p.title.toLowerCase().includes(query)) ||
+               (p.description && p.description.toLowerCase().includes(query)) ||
+               (p.sellerUsername && p.sellerUsername.toLowerCase().includes(query));
+    });
+    renderProducts(filtered);
+}
+
+function clearSearch() {
+    document.getElementById('marketSearchInput').value = '';
+    document.getElementById('searchClearBtn').style.display = 'none';
+    filterProducts();
 }
 
 async function loadProducts() {
@@ -685,6 +761,8 @@ document.querySelectorAll('.sidebar-link').forEach(link => {
 <script>document.addEventListener("DOMContentLoaded",function(){if(window.remoji){remoji.parse(document.body,{font:"oneui"});var o=new MutationObserver(function(m){m.forEach(function(mu){mu.addedNodes.forEach(function(n){if(n.nodeType===1)remoji.parse(n,{font:"oneui"})})})});o.observe(document.body,{childList:true,subtree:true})}});</script>
 <style>.emoji{height:1.2em;width:1.2em;margin:0 .05em 0 .1em;vertical-align:-0.2em;display:inline-block;}</style>
 
+
+
 <!-- Pull to Refresh -->
 <style>
 .ptr-indicator {
@@ -692,76 +770,122 @@ document.querySelectorAll('.sidebar-link').forEach(link => {
   top: -50px;
   left: 50%;
   transform: translateX(-50%);
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: #1e293b;
-  border: 2px solid rgba(255,255,255,0.1);
+  background: rgba(30,41,59,0.95);
+  border: 1.5px solid rgba(255,255,255,0.12);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  transition: top 0.2s ease, transform 0.2s ease;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  transition: top 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  pointer-events: none;
 }
-.ptr-indicator i {
-  color: #6ee7b7;
-  font-size: 18px;
+.ptr-indicator .ptr-arrow {
+  width: 16px; height: 16px;
+  border: 2px solid #6ee7b7;
+  border-top: none; border-right: none;
+  transform: rotate(-45deg);
+  margin-top: -4px;
   transition: transform 0.2s ease;
 }
-.ptr-indicator.ptr-loading i {
-  animation: ptr-spin 0.8s linear infinite;
+.ptr-indicator.ptr-ready .ptr-arrow {
+  transform: rotate(135deg);
+  margin-top: 4px;
 }
-@keyframes ptr-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.ptr-indicator.ptr-loading .ptr-arrow {
+  border: 2px solid #6ee7b7;
+  border-radius: 50%;
+  border-top-color: transparent;
+  width: 18px; height: 18px;
+  transform: none;
+  margin-top: 0;
+  animation: ptr-spin 0.6s linear infinite;
+}
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
 </style>
-<div class="ptr-indicator" id="ptr-indicator"><i class="fas fa-sync-alt"></i></div>
+<div class="ptr-indicator" id="ptr-indicator"><div class="ptr-arrow"></div></div>
 <script>
 (function() {
   var ptrEl = document.getElementById('ptr-indicator');
   if (!ptrEl) return;
-  var startY = 0, currentY = 0, pulling = false, threshold = 80;
+  var startY = 0, pulling = false, activated = false;
+  var threshold = 90, deadZone = 15;
 
-  function getScrollTop() {
-    return window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  function isAtPageTop() {
+    return (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0) <= 2;
+  }
+
+  function isInsideScrollable(el) {
+    while (el && el !== document.body && el !== document.documentElement) {
+      var style = window.getComputedStyle(el);
+      var oy = style.overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight && el.scrollTop > 0) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
   }
 
   document.addEventListener('touchstart', function(e) {
-    if (getScrollTop() <= 5) {
-      startY = e.touches[0].clientY;
-      pulling = true;
-    }
+    if (!isAtPageTop()) return;
+    if (isInsideScrollable(e.target)) return;
+    startY = e.touches[0].clientY;
+    pulling = true;
+    activated = false;
   }, { passive: true });
 
   document.addEventListener('touchmove', function(e) {
     if (!pulling) return;
-    currentY = e.touches[0].clientY;
+    var currentY = e.touches[0].clientY;
     var dist = currentY - startY;
-    if (dist > 0 && getScrollTop() <= 5) {
-      var progress = Math.min(dist / threshold, 1);
-      var top = Math.min(dist * 0.4, 60);
-      ptrEl.style.top = (top - 20) + 'px';
-      ptrEl.querySelector('i').style.transform = 'rotate(' + (progress * 180) + 'deg)';
-      if (dist > 10) { e.preventDefault(); }
-    } else {
+
+    if (!isAtPageTop()) {
       pulling = false;
       ptrEl.style.top = '-50px';
+      ptrEl.classList.remove('ptr-ready');
+      return;
+    }
+
+    if (dist < deadZone) return;
+
+    var realDist = dist - deadZone;
+    var progress = Math.min(realDist / threshold, 1);
+    var top = Math.min(realDist * 0.35, 50);
+    ptrEl.style.top = (top - 15) + 'px';
+    ptrEl.style.transition = 'none';
+
+    if (progress >= 1) {
+      ptrEl.classList.add('ptr-ready');
+      activated = true;
+    } else {
+      ptrEl.classList.remove('ptr-ready');
+      activated = false;
+    }
+
+    if (realDist > 5 && e.cancelable) {
+      e.preventDefault();
     }
   }, { passive: false });
 
   document.addEventListener('touchend', function() {
     if (!pulling) return;
-    var dist = currentY - startY;
-    if (dist >= threshold && getScrollTop() <= 5) {
-      ptrEl.style.top = '10px';
+    ptrEl.style.transition = 'top 0.25s ease';
+    if (activated) {
+      ptrEl.style.top = '12px';
+      ptrEl.classList.remove('ptr-ready');
       ptrEl.classList.add('ptr-loading');
-      ptrEl.querySelector('i').style.transform = '';
-      setTimeout(function() { location.reload(); }, 400);
+      setTimeout(function() { location.reload(); }, 350);
     } else {
       ptrEl.style.top = '-50px';
+      ptrEl.classList.remove('ptr-ready');
     }
     pulling = false;
+    activated = false;
     startY = 0;
-    currentY = 0;
   }, { passive: true });
 })();
 </script>
