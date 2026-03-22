@@ -2077,7 +2077,8 @@ app.get('/api/messages/:contactId', requireAuth, async (req, res) => {
       messages.push({
         ...val, // جلب كل البيانات
         messageId: childSnap.key, // التأكد من أن الـ ID موجود
-        reaction: val.reaction || null // [مهم] قراءة التفاعل المحفوظ
+        reaction: val.reaction || null, // [مهم] التوافق مع النظام القديم
+        reactions: val.reactions || null // [جديد] كائن التفاعلات المتعددة {userId: emoji}
       });
     });
 
@@ -2341,9 +2342,9 @@ app.post('/api/mark_read', requireAuth, async (req, res) => {
 });
 
 
-// ---------------- API: Message Reactions (جديد) ----------------
+// ---------------- API: Message Reactions (متعدد التفاعلات) ----------------
 
-// إضافة تفاعل (reaction) على رسالة معينة
+// إضافة تفاعل (reaction) على رسالة معينة - يدعم تفاعل لكل مستخدم
 app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { otherId, messageId } = req.params;
@@ -2356,7 +2357,6 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
   const chatId = [userId, otherId].sort().join('_');
 
   try {
-    // تصحيح المسار: الوصول المباشر للرسالة
     const messageRef = db.ref(`messages/${chatId}/${messageId}`);
     const messageSnap = await messageRef.once('value');
 
@@ -2366,20 +2366,20 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
 
     const message = messageSnap.val();
 
-    // [مهم] حفظ التفاعل داخل كائن الرسالة مباشرة باستخدام update
-    await messageRef.update({
-      reaction: reaction
-    });
+    // حفظ التفاعل في كائن reactions مفهرس بمعرف المستخدم
+    const updates = {};
+    updates[`reactions/${userId}`] = reaction;
+    // الحفاظ على التوافق مع الحقل القديم
+    updates['reaction'] = reaction;
+    await messageRef.update(updates);
 
-    // إرسال إشعار لصاحب الرسالة عند التفاعل (إذا لم يكن هو نفسه)
-    // [مهم] الإشعار يظهر في خانة الرسائل وليس صفحة الإشعارات
+    // إرسال إشعار لصاحب الرسالة عند التفاعل
     const messageSenderId = message.senderId;
     if (messageSenderId && messageSenderId !== userId) {
       try {
         const fromProfileSnap = await db.ref(`profiles/${userId}`).once('value');
         const fromProfile = fromProfileSnap.val() || {};
         
-        // تحديث قائمة المحادثات لإظهار إشعار التفاعل في خانة الرسائل
         const reactionPreview = `${reaction} تفاعل على رسالتك`;
         await db.ref(`chats/${messageSenderId}/${userId}`).update({
           last_message_content: reactionPreview,
@@ -2389,7 +2389,6 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
           contact_id: userId
         });
         
-        // إرسال إشعار Push للجهاز (يظهر كإشعار رسالة)
         sendPushNotification(
           messageSenderId,
           `${fromProfile.username || 'شخص ما'}`,
@@ -2409,7 +2408,7 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
 });
 
 
-// حذف تفاعل من رسالة
+// حذف تفاعل المستخدم الحالي فقط من رسالة
 app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { otherId, messageId } = req.params;
@@ -2417,7 +2416,6 @@ app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (re
   const chatId = [userId, otherId].sort().join('_');
 
   try {
-    // المسار المتوافق مع طريقة حفظ التفاعل في POST
     const messageRef = db.ref(`messages/${chatId}/${messageId}`);
     const snap = await messageRef.once('value');
     if (!snap.exists()) {
@@ -2425,12 +2423,18 @@ app.delete('/api/messages/:otherId/reactions/:messageId', requireAuth, async (re
     }
 
     const msgData = snap.val();
-    if (!msgData.reaction) {
-      return res.status(404).json({ ok: false, error: 'No reaction found' });
-    }
+    const reactions = msgData.reactions || {};
 
-    // إزالة حقل التفاعل من الرسالة
-    await messageRef.update({ reaction: null });
+    // إزالة تفاعل المستخدم الحالي فقط
+    delete reactions[userId];
+    
+    // تحديث الحقل القديم والجديد
+    const remainingKeys = Object.keys(reactions);
+    const updates = {
+      reactions: remainingKeys.length > 0 ? reactions : null,
+      reaction: remainingKeys.length > 0 ? reactions[remainingKeys[remainingKeys.length - 1]] : null
+    };
+    await messageRef.update(updates);
 
     res.json({ ok: true });
   } catch (error) {
