@@ -2490,20 +2490,10 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         });
     }
 
-    // رفع ملف مباشرة إلى ImageKit باستخدام مصادقة من السيرفر مع شريط تقدم
+    // رفع ملف مباشرة إلى ImageKit باستخدام مصادقة من السيرفر مع شريط تقدم (مع إعادة المحاولة)
     var _storyUploadBtn = null;
-    async function uploadToImageKit(file, resourceType) {
-        // 1. Get auth from server
-        var authRes = await fetch('/api/imagekit/auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: 'stories', resource_type: resourceType }),
-            credentials: 'same-origin'
-        });
-        var authData = await authRes.json();
-        if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
 
-        // 2. Upload directly to ImageKit
+    async function _uploadToImageKitOnce(file, authData) {
         var fd = new FormData();
         fd.append('file', file);
         fd.append('publicKey', authData.publicKey);
@@ -2512,14 +2502,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
         fd.append('token', authData.token);
         fd.append('folder', authData.folder);
         fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-
         var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
-
-        // Use XMLHttpRequest for upload progress tracking
         return new Promise(function(resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open('POST', uploadUrl, true);
-            xhr.timeout = 120000;
+            xhr.timeout = 300000; // 5 minutes
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable && _storyUploadBtn) {
                     var pct = Math.round((e.loaded / e.total) * 100);
@@ -2541,6 +2528,33 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
             xhr.send(fd);
         });
+    }
+
+    async function uploadToImageKit(file, resourceType) {
+        var maxRetries = 3;
+        var lastError = null;
+        for (var attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                if (attempt > 0) {
+                    if (_storyUploadBtn) _storyUploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> إعادة المحاولة...';
+                    await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
+                }
+                var authRes = await fetch('/api/imagekit/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ folder: 'stories', resource_type: resourceType }),
+                    credentials: 'same-origin'
+                });
+                if (!authRes.ok) throw new Error('فشل الاتصال بالخادم');
+                var authData = await authRes.json();
+                if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
+                return await _uploadToImageKitOnce(file, authData);
+            } catch(err) {
+                console.warn('Upload attempt ' + (attempt+1) + '/' + maxRetries + ' failed:', err.message);
+                lastError = err;
+            }
+        }
+        throw lastError;
     }
 
     async function submitStory(btn) {

@@ -78,16 +78,29 @@ async function uploadFileToImageKit(file, folder) {
     .substring(0, 100);
   const fileName = Date.now() + '-' + (safeName || 'file') + path.extname(file.originalname);
 
-  const result = await imagekit.upload({
-    file: file.buffer,
-    fileName: fileName,
-    folder: '/' + folder,
-    useUniqueFileName: false
-  });
-  return result.url;
+  const maxRetries = 3;
+  let lastError = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+      const result = await imagekit.upload({
+        file: file.buffer,
+        fileName: fileName,
+        folder: '/' + folder,
+        useUniqueFileName: false
+      });
+      return result.url;
+    } catch (err) {
+      console.warn('ImageKit upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
-const upload = multer({ storage: memoryStorage, fileFilter: fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage: memoryStorage, fileFilter: fileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
 
 // Initialize Firebase Admin
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY || '{}');
@@ -152,8 +165,8 @@ const writeLimiter = rateLimit({
   message: { ok: false, error: 'Too many requests, please slow down.' }
 });
 
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 const corsOptions = {
   origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
@@ -1615,7 +1628,7 @@ app.post('/api/imagekit/auth', (req, res, next) => {
   return res.status(401).json({ ok: false, error: 'يجب تسجيل الدخول' });
 }, (req, res) => {
   try {
-    const ALLOWED_FOLDERS = ['stories', 'post_media', 'profile_pics', 'profile_pictures', 'cover_photos', 'reels', 'chat_media', 'general'];
+    const ALLOWED_FOLDERS = ['stories', 'post_media', 'profile_pics', 'profile_pictures', 'cover_photos', 'reels', 'chat_media', 'general', 'marketplace'];
     const rawFolder = String(req.body.folder || 'stories').replace(/[^a-zA-Z0-9_-]/g, '');
     const folder = ALLOWED_FOLDERS.includes(rawFolder) ? rawFolder : 'stories';
     const authParams = imagekit.getAuthenticationParameters();
@@ -6404,7 +6417,14 @@ app.get('/js/recovery-email-modal.js', (req, res) => {
 // (already handled via 'general' fallback, but let's be explicit)
 
 // Create a new product
-app.post('/api/marketplace/create', requireAuth, writeLimiter, upload.array('product_images', 5), async (req, res) => {
+app.post('/api/marketplace/create', requireAuth, writeLimiter, (req, res, next) => {
+  // If content-type is JSON, skip multer (direct ImageKit URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  upload.array('product_images', 5)(req, res, next);
+}, async (req, res) => {
   try {
     const userId = req.session.userId;
     const { title, description, price } = req.body;
@@ -6422,6 +6442,15 @@ app.post('/api/marketplace/create', requireAuth, writeLimiter, upload.array('pro
 
     // Upload images to ImageKit
     const imageUrls = [];
+    // Support direct ImageKit URLs from client-side upload (JSON body)
+    if (req.body.imageUrls && Array.isArray(req.body.imageUrls)) {
+      for (const url of req.body.imageUrls) {
+        if (isValidUploadUrl(url)) {
+          imageUrls.push(url);
+        }
+      }
+    }
+    // Support multer file upload (backward compatibility)
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         const url = await uploadFileToImageKit(file, 'marketplace');
@@ -6494,7 +6523,14 @@ app.get('/api/marketplace/:productId', requireAuth, async (req, res) => {
 });
 
 // Update a product (owner only)
-app.put('/api/marketplace/:productId', requireAuth, upload.array('product_images', 5), async (req, res) => {
+app.put('/api/marketplace/:productId', requireAuth, (req, res, next) => {
+  // If content-type is JSON, skip multer (direct ImageKit URLs)
+  const ct = req.headers['content-type'] || '';
+  if (ct.indexOf('application/json') !== -1) {
+    return next();
+  }
+  upload.array('product_images', 5)(req, res, next);
+}, async (req, res) => {
   try {
     const userId = req.session.userId;
     const productId = sanitizePathParam(req.params.productId);
@@ -6520,12 +6556,21 @@ app.put('/api/marketplace/:productId', requireAuth, upload.array('product_images
     let imageUrls = [];
     if (existing_images) {
       try {
-        imageUrls = JSON.parse(existing_images);
-        if (!Array.isArray(imageUrls)) imageUrls = [];
+        const parsedExisting = typeof existing_images === 'string' ? JSON.parse(existing_images) : existing_images;
+        if (Array.isArray(parsedExisting)) imageUrls = parsedExisting;
       } catch (e) { imageUrls = []; }
     }
 
-    // Upload new images
+    // Support direct ImageKit URLs from client-side upload (JSON body)
+    if (req.body.newImageUrls && Array.isArray(req.body.newImageUrls)) {
+      for (const url of req.body.newImageUrls) {
+        if (isValidUploadUrl(url)) {
+          imageUrls.push(url);
+        }
+      }
+    }
+
+    // Upload new images via multer (backward compatibility)
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         const url = await uploadFileToImageKit(file, 'marketplace');
@@ -6662,7 +6707,7 @@ app.get('/api/link-preview', requireAuth, async (req, res) => {
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ ok: false, error: 'حجم الملف كبير جداً. الحد الأقصى 5 ميغابايت عبر السيرفر. استخدم الرفع المباشر للملفات الكبيرة.' });
+      return res.status(413).json({ ok: false, error: 'حجم الملف كبير جداً. الحد الأقصى 50 ميغابايت. استخدم الرفع المباشر للملفات الكبيرة.' });
     }
     return res.status(400).json({ ok: false, error: 'خطأ في رفع الملف: ' + err.message });
   }

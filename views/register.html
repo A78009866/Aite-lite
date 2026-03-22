@@ -387,17 +387,8 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             }
         }
 
-        // رفع ملف مباشرة إلى ImageKit (يتجاوز حد حجم السيرفر)
-        async function uploadToImageKit(file, folder) {
-            var authRes = await fetch('/api/imagekit/auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ folder: folder })
-            });
-            var authData = await authRes.json();
-            if (!authData.ok) throw new Error('فشل في الحصول على مصادقة الرفع');
-
+        // رفع ملف مباشرة إلى ImageKit (يتجاوز حد حجم السيرفر) - مع إعادة المحاولة
+        async function _uploadToImageKitOnce(file, authData) {
             var fd = new FormData();
             fd.append('file', file);
             fd.append('publicKey', authData.publicKey);
@@ -406,12 +397,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
             fd.append('token', authData.token);
             fd.append('folder', authData.folder);
             fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-
             var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
             return new Promise(function(resolve, reject) {
                 var xhr = new XMLHttpRequest();
                 xhr.open('POST', uploadUrl, true);
-                xhr.timeout = 120000;
+                xhr.timeout = 300000; // 5 minutes
                 xhr.upload.onprogress = function(e) {
                     if (e.lengthComputable && btnText) {
                         var pct = Math.round((e.loaded / e.total) * 100);
@@ -433,6 +423,33 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
                 xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
                 xhr.send(fd);
             });
+        }
+
+        async function uploadToImageKit(file, folder) {
+            var maxRetries = 3;
+            var lastError = null;
+            for (var attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    if (attempt > 0) {
+                        if (btnText) btnText.textContent = 'إعادة المحاولة...';
+                        await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
+                    }
+                    var authRes = await fetch('/api/imagekit/auth', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ folder: folder })
+                    });
+                    if (!authRes.ok) throw new Error('فشل الاتصال بالخادم');
+                    var authData = await authRes.json();
+                    if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
+                    return await _uploadToImageKitOnce(file, authData);
+                } catch(err) {
+                    console.warn('Upload attempt ' + (attempt+1) + '/' + maxRetries + ' failed:', err.message);
+                    lastError = err;
+                }
+            }
+            throw lastError;
         }
 
         // مفتاح التخزين الموحد

@@ -339,8 +339,9 @@ function handleNewImageSelect(event) {
         event.target.value = '';
         return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-        showToast('حجم الصورة يجب أن يكون أقل من 5MB', 'error');
+    // Accept all image types, no file size restriction
+    if (!file.type.startsWith('image/')) {
+        showToast('يرجى اختيار ملف صورة', 'error');
         event.target.value = '';
         return;
     }
@@ -391,6 +392,95 @@ function removeNewImage(index) {
     renderNewPreviews();
 }
 
+// ======== IMAGE COMPRESSION ========
+async function compressImage(file, maxWidth, maxHeight, quality) {
+    maxWidth = maxWidth || 1920; maxHeight = maxHeight || 1920; quality = quality || 0.85;
+    if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+    return new Promise(function(resolve) {
+        var img = new Image();
+        img.onload = function() {
+            var w = img.width, h = img.height;
+            var ratio = Math.min(maxWidth / w, maxHeight / h, 1);
+            var canvas = document.createElement('canvas');
+            canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(function(blob) {
+                if (blob && blob.size < file.size) {
+                    resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: Date.now() }));
+                } else {
+                    resolve(file);
+                }
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = function() { resolve(file); };
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+// ======== IMAGEKIT DIRECT UPLOAD (with retry) ========
+async function uploadToImageKit(file, statusCallback) {
+    var maxRetries = 3;
+    var lastError = null;
+
+    for (var attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            if (attempt > 0) {
+                if (statusCallback) statusCallback('إعادة المحاولة...');
+                await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
+            }
+
+            var authRes = await fetch('/api/imagekit/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder: 'marketplace', resource_type: 'image' }),
+                credentials: 'same-origin'
+            });
+            if (!authRes.ok) throw new Error('فشل الاتصال بالخادم');
+            var authData = await authRes.json();
+            if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
+
+            var fd = new FormData();
+            fd.append('file', file);
+            fd.append('publicKey', authData.publicKey);
+            fd.append('signature', authData.signature);
+            fd.append('expire', authData.expire);
+            fd.append('token', authData.token);
+            fd.append('folder', authData.folder);
+            fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
+
+            var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
+            var result = await new Promise(function(resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', uploadUrl, true);
+                xhr.timeout = 300000; // 5 minutes
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable && statusCallback) {
+                        var pct = Math.round((e.loaded / e.total) * 100);
+                        statusCallback('جاري الرفع ' + pct + '%');
+                    }
+                };
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var data = JSON.parse(xhr.responseText);
+                            if (data.error) return reject(new Error(data.error || 'فشل رفع الملف'));
+                            resolve(data.url);
+                        } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
+                    } else reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
+                };
+                xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
+                xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
+                xhr.send(fd);
+            });
+            return result;
+        } catch(err) {
+            console.warn('Upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
+            lastError = err;
+        }
+    }
+    throw lastError;
+}
+
 async function handleEditSubmit(event) {
     event.preventDefault();
     const submitBtn = document.getElementById('submitBtn');
@@ -408,17 +498,33 @@ async function handleEditSubmit(event) {
         return;
     }
 
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('description', description);
-    formData.append('price', price);
-    formData.append('existing_images', JSON.stringify(existingImages));
-    selectedNewImages.forEach(file => formData.append('product_images', file));
-
     try {
+        // Upload new images directly to ImageKit with compression
+        var newImageUrls = [];
+        for (var i = 0; i < selectedNewImages.length; i++) {
+            submitBtn.innerHTML = '<div class="spinner"></div> ضغط الصورة ' + (i+1) + '/' + selectedNewImages.length + '...';
+            var compressed = await compressImage(selectedNewImages[i]);
+            submitBtn.innerHTML = '<div class="spinner"></div> رفع الصورة ' + (i+1) + '/' + selectedNewImages.length + '...';
+            var url = await uploadToImageKit(compressed, function(status) {
+                submitBtn.innerHTML = '<div class="spinner"></div> صورة ' + (i+1) + ': ' + status;
+            });
+            newImageUrls.push(url);
+        }
+
+        submitBtn.innerHTML = '<div class="spinner"></div> جاري الحفظ...';
+
+        // Send JSON with image URLs (not FormData)
         const res = await fetch('/api/marketplace/' + currentProduct.id, {
             method: 'PUT',
-            body: formData
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: title,
+                description: description,
+                price: price,
+                existing_images: existingImages,
+                newImageUrls: newImageUrls
+            }),
+            credentials: 'same-origin'
         });
         const data = await res.json();
         if (data.ok) {
@@ -430,7 +536,8 @@ async function handleEditSubmit(event) {
             submitBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التعديلات';
         }
     } catch (err) {
-        showToast('تعذر الاتصال بالسيرفر', 'error');
+        console.error('Product edit error:', err);
+        showToast('خطأ: ' + (err.message || 'فشل الاتصال بالسيرفر'), 'error');
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التعديلات';
     }
