@@ -6573,6 +6573,91 @@ app.delete('/api/marketplace/:productId', requireAuth, async (req, res) => {
 
 // ============================================================
 
+// --- Link Preview API (for chat internal link cards) ---
+app.get('/api/link-preview', requireAuth, async (req, res) => {
+  try {
+    const type = String(req.query.type || '').trim();
+    const id = sanitizePathParam(String(req.query.id || '').trim());
+    if (!type || !id) return res.status(400).json({ ok: false, error: 'Missing type or id' });
+
+    if (type === 'product') {
+      const snap = await db.ref('marketplace/' + id).once('value');
+      const p = snap.val();
+      if (!p || p.status !== 'active') return res.json({ ok: false });
+      return res.json({
+        ok: true,
+        type: 'product',
+        data: {
+          id: p.id,
+          title: p.title || '',
+          price: p.price || 0,
+          image: (p.images && p.images.length > 0) ? p.images[0] : null,
+          sellerUsername: p.sellerUsername || '',
+          sellerProfilePic: p.sellerProfilePic || null,
+          sellerVerified: !!p.sellerVerified
+        }
+      });
+    }
+
+    if (type === 'post') {
+      const snap = await db.ref('posts/' + id).once('value');
+      const p = snap.val();
+      if (!p) return res.json({ ok: false });
+      const userSnap = await db.ref('profiles/' + p.userId).once('value');
+      const u = userSnap.val() || {};
+      let image = null;
+      if (p.media && p.media.url && (p.media.type || '').startsWith('image')) image = p.media.url;
+      else if (p.mediaUrls && p.mediaUrls.length > 0) image = p.mediaUrls[0];
+      else if (p.media && p.media.url && (p.media.type || '').startsWith('video')) image = null;
+      return res.json({
+        ok: true,
+        type: 'post',
+        data: {
+          id: p.postId,
+          content: (p.content || '').substring(0, 200),
+          image: image,
+          mediaType: p.media ? p.media.type : null,
+          username: u.username || '',
+          profilePic: u.profile_picture_url || null,
+          verified: !!u.is_verified,
+          likes: p.likes || 0,
+          commentsCount: p.commentsCount || 0
+        }
+      });
+    }
+
+    if (type === 'reel') {
+      const snap = await db.ref('reels/' + id).once('value');
+      const r = snap.val();
+      if (!r) return res.json({ ok: false });
+      const userSnap = await db.ref('profiles/' + r.userId).once('value');
+      const u = userSnap.val() || {};
+      return res.json({
+        ok: true,
+        type: 'reel',
+        data: {
+          id: r.reelId,
+          caption: (r.caption || '').substring(0, 200),
+          thumbnail: r.thumbnailUrl || null,
+          videoUrl: r.videoUrl || null,
+          username: u.username || '',
+          profilePic: u.profile_picture_url || null,
+          verified: !!u.is_verified,
+          likes: r.likes || 0,
+          commentsCount: r.commentsCount || 0
+        }
+      });
+    }
+
+    return res.json({ ok: false, error: 'Unknown type' });
+  } catch (err) {
+    console.error('Link preview error:', err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// ============================================================
+
 // Global error handler for multer and other middleware errors
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
