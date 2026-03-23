@@ -2704,26 +2704,36 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   background: rgba(236,72,153,0.15);
   color: #f472b6;
 }
-/* Reel-specific card: taller phone-like aspect ratio */
+/* Reel-specific card: compact attractive preview */
 .link-preview-card.lpc-reel-card {
-  max-width: 220px;
+  max-width: 260px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
 }
 .link-preview-card.lpc-reel-card .lpc-image-wrap {
-  aspect-ratio: 9/14;
-  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%);
+  aspect-ratio: 9/12;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  position: relative;
 }
 .link-preview-card.lpc-reel-card .lpc-image-wrap img {
   object-fit: cover;
+  width: 100%;
+  height: 100%;
 }
 .link-preview-card.lpc-reel-card .lpc-video-play {
-  width: 52px;
-  height: 52px;
-  background: rgba(236,72,153,0.5);
-  border: 2px solid rgba(255,255,255,0.4);
-  box-shadow: 0 0 20px rgba(236,72,153,0.3);
+  width: 50px;
+  height: 50px;
+  background: rgba(236,72,153,0.45);
+  border: 2px solid rgba(255,255,255,0.35);
+  box-shadow: 0 0 24px rgba(236,72,153,0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 3;
 }
 .link-preview-card.lpc-reel-card .lpc-video-play i {
-  font-size: 20px;
+  font-size: 18px;
   margin-left: 3px;
 }
 .lpc-reel-gradient {
@@ -2731,33 +2741,40 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 60%;
-  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  height: 55%;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 50%, transparent 100%);
   pointer-events: none;
   z-index: 1;
 }
 .lpc-reel-overlay-info {
   position: absolute;
-  bottom: 8px;
+  bottom: 10px;
   left: 10px;
   right: 10px;
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .lpc-reel-overlay-info img {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1.5px solid rgba(255,255,255,0.4);
+  border: 1.5px solid rgba(255,255,255,0.5);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 .lpc-reel-overlay-info span {
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+.link-preview-card.lpc-reel-card .lpc-body {
+  padding: 8px 12px 10px;
+}
+.link-preview-card.lpc-reel-card .lpc-desc {
+  -webkit-line-clamp: 1;
 }
 .lpc-title {
   font-size: 13px;
@@ -5573,9 +5590,12 @@ function renderPreviewCard(cardId, res) {
     } else if (res.type === 'reel') {
     // Add reel-specific class to the card
     card.classList.add('lpc-reel-card');
-    var thumbHtml = d.thumbnail
-      ? '<div class="lpc-image-wrap"><img src="' + d.thumbnail + '" alt="" onerror="this.parentNode.querySelector(\'img\').style.display=\'none\'"><div class="lpc-reel-gradient"></div><div class="lpc-video-play"><i class="fas fa-play"></i></div>' + (d.profilePic ? '<div class="lpc-reel-overlay-info"><img src="' + d.profilePic + '" alt=""><span>@' + escapePreviewText(d.username) + '</span></div>' : '') + '</div>'
-      : '<div class="lpc-image-wrap"><div class="lpc-image-placeholder" style="background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(168,85,247,0.15))"><i class="fas fa-film" style="font-size:48px;color:rgba(236,72,153,0.4)"></i></div><div class="lpc-reel-gradient"></div><div class="lpc-video-play"><i class="fas fa-play"></i></div>' + (d.profilePic ? '<div class="lpc-reel-overlay-info"><img src="' + d.profilePic + '" alt=""><span>@' + escapePreviewText(d.username) + '</span></div>' : '') + '</div>';
+    // Try to get thumbnail: use provided thumbnail, or extract from video URL
+    var reelThumb = d.thumbnail || (d.videoUrl ? getVideoThumbnail(d.videoUrl) : '') || '';
+    var overlayInfo = d.profilePic ? '<div class="lpc-reel-overlay-info"><img src="' + d.profilePic + '" alt=""><span>@' + escapePreviewText(d.username) + '</span></div>' : '';
+    var thumbHtml = reelThumb
+      ? '<div class="lpc-image-wrap"><img src="' + reelThumb + '" alt="" onerror="this.style.opacity=\'0\'"><div class="lpc-reel-gradient"></div><div class="lpc-video-play"><i class="fas fa-play"></i></div>' + overlayInfo + '</div>'
+      : '<div class="lpc-image-wrap"><div class="lpc-image-placeholder" style="background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(168,85,247,0.15))"><i class="fas fa-film" style="font-size:48px;color:rgba(236,72,153,0.4)"></i></div><div class="lpc-reel-gradient"></div><div class="lpc-video-play"><i class="fas fa-play"></i></div>' + overlayInfo + '</div>';
     html = thumbHtml +
       '<div class="lpc-body">' +
         '<span class="lpc-type-badge lpc-type-reel"><i class="fas fa-film"></i> ريلز</span>' +
