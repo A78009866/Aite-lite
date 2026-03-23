@@ -97,25 +97,27 @@
 
         /* Increased size for reel cards for clarity */
         .reel-card-item {
-            width: 170px;
-            height: 260px;
-            border-radius: 14px;
+            width: 180px;
+            height: 280px;
+            border-radius: 16px;
             background: #111;
             position: relative;
             overflow: hidden;
             cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.08);
-            transition: transform 0.18s, box-shadow 0.18s;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.22s;
             display: flex;
             align-items: center;
             justify-content: center;
             box-shadow: 0 8px 30px rgba(0,0,0,0.6);
             flex-shrink: 0;
         }
-        .reel-card-item:hover { transform: translateY(-6px); box-shadow: 0 12px 40px rgba(0,0,0,0.7); }
+        .reel-card-item:hover { transform: translateY(-6px) scale(1.03); box-shadow: 0 14px 44px rgba(0,0,0,0.75); }
 
         /* poster image covers card to appear crisp */
         .reel-card-item img {
+            position: absolute;
+            inset: 0;
             height: 100%;
             width: 100%;
             object-fit: cover;
@@ -123,11 +125,22 @@
             display: block;
             margin: 0;
             background: #000;
+            z-index: 1;
         }
         .reel-card-item video {
             display: none;
             width: 100%; height: 100%; object-fit: cover;
             pointer-events: none;
+        }
+        /* Reel card shimmer placeholder */
+        .reel-card-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #1a1a2e 25%, #252540 50%, #1a1a2e 75%);
+            background-size: 200% 200%;
+            animation: skeleton-shimmer 1.5s ease-in-out infinite;
+            z-index: 0;
         }
 
         /* Center play icon over poster for affordance (slightly larger) */
@@ -138,30 +151,43 @@
             align-items: center;
             justify-content: center;
             pointer-events: none;
+            z-index: 5;
         }
         .reel-play-icon i {
             color: rgba(255,255,255,0.95);
-            font-size: 30px;
+            font-size: 34px;
             text-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.35);
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            border: 2px solid rgba(255,255,255,0.2);
         }
 
         .reel-card-overlay {
             position: absolute; bottom: 0; left: 0; right: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-            padding: 10px;
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+            padding: 12px;
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
-            height: 50%;
+            height: 55%;
+            z-index: 4;
         }
         .reel-user-avatar {
             position: absolute; top: 10px; left: 10px;
-            width: 34px; height: 34px;
+            width: 36px; height: 36px;
             border-radius: 50%;
-            border: 2px solid white;
+            border: 2px solid rgba(255,255,255,0.9);
             z-index: 10;
             overflow: hidden;
             background: #000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
         .reel-user-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -2927,9 +2953,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   100% { background-position: 200% 0; }
 }
 .media-skeleton {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 16/9;
+  height: 100%;
+  min-height: 200px;
   background: linear-gradient(90deg, #1a1a2e 25%, #252540 37%, #1a1a2e 63%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
@@ -2937,12 +2965,14 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  z-index: 2;
+  transition: opacity 0.4s ease;
 }
 .media-skeleton-icon {
   color: rgba(255,255,255,0.15);
   font-size: 36px;
 }
-.media-skeleton-hide { display: none !important; }
+.media-skeleton-hide { opacity: 0; pointer-events: none; }
 
 /* Post multi-image carousel */
 .post-carousel-wrapper { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; direction: rtl; width: 100%; }
@@ -5642,7 +5672,7 @@ function handleNotifClick(el) {
                     let dotsHtml = '';
                     post.mediaUrls.forEach(function(url, idx) {
                         const safeUrl = escapeAttr(url);
-                        slidesHtml += `<div class="post-carousel-slide"><div class="media-skeleton" id="skel-${carouselId}-${idx}"><i class="fas fa-image media-skeleton-icon"></i></div><img src="${safeUrl}" alt="صورة ${idx+1}" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;border-radius:0;cursor:pointer;display:none;" onload="this.style.display='block';var s=document.getElementById('skel-${carouselId}-${idx}');if(s)s.classList.add('media-skeleton-hide');" onclick="openCarouselFullscreen(${JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;')}, ${idx})" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}';this.style.display='block';var s=document.getElementById('skel-${carouselId}-${idx}');if(s)s.classList.add('media-skeleton-hide');"></div>`;
+                        slidesHtml += `<div class="post-carousel-slide" style="position:relative;"><div class="media-skeleton" id="skel-${carouselId}-${idx}"><i class="fas fa-image media-skeleton-icon"></i></div><img src="${safeUrl}" alt="صورة ${idx+1}" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;border-radius:0;cursor:pointer;position:relative;z-index:3;" onload="var s=document.getElementById('skel-${carouselId}-${idx}');if(s)s.classList.add('media-skeleton-hide');" onclick="openCarouselFullscreen(${JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;')}, ${idx})" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}';var s=document.getElementById('skel-${carouselId}-${idx}');if(s)s.classList.add('media-skeleton-hide');"></div>`;
                         dotsHtml += `<span class="post-carousel-dot${idx === 0 ? ' active' : ''}" data-idx="${idx}"></span>`;
                     });
                     mediaContent = `
@@ -5661,9 +5691,9 @@ function handleNotifClick(el) {
                 } else if (post.media.type === 'image') {
                     const imgUrl = escapeAttr(post.media.url || '');
                     mediaContent = `
-                        <div class="cursor-pointer" onclick="openMediaViewer('${imgUrl}', 'image', event)" style="position:relative;">
+                        <div class="cursor-pointer" onclick="openMediaViewer('${imgUrl}', 'image', event)" style="position:relative;min-height:200px;">
                             <div class="media-skeleton" id="skel-img-${escapeAttr(post.postId)}"><i class="fas fa-image media-skeleton-icon"></i></div>
-                            <img src="${imgUrl}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0;display:none;" onload="this.style.display='block';var s=document.getElementById('skel-img-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}';this.style.display='block';var s=document.getElementById('skel-img-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');">
+                            <img src="${imgUrl}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0;display:block;position:relative;z-index:3;" onload="var s=document.getElementById('skel-img-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}';var s=document.getElementById('skel-img-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');">
                         </div>
                     `;
                 } else if (post.media.type === 'video') {
@@ -5679,8 +5709,8 @@ function handleNotifClick(el) {
                                    poster="${poster}" 
                                    preload="auto"
                                    playsinline
-                                   style="aspect-ratio:16/9;display:none;"
-                                   onloadeddata="this.style.display='block';var s=document.getElementById('skel-vid-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');"
+                                   style="aspect-ratio:16/9;display:block;position:relative;z-index:3;"
+                                   onloadeddata="var s=document.getElementById('skel-vid-${escapeAttr(post.postId)}');if(s)s.classList.add('media-skeleton-hide');"
                                    onclick="toggleVideoPlay('${escapeAttr(post.postId)}', event)">
                             </video>
                             

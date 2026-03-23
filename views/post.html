@@ -237,9 +237,11 @@
             100% { background-position: 200% 0; }
         }
         .media-skeleton {
-            position: relative;
+            position: absolute;
+            inset: 0;
             width: 100%;
-            aspect-ratio: 16/9;
+            height: 100%;
+            min-height: 200px;
             background: linear-gradient(90deg, #1a1a2e 25%, #252540 37%, #1a1a2e 63%);
             background-size: 200% 100%;
             animation: skeleton-shimmer 1.5s ease-in-out infinite;
@@ -247,12 +249,14 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            z-index: 2;
+            transition: opacity 0.4s ease;
         }
         .media-skeleton-icon {
             color: rgba(255,255,255,0.15);
             font-size: 36px;
         }
-        .media-skeleton-hide { display: none !important; }
+        .media-skeleton-hide { opacity: 0; pointer-events: none; }
 
         /* Media Viewer */
         .media-container { max-height: 80vh; width: auto; }
@@ -3528,7 +3532,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
                     let slidesHtml = '';
                     let dotsHtml = '';
                     post.mediaUrls.forEach(function(url, idx) {
-                        slidesHtml += '<div class="post-carousel-slide"><div class="media-skeleton" id="skel-' + carouselId + '-' + idx + '"><i class="fas fa-image media-skeleton-icon"></i></div><img src="' + url + '" alt="صورة ' + (idx+1) + '" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;cursor:pointer;border-radius:0;display:none;" onload="this.style.display=\'block\';var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');" onclick="openCarouselFullscreen(' + JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;') + ', ' + idx + ')" onerror="this.onerror=null;this.src=\'/images/default-avatar.png\';this.style.display=\'block\';var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');"></div>';
+                        slidesHtml += '<div class="post-carousel-slide" style="position:relative;"><div class="media-skeleton" id="skel-' + carouselId + '-' + idx + '"><i class="fas fa-image media-skeleton-icon"></i></div><img src="' + url + '" alt="صورة ' + (idx+1) + '" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;cursor:pointer;border-radius:0;position:relative;z-index:3;" onload="var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');" onclick="openCarouselFullscreen(' + JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;') + ', ' + idx + ')" onerror="this.onerror=null;this.src=\'/images/default-avatar.png\';var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');"></div>';
                         dotsHtml += '<span class="post-carousel-dot' + (idx === 0 ? ' active' : '') + '" data-idx="' + idx + '"></span>';
                     });
                     mediaContent = `
@@ -3546,9 +3550,9 @@ html[data-theme="light"] .sidebar-menu-icon i {
                     `;
                 } else if (post.media.type === 'image') {
                     mediaContent = `
-                        <div class="cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)" style="position:relative;">
+                        <div class="cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)" style="position:relative;min-height:200px;">
                             <div class="media-skeleton" id="skel-img-${post.postId}"><i class="fas fa-image media-skeleton-icon"></i></div>
-                            <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0;display:none;" onload="this.style.display='block';var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.style.display='block';var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');">
+                            <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0;display:block;position:relative;z-index:3;" onload="var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');" onerror="var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');">
                         </div>
                     `;
                 } else if (post.media.type === 'video') {
@@ -3562,8 +3566,8 @@ html[data-theme="light"] .sidebar-menu-icon i {
                                    poster="${poster}" 
                                    preload="auto"
                                    playsinline
-                                   style="aspect-ratio:16/9;display:none;"
-                                   onloadeddata="this.style.display='block';var s=document.getElementById('skel-vid-${post.postId}');if(s)s.classList.add('media-skeleton-hide');"
+                                   style="aspect-ratio:16/9;display:block;position:relative;z-index:3;"
+                                   onloadeddata="var s=document.getElementById('skel-vid-${post.postId}');if(s)s.classList.add('media-skeleton-hide');"
                                    onclick="toggleVideoPlay('${post.postId}', event)">
                             </video>
                             

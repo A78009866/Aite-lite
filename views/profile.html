@@ -2544,9 +2544,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   100% { background-position: 200% 0; }
 }
 .media-skeleton {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 16/9;
+  height: 100%;
+  min-height: 200px;
   background: linear-gradient(90deg, #1a1a2e 25%, #252540 37%, #1a1a2e 63%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
@@ -2554,12 +2556,14 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  z-index: 2;
+  transition: opacity 0.4s ease;
 }
 .media-skeleton-icon {
   color: rgba(255,255,255,0.15);
   font-size: 36px;
 }
-.media-skeleton-hide { display: none !important; }
+.media-skeleton-hide { opacity: 0; pointer-events: none; }
 
 /* Post multi-image carousel */
 .post-carousel-wrapper { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; direction: rtl; width: 100%; }
@@ -4340,7 +4344,7 @@ function createPostCard(post) {
             let slidesHtml = '';
             let dotsHtml = '';
             post.mediaUrls.forEach(function(url, idx) {
-                slidesHtml += '<div class="post-carousel-slide"><div class="media-skeleton" id="skel-' + carouselId + '-' + idx + '"><i class="fas fa-image media-skeleton-icon"></i></div><img src="' + escapeHtml(url) + '" alt="صورة ' + (idx+1) + '" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;border-radius:0;cursor:pointer;display:none;" onload="this.style.display=\'block\';var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');" onclick="openCarouselFullscreen(' + JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;') + ', ' + idx + ')" onerror="this.style.display=\'block\';var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');"></div>';
+                slidesHtml += '<div class="post-carousel-slide" style="position:relative;"><div class="media-skeleton" id="skel-' + carouselId + '-' + idx + '"><i class="fas fa-image media-skeleton-icon"></i></div><img src="' + escapeHtml(url) + '" alt="صورة ' + (idx+1) + '" style="width:100%;height:auto;max-height:70vh;object-fit:contain;display:block;border-radius:0;cursor:pointer;position:relative;z-index:3;" onload="var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');" onclick="openCarouselFullscreen(' + JSON.stringify(post.mediaUrls).replace(/"/g, '&quot;') + ', ' + idx + ')" onerror="var s=document.getElementById(\'skel-' + carouselId + '-' + idx + '\');if(s)s.classList.add(\'media-skeleton-hide\');"></div>';
                 dotsHtml += '<span class="post-carousel-dot' + (idx === 0 ? ' active' : '') + '" data-idx="' + idx + '"></span>';
             });
             mediaContent = `
@@ -4357,9 +4361,9 @@ function createPostCard(post) {
                 </div>`;
         } else if (post.media.type === 'image') {
             mediaContent = `
-                <div class="cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)" style="position:relative;">
+                <div class="cursor-pointer" onclick="openMediaViewer('${post.media.url}', 'image', event)" style="position:relative;min-height:200px;">
                     <div class="media-skeleton" id="skel-img-${post.postId}"><i class="fas fa-image media-skeleton-icon"></i></div>
-                    <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0;display:none;" onload="this.style.display='block';var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');" onerror="this.style.display='block';var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');">
+                    <img src="${post.media.url}" alt="صورة المنشور" class="w-full object-cover" style="border-radius:0;display:block;position:relative;z-index:3;" onload="var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');" onerror="var s=document.getElementById('skel-img-${post.postId}');if(s)s.classList.add('media-skeleton-hide');">
                 </div>`;
         } else if (post.media.type === 'video') {
             const autoThumb = getVideoThumbnail(post.media.url);
@@ -4372,8 +4376,8 @@ function createPostCard(post) {
                            poster="${poster}" 
                            preload="auto"
                            playsinline
-                           style="aspect-ratio:16/9;display:none;"
-                           onloadeddata="this.style.display='block';var s=document.getElementById('skel-vid-${post.postId}');if(s)s.classList.add('media-skeleton-hide');"
+                           style="aspect-ratio:16/9;display:block;position:relative;z-index:3;"
+                           onloadeddata="var s=document.getElementById('skel-vid-${post.postId}');if(s)s.classList.add('media-skeleton-hide');"
                            onclick="toggleVideoPlay('${post.postId}', event)">
                     </video>
                     
