@@ -2704,6 +2704,61 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   background: rgba(236,72,153,0.15);
   color: #f472b6;
 }
+/* Reel-specific card: taller phone-like aspect ratio */
+.link-preview-card.lpc-reel-card {
+  max-width: 220px;
+}
+.link-preview-card.lpc-reel-card .lpc-image-wrap {
+  aspect-ratio: 9/14;
+  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%);
+}
+.link-preview-card.lpc-reel-card .lpc-image-wrap img {
+  object-fit: cover;
+}
+.link-preview-card.lpc-reel-card .lpc-video-play {
+  width: 52px;
+  height: 52px;
+  background: rgba(236,72,153,0.5);
+  border: 2px solid rgba(255,255,255,0.4);
+  box-shadow: 0 0 20px rgba(236,72,153,0.3);
+}
+.link-preview-card.lpc-reel-card .lpc-video-play i {
+  font-size: 20px;
+  margin-left: 3px;
+}
+.lpc-reel-gradient {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60%;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  pointer-events: none;
+  z-index: 1;
+}
+.lpc-reel-overlay-info {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lpc-reel-overlay-info img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255,255,255,0.4);
+}
+.lpc-reel-overlay-info span {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
 .lpc-title {
   font-size: 13px;
   font-weight: 600;
@@ -5400,20 +5455,17 @@ function renderPreviewCard(cardId, res) {
           (d.verified ? '<img src="https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png" style="width:14px;height:14px;vertical-align:middle;">' : '') +
         '</div>';
     } else if (res.type === 'reel') {
+    // Add reel-specific class to the card
+    card.classList.add('lpc-reel-card');
     var thumbHtml = d.thumbnail
-      ? '<div class="lpc-image-wrap"><img src="' + d.thumbnail + '" alt="" onerror="this.parentNode.innerHTML=\'<div class=lpc-image-placeholder><i class=fas\\ fa-film></i></div>\'"><div class="lpc-video-play"><i class="fas fa-play"></i></div></div>'
-      : '<div class="lpc-image-wrap"><div class="lpc-image-placeholder"><i class="fas fa-film" style="font-size:40px;color:rgba(255,255,255,0.3)"></i></div><div class="lpc-video-play"><i class="fas fa-play"></i></div></div>';
+      ? '<div class="lpc-image-wrap"><img src="' + d.thumbnail + '" alt="" onerror="this.parentNode.querySelector(\'img\').style.display=\'none\'"><div class="lpc-reel-gradient"></div><div class="lpc-video-play"><i class="fas fa-play"></i></div>' + (d.profilePic ? '<div class="lpc-reel-overlay-info"><img src="' + d.profilePic + '" alt=""><span>@' + escapePreviewText(d.username) + '</span></div>' : '') + '</div>'
+      : '<div class="lpc-image-wrap"><div class="lpc-image-placeholder" style="background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(168,85,247,0.15))"><i class="fas fa-film" style="font-size:48px;color:rgba(236,72,153,0.4)"></i></div><div class="lpc-reel-gradient"></div><div class="lpc-video-play"><i class="fas fa-play"></i></div>' + (d.profilePic ? '<div class="lpc-reel-overlay-info"><img src="' + d.profilePic + '" alt=""><span>@' + escapePreviewText(d.username) + '</span></div>' : '') + '</div>';
     html = thumbHtml +
       '<div class="lpc-body">' +
         '<span class="lpc-type-badge lpc-type-reel"><i class="fas fa-film"></i> ريلز</span>' +
         (d.caption ? '<div class="lpc-desc">' + escapePreviewText(d.caption) + '</div>' : '') +
         '<div class="lpc-stats"><span><i class="fas fa-heart"></i> ' + (d.likes || 0) + '</span><span><i class="fas fa-comment"></i> ' + (d.commentsCount || 0) + '</span></div>' +
-      '</div>' +
-      '<div class="lpc-footer">' +
-        (d.profilePic ? '<img src="' + d.profilePic + '" alt="">' : '') +
-        '<span class="lpc-footer-name">@' + escapePreviewText(d.username) + '</span>' +
-          (d.verified ? '<img src="https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png" style="width:14px;height:14px;vertical-align:middle;">' : '') +
-        '</div>';
+      '</div>';
     }
 
     card.innerHTML = html;
