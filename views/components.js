@@ -210,7 +210,7 @@
         var isNoNavPage = noNavPages.indexOf(currentPath) !== -1;
 
         // Pages that have sidebar but no bottom nav
-        var sidebarOnlyPages = ['/create_post', '/create_product', '/edit_product', '/product_detail'];
+        var sidebarOnlyPages = ['/create_post', '/create_product', '/edit_product', '/product_detail', '/marketplace'];
         var isSidebarOnly = sidebarOnlyPages.indexOf(currentPath) !== -1;
 
         if (!isNoNavPage) {
