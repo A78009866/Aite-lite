@@ -20,14 +20,14 @@
         if (document.querySelector('.desktop-sidebar')) return;
 
         var sidebarLinks = [
-            { href: '/chat_list', icon: 'fas fa-home', label: '\u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629', page: '/chat_list' },
-            { href: '/users_list', icon: 'fab fa-facebook-messenger', label: '\u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A', page: '/users_list' },
-            { href: '/reels', icon: 'fas fa-clapperboard', label: '\u0631\u064A\u0644\u0632', page: '/reels' },
-            { href: '/notifications', icon: 'fas fa-bell', label: '\u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A', page: '/notifications' },
-            { href: '/all_users', icon: 'fas fa-users', label: '\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646', page: '/all_users' },
-            { href: '/marketplace', icon: 'fas fa-store', label: '\u0645\u062A\u062C\u0631', page: '/marketplace' },
-            { href: '/profile', icon: 'fas fa-user', label: '\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A', page: '/profile' },
-            { href: '/settings', icon: 'fas fa-cog', label: '\u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A', page: '/settings' }
+                        { href: '/chat_list', icon: 'fas fa-home', label: '\u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629', page: '/chat_list' },
+                        { href: '/users_list', icon: 'fab fa-facebook-messenger', label: '\u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A', page: '/users_list' },
+                        { href: '/reels', icon: 'fas fa-clapperboard', label: '\u0631\u064A\u0644\u0632', page: '/reels' },
+                        { href: '/notifications', icon: 'fas fa-bell', label: '\u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A', page: '/notifications' },
+                        { href: '/all_users', icon: 'fas fa-users', label: '\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646', page: '/all_users' },
+                        { href: '/marketplace', icon: 'fas fa-store', label: '\u0645\u062A\u062C\u0631', page: '/marketplace' },
+                        { href: '/profile', icon: 'fas fa-user', label: '\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A', page: '/profile' },
+                        { href: '/settings', icon: 'fas fa-cog', label: '\u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A', page: '/settings' }
         ];
 
         var aside = document.createElement('aside');
@@ -58,11 +58,11 @@
                 a.classList.add('active');
             }
             // create_post -> chat_list active
-            if (currentPath === '/create_post' && item.page === '/chat_list') {
-                a.classList.add('active');
-            }
-            // create_reel, create_story -> chat_list active
-            if ((currentPath === '/create_reel' || currentPath === '/create_story') && item.page === '/chat_list') {
+                        if ((currentPath === '/create_post' || currentPath === '/create-post') && item.page === '/chat_list') {
+                            a.classList.add('active');
+                        }
+                        // create_reel, create_story -> chat_list active
+                        if ((currentPath === '/create_reel' || currentPath === '/create-reel' || currentPath === '/create_story' || currentPath === '/create-story') && item.page === '/chat_list') {
                 a.classList.add('active');
             }
             // chat -> users_list active
@@ -100,7 +100,7 @@
         if (document.getElementById('mainBottomNav')) return;
 
         var bottomNavItems = [
-            { id: 'homeBtn', href: '/chat_list', icon: 'fas fa-home', pages: ['/chat_list', '/post', '/notifications', '/settings', '/profile', '/edit_profile', '/all_users', '/marketplace', '/create_reel', '/create_story', '/create_product', '/edit_product', '/product_detail'] },
+            { id: 'homeBtn', href: '/chat_list', icon: 'fas fa-home', pages: ['/chat_list', '/post', '/notifications', '/settings', '/profile', '/edit_profile', '/all_users', '/marketplace', '/create_reel', '/create-reel', '/create_story', '/create-story', '/create_product', '/edit_product', '/product_detail'] },
             { id: 'searchBtn', href: '/search', icon: 'fas fa-search', pages: ['/search'] },
             { id: null, type: 'create' },
             { id: 'reelsBtn', href: '/reels', icon: 'fas fa-clapperboard', pages: [] },
@@ -176,15 +176,15 @@
             + '<div class="modal-handle"></div>'
             + '<h3 style="font-size:18px;font-weight:700;margin:0 0 16px;text-align:center;" data-i18n="\u0625\u0646\u0634\u0627\u0621">' + tr('\u0625\u0646\u0634\u0627\u0621') + '</h3>'
             + '<div style="display:flex;flex-direction:column;gap:8px;">'
-            + '<a href="/create_post" class="create-modal-item">'
+            + '<a href="/create-post" class="create-modal-item">'
             + '<div class="create-modal-icon" style="background:rgba(59,130,246,0.15);"><i class="fas fa-pen-to-square" style="color:#60a5fa;"></i></div>'
             + '<span data-i18n="\u0645\u0646\u0634\u0648\u0631">' + tr('\u0645\u0646\u0634\u0648\u0631') + '</span>'
             + '</a>'
-            + '<a href="/create_story" class="create-modal-item">'
+            + '<a href="/create-story" class="create-modal-item">'
             + '<div class="create-modal-icon" style="background:rgba(168,85,247,0.15);"><i class="fas fa-circle-plus" style="color:#a855f7;"></i></div>'
             + '<span data-i18n="\u0642\u0635\u0629">' + tr('\u0642\u0635\u0629') + '</span>'
             + '</a>'
-            + '<a href="/create_reel" class="create-modal-item">'
+            + '<a href="/create-reel" class="create-modal-item">'
             + '<div class="create-modal-icon" style="background:rgba(239,68,68,0.15);"><i class="fas fa-clapperboard" style="color:#f87171;"></i></div>'
             + '<span data-i18n="\u0631\u064A\u0644\u0632">' + tr('\u0631\u064A\u0644\u0632') + '</span>'
             + '</a>'
@@ -217,16 +217,16 @@
         var isNoNavPage = noNavPages.indexOf(currentPath) !== -1;
 
         // Pages that have sidebar but no bottom nav
-        var sidebarOnlyPages = ['/create_post', '/create_reel', '/create_product', '/edit_product', '/product_detail', '/marketplace'];
+        var sidebarOnlyPages = ['/create_post', '/create-post', '/create_reel', '/create-reel', '/create_product', '/edit_product', '/product_detail', '/marketplace'];
         var isSidebarOnly = sidebarOnlyPages.indexOf(currentPath) !== -1;
 
-        if (!isNoNavPage) {
-            injectSidebar();
-            if (!isSidebarOnly) {
-                injectCreateModal();
-                injectBottomNav();
-            }
-        }
+                if (!isNoNavPage) {
+                    injectSidebar();
+                    injectCreateModal();
+                    if (!isSidebarOnly) {
+                        injectBottomNav();
+                    }
+                }
     }
 
 
