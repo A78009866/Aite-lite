@@ -324,6 +324,8 @@ app.get('/favicon-32.png', (req, res) => { res.sendFile(path.join(__dirname, 'vi
 app.get('/favicon-16.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-16.png')); });
 app.get('/notification.mp3', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notification.mp3')); });
 app.get('/wilayas_data.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'wilayas_data.js')); });
+app.get('/common.css', (req, res) => { res.setHeader('Content-Type', 'text/css'); res.sendFile(path.join(__dirname, 'views', 'common.css')); });
+app.get('/components.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'components.js')); });
 
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
