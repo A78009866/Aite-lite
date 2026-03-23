@@ -145,21 +145,10 @@
 
                 var circle = document.createElement('div');
                 circle.className = 'nav-icon-circle';
-                circle.style.position = 'relative';
 
                 var icon = document.createElement('i');
                 icon.className = item.icon + ' text-xl';
                 circle.appendChild(icon);
-
-                // Add unread messages badge to the messages button
-                if (item.id === 'messagesBtn') {
-                    var badge = document.createElement('span');
-                    badge.id = 'msgBadge';
-                    badge.style.cssText = 'display:none;position:absolute;top:-4px;left:-4px;min-width:18px;height:18px;padding:0 5px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;border-radius:999px;align-items:center;justify-content:center;line-height:1;z-index:2;border:2px solid rgba(30,30,30,0.75);';
-                    badge.textContent = '0';
-                    circle.appendChild(badge);
-                }
-
                 a.appendChild(circle);
                 nav.appendChild(a);
             }
