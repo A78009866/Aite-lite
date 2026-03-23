@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+    <script src="/i18n.js"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <!-- PWA Meta Tags -->
@@ -1126,7 +1127,7 @@ html[data-theme="light"] #replyIndicator {
         </div>
         <div class="flex items-center gap-2 bg-[#242526] p-1.5 rounded-3xl border border-gray-700" id="commentInputWrapper">
           <img id="myCurrentAvatar" src="https://via.placeholder.com/40" class="w-8 h-8 rounded-full object-cover border border-gray-600 ml-1">
-          <input type="text" id="commentInput" placeholder="أضف تعليقاً..." 
+          <input type="text" id="commentInput" placeholder="أضف تعليقاً..." data-i18n-placeholder="أضف تعليقاً..." 
                  class="flex-grow bg-transparent text-white text-sm px-2 focus:outline-none" 
                  dir="rtl" autocomplete="off">
           <button id="sendCommentBtn" class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition w-9 h-9 flex items-center justify-center flex-shrink-0">
@@ -1139,7 +1140,8 @@ html[data-theme="light"] #replyIndicator {
 
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 
-<script>
+<script>var t = (window.AiteI18n && window.AiteI18n.t) ? window.AiteI18n.t : function(s){return s;};
+
   const VERIFIED_IMG_URL = "https://res.cloudinary.com/duixjs8az/image/upload/v1768036959/post_media/1768036959482-badge.png";
   const DEFAULT_AVATAR = 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png';
 
@@ -1214,11 +1216,11 @@ html[data-theme="light"] #replyIndicator {
           setTimeout(() => { openComments(targetReelId); }, 500);
         }
       } else {
-        document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500">لا توجد ريلز حالياً</div>';
+        document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500" data-i18n="لا توجد ريلز حالياً">' + t('لا توجد ريلز حالياً') + '</div>';
       }
     } catch(e) {
       console.error(e);
-      document.getElementById('reelsWrapper').innerHTML = `<div class="swiper-slide text-red-500">خطأ في التحميل</div>`;
+      document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-red-500" data-i18n="خطأ في التحميل">' + t('خطأ في التحميل') + '</div>';
     }
   }
 
@@ -1256,15 +1258,15 @@ html[data-theme="light"] #replyIndicator {
             <div class="action-icon">
               <i class="fas fa-share-nodes"></i>
             </div>
-            <span class="action-label">مشاركة</span>
+            <span class="action-label" data-i18n="مشاركة">مشاركة</span>
           </div>
           <div class="reel-action-btn" onclick="toggleMute('${reel.reelId}')">
             <div class="action-icon" id="soundIconWrap-${reel.reelId}">
               <i class="fas fa-volume-high" id="soundIcon-${reel.reelId}"></i>
             </div>
-            <span class="action-label" id="soundLabel-${reel.reelId}">الصوت</span>
+            <span class="action-label" id="soundLabel-${reel.reelId}" data-i18n="الصوت">${t('الصوت')}</span>
           </div>
-          ${isOwner ? `<div class="reel-action-btn" onclick="deleteReel('${reel.reelId}')"><div class="action-icon" style="background:rgba(239,68,68,0.2)"><i class="fas fa-trash-can" style="color:#ef4444"></i></div><span class="action-label" style="color:#ef4444">حذف</span></div>` : ''}
+          ${isOwner ? `<div class="reel-action-btn" onclick="deleteReel('${reel.reelId}')"><div class="action-icon" style="background:rgba(239,68,68,0.2)"><i class="fas fa-trash-can" style="color:#ef4444"></i></div><span class="action-label" style="color:#ef4444" data-i18n="حذف">حذف</span></div>` : ''}
         </div>
 
         <div class="absolute right-4 bottom-8 left-16 z-20 text-right">
@@ -1517,7 +1519,7 @@ html[data-theme="light"] #replyIndicator {
       const data = await res.json().catch(()=>({ ok: false }));
       if(res.ok && data.ok) { closeDeleteReelModal(); location.reload(); }
       else { console.error('Delete reel failed', res.status, data); btn.disabled = false; btn.innerHTML = 'حذف'; alert(data.error || 'خطأ في الحذف'); }
-    } catch(e) { console.error('Delete reel error', e); btn.disabled = false; btn.innerHTML = 'حذف'; alert('فشل الاتصال بالسيرفر'); }
+    } catch(e) { console.error('Delete reel error', e); btn.disabled = false; btn.innerHTML = 'حذف'; alert(t('فشل الاتصال بالسيرفر')); }
   };
 
   async function handleLike(reelId, forceLike = false) {
@@ -1558,7 +1560,7 @@ html[data-theme="light"] #replyIndicator {
       await fetchAndRenderReelComments(reelId);
     } catch(e) {
       console.error('openComments error', e);
-      commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
+      commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">' + t('فشل في جلب التعليقات.') + '</div>';
     }
     initReelSwipeGesture();
   };
@@ -1642,7 +1644,7 @@ html[data-theme="light"] #replyIndicator {
       if (countEl) countEl.textContent = totalCount;
 
       if(comments.length === 0) {
-        commentsList.innerHTML = '<p class="text-center text-gray-500 py-10">لا توجد تعليقات بعد.</p>';
+        commentsList.innerHTML = '<p class="text-center text-gray-500 py-10">' + t('لا توجد تعليقات بعد.') + '</p>';
       } else {
         commentsList.innerHTML = comments.map(c => createCommentHtml(c, reelId)).join('');
         updateCommentBadges(comments);
@@ -1651,7 +1653,7 @@ html[data-theme="light"] #replyIndicator {
       }
     } catch (e) {
       console.error(e);
-      commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">فشل في جلب التعليقات.</div>';
+      commentsList.innerHTML = '<div class="text-center text-red-500 mt-4">' + t('فشل في جلب التعليقات.') + '</div>';
     }
   }
 
@@ -1673,7 +1675,7 @@ html[data-theme="light"] #replyIndicator {
           if (btn) {
             btn.classList.add('expanded');
             const spanEl = btn.querySelector('span:not(.toggle-replies-count)');
-            if (spanEl) spanEl.textContent = 'إخفاء الردود';
+            if (spanEl) spanEl.textContent = t('إخفاء الردود');
           }
         }
         targetEl = document.getElementById('reply-' + highlightReplyId);
@@ -1725,8 +1727,8 @@ html[data-theme="light"] #replyIndicator {
           </div>
           <div class="fb-reply-meta">
             <span class="fb-time">${replyTime}</span>
-            <button class="fb-action ${likedClass}" onclick="toggleReelReplyLike('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
-            <button class="fb-action" onclick="startReelReplyToReply('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', '${escapeHtml(r.username)}')">رد</button>
+            <button class="fb-action ${likedClass}" onclick="toggleReelReplyLike('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', this)"><i class="${likeIcon} fa-heart"></i> <span data-i18n="أعجبني">أعجبني</span></button>
+            <button class="fb-action" onclick="startReelReplyToReply('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', '${escapeAttr(rId)}', '${escapeHtml(r.username)}')" data-i18n="رد">رد</button>
           </div>
         </div>
       </div>`;
@@ -1755,7 +1757,7 @@ html[data-theme="light"] #replyIndicator {
     const toggleBtn = hasReplies ? `
       <button class="fb-toggle-replies-btn" onclick="toggleRepliesSection('${escapeAttr(commentId)}', this)" id="toggle-replies-btn-${escapeAttr(commentId)}">
         <i class="fas fa-chevron-down"></i>
-        <span>عرض الردود</span>
+        <span data-i18n="عرض الردود">${t('عرض الردود')}</span>
         <span class="toggle-replies-count">${repliesCount}</span>
       </button>
     ` : '';
@@ -1772,8 +1774,8 @@ html[data-theme="light"] #replyIndicator {
             </div>
             <div class="fb-comment-meta">
               <span class="fb-time">${commentDate}</span>
-              <button class="fb-action ${likedClass}" onclick="toggleReelCommentLike('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', this)"><i class="${likeIcon} fa-heart"></i> أعجبني</button>
-              <button class="fb-action" onclick="setReplyMode('${escapeAttr(commentId)}', '${escapeHtml(username)}')">رد</button>
+              <button class="fb-action ${likedClass}" onclick="toggleReelCommentLike('${escapeAttr(reelId)}', '${escapeAttr(commentId)}', this)"><i class="${likeIcon} fa-heart"></i> <span data-i18n="أعجبني">أعجبني</span></button>
+              <button class="fb-action" onclick="setReplyMode('${escapeAttr(commentId)}', '${escapeHtml(username)}')" data-i18n="رد">رد</button>
             </div>
           </div>
         </div>
@@ -1798,12 +1800,12 @@ html[data-theme="light"] #replyIndicator {
           section.classList.remove('collapsed');
           section.classList.add('expanded');
           btn.classList.add('expanded');
-          btn.querySelector('span:not(.toggle-replies-count)').textContent = 'إخفاء الردود';
+          btn.querySelector('span:not(.toggle-replies-count)').textContent = t('إخفاء الردود');
       } else {
           section.classList.remove('expanded');
           section.classList.add('collapsed');
           btn.classList.remove('expanded');
-          btn.querySelector('span:not(.toggle-replies-count)').textContent = 'عرض الردود';
+          btn.querySelector('span:not(.toggle-replies-count)').textContent = t('عرض الردود');
       }
   }
 
@@ -1818,7 +1820,7 @@ html[data-theme="light"] #replyIndicator {
       }
       if (btn) {
           btn.classList.add('expanded');
-          btn.querySelector('span:not(.toggle-replies-count)').textContent = 'إخفاء الردود';
+          btn.querySelector('span:not(.toggle-replies-count)').textContent = t('إخفاء الردود');
           const container = document.getElementById('replies-container-' + commentId);
           if (container) {
               const count = container.querySelectorAll('.fb-reply-item').length;
@@ -1924,7 +1926,7 @@ html[data-theme="light"] #replyIndicator {
       }
     } catch(e) {
       console.error(e);
-      content.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">فشل في جلب الإعجابات</div>';
+      content.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">' + t('فشل في جلب الإعجابات') + '</div>';
     }
   }
 
@@ -2068,7 +2070,7 @@ html[data-theme="light"] #replyIndicator {
         }
       } catch (e) {
         console.error(e);
-        alert('فشل في الاتصال');
+        alert(t('فشل في الاتصال'));
       }
       return;
     }
@@ -2095,7 +2097,7 @@ html[data-theme="light"] #replyIndicator {
       updateReelCommentCounter(1);
       // Background sync for normal comments
       fetchAndRenderReelComments(currentReelIdForComments).catch(() => {});
-    } catch(e) { console.error('send comment error', e); alert('فشل الإرسال'); }
+    } catch(e) { console.error('send comment error', e); alert(t('فشل الإرسال')); }
   });
 
   // Helper: update reel comment counter by delta
@@ -2124,7 +2126,7 @@ html[data-theme="light"] #replyIndicator {
       navigator.share({ title: 'شاهد هذا الريل', url: shareUrl });
     } else {
       navigator.clipboard.writeText(shareUrl);
-      alert('تم نسخ الرابط!');
+      alert(t('تم نسخ الرابط!'));
     }
   };
 
@@ -2258,20 +2260,20 @@ html[data-theme="light"] #likesListContent {
 <div id="commentCtxOverlay" class="comment-ctx-overlay" onclick="closeCommentCtx()">
   <div class="comment-ctx-menu" onclick="event.stopPropagation()">
     <div class="comment-ctx-handle"></div>
-    <button class="comment-ctx-item" id="ctxCopyBtn" onclick="ctxCopyComment()"><i class="far fa-copy"></i> نسخ التعليق</button>
-    <button class="comment-ctx-item" id="ctxEditBtn" onclick="ctxEditComment()" style="display:none"><i class="far fa-pen-to-square"></i> تعديل التعليق</button>
-    <button class="comment-ctx-item ctx-delete" id="ctxDeleteBtn" onclick="ctxDeleteComment()" style="display:none"><i class="far fa-trash-can"></i> حذف التعليق</button>
+    <button class="comment-ctx-item" id="ctxCopyBtn" onclick="ctxCopyComment()"><i class="far fa-copy"></i> <span data-i18n="نسخ التعليق">نسخ التعليق</span></button>
+    <button class="comment-ctx-item" id="ctxEditBtn" onclick="ctxEditComment()" style="display:none"><i class="far fa-pen-to-square"></i> <span data-i18n="تعديل التعليق">تعديل التعليق</span></button>
+    <button class="comment-ctx-item ctx-delete" id="ctxDeleteBtn" onclick="ctxDeleteComment()" style="display:none"><i class="far fa-trash-can"></i> <span data-i18n="حذف التعليق">حذف التعليق</span></button>
   </div>
 </div>
 
 <!-- Edit Comment Modal -->
 <div id="editCommentModal" class="edit-comment-modal-overlay" onclick="closeEditCommentModal()">
   <div class="edit-comment-modal-box" onclick="event.stopPropagation()">
-    <h3>تعديل التعليق</h3>
+    <h3 data-i18n="تعديل التعليق">تعديل التعليق</h3>
     <textarea id="editCommentTextarea" placeholder="اكتب التعليق..."></textarea>
     <div class="ecm-actions">
-      <button class="ecm-cancel" onclick="closeEditCommentModal()">إلغاء</button>
-      <button class="ecm-save" id="ecmSaveBtn" onclick="saveEditComment()">حفظ</button>
+      <button class="ecm-cancel" onclick="closeEditCommentModal()" data-i18n="إلغاء">إلغاء</button>
+      <button class="ecm-save" id="ecmSaveBtn" onclick="saveEditComment()" data-i18n="حفظ">حفظ</button>
     </div>
   </div>
 </div>
@@ -2280,11 +2282,11 @@ html[data-theme="light"] #likesListContent {
 <div id="deleteReelModal" class="delete-comment-modal-overlay" onclick="closeDeleteReelModal()">
   <div class="delete-comment-modal-box" onclick="event.stopPropagation()">
     <div class="dcm-icon" style="background:rgba(239,68,68,0.15)"><i class="fas fa-film" style="color:#ef4444;font-size:22px"></i></div>
-    <div class="dcm-title">حذف الريل</div>
-    <div class="dcm-desc">هل أنت متأكد من حذف هذا الريل نهائياً؟<br>لا يمكن التراجع عن هذا الإجراء.</div>
+    <div class="dcm-title" data-i18n="حذف الريل">حذف الريل</div>
+    <div class="dcm-desc" data-i18n="هل أنت متأكد من حذف هذا الريل نهائياً؟">هل أنت متأكد من حذف هذا الريل نهائياً؟<br><span data-i18n="لا يمكن التراجع عن هذا الإجراء.">لا يمكن التراجع عن هذا الإجراء.</span></div>
     <div class="dcm-actions">
-      <button class="dcm-cancel" onclick="closeDeleteReelModal()">إلغاء</button>
-      <button class="dcm-confirm" id="deleteReelConfirmBtn" onclick="confirmDeleteReel()">حذف</button>
+      <button class="dcm-cancel" onclick="closeDeleteReelModal()" data-i18n="إلغاء">إلغاء</button>
+      <button class="dcm-confirm" id="deleteReelConfirmBtn" onclick="confirmDeleteReel()" data-i18n="حذف">حذف</button>
     </div>
   </div>
 </div>
@@ -2293,11 +2295,11 @@ html[data-theme="light"] #likesListContent {
 <div id="deleteCommentModal" class="delete-comment-modal-overlay" onclick="closeDeleteCommentModal()">
   <div class="delete-comment-modal-box" onclick="event.stopPropagation()">
     <div class="dcm-icon"><i class="fas fa-trash-alt"></i></div>
-    <div class="dcm-title">حذف التعليق</div>
-    <div class="dcm-desc">هل أنت متأكد من حذف هذا التعليق؟ لا يمكن التراجع عن هذا الإجراء.</div>
+    <div class="dcm-title" data-i18n="حذف التعليق">حذف التعليق</div>
+    <div class="dcm-desc" data-i18n="هل أنت متأكد من حذف هذا التعليق؟ لا يمكن التراجع عن هذا الإجراء.">هل أنت متأكد من حذف هذا التعليق؟ لا يمكن التراجع عن هذا الإجراء.</div>
     <div class="dcm-actions">
-      <button class="dcm-cancel" onclick="closeDeleteCommentModal()">إلغاء</button>
-      <button class="dcm-confirm" id="dcmConfirmBtn" onclick="confirmDeleteComment()">حذف</button>
+      <button class="dcm-cancel" onclick="closeDeleteCommentModal()" data-i18n="إلغاء">إلغاء</button>
+      <button class="dcm-confirm" id="dcmConfirmBtn" onclick="confirmDeleteComment()" data-i18n="حذف">حذف</button>
     </div>
   </div>
 </div>
@@ -2453,7 +2455,7 @@ html[data-theme="light"] #likesListContent {
   <div class="comment-likes-modal-box" onclick="event.stopPropagation()">
     <div class="modal-handle" onclick="closeCommentLikesModal()"></div>
     <div class="border-gray-800" style="display:flex;justify-content:space-between;align-items:center;padding:4px 16px 8px;border-bottom:1px solid rgba(255,255,255,0.08);">
-      <h3 style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;"><i class="fas fa-heart" style="color:#ef4444;"></i> إعجابات التعليق</h3>
+      <h3 style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;"><i class="fas fa-heart" style="color:#ef4444;"></i> <span data-i18n="إعجابات التعليق">إعجابات التعليق</span></h3>
       <button style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;" onclick="closeCommentLikesModal()"><i class="fas fa-times" style="font-size:12px;"></i></button>
     </div>
     <div id="commentLikesListContent" style="flex-grow:1;overflow-y:auto;padding:8px;"></div>
@@ -2464,7 +2466,7 @@ html[data-theme="light"] #likesListContent {
   <div class="likes-modal-box" onclick="event.stopPropagation()">
     <div class="modal-handle" onclick="closeLikesModal()"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 16px 8px;border-bottom:1px solid rgba(255,255,255,0.08);">
-      <h3 style="font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;"><i class="fas fa-heart" style="color:#ef4444;"></i> الإعجابات</h3>
+      <h3 style="font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;"><i class="fas fa-heart" style="color:#ef4444;"></i> <span data-i18n="الإعجابات">الإعجابات</span></h3>
       <button style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:#9ca3af;border:none;cursor:pointer;" onclick="closeLikesModal()"><i class="fas fa-times" style="font-size:12px;"></i></button>
     </div>
     <div id="likesListContent" style="flex-grow:1;overflow-y:auto;padding:8px;"></div>
@@ -2493,7 +2495,7 @@ async function showLikesList(id, type) {
         }
     } catch(e) {
         console.error(e);
-        content.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">فشل في جلب الإعجابات</div>';
+        content.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">' + t('فشل في جلب الإعجابات') + '</div>';
     }
 }
 function closeLikesModal() {
@@ -2657,14 +2659,15 @@ async function confirmDeleteComment() {
     <img src="/icon-192.png" alt="Aite" class="pwa-bar-icon">
     <div class="pwa-bar-text">
       <div class="pwa-bar-title">Aite</div>
-      <div class="pwa-bar-desc" id="pwaBarDesc">تثبيت التطبيق على جهازك</div>
+      <div class="pwa-bar-desc" id="pwaBarDesc" data-i18n="تثبيت التطبيق على جهازك">تثبيت التطبيق على جهازك</div>
     </div>
-    <button class="pwa-bar-btn" id="pwaBarInstallBtn" onclick="pwaInstallApp()">تثبيت</button>
+    <button class="pwa-bar-btn" id="pwaBarInstallBtn" onclick="pwaInstallApp()" data-i18n="تثبيت">تثبيت</button>
     <button class="pwa-bar-close" onclick="pwaDismiss()">&times;</button>
   </div>
 </div>
 
-<script>
+<script>var t = (window.AiteI18n && window.AiteI18n.t) ? window.AiteI18n.t : function(s){return s;};
+
 (function(){
   // ===== PWA Full App Install =====
   var DISMISS_KEY = 'aite_install_dismiss_v2';
@@ -2706,8 +2709,8 @@ async function confirmDeleteComment() {
   // ---- iOS: Show after delay with custom instructions ----
   if (isIOS && !wasDismissed()) {
     setTimeout(function(){
-      if (desc) desc.textContent = 'أضف Aite إلى الشاشة الرئيسية';
-      if (btn) btn.textContent = 'إضافة';
+      if (desc) desc.textContent = t('أضف Aite إلى الشاشة الرئيسية');
+      if (btn) btn.textContent = t('إضافة');
       bar.style.display = 'block';
     }, 2500);
   }
@@ -2730,12 +2733,12 @@ async function confirmDeleteComment() {
       ov.id = 'iosInstallOverlay';
       ov.innerHTML = '<div class="ios-install-box">'
         + '<img src="/icon-192.png" style="width:60px;height:60px;border-radius:14px;margin:0 auto 14px;display:block;">'
-        + '<h3 style="color:#fff;font-size:19px;font-weight:700;margin:0 0 6px;">تثبيت Aite</h3>'
-        + '<p style="color:#9ca3af;font-size:13px;margin:0 0 18px;">اتبع الخطوات التالية لتثبيت التطبيق:</p>'
-        + '<div class="ios-step">1. اضغط على أيقونة المشاركة <span style="font-size:17px;">⬆️</span> في شريط Safari</div>'
-        + '<div class="ios-step">2. اختر <b style="color:#fff;">"إضافة إلى الشاشة الرئيسية"</b> <span style="font-size:15px;">📱</span></div>'
-        + '<div class="ios-step">3. اضغط <b style="color:#fff;">"إضافة"</b> في الأعلى</div>'
-        + '<button onclick="this.closest(\x27#iosInstallOverlay\x27).remove()" style="margin-top:18px;background:#3b82f6;color:#fff;border:none;padding:11px 34px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">فهمت</button>'
+        + '<h3 style="color:#fff;font-size:19px;font-weight:700;margin:0 0 6px;" data-i18n="تثبيت Aite">تثبيت Aite</h3>'
+        + '<p style="color:#9ca3af;font-size:13px;margin:0 0 18px;" data-i18n="اتبع الخطوات التالية لتثبيت التطبيق:">اتبع الخطوات التالية لتثبيت التطبيق:</p>'
+        + '<div class="ios-step" data-i18n="1. اضغط على أيقونة المشاركة ⬆️ في شريط Safari">1. اضغط على أيقونة المشاركة <span style="font-size:17px;">⬆️</span> في شريط Safari</div>'
+        + '<div class="ios-step" data-i18n="2. اختر إضافة إلى الشاشة الرئيسية">2. اختر <b style="color:#fff;">"إضافة إلى الشاشة الرئيسية"</b> <span style="font-size:15px;">📱</span></div>'
+        + '<div class="ios-step" data-i18n="3. اضغط إضافة في الأعلى">3. اضغط <b style="color:#fff;">"إضافة"</b> في الأعلى</div>'
+        + '<button onclick="this.closest(\x27#iosInstallOverlay\x27).remove()" style="margin-top:18px;background:#3b82f6;color:#fff;border:none;padding:11px 34px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;" data-i18n="فهمت">' + t('فهمت') + '</button>'
         + '</div>';
       document.body.appendChild(ov);
       ov.addEventListener('click', function(ev){ if(ev.target===ov) ov.remove(); });

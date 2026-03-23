@@ -8,6 +8,12 @@
 
     var currentPath = window.location.pathname.replace(/\/$/, '') || '/';
 
+    // Helper: translate text if i18n is available
+    function tr(text) {
+        if (window.AiteI18n && window.AiteI18n.t) return window.AiteI18n.t(text);
+        return text;
+    }
+
     // ===== SIDEBAR =====
     function injectSidebar() {
         // Don't inject if sidebar already exists
@@ -77,7 +83,8 @@
             a.appendChild(icon);
 
             var span = document.createElement('span');
-            span.textContent = item.label;
+            span.textContent = tr(item.label);
+            span.setAttribute('data-i18n', item.label);
             a.appendChild(span);
 
             nav.appendChild(a);
@@ -125,7 +132,7 @@
                 var fabBtn = document.createElement('button');
                 fabBtn.onclick = toggleCreateModal;
                 fabBtn.className = 'create-fab-btn';
-                fabBtn.title = '\u0625\u0646\u0634\u0627\u0621';
+                fabBtn.title = tr('\u0625\u0646\u0634\u0627\u0621');
 
                 var fabIcon = document.createElement('i');
                 fabIcon.className = 'fas fa-plus text-lg';
@@ -167,19 +174,19 @@
             + '<div class="create-modal-bg" onclick="toggleCreateModal()"></div>'
             + '<div class="create-modal-sheet">'
             + '<div class="modal-handle"></div>'
-            + '<h3 style="font-size:18px;font-weight:700;margin:0 0 16px;text-align:center;">\u0625\u0646\u0634\u0627\u0621</h3>'
+            + '<h3 style="font-size:18px;font-weight:700;margin:0 0 16px;text-align:center;" data-i18n="\u0625\u0646\u0634\u0627\u0621">' + tr('\u0625\u0646\u0634\u0627\u0621') + '</h3>'
             + '<div style="display:flex;flex-direction:column;gap:8px;">'
             + '<a href="/create_post" class="create-modal-item">'
             + '<div class="create-modal-icon" style="background:rgba(59,130,246,0.15);"><i class="fas fa-pen-to-square" style="color:#60a5fa;"></i></div>'
-            + '<span>\u0645\u0646\u0634\u0648\u0631</span>'
+            + '<span data-i18n="\u0645\u0646\u0634\u0648\u0631">' + tr('\u0645\u0646\u0634\u0648\u0631') + '</span>'
             + '</a>'
             + '<a href="/create_story" class="create-modal-item">'
             + '<div class="create-modal-icon" style="background:rgba(168,85,247,0.15);"><i class="fas fa-circle-plus" style="color:#a855f7;"></i></div>'
-            + '<span>\u0642\u0635\u0629</span>'
+            + '<span data-i18n="\u0642\u0635\u0629">' + tr('\u0642\u0635\u0629') + '</span>'
             + '</a>'
             + '<a href="/create_reel" class="create-modal-item">'
             + '<div class="create-modal-icon" style="background:rgba(239,68,68,0.15);"><i class="fas fa-clapperboard" style="color:#f87171;"></i></div>'
-            + '<span>\u0631\u064A\u0644\u0632</span>'
+            + '<span data-i18n="\u0631\u064A\u0644\u0632">' + tr('\u0631\u064A\u0644\u0632') + '</span>'
             + '</a>'
             + '</div>'
             + '</div>'
@@ -221,6 +228,20 @@
             }
         }
     }
+
+    // Listen for language changes and re-translate dynamic components
+    window.addEventListener('aite-lang-changed', function() {
+        var sidebarSpans = document.querySelectorAll('.desktop-sidebar .sidebar-link [data-i18n]');
+        for (var i = 0; i < sidebarSpans.length; i++) {
+            var key = sidebarSpans[i].getAttribute('data-i18n');
+            sidebarSpans[i].textContent = tr(key);
+        }
+        var modalI18n = document.querySelectorAll('#createModal [data-i18n]');
+        for (var j = 0; j < modalI18n.length; j++) {
+            var mkey = modalI18n[j].getAttribute('data-i18n');
+            modalI18n[j].textContent = tr(mkey);
+        }
+    });
 
     // Run when DOM is ready
     if (document.readyState === 'loading') {
