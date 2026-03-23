@@ -3507,7 +3507,7 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let recTimerInterval = null;
-let audioWaveSurfers = {}; // Stores { id: WaveSurferInstance }
+let audioWaveSurfers = {}; // Stores { id: { ws, fallbackAudio, ready, eventsBound, url } }
 let composerWaveSurfer = null;
 let activeLongPressMsgId = null;
 let recAudioContext = null;
@@ -5018,77 +5018,137 @@ function toggleSendButton() {
   micBtn.style.display = hasContent ? 'none' : 'flex';
 }
 
-// --- Audio Player Logic (FIXED: High Contrast White) ---
+// --- Audio Player Logic (FIXED) ---
 function initWaveform(containerId, url, isMe) {
   const container = document.getElementById(containerId);
   if (!container || audioWaveSurfers[containerId]) return;
 
+  // Store state object for this audio player
+  var state = {
+    ws: null,
+    fallbackAudio: null,
+    ready: false,
+    eventsBound: false,
+    url: url
+  };
+  audioWaveSurfers[containerId] = state;
+
   try {
-      const ws = WaveSurfer.create({
+      var ws = WaveSurfer.create({
         container: container,
-        // لون الموجة غير المشغلة (أبيض شفاف ليكون واضحاً على الأسود)
         waveColor: 'rgba(255, 255, 255, 0.4)', 
-        // لون الموجة المشغلة (أبيض ناصع)
         progressColor: '#ffffff', 
-        // لون المؤشر
         cursorColor: '#ffffff',
         cursorWidth: 2,
-        // سماكة الخطوط
         barWidth: 3, 
         barRadius: 3, 
         barGap: 3,
         height: 34,
-        responsive: true,
         url: url
       });
+      state.ws = ws;
       
-      ws.on('ready', () => {
-        const parent = container.parentElement;
+      ws.on('ready', function() {
+        state.ready = true;
+        var parent = container.parentElement;
         if(parent) {
-            const timeEl = parent.querySelector('.audio-time');
+            var timeEl = parent.querySelector('.audio-time');
             if(timeEl) timeEl.textContent = fmtTime(ws.getDuration());
         }
       });
+
+      ws.on('error', function(err) {
+        console.warn("WaveSurfer error for " + containerId + ", using fallback audio.", err);
+        // Create fallback HTML5 Audio element
+        if (!state.fallbackAudio) {
+          var audio = new Audio(url);
+          audio.preload = 'auto';
+          state.fallbackAudio = audio;
+          state.ready = true;
+        }
+      });
       
-      ws.on('finish', () => {
-         const btn = container.parentElement.querySelector('.audio-play-btn');
-         if(btn) btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+      ws.on('finish', function() {
+         var btn2 = container.parentElement ? container.parentElement.querySelector('.audio-play-btn') : null;
+         if(btn2) btn2.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+         var liveBars2 = container.parentElement ? container.parentElement.querySelector('.audio-live-bars') : null;
+         if(liveBars2) liveBars2.classList.remove('active');
          ws.seekTo(0);
       });
 
-      audioWaveSurfers[containerId] = ws;
   } catch(err) {
-      console.error("Error creating WaveSurfer", err);
+      console.error("Error creating WaveSurfer, using fallback.", err);
+      // Fallback: use native Audio
+      var audio = new Audio(url);
+      audio.preload = 'auto';
+      state.fallbackAudio = audio;
+      state.ready = true;
   }
 }
 
 function playAudio(url, id, btn) {
-  const ws = audioWaveSurfers[id];
-  if(!ws) return;
-  ws.playPause();
-  
-  const player = btn.closest('.msg-audio-player');
-  let liveBars = player ? player.querySelector('.audio-live-bars') : null;
-  
-  if (ws.isPlaying()) {
-      btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
-      if (liveBars) liveBars.classList.add('active');
-  } else {
+  var state = audioWaveSurfers[id];
+  var player = btn.closest('.msg-audio-player');
+  var liveBars = player ? player.querySelector('.audio-live-bars') : null;
+
+  // If not initialized yet, init and retry after a short delay
+  if (!state) {
+    initWaveform(id, url, false);
+    setTimeout(function() { playAudio(url, id, btn); }, 500);
+    return;
+  }
+
+  // === Fallback audio path (when WaveSurfer failed to load) ===
+  if (state.fallbackAudio) {
+    var audio = state.fallbackAudio;
+    if (audio.paused) {
+      audio.play().then(function() {
+        btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
+        if (liveBars) liveBars.classList.add('active');
+      }).catch(function(e) { console.error('Fallback audio play error:', e); });
+      audio.onended = function() {
+        btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+        if (liveBars) liveBars.classList.remove('active');
+        audio.currentTime = 0;
+      };
+    } else {
+      audio.pause();
       btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
       if (liveBars) liveBars.classList.remove('active');
+    }
+    return;
   }
-  
-  ws.on('play', () => {
-    btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
-    if (liveBars) liveBars.classList.add('active');
-  });
-  ws.on('pause', () => {
-    btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
-    if (liveBars) liveBars.classList.remove('active');
-  });
-  ws.on('finish', () => {
-    if (liveBars) liveBars.classList.remove('active');
-  });
+
+  var ws = state.ws;
+  if (!ws) return;
+
+  // Bind play/pause/finish events only ONCE to avoid duplicates
+  if (!state.eventsBound) {
+    state.eventsBound = true;
+    ws.on('play', function() {
+      btn.innerHTML = '<i class="fas fa-pause" style="font-size:14px"></i>';
+      if (liveBars) liveBars.classList.add('active');
+    });
+    ws.on('pause', function() {
+      btn.innerHTML = '<i class="fas fa-play" style="font-size:14px"></i>';
+      if (liveBars) liveBars.classList.remove('active');
+    });
+    ws.on('finish', function() {
+      if (liveBars) liveBars.classList.remove('active');
+    });
+  }
+
+  // If audio not ready yet, wait for ready event then play
+  if (!state.ready) {
+    ws.once('ready', function() {
+      state.ready = true;
+      ws.playPause();
+    });
+    return;
+  }
+
+  // Audio is ready - play or pause
+  ws.playPause();
 }
 
 // --- Helpers ---
