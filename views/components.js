@@ -217,7 +217,7 @@
         var isNoNavPage = noNavPages.indexOf(currentPath) !== -1;
 
         // Pages that have sidebar but no bottom nav
-        var sidebarOnlyPages = ['/create_post', '/create_product', '/edit_product', '/product_detail', '/marketplace'];
+        var sidebarOnlyPages = ['/create_post', '/create_reel', '/create_product', '/edit_product', '/product_detail', '/marketplace'];
         var isSidebarOnly = sidebarOnlyPages.indexOf(currentPath) !== -1;
 
         if (!isNoNavPage) {
@@ -229,19 +229,6 @@
         }
     }
 
-    // Listen for language changes and re-translate dynamic components
-    window.addEventListener('aite-lang-changed', function() {
-        var sidebarSpans = document.querySelectorAll('.desktop-sidebar .sidebar-link [data-i18n]');
-        for (var i = 0; i < sidebarSpans.length; i++) {
-            var key = sidebarSpans[i].getAttribute('data-i18n');
-            sidebarSpans[i].textContent = tr(key);
-        }
-        var modalI18n = document.querySelectorAll('#createModal [data-i18n]');
-        for (var j = 0; j < modalI18n.length; j++) {
-            var mkey = modalI18n[j].getAttribute('data-i18n');
-            modalI18n[j].textContent = tr(mkey);
-        }
-    });
 
     // Run when DOM is ready
     if (document.readyState === 'loading') {
