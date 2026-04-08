@@ -19,7 +19,7 @@ const multer = require('multer');
 const ImageKit = require('imagekit');
 const nodemailer = require('nodemailer');
 const webpush = require('web-push');
-const DEFAULT_PROFILE_PIC_URL = 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png';
+const DEFAULT_PROFILE_PIC_URL = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
 
 // ---------------- Web Push (VAPID) Setup ----------------
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -2038,7 +2038,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
           ...contactProfile,
           username: 'Aite user',
           full_name: 'Aite user',
-          profile_picture_url: 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png',
+          profile_picture_url: 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
           is_online: false
         };
       }
@@ -2653,7 +2653,7 @@ app.get('/api/get-public-info', requireAuth, async (req, res) => {
                 found: true,
                 full_name: profileData.full_name || username,
                 // تأكد من وجود رابط للصورة أو استخدام الافتراضية
-                profile_picture_url: profileData.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png'
+                profile_picture_url: profileData.profile_picture_url || 'https://ik.imagekit.io/Aite/post_media/default_profile.png'
             });
         }
         res.json({ found: false });
@@ -3109,7 +3109,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
         id: requestedUserId,
         username: 'Aite user',
         full_name: 'Aite user',
-        profile_picture_url: 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png',
+        profile_picture_url: 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
         bio: '',
         is_owner: false,
         is_friend: false,
@@ -3174,7 +3174,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
         id: userId,
         username: 'Aite user',
         full_name: 'Aite user',
-        profile_picture_url: 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png',
+        profile_picture_url: 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
         bio: '',
         has_story: false,
         story_viewed: false,
@@ -6115,7 +6115,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 id: user.id,
                 username: user.username,
                 full_name: isBlockRelation ? '' : (user.full_name || ''),
-                profile_picture_url: isBlockRelation ? 'https://res.cloudinary.com/duixjs8az/image/upload/v1765009560/post_media/1765009560909-default_profile.png' : (user.profile_picture_url || DEFAULT_PROFILE_PIC_URL),
+                profile_picture_url: isBlockRelation ? 'https://ik.imagekit.io/Aite/post_media/default_profile.png' : (user.profile_picture_url || DEFAULT_PROFILE_PIC_URL),
                 is_verified: isBlockRelation ? false : !!user.is_verified,
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0,
@@ -6479,7 +6479,7 @@ app.post('/api/marketplace/create', requireAuth, writeLimiter, (req, res, next) 
       images: imageUrls,
       sellerId: userId,
       sellerUsername: profile.username || 'مستخدم',
-      sellerProfilePic: profile.profile_picture_url || 'https://res.cloudinary.com/duixjs8az/image/upload/v1766905033/post_media/1766905033352-default_profile.png',
+      sellerProfilePic: profile.profile_picture_url || 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
       sellerVerified: profile.verified || false,
       createdAt: Date.now(),
       status: 'active'
