@@ -1850,7 +1850,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
 <!-- Sidebar Menu -->
 <div id="sidebarMenu" class="sidebar-menu">
     <div class="sidebar-menu-header">
-        <img id="sidebarProfilePic" src="https://ik.imagekit.io/Aite/post_media/default_profile.png" alt="البروفيل" class="sidebar-menu-avatar">
+        <img id="sidebarProfilePic" src="/default_profile.png" alt="البروفيل" class="sidebar-menu-avatar">
         <div class="sidebar-menu-user-info">
             <span id="sidebarUsername" class="sidebar-menu-username" data-i18n="المستخدم">المستخدم</span>
         </div>
@@ -1879,7 +1879,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
         </a>
     </div>
     <div class="sidebar-menu-footer">
-        <img src="https://ik.imagekit.io/Aite/post_media/1775677384191-1000126675_-DAThYlRs.webp" alt="Aite" class="sidebar-menu-footer-logo">
+        <img src="/aite-logo.webp" alt="Aite" class="sidebar-menu-footer-logo">
         <span data-i18n="شركة Aite - كل الحقوق محفوظة © 2026">شركة Aite - كل الحقوق محفوظة © 2026</span>
     </div>
 </div>
@@ -1951,10 +1951,10 @@ html[data-theme="light"] .sidebar-menu-icon i {
         <header class="sticky top-0 z-50 glass-navbar p-3">
         <nav class="flex items-center max-w-6xl mx-auto relative" style="justify-content:space-between;">
             <button id="profileMenuButton" class="relative block focus:outline-none" onclick="openSidebar()" title="القائمة">
-                <img id="navProfilePic" src="https://ik.imagekit.io/Aite/post_media/default_profile.png" alt="البروفيل" class="w-9 h-9 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                <img id="navProfilePic" src="/default_profile.png" alt="البروفيل" class="w-9 h-9 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
             </button>
             <div class="flex items-center gap-2" style="position:absolute;left:50%;transform:translateX(-50%);">
-                <img src="https://ik.imagekit.io/Aite/post_media/1775677384191-1000126675_-DAThYlRs.webp" alt="Aite" class="w-9 h-9 rounded-xl shadow-lg" style="border:1px solid rgba(255,255,255,0.1);">
+                <img src="/aite-logo.webp" alt="Aite" class="w-9 h-9 rounded-xl shadow-lg" style="border:1px solid rgba(255,255,255,0.1);">
                 <a href="/chat_list" class="text-2xl font-extrabold text-white tracking-widest hover:text-gray-300 transition duration-300 app-logo">
                     Aite
                 </a>
@@ -2088,20 +2088,12 @@ html[data-theme="light"] .sidebar-menu-icon i {
         /**
          * رفع ملف مباشرة إلى ImageKit (يتجاوز حد حجم السيرفر) - مع إعادة المحاولة
          */
-        async function _uploadToImageKitOnce(file, authData) {
-            var fd = new FormData();
-            fd.append('file', file);
-            fd.append('publicKey', authData.publicKey);
-            fd.append('signature', authData.signature);
-            fd.append('expire', authData.expire);
-            fd.append('token', authData.token);
-            fd.append('folder', authData.folder);
-            fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-            var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
+        async function _uploadToR2Once(file, presignData) {
             return new Promise(function(resolve, reject) {
                 var xhr = new XMLHttpRequest();
-                xhr.open('POST', uploadUrl, true);
-                xhr.timeout = 300000; // 5 minutes
+                xhr.open('PUT', presignData.uploadUrl, true);
+                xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+                xhr.timeout = 300000;
                 xhr.upload.onprogress = function(e) {
                     if (e.lengthComputable && saveButton) {
                         var pct = Math.round((e.loaded / e.total) * 100);
@@ -2110,22 +2102,18 @@ html[data-theme="light"] .sidebar-menu-icon i {
                 };
                 xhr.onload = function() {
                     if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            var uploadData = JSON.parse(xhr.responseText);
-                            if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
-                            resolve(uploadData.url);
-                        } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
+                        resolve(presignData.publicUrl);
                     } else {
                         reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
                     }
                 };
                 xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
                 xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
-                xhr.send(fd);
+                xhr.send(file);
             });
         }
 
-        async function uploadToImageKit(file, folder) {
+        async function uploadToR2(file, folder) {
             var maxRetries = 3;
             var lastError = null;
             for (var attempt = 0; attempt < maxRetries; attempt++) {
@@ -2134,16 +2122,16 @@ html[data-theme="light"] .sidebar-menu-icon i {
                         if (saveButton) saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> إعادة المحاولة...';
                         await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
                     }
-                    var authRes = await fetch('/api/imagekit/auth', {
+                    var presignRes = await fetch('/api/r2/presign', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ folder: folder })
+                        body: JSON.stringify({ folder: folder, fileName: file.name, contentType: file.type })
                     });
-                    if (!authRes.ok) throw new Error('فشل الاتصال بالخادم');
-                    var authData = await authRes.json();
-                    if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
-                    return await _uploadToImageKitOnce(file, authData);
+                    if (!presignRes.ok) throw new Error('فشل الاتصال بالخادم');
+                    var presignData = await presignRes.json();
+                    if (!presignData.ok) throw new Error(presignData.error || 'فشل في الحصول على رابط الرفع');
+                    return await _uploadToR2Once(file, presignData);
                 } catch(err) {
                     console.warn('Upload attempt ' + (attempt+1) + '/' + maxRetries + ' failed:', err.message);
                     lastError = err;
@@ -2173,14 +2161,14 @@ html[data-theme="light"] .sidebar-menu-icon i {
                 var profilePicInput = document.getElementById('profilePicInput');
                 if (profilePicInput.files && profilePicInput.files[0]) {
                     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع صورة البروفايل...';
-                    bodyData.profile_picture_url = await uploadToImageKit(profilePicInput.files[0], 'profile_pics');
+                    bodyData.profile_picture_url = await uploadToR2(profilePicInput.files[0], 'profile_pics');
                 }
 
                 // رفع صورة الغلاف مباشرة إلى ImageKit إذا تم اختيارها
                 var coverPhotoInput = document.getElementById('coverPhotoInput');
                 if (coverPhotoInput.files && coverPhotoInput.files[0]) {
                     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع صورة الغلاف...';
-                    bodyData.cover_photo_url = await uploadToImageKit(coverPhotoInput.files[0], 'cover_photos');
+                    bodyData.cover_photo_url = await uploadToR2(coverPhotoInput.files[0], 'cover_photos');
                 }
 
                 saveButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';

@@ -16,10 +16,28 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const multer = require('multer');
-const ImageKit = require('imagekit');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const nodemailer = require('nodemailer');
 const webpush = require('web-push');
-const DEFAULT_PROFILE_PIC_URL = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+
+// Cloudflare R2 Configuration
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'aite-media';
+const R2_PUBLIC_DOMAIN = process.env.R2_PUBLIC_DOMAIN || 'pub-7c93bdf7768e4bd3a90334827b920b16.r2.dev';
+
+const r2Client = new S3Client({
+  region: 'auto',
+  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: R2_ACCESS_KEY_ID || '',
+    secretAccessKey: R2_SECRET_ACCESS_KEY || '',
+  },
+});
+
+const DEFAULT_PROFILE_PIC_URL = '/default_profile.png';
 
 // ---------------- Web Push (VAPID) Setup ----------------
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -39,14 +57,7 @@ const mailTransporter = nodemailer.createTransport({
   }
 });
 
-// إعدادات ImageKit
-const imagekit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/Aite'
-});
-
-// إعدادات Multer مع تخزين مؤقت في الذاكرة ثم رفع إلى ImageKit
+// إعدادات Multer مع تخزين مؤقت في الذاكرة ثم رفع إلى R2
 const memoryStorage = multer.memoryStorage();
 
 // Helper: determine folder name from request context
@@ -71,12 +82,13 @@ function getUploadFolder(req, file) {
   return folderName;
 }
 
-// Helper: upload a multer file buffer to ImageKit
-async function uploadFileToImageKit(file, folder) {
+// Helper: upload a multer file buffer to Cloudflare R2
+async function uploadFileToR2(file, folder) {
   const safeName = path.parse(file.originalname).name
     .replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
     .substring(0, 100);
   const fileName = Date.now() + '-' + (safeName || 'file') + path.extname(file.originalname);
+  const key = folder + '/' + fileName;
 
   const maxRetries = 3;
   let lastError = null;
@@ -85,15 +97,15 @@ async function uploadFileToImageKit(file, folder) {
       if (attempt > 0) {
         await new Promise(r => setTimeout(r, 1000 * attempt));
       }
-      const result = await imagekit.upload({
-        file: file.buffer,
-        fileName: fileName,
-        folder: '/' + folder,
-        useUniqueFileName: false
-      });
-      return result.url;
+      await r2Client.send(new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype || 'application/octet-stream',
+      }));
+      return `https://${R2_PUBLIC_DOMAIN}/${key}`;
     } catch (err) {
-      console.warn('ImageKit upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
+      console.warn('R2 upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
       lastError = err;
     }
   }
@@ -246,7 +258,7 @@ function isValidCloudinaryUrl(url) {
   }
 }
 
-// Validate that a URL is a legitimate ImageKit URL
+// Validate that a URL is a legitimate ImageKit URL (backward compatibility)
 function isValidImageKitUrl(url) {
   if (!url) return false;
   try {
@@ -257,15 +269,26 @@ function isValidImageKitUrl(url) {
   }
 }
 
-// Accept both Cloudinary (old) and ImageKit (new) URLs
+// Validate that a URL is a legitimate Cloudflare R2 URL
+function isValidR2Url(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return (parsed.hostname.endsWith('.r2.dev') || parsed.hostname.endsWith('.r2.cloudflarestorage.com')) && parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+// Accept Cloudinary (old), ImageKit (old), and R2 (new) URLs
 function isValidUploadUrl(url) {
   if (!url) return false;
-  return isValidCloudinaryUrl(url) || isValidImageKitUrl(url);
+  return isValidCloudinaryUrl(url) || isValidImageKitUrl(url) || isValidR2Url(url);
 }
 
 function isValidMediaUrl(url) {
   if (!url) return false;
-  // Accept Cloudinary URLs (existing uploads) and ImageKit URLs (new uploads)
+  // Accept Cloudinary, ImageKit (existing uploads) and R2 (new uploads)
   if (isValidUploadUrl(url)) return true;
   // Accept base64 data URLs (for fallback)
   if (url.startsWith('data:image/') && url.includes(';base64,') && url.length < 500 * 1024) return true;
@@ -809,11 +832,11 @@ app.post('/register', authLimiter, (req, res, next) => {
     if (req.files) {
       if (req.files.profile_picture) {
         const f = req.files.profile_picture[0];
-        profile_picture_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
+        profile_picture_url = await uploadFileToR2(f, getUploadFolder(req, f));
       }
       if (req.files.cover_photo) {
         const f = req.files.cover_photo[0];
-        cover_photo_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
+        cover_photo_url = await uploadFileToR2(f, getUploadFolder(req, f));
       }
     }
 
@@ -1617,44 +1640,54 @@ app.delete('/api/admin/users/:userId', requireAuth, requireAdmin, async (req, re
 
 // ---------------- API: Stories (القصص) ----------------
 
-// API: مصادقة رفع مباشر إلى ImageKit (لتجاوز حد Vercel 4.5MB)
+// API: presigned URL for direct upload to R2 (bypasses Vercel 4.5MB limit)
 // Allows unauthenticated access for registration-related folders only
-app.post('/api/imagekit/auth', (req, res, next) => {
-  // Allow unauthenticated uploads for registration (profile_pics, cover_photos)
+app.post('/api/r2/presign', (req, res, next) => {
   const folder = String(req.body.folder || '');
   const UNAUTHENTICATED_FOLDERS = ['profile_pics', 'cover_photos'];
   if (req.session && req.session.userId) {
-    return next(); // authenticated - allow all folders
+    return next();
   }
   if (UNAUTHENTICATED_FOLDERS.includes(folder)) {
-    return next(); // unauthenticated but allowed folder
+    return next();
   }
   return res.status(401).json({ ok: false, error: 'يجب تسجيل الدخول' });
-}, (req, res) => {
+}, async (req, res) => {
   try {
     const ALLOWED_FOLDERS = ['stories', 'post_media', 'profile_pics', 'profile_pictures', 'cover_photos', 'reels', 'chat_media', 'general', 'marketplace'];
     const rawFolder = String(req.body.folder || 'stories').replace(/[^a-zA-Z0-9_-]/g, '');
     const folder = ALLOWED_FOLDERS.includes(rawFolder) ? rawFolder : 'stories';
-    const authParams = imagekit.getAuthenticationParameters();
+    const fileName = req.body.fileName || (Date.now() + '-file');
+    const safeName = String(fileName).replace(/[^a-zA-Z0-9_\-.\u0600-\u06FF]/g, '_').substring(0, 150);
+    const key = folder + '/' + Date.now() + '-' + safeName;
+    const contentType = req.body.contentType || 'application/octet-stream';
+
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+    });
+    const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 600 });
+
     res.json({
       ok: true,
-      token: authParams.token,
-      expire: authParams.expire,
-      signature: authParams.signature,
-      folder: '/' + folder,
-      publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-      urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/Aite'
+      uploadUrl: presignedUrl,
+      publicUrl: `https://${R2_PUBLIC_DOMAIN}/${key}`,
+      key: key,
     });
   } catch (error) {
-    console.error('Error generating ImageKit auth:', error);
-    res.status(500).json({ ok: false, error: 'فشل في إنشاء مصادقة الرفع' });
+    console.error('Error generating R2 presigned URL:', error);
+    res.status(500).json({ ok: false, error: 'فشل في إنشاء رابط الرفع' });
   }
 });
 
-// Keep old endpoint as alias for backward compatibility
+// Keep old endpoints as aliases for backward compatibility
+app.post('/api/imagekit/auth', (req, res) => {
+  req.url = '/api/r2/presign';
+  return app.handle(req, res);
+});
 app.post('/api/cloudinary/sign', (req, res) => {
-  // Redirect to new ImageKit auth endpoint
-  req.url = '/api/imagekit/auth';
+  req.url = '/api/r2/presign';
   return app.handle(req, res);
 });
 
@@ -1687,10 +1720,10 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
   // If files were uploaded via multer (backward compatibility) - upload to ImageKit
   if (!mediaUrl && req.files && req.files.story_media) {
     const mediaFile = req.files.story_media[0];
-    mediaUrl = await uploadFileToImageKit(mediaFile, getUploadFolder(req, mediaFile));
+    mediaUrl = await uploadFileToR2(mediaFile, getUploadFolder(req, mediaFile));
     mediaType = mediaFile.mimetype.startsWith('video/') ? 'video' : 'image';
     if (req.files.story_audio) {
-      audioUrl = await uploadFileToImageKit(req.files.story_audio[0], 'stories');
+      audioUrl = await uploadFileToR2(req.files.story_audio[0], 'stories');
     }
   }
 
@@ -2038,7 +2071,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
           ...contactProfile,
           username: 'Aite user',
           full_name: 'Aite user',
-          profile_picture_url: 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
+          profile_picture_url: DEFAULT_PROFILE_PIC_URL,
           is_online: false
         };
       }
@@ -2218,7 +2251,7 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       else if (file.mimetype.startsWith('audio/') || file.mimetype === 'audio/webm') type = 'audio';
       
       // Upload to ImageKit
-      const uploadedUrl = await uploadFileToImageKit(file, getUploadFolder(req, file));
+      const uploadedUrl = await uploadFileToR2(file, getUploadFolder(req, file));
       mediaObject = {
         url: uploadedUrl, 
         type: type,
@@ -2653,7 +2686,7 @@ app.get('/api/get-public-info', requireAuth, async (req, res) => {
                 found: true,
                 full_name: profileData.full_name || username,
                 // تأكد من وجود رابط للصورة أو استخدام الافتراضية
-                profile_picture_url: profileData.profile_picture_url || 'https://ik.imagekit.io/Aite/post_media/default_profile.png'
+                profile_picture_url: profileData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
             });
         }
         res.json({ found: false });
@@ -3109,7 +3142,7 @@ app.get('/api/profile', requireAuth, async (req, res) => {
         id: requestedUserId,
         username: 'Aite user',
         full_name: 'Aite user',
-        profile_picture_url: 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
+        profile_picture_url: DEFAULT_PROFILE_PIC_URL,
         bio: '',
         is_owner: false,
         is_friend: false,
@@ -3174,7 +3207,7 @@ app.get('/api/profile/:userId', requireAuth, async (req, res) => {
         id: userId,
         username: 'Aite user',
         full_name: 'Aite user',
-        profile_picture_url: 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
+        profile_picture_url: DEFAULT_PROFILE_PIC_URL,
         bio: '',
         has_story: false,
         story_viewed: false,
@@ -3279,11 +3312,11 @@ app.post('/api/profile/edit', requireAuth, (req, res, next) => {
     // Support multer file upload (backward compatibility) - upload to ImageKit
     if (req.files && req.files.profile_picture) {
       const f = req.files.profile_picture[0];
-      updates.profile_picture_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
+      updates.profile_picture_url = await uploadFileToR2(f, getUploadFolder(req, f));
     }
     if (req.files && req.files.cover_photo) {
       const f = req.files.cover_photo[0];
-      updates.cover_photo_url = await uploadFileToImageKit(f, getUploadFolder(req, f));
+      updates.cover_photo_url = await uploadFileToR2(f, getUploadFolder(req, f));
     }
 
     await db.ref(`profiles/${userId}`).update(updates);
@@ -3332,7 +3365,7 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
 
   // If files were uploaded via multer (backward compatibility) - upload to ImageKit
   if (!mediaUrl && req.file) {
-    mediaUrl = await uploadFileToImageKit(req.file, getUploadFolder(req, req.file));
+    mediaUrl = await uploadFileToR2(req.file, getUploadFolder(req, req.file));
     const mimeType = req.file.mimetype || '';
     if (mimeType.startsWith('image/')) mediaType = 'image';
     else if (mimeType.startsWith('video/')) mediaType = 'video';
@@ -4715,7 +4748,7 @@ app.post('/api/reels/create', requireAuth, writeLimiter, (req, res, next) => {
 
   // If file was uploaded via multer (backward compatibility) - upload to ImageKit
   if (!videoUrl && req.file) {
-    videoUrl = await uploadFileToImageKit(req.file, getUploadFolder(req, req.file));
+    videoUrl = await uploadFileToR2(req.file, getUploadFolder(req, req.file));
     mimeType = req.file.mimetype;
   }
 
@@ -6115,7 +6148,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 id: user.id,
                 username: user.username,
                 full_name: isBlockRelation ? '' : (user.full_name || ''),
-                profile_picture_url: isBlockRelation ? 'https://ik.imagekit.io/Aite/post_media/default_profile.png' : (user.profile_picture_url || DEFAULT_PROFILE_PIC_URL),
+                profile_picture_url: isBlockRelation ? DEFAULT_PROFILE_PIC_URL : (user.profile_picture_url || DEFAULT_PROFILE_PIC_URL),
                 is_verified: isBlockRelation ? false : !!user.is_verified,
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0,
@@ -6461,7 +6494,7 @@ app.post('/api/marketplace/create', requireAuth, writeLimiter, (req, res, next) 
     // Support multer file upload (backward compatibility)
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const url = await uploadFileToImageKit(file, 'marketplace');
+        const url = await uploadFileToR2(file, 'marketplace');
         imageUrls.push(url);
       }
     }
@@ -6479,7 +6512,7 @@ app.post('/api/marketplace/create', requireAuth, writeLimiter, (req, res, next) 
       images: imageUrls,
       sellerId: userId,
       sellerUsername: profile.username || 'مستخدم',
-      sellerProfilePic: profile.profile_picture_url || 'https://ik.imagekit.io/Aite/post_media/default_profile.png',
+      sellerProfilePic: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
       sellerVerified: profile.verified || false,
       createdAt: Date.now(),
       status: 'active'
@@ -6581,7 +6614,7 @@ app.put('/api/marketplace/:productId', requireAuth, (req, res, next) => {
     // Upload new images via multer (backward compatibility)
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const url = await uploadFileToImageKit(file, 'marketplace');
+        const url = await uploadFileToR2(file, 'marketplace');
         imageUrls.push(url);
       }
     }

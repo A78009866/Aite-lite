@@ -941,20 +941,12 @@
     }
 
     // ======== IMAGEKIT UPLOAD (with retry) ========
-    async function _uploadToImageKitOnce(file, resourceType, authData) {
-        var fd = new FormData();
-        fd.append('file', file);
-        fd.append('publicKey', authData.publicKey);
-        fd.append('signature', authData.signature);
-        fd.append('expire', authData.expire);
-        fd.append('token', authData.token);
-        fd.append('folder', authData.folder);
-        fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-        var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
+    async function _uploadToR2Once(file, resourceType, presignData) {
         return new Promise(function(resolve, reject) {
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', uploadUrl, true);
-            xhr.timeout = 300000; // 5 minutes
+            xhr.open('PUT', presignData.uploadUrl, true);
+            xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+            xhr.timeout = 300000;
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
                     var pct = Math.round((e.loaded / e.total) * 100);
@@ -963,20 +955,16 @@
             };
             xhr.onload = function() {
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        var data = JSON.parse(xhr.responseText);
-                        if (data.error) return reject(new Error(data.error || 'فشل رفع الملف'));
-                        resolve(data.url);
-                    } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
+                    resolve(presignData.publicUrl);
                 } else reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
             };
             xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
             xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
-            xhr.send(fd);
+            xhr.send(file);
         });
     }
 
-    async function uploadToImageKit(file, resourceType) {
+    async function uploadToR2(file, resourceType) {
         var maxRetries = 3;
         var lastError = null;
         for (var attempt = 0; attempt < maxRetries; attempt++) {
@@ -985,15 +973,15 @@
                     if (submitBtnText) submitBtnText.textContent = t('إعادة المحاولة...');
                     await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
                 }
-                var authRes = await fetch('/api/imagekit/auth', {
+                var presignRes = await fetch('/api/r2/presign', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }),
+                    body: JSON.stringify({ folder: 'post_media', fileName: file.name, contentType: file.type }),
                     credentials: 'same-origin'
                 });
-                if (!authRes.ok) throw new Error('فشل الاتصال بالخادم');
-                var authData = await authRes.json();
-                if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
-                return await _uploadToImageKitOnce(file, resourceType, authData);
+                if (!presignRes.ok) throw new Error('فشل الاتصال بالخادم');
+                var presignData = await presignRes.json();
+                if (!presignData.ok) throw new Error(presignData.error || 'فشل في الحصول على مصادقة الرفع');
+                return await _uploadToR2Once(file, resourceType, presignData);
             } catch(err) {
                 console.warn('Upload attempt ' + (attempt+1) + '/' + maxRetries + ' failed:', err.message);
                 lastError = err;
@@ -1024,7 +1012,7 @@
                     submitBtnText.textContent = t('جاري ضغط الصورة ') + (i + 1) + '/' + selectedImageFiles.length + '...';
                     var compressed = await compressImage(selectedImageFiles[i]);
                     submitBtnText.textContent = t('جاري رفع الصورة ') + (i + 1) + '/' + selectedImageFiles.length + '...';
-                    var url = await uploadToImageKit(compressed, 'image');
+                    var url = await uploadToR2(compressed, 'image');
                     uploadedUrls.push(url);
                 }
                 mediaUrl = uploadedUrls[0];
@@ -1044,7 +1032,7 @@
                     file = await compressImage(file);
                 }
                 submitBtnText.textContent = t('جاري رفع الملف...');
-                mediaUrl = await uploadToImageKit(file, resourceType);
+                mediaUrl = await uploadToR2(file, resourceType);
             }
 
             submitBtnText.textContent = t('جاري النشر...');

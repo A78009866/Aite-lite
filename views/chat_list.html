@@ -3655,7 +3655,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
 <!-- Sidebar Menu -->
 <div id="sidebarMenu" class="sidebar-menu">
     <div class="sidebar-menu-header">
-        <img id="sidebarProfilePic" src="https://ik.imagekit.io/Aite/post_media/default_profile.png" alt="البروفيل" class="sidebar-menu-avatar">
+        <img id="sidebarProfilePic" src="/default_profile.png" alt="البروفيل" class="sidebar-menu-avatar">
         <div class="sidebar-menu-user-info">
             <span id="sidebarUsername" class="sidebar-menu-username" data-i18n="المستخدم">المستخدم</span>
         </div>
@@ -3684,7 +3684,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
         </a>
     </div>
     <div class="sidebar-menu-footer">
-        <img src="https://ik.imagekit.io/Aite/post_media/1775677384191-1000126675_-DAThYlRs.webp" alt="Aite" class="sidebar-menu-footer-logo">
+        <img src="/aite-logo.webp" alt="Aite" class="sidebar-menu-footer-logo">
         <span data-i18n="شركة Aite - كل الحقوق محفوظة © 2026">شركة Aite - كل الحقوق محفوظة © 2026</span>
     </div>
 </div>
@@ -3790,12 +3790,12 @@ html[data-theme="light"] .sidebar-menu-icon i {
         
         <!-- Right side: Profile with dropdown -->
                     <button id="profileMenuButton" class="relative block focus:outline-none" onclick="openSidebar()" title="القائمة">
-                <img id="navProfilePic" src="https://ik.imagekit.io/Aite/post_media/default_profile.png" alt="البروفيل" class="w-9 h-9 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                <img id="navProfilePic" src="/default_profile.png" alt="البروفيل" class="w-9 h-9 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
             </button>
 
         <!-- Center: App icon + name -->
         <div class="flex items-center gap-2" style="position:absolute;left:50%;transform:translateX(-50%);">
-            <img src="https://ik.imagekit.io/Aite/post_media/1775677384191-1000126675_-DAThYlRs.webp" alt="Aite" class="w-9 h-9 rounded-xl shadow-lg" style="border:1px solid rgba(255,255,255,0.1);">
+            <img src="/aite-logo.webp" alt="Aite" class="w-9 h-9 rounded-xl shadow-lg" style="border:1px solid rgba(255,255,255,0.1);">
             <a href="/chat_list" class="text-2xl font-extrabold text-white tracking-widest hover:text-gray-300 transition duration-300 app-logo">
                 Aite
             </a>
@@ -4054,7 +4054,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
 
 <script>
 /* ============ Notification Bubble Logic ============ */
-var NOTIF_BUBBLE_DEFAULT_AVATAR = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+var NOTIF_BUBBLE_DEFAULT_AVATAR = '/default_profile.png';
 var NOTIF_BUBBLE_DURATION = 4000;
 var _notifBubbleTimer = null;
 var _notifBubbleEl = null;
@@ -4515,8 +4515,8 @@ function handleNotifClick(el) {
             return array;
         }
 
-        const VERIFIED_IMG_URL = "https://ik.imagekit.io/Aite/post_media/badge.png";
-        const DEFAULT_AVATAR = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+        const VERIFIED_IMG_URL = "/badge.png";
+        const DEFAULT_AVATAR = '/default_profile.png';
 
         // Helper: convert video URL to a thumbnail image URL (supports both Cloudinary and ImageKit)
         function getVideoThumbnail(videoUrl) {
@@ -4528,7 +4528,7 @@ function handleNotifClick(el) {
                 return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
             }
             // ImageKit video thumbnail
-            if (videoUrl.includes('ik.imagekit.io')) {
+            if (videoUrl.includes('ik.imagekit.io') || videoUrl.includes('.r2.dev')) {
                 return videoUrl.replace(/\.(mp4|mov|avi|webm|mkv|m4v)(\?.*)?$/i, '.jpg') + '?tr=so-1,w-640';
             }
             // fallback: return empty (will use client-side extraction)
@@ -5166,26 +5166,18 @@ function handleNotifClick(el) {
 
         document.getElementById('editPostContent').addEventListener('input', editCheckInputs);
 
-        async function editUploadToImageKit(file, resourceType) {
-            const authRes = await fetch('/api/imagekit/auth', {
+        async function editUploadToR2(file, resourceType) {
+            const presignRes = await fetch('/api/r2/presign', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }),
+                body: JSON.stringify({ folder: 'post_media', fileName: file.name, contentType: file.type }),
                 credentials: 'same-origin'
             });
-            const authData = await authRes.json();
-            if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('publicKey', authData.publicKey);
-            fd.append('signature', authData.signature);
-            fd.append('expire', authData.expire);
-            fd.append('token', authData.token);
-            fd.append('folder', authData.folder);
-            fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-            const uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
+            const presignData = await presignRes.json();
+            if (!presignData.ok) throw new Error(presignData.error || 'فشل في الحصول على مصادقة الرفع');
             return new Promise(function(resolve, reject) {
                 const xhr = new XMLHttpRequest();
-                xhr.open('POST', uploadUrl, true);
+                xhr.open('PUT', presignData.uploadUrl, true);
+                xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
                 xhr.timeout = 120000;
                 xhr.upload.onprogress = function(e) {
                     if (e.lengthComputable) {
@@ -5195,16 +5187,12 @@ function handleNotifClick(el) {
                 };
                 xhr.onload = function() {
                     if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            const data = JSON.parse(xhr.responseText);
-                            if (data.error) return reject(new Error(data.error || 'فشل رفع الملف'));
-                            resolve(data.url);
-                        } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
+                        resolve(presignData.publicUrl);
                     } else reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
                 };
                 xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
                 xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
-                xhr.send(fd);
+                xhr.send(file);
             });
         }
 
@@ -5252,7 +5240,7 @@ function handleNotifClick(el) {
                     submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0636\u063a\u0637...';
                     const compressed = await editCompressImage(editSelectedImageFile);
                     submitText.textContent = '\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629...';
-                    mediaUrl = await editUploadToImageKit(compressed, 'image');
+                    mediaUrl = await editUploadToR2(compressed, 'image');
                 } else if (editSelectedMediaFile) {
                     const mimeType = editSelectedMediaFile.type || '';
                     let resourceType = 'auto';
@@ -5260,7 +5248,7 @@ function handleNotifClick(el) {
                     else if (mimeType.startsWith('audio/')) { resourceType = 'video'; mediaType = 'audio'; }
                     else { resourceType = 'auto'; mediaType = 'raw'; }
                     submitText.textContent = '\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641...';
-                    mediaUrl = await editUploadToImageKit(editSelectedMediaFile, resourceType);
+                    mediaUrl = await editUploadToR2(editSelectedMediaFile, resourceType);
                 }
 
                 // If user removed existing media and didn't add new
@@ -6162,7 +6150,7 @@ function handleNotifClick(el) {
                 const res = await fetch('/api/stories', { credentials: 'same-origin' });
                 const data = await res.json();
                 
-                let myPic = typeof DEFAULT_AVATAR !== 'undefined' ? DEFAULT_AVATAR : 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+                let myPic = typeof DEFAULT_AVATAR !== 'undefined' ? DEFAULT_AVATAR : '/default_profile.png';
                 const userPicEl = document.getElementById('navProfilePic');
                 if (userPicEl) myPic = userPicEl.src;
 
@@ -7472,7 +7460,7 @@ function handleNotifClick(el) {
                                 <img src="${escapeAttr(u.profile_picture_url)}" alt="${escapeHtml(u.username)}" onerror="this.onerror=null;this.src='${escapeAttr(DEFAULT_AVATAR)}'">
                                 ${onlineDot}
                             </div>
-                            <div class="discover-name">${escapeHtml(u.username)}${u.is_verified ? ' <img src="https://ik.imagekit.io/Aite/post_media/badge.png" alt="\u0645\u0648\u062b\u0642" title="\u0645\u0648\u062b\u0642" class="verified-badge-img" style="display:inline;vertical-align:middle;">' : ''}</div>
+                            <div class="discover-name">${escapeHtml(u.username)}${u.is_verified ? ' <img src="/badge.png" alt="\u0645\u0648\u062b\u0642" title="\u0645\u0648\u062b\u0642" class="verified-badge-img" style="display:inline;vertical-align:middle;">' : ''}</div>
                             ${categoryLabel}
                             ${actionBtn}
                         </div>
