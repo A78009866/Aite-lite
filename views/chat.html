@@ -3600,7 +3600,7 @@ const filePreviewArea = document.getElementById('file-preview-area');
 const contextMenu = document.getElementById('context-menu');
 const contextOverlay = document.getElementById('context-menu-overlay');
 
-const VERIFIED_ICON = `<img src="https://ik.imagekit.io/Aite/post_media/badge.png" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;">`;
+const VERIFIED_ICON = `<img src="/badge.png" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;">`;
 
 // --- Emoji Picker ---
 const ALL_EMOJIS = [
@@ -3700,7 +3700,7 @@ async function checkBlockStatus() {
       // If blocked, update header to show Aite user
       if (chatBlocked || chatBlockedBy) {
         document.getElementById('header-name').textContent = 'Aite user';
-        document.getElementById('header-avatar').src = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+        document.getElementById('header-avatar').src = '/default_profile.png';
         document.getElementById('header-online').style.display = 'none';
         document.getElementById('header-status').textContent = '';
       }
@@ -3753,7 +3753,7 @@ async function init() {
           chatBlocked = true;
           updateBlockUI();
           document.getElementById('header-name').textContent = 'Aite user';
-          document.getElementById('header-avatar').src = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+          document.getElementById('header-avatar').src = '/default_profile.png';
           document.getElementById('header-online').style.display = 'none';
           document.getElementById('header-status').textContent = '';
         }
@@ -3887,7 +3887,7 @@ async function init() {
           updateBlockUI();
           if (chatBlocked || chatBlockedBy) {
             document.getElementById('header-name').textContent = 'Aite user';
-            document.getElementById('header-avatar').src = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+            document.getElementById('header-avatar').src = '/default_profile.png';
             document.getElementById('header-online').style.display = 'none';
             document.getElementById('header-status').textContent = '';
           } else {
@@ -3945,7 +3945,7 @@ async function fetchProfile() {
       // Check if blocked - show Aite user
       if (data.blocked_by || data.i_blocked) {
         document.getElementById('header-name').textContent = 'Aite user';
-        document.getElementById('header-avatar').src = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+        document.getElementById('header-avatar').src = '/default_profile.png';
         document.getElementById('header-online').style.display = 'none';
         document.getElementById('header-status').textContent = '';
         document.getElementById('profile-link').href = `/profile?userId=${otherId}`;
@@ -4183,7 +4183,7 @@ function createMsgElement(msg, showAvatar) {
     if (showAvatar) {
       const pic = document.createElement('img');
       pic.className = 'msg-profile-pic';
-      pic.src = document.getElementById('header-avatar')?.src || 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+      pic.src = document.getElementById('header-avatar')?.src || '/default_profile.png';
       pic.alt = '';
       pic.loading = 'lazy';
       wrapper.appendChild(pic);
@@ -4571,7 +4571,7 @@ function showReactorsModal(messageId, reactions) {
   
   const entries = Object.entries(reactions);
   const otherName = document.getElementById('header-name')?.textContent || 'المستخدم';
-  const otherAvatar = document.getElementById('header-avatar')?.src || 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+  const otherAvatar = document.getElementById('header-avatar')?.src || '/default_profile.png';
   
   entries.forEach(([uid, emoji]) => {
     const item = document.createElement('div');
@@ -5176,7 +5176,7 @@ function getVideoThumbnail(videoUrl) {
         return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
     }
     // ImageKit video thumbnail
-    if (videoUrl.includes('ik.imagekit.io')) {
+    if (videoUrl.includes('ik.imagekit.io') || videoUrl.includes('.r2.dev')) {
         return videoUrl.replace(/\.(mp4|mov|avi|webm|mkv|m4v)(\?.*)?$/i, '.jpg') + '?tr=so-1,w-640';
     }
     return '';
@@ -5236,24 +5236,13 @@ async function fileToDataUrl(file) {
 }
 
 // --- Sending ---
-// --- Direct ImageKit Upload (bypass server size limits) ---
-// Single attempt to upload to ImageKit
-function _imageKitUploadOnce(file, authData) {
-  var fd = new FormData();
-  fd.append('file', file);
-  fd.append('publicKey', authData.publicKey);
-  fd.append('signature', authData.signature);
-  fd.append('expire', authData.expire);
-  fd.append('token', authData.token);
-  fd.append('folder', authData.folder);
-  fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-
-  var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
-
+// --- Direct R2 Upload (bypass server size limits) ---
+function _r2UploadOnce(file, presignData) {
   return new Promise(function(resolve, reject) {
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', uploadUrl, true);
-    xhr.timeout = 300000; // 5 minutes timeout for large files
+    xhr.open('PUT', presignData.uploadUrl, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.timeout = 300000;
     xhr.upload.onprogress = function(e) {
       if (e.lengthComputable && sendBtn) {
         var pct = Math.round((e.loaded / e.total) * 100);
@@ -5262,63 +5251,47 @@ function _imageKitUploadOnce(file, authData) {
     };
     xhr.onload = function() {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          var uploadData = JSON.parse(xhr.responseText);
-          if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
-          resolve({ url: uploadData.url, type: file.type });
-        } catch(parseErr) {
-          reject(new Error('استجابة غير صالحة من خدمة الرفع'));
-        }
+        resolve({ url: presignData.publicUrl, type: file.type });
       } else {
-        var errText = 'فشل رفع الملف (HTTP ' + xhr.status + ')';
-        try { var errJson = JSON.parse(xhr.responseText); errText = errJson.message || errText; } catch(e) {}
-        reject(new Error(errText));
+        reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
       }
     };
     xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
     xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
-    xhr.send(fd);
+    xhr.send(file);
   });
 }
 
-async function uploadToImageKit(file) {
-  var resourceType = 'auto';
-  if (file.type && file.type.startsWith('image')) resourceType = 'image';
-  else if (file.type && file.type.startsWith('video')) resourceType = 'video';
-  else if ((file.type && file.type.startsWith('audio')) || file.name.endsWith('.webm')) resourceType = 'video';
-  else resourceType = 'raw';
-
+async function uploadToR2(file) {
   var maxRetries = 3;
   var lastError = null;
 
   for (var attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // Wait before retry (exponential backoff)
       if (attempt > 0) {
         if (sendBtn) sendBtn.innerHTML = '<div style="font-size:11px;line-height:1;">إعادة...</div>';
         await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
       }
 
-      // Get fresh auth for each attempt
-      var authRes = await fetch('/api/imagekit/auth', {
+      var presignRes = await fetch('/api/r2/presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: 'chat_media', resource_type: resourceType }),
+        body: JSON.stringify({ folder: 'chat_media', fileName: file.name, contentType: file.type }),
         credentials: 'same-origin'
       });
-      if (!authRes.ok) throw new Error('فشل الاتصال بالخادم (HTTP ' + authRes.status + ')');
-      var authData = await authRes.json();
-      if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
+      if (!presignRes.ok) throw new Error('فشل الاتصال بالخادم (HTTP ' + presignRes.status + ')');
+      var presignData = await presignRes.json();
+      if (!presignData.ok) throw new Error(presignData.error || 'فشل في الحصول على رابط الرفع');
 
-      var result = await _imageKitUploadOnce(file, authData);
-      return result; // Success
+      var result = await _r2UploadOnce(file, presignData);
+      return result;
     } catch(err) {
-      console.warn('ImageKit upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
+      console.warn('R2 upload attempt ' + (attempt + 1) + '/' + maxRetries + ' failed:', err.message);
       lastError = err;
     }
   }
 
-  console.error('All ImageKit upload attempts failed:', lastError);
+  console.error('All R2 upload attempts failed:', lastError);
   throw lastError;
 }
 
@@ -5379,7 +5352,7 @@ sendBtn.onclick = async () => {
 
       // Method 1: Direct ImageKit upload
       try {
-        var result = await uploadToImageKit(fileToSend);
+        var result = await uploadToR2(fileToSend);
         mediaUrl = result.url;
       } catch(ikErr) {
         console.warn('Direct ImageKit upload failed:', ikErr.message);
@@ -5594,7 +5567,7 @@ function renderPreviewCard(cardId, res) {
       '<div class="lpc-footer">' +
         (d.sellerProfilePic ? '<img src="' + d.sellerProfilePic + '" alt="">' : '') +
         '<span class="lpc-footer-name">@' + escapePreviewText(d.sellerUsername) + '</span>' +
-              (d.sellerVerified ? '<img src="https://ik.imagekit.io/Aite/post_media/badge.png" style="width:14px;height:14px;vertical-align:middle;">' : '') +
+              (d.sellerVerified ? '<img src="/badge.png" style="width:14px;height:14px;vertical-align:middle;">' : '') +
             '</div>';
   } else if (res.type === 'post') {
     var imgSection = '';
@@ -5612,7 +5585,7 @@ function renderPreviewCard(cardId, res) {
       '<div class="lpc-footer">' +
         (d.profilePic ? '<img src="' + d.profilePic + '" alt="">' : '') +
         '<span class="lpc-footer-name">@' + escapePreviewText(d.username) + '</span>' +
-          (d.verified ? '<img src="https://ik.imagekit.io/Aite/post_media/badge.png" style="width:14px;height:14px;vertical-align:middle;">' : '') +
+          (d.verified ? '<img src="/badge.png" style="width:14px;height:14px;vertical-align:middle;">' : '') +
         '</div>';
     } else if (res.type === 'reel') {
     // Add reel-specific class to the card

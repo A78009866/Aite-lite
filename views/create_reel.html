@@ -1802,19 +1802,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
   }
 
   // رفع ملف مباشرة إلى ImageKit مع إعادة المحاولة
-  async function _uploadToImageKitOnce(file, authData) {
-    var fd = new FormData();
-    fd.append('file', file);
-    fd.append('publicKey', authData.publicKey);
-    fd.append('signature', authData.signature);
-    fd.append('expire', authData.expire);
-    fd.append('token', authData.token);
-    fd.append('folder', authData.folder);
-    fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-    var uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
+  async function _uploadToR2Once(file, presignData) {
     return new Promise(function(resolve, reject) {
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', uploadUrl, true);
+      xhr.open('PUT', presignData.uploadUrl, true);
+                xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
       xhr.timeout = 600000; // 10 minutes for large video files
       xhr.upload.onprogress = function(e) {
         if (e.lengthComputable) {
@@ -1826,9 +1818,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            var uploadData = JSON.parse(xhr.responseText);
-            if (uploadData.error) return reject(new Error(uploadData.error || 'فشل رفع الملف'));
-            resolve(uploadData.url);
+            resolve(presignData.publicUrl);
           } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
         } else {
           reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
@@ -1836,11 +1826,11 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
       };
       xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
       xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
-      xhr.send(fd);
+      xhr.send(file);
     });
   }
 
-  async function uploadToImageKit(file, resourceType) {
+  async function uploadToR2(file, resourceType) {
     var maxRetries = 3;
     var lastError = null;
     for (var attempt = 0; attempt < maxRetries; attempt++) {
@@ -1850,16 +1840,16 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
           if (spanEl) spanEl.textContent = t('إعادة المحاولة...');
           await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
         }
-        var authRes = await fetch('/api/imagekit/auth', {
+        var presignRes = await fetch('/api/r2/presign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folder: 'reels', resource_type: resourceType }),
+          body: JSON.stringify({ folder: 'reels', fileName: file.name, contentType: file.type }),
           credentials: 'same-origin'
         });
-        if (!authRes.ok) throw new Error('فشل الاتصال بالخادم');
-        var authData = await authRes.json();
-        if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
-        return await _uploadToImageKitOnce(file, authData);
+        if (!presignRes.ok) throw new Error('فشل الاتصال بالخادم');
+        var presignData = await presignRes.json();
+        if (!presignData.ok) throw new Error(presignData.error || 'فشل في الحصول على مصادقة الرفع');
+        return await _uploadToR2Once(file, presignData);
       } catch(err) {
         console.warn('Upload attempt ' + (attempt+1) + '/' + maxRetries + ' failed:', err.message);
         lastError = err;
@@ -1879,7 +1869,7 @@ html[data-theme="light"] .skeleton-loader .sk-bg {
     try {
       // رفع الفيديو مباشرة إلى ImageKit (يتجاوز حد حجم Vercel)
       publishBtn.querySelector('span').textContent = t('جاري رفع الفيديو...');
-      const videoUrl = await uploadToImageKit(selectedFile, 'video');
+      const videoUrl = await uploadToR2(selectedFile, 'video');
 
       // إرسال الرابط فقط إلى السيرفر (JSON صغير، بدون ملف)
       publishBtn.querySelector('span').textContent = t('جاري النشر...');

@@ -3110,7 +3110,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
 <!-- Sidebar Menu -->
 <div id="sidebarMenu" class="sidebar-menu">
     <div class="sidebar-menu-header">
-        <img id="sidebarProfilePic" src="https://ik.imagekit.io/Aite/post_media/default_profile.png" alt="البروفيل" class="sidebar-menu-avatar">
+        <img id="sidebarProfilePic" src="/default_profile.png" alt="البروفيل" class="sidebar-menu-avatar">
         <div class="sidebar-menu-user-info">
             <span id="sidebarUsername" class="sidebar-menu-username" data-i18n="المستخدم">المستخدم</span>
         </div>
@@ -3139,7 +3139,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
         </a>
     </div>
     <div class="sidebar-menu-footer">
-        <img src="https://ik.imagekit.io/Aite/post_media/1775677384191-1000126675_-DAThYlRs.webp" alt="Aite" class="sidebar-menu-footer-logo">
+        <img src="/aite-logo.webp" alt="Aite" class="sidebar-menu-footer-logo">
         <span data-i18n="شركة Aite - كل الحقوق محفوظة © 2026">شركة Aite - كل الحقوق محفوظة © 2026</span>
     </div>
 </div>
@@ -3224,10 +3224,10 @@ html[data-theme="light"] .sidebar-menu-icon i {
         <header class="sticky top-0 z-50 glass-navbar p-3">
         <nav class="flex items-center max-w-6xl mx-auto relative" style="justify-content:space-between;">
             <button id="profileMenuButton" class="relative block focus:outline-none" onclick="openSidebar()" title="القائمة">
-                <img id="navProfilePic" src="https://ik.imagekit.io/Aite/post_media/default_profile.png" alt="البروفيل" class="w-9 h-9 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
+                <img id="navProfilePic" src="/default_profile.png" alt="البروفيل" class="w-9 h-9 rounded-full border-2 border-blue-500 object-cover hover:ring-2 hover:ring-blue-400 transition duration-300 cursor-pointer">
             </button>
             <div class="flex items-center gap-2" style="position:absolute;left:50%;transform:translateX(-50%);">
-                <img src="https://ik.imagekit.io/Aite/post_media/1775677384191-1000126675_-DAThYlRs.webp" alt="Aite" class="w-9 h-9 rounded-xl shadow-lg" style="border:1px solid rgba(255,255,255,0.1);">
+                <img src="/aite-logo.webp" alt="Aite" class="w-9 h-9 rounded-xl shadow-lg" style="border:1px solid rgba(255,255,255,0.1);">
                 <a href="/chat_list" class="text-2xl font-extrabold text-white tracking-widest hover:text-gray-300 transition duration-300 app-logo">
                     Aite
                 </a>
@@ -3257,7 +3257,7 @@ html[data-theme="light"] .sidebar-menu-icon i {
                 <div class="p-4 pt-0 -mt-20 relative">
 
                     <div id="profileAvatarWrap" class="avatar-wrapper" data-user-id="">
-                        <img id="profileImage" src="https://ik.imagekit.io/Aite/post_media/default_profile.png" alt="صورة الملف الشخصي"
+                        <img id="profileImage" src="/default_profile.png" alt="صورة الملف الشخصي"
                              class="w-32 h-32 rounded-full object-cover border-4 border-black shadow-lg mb-3 hover:ring-4 hover:ring-blue-400 transition duration-300">
                         
                         <span id="profileOnlineDot" class="status-indicator large" title="متصل الآن"></span>
@@ -3539,9 +3539,9 @@ html[data-theme="light"] .sidebar-menu-icon i {
 
 <script>var t = (window.AiteI18n && window.AiteI18n.t) ? window.AiteI18n.t : function(s){return s;};
 
-const VERIFIED_IMG_URL = "https://ik.imagekit.io/Aite/post_media/badge.png";
+const VERIFIED_IMG_URL = "/badge.png";
 // use provided default profile pic from server for users without profile picture
-const DEFAULT_PROFILE_PIC_URL = 'https://ik.imagekit.io/Aite/post_media/default_profile.png';
+const DEFAULT_PROFILE_PIC_URL = '/default_profile.png';
 
 let currentProfileId = null;
 let currentUserId = null;
@@ -5186,26 +5186,18 @@ function editCheckInputs() {
 }
 document.getElementById('editPostContent').addEventListener('input', editCheckInputs);
 
-async function editUploadToImageKit(file, resourceType) {
-    const authRes = await fetch('/api/imagekit/auth', {
+async function editUploadToR2(file, resourceType) {
+    const presignRes = await fetch('/api/r2/presign', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: 'post_media', resource_type: resourceType }),
+        body: JSON.stringify({ folder: 'post_media', fileName: file.name, contentType: file.type }),
         credentials: 'same-origin'
     });
-    const authData = await authRes.json();
-    if (!authData.ok) throw new Error(authData.error || 'فشل في الحصول على مصادقة الرفع');
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('publicKey', authData.publicKey);
-    fd.append('signature', authData.signature);
-    fd.append('expire', authData.expire);
-    fd.append('token', authData.token);
-    fd.append('folder', authData.folder);
-    fd.append('fileName', Date.now() + '-' + (file.name || 'file'));
-    const uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
+    const presignData = await presignRes.json();
+    if (!presignData.ok) throw new Error(presignData.error || 'فشل في الحصول على مصادقة الرفع');
     return new Promise(function(resolve, reject) {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', uploadUrl, true);
+        xhr.open('PUT', presignData.uploadUrl, true);
+                xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
         xhr.timeout = 120000;
         xhr.upload.onprogress = function(e) {
             if (e.lengthComputable) {
@@ -5215,16 +5207,12 @@ async function editUploadToImageKit(file, resourceType) {
         };
         xhr.onload = function() {
             if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                    const data = JSON.parse(xhr.responseText);
-                    if (data.error) return reject(new Error(data.error || 'فشل رفع الملف'));
-                    resolve(data.url);
-                } catch(e) { reject(new Error('استجابة غير صالحة من خدمة الرفع')); }
+                resolve(presignData.publicUrl);
             } else reject(new Error('فشل رفع الملف (HTTP ' + xhr.status + ')'));
     };
         xhr.onerror = function() { reject(new Error('خطأ في الاتصال أثناء الرفع')); };
         xhr.ontimeout = function() { reject(new Error('انتهت مهلة الرفع - حاول مرة أخرى')); };
-        xhr.send(fd);
+        xhr.send(file);
     });
 }
 async function editCompressImage(file, maxW, maxH, q) {
@@ -5242,8 +5230,8 @@ async function submitEditPost() {
     const content = document.getElementById('editPostContent').value.trim();
     let mediaUrl = null, mediaType = null, removeMedia = false;
     try {
-        if (editSelectedImageFile) { mediaType = 'image'; submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0636\u063a\u0637...'; const compressed = await editCompressImage(editSelectedImageFile); submitText.textContent = '\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629...'; mediaUrl = await editUploadToImageKit(compressed, 'image'); }
-        else if (editSelectedMediaFile) { const mt = editSelectedMediaFile.type||''; let rt = 'auto'; if(mt.startsWith('video/')){ rt='video'; mediaType='video'; } else if(mt.startsWith('audio/')){ rt='video'; mediaType='audio'; } else { rt='auto'; mediaType='raw'; } submitText.textContent='\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641...'; mediaUrl = await editUploadToImageKit(editSelectedMediaFile, rt); }
+        if (editSelectedImageFile) { mediaType = 'image'; submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0636\u063a\u0637...'; const compressed = await editCompressImage(editSelectedImageFile); submitText.textContent = '\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629...'; mediaUrl = await editUploadToR2(compressed, 'image'); }
+        else if (editSelectedMediaFile) { const mt = editSelectedMediaFile.type||''; let rt = 'auto'; if(mt.startsWith('video/')){ rt='video'; mediaType='video'; } else if(mt.startsWith('audio/')){ rt='video'; mediaType='audio'; } else { rt='auto'; mediaType='raw'; } submitText.textContent='\u062c\u0627\u0631\u064a \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641...'; mediaUrl = await editUploadToR2(editSelectedMediaFile, rt); }
         if (editRemoveExistingMediaFlag && !mediaUrl) removeMedia = true;
         submitText.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638...';
         const bodyData = { content }; if (mediaUrl) { bodyData.mediaUrl = mediaUrl; bodyData.mediaType = mediaType; } if (removeMedia) bodyData.removeMedia = true;
