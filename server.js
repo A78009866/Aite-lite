@@ -181,7 +181,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.json({ limit: '50mb' }));
 
 const corsOptions = {
-  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
+  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app', 'https://aite-lite.vercel.app'],
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -350,6 +350,10 @@ app.get('/wilayas_data.js', (req, res) => { res.setHeader('Content-Type', 'appli
 app.get('/common.css', (req, res) => { res.setHeader('Content-Type', 'text/css'); res.sendFile(path.join(__dirname, 'views', 'common.css')); });
 app.get('/components.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'components.js')); });
 app.get('/i18n.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'i18n.js')); });
+app.get('/aite-logo.webp', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'aite-logo.webp')); });
+app.get('/default_profile.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'default_profile.png')); });
+app.get('/badge.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'badge.png')); });
+app.get('/trimer.jpg', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'trimer.jpg')); });
 
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });
@@ -828,7 +832,7 @@ app.post('/register', authLimiter, (req, res, next) => {
       cover_photo_url = req.body.cover_photo_url;
     }
 
-    // process uploaded files via multer (backward compatibility) - upload to ImageKit
+    // process uploaded files via multer (backward compatibility) - upload to R2
     if (req.files) {
       if (req.files.profile_picture) {
         const f = req.files.profile_picture[0];
@@ -1717,7 +1721,7 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
     return res.status(400).json({ ok: false, error: 'رابط الصوت غير صالح.' });
   }
 
-  // If files were uploaded via multer (backward compatibility) - upload to ImageKit
+  // If files were uploaded via multer (backward compatibility) - upload to R2
   if (!mediaUrl && req.files && req.files.story_media) {
     const mediaFile = req.files.story_media[0];
     mediaUrl = await uploadFileToR2(mediaFile, getUploadFolder(req, mediaFile));
@@ -2250,7 +2254,7 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       else if (file.mimetype.startsWith('video/')) type = 'video';
       else if (file.mimetype.startsWith('audio/') || file.mimetype === 'audio/webm') type = 'audio';
       
-      // Upload to ImageKit
+      // Upload to R2
       const uploadedUrl = await uploadFileToR2(file, getUploadFolder(req, file));
       mediaObject = {
         url: uploadedUrl, 
@@ -3309,7 +3313,7 @@ app.post('/api/profile/edit', requireAuth, (req, res, next) => {
       updates.cover_photo_url = req.body.cover_photo_url;
     }
 
-    // Support multer file upload (backward compatibility) - upload to ImageKit
+    // Support multer file upload (backward compatibility) - upload to R2
     if (req.files && req.files.profile_picture) {
       const f = req.files.profile_picture[0];
       updates.profile_picture_url = await uploadFileToR2(f, getUploadFolder(req, f));
@@ -3363,7 +3367,7 @@ app.post('/api/posts/create', requireAuth, writeLimiter, (req, res, next) => {
     mediaUrls = null;
   }
 
-  // If files were uploaded via multer (backward compatibility) - upload to ImageKit
+  // If files were uploaded via multer (backward compatibility) - upload to R2
   if (!mediaUrl && req.file) {
     mediaUrl = await uploadFileToR2(req.file, getUploadFolder(req, req.file));
     const mimeType = req.file.mimetype || '';
@@ -4746,7 +4750,7 @@ app.post('/api/reels/create', requireAuth, writeLimiter, (req, res, next) => {
     return res.status(400).json({ ok: false, error: 'رابط الفيديو غير صالح.' });
   }
 
-  // If file was uploaded via multer (backward compatibility) - upload to ImageKit
+  // If file was uploaded via multer (backward compatibility) - upload to R2
   if (!videoUrl && req.file) {
     videoUrl = await uploadFileToR2(req.file, getUploadFolder(req, req.file));
     mimeType = req.file.mimetype;
@@ -5697,7 +5701,7 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(413).json({ ok: false, error: 'خطأ في رفع الملف: ' + err.message });
   }
-  // Catch ImageKit and other upload errors
+  // Catch upload errors
   if (err && (err.message || '').toLowerCase().includes('upload')) {
     return res.status(500).json({ ok: false, error: 'فشل في رفع الملف إلى الخادم.' });
   }
@@ -6459,7 +6463,7 @@ app.get('/js/recovery-email-modal.js', (req, res) => {
 
 // Create a new product
 app.post('/api/marketplace/create', requireAuth, writeLimiter, (req, res, next) => {
-  // If content-type is JSON, skip multer (direct ImageKit URLs)
+  // If content-type is JSON, skip multer (direct R2 URLs)
   const ct = req.headers['content-type'] || '';
   if (ct.indexOf('application/json') !== -1) {
     return next();
@@ -6481,9 +6485,9 @@ app.post('/api/marketplace/create', requireAuth, writeLimiter, (req, res, next) 
       return res.status(400).json({ ok: false, error: 'السعر غير صالح.' });
     }
 
-    // Upload images to ImageKit
+    // Collect image URLs
     const imageUrls = [];
-    // Support direct ImageKit URLs from client-side upload (JSON body)
+    // Support direct R2 URLs from client-side upload (JSON body)
     if (req.body.imageUrls && Array.isArray(req.body.imageUrls)) {
       for (const url of req.body.imageUrls) {
         if (isValidUploadUrl(url)) {
@@ -6565,7 +6569,7 @@ app.get('/api/marketplace/:productId', requireAuth, async (req, res) => {
 
 // Update a product (owner only)
 app.put('/api/marketplace/:productId', requireAuth, (req, res, next) => {
-  // If content-type is JSON, skip multer (direct ImageKit URLs)
+  // If content-type is JSON, skip multer (direct R2 URLs)
   const ct = req.headers['content-type'] || '';
   if (ct.indexOf('application/json') !== -1) {
     return next();
@@ -6602,7 +6606,7 @@ app.put('/api/marketplace/:productId', requireAuth, (req, res, next) => {
       } catch (e) { imageUrls = []; }
     }
 
-    // Support direct ImageKit URLs from client-side upload (JSON body)
+    // Support direct R2 URLs from client-side upload (JSON body)
     if (req.body.newImageUrls && Array.isArray(req.body.newImageUrls)) {
       for (const url of req.body.newImageUrls) {
         if (isValidUploadUrl(url)) {
