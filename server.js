@@ -39,6 +39,13 @@ const r2Client = new S3Client({
 
 const DEFAULT_PROFILE_PIC_URL = '/default_profile.png';
 
+function sanitizeProfilePicUrl(url) {
+  if (!url || typeof url !== 'string') return DEFAULT_PROFILE_PIC_URL;
+  if (url.includes('ik.imagekit.io')) return DEFAULT_PROFILE_PIC_URL;
+  if (url.includes('via.placeholder.com')) return DEFAULT_PROFILE_PIC_URL;
+  return url;
+}
+
 // ---------------- Web Push (VAPID) Setup ----------------
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
@@ -460,7 +467,7 @@ app.get('/api/posts/one/:postId', requireAuth, async (req, res) => {
       is_liked: isLiked,
       user: {
         username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150',
+        profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
         is_online: !!userData.is_online,
         is_verified: !!userData.is_verified
       }
@@ -499,7 +506,7 @@ app.get('/api/search', requireAuth, async (req, res) => {
       usernameRaw: p.username || '',
       full_name: (p.full_name || '').toLowerCase(),
       full_nameRaw: p.full_name || '',
-      profile_picture_url: p.profile_picture_url || ''
+      profile_picture_url: sanitizeProfilePicUrl(p.profile_picture_url)
     }));
 
     // search people
@@ -525,7 +532,7 @@ app.get('/api/search', requireAuth, async (req, res) => {
           media: p.media || null,
           user: {
             username: author.username || author.displayName || 'مستخدم',
-            profile_picture_url: author.profile_picture_url || ''
+            profile_picture_url: sanitizeProfilePicUrl(author.profile_picture_url)
           }
         });
       }
@@ -550,7 +557,7 @@ app.get('/api/search', requireAuth, async (req, res) => {
           videoUrl: r.videoUrl || r.video_url || '',
           user: {
             username: author.username || author.displayName || 'مستخدم',
-            profile_picture_url: author.profile_picture_url || ''
+            profile_picture_url: sanitizeProfilePicUrl(author.profile_picture_url)
           }
         });
       }
@@ -766,7 +773,7 @@ app.post('/login', authLimiter, async (req, res) => {
         redirect: '/chat_list',
         username: profile.username || username,
         full_name: profile.full_name || username,
-        profile_picture_url: profile.profile_picture_url || profile.photoURL || DEFAULT_PROFILE_PIC_URL,
+        profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url || profile.photoURL),
         remember_token: rememberToken
       });
     }
@@ -1109,16 +1116,16 @@ function normalizeStoredComment(val) {
   if (val.user && typeof val.user === 'object') {
     user.userId = val.user.userId || val.user.id || val.user.uid || val.userId || '';
     user.username = val.user.username || val.user.displayName || val.user.name || val.username || 'مستخدم';
-    user.profile_picture_url = val.user.profile_picture_url || val.user.photoURL || val.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+    user.profile_picture_url = val.user.profile_picture_url || val.user.photoURL || sanitizeProfilePicUrl(val.profile_picture_url);
   } else {
     user.userId = val.userId || val.userID || val.from_user_id || '';
     user.username = val.username || val.from_username || 'مستخدم';
-    user.profile_picture_url = val.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+    user.profile_picture_url = sanitizeProfilePicUrl(val.profile_picture_url);
   }
 
   user.userId = user.userId || '';
   user.username = user.username || 'مستخدم';
-  user.profile_picture_url = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+  user.profile_picture_url = sanitizeProfilePicUrl(user.profile_picture_url);
 
   // include likes/replies counts if present (backwards compatible)
   const likesCount = typeof val.likes === 'number' ? val.likes : (val.likesCount || 0);
@@ -1187,7 +1194,7 @@ async function processMentions(text, fromUserId, context) {
           type: 'mention',
           from_user_id: fromUserId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           context_type: context.type || 'post',
           postId: context.postId || null,
           reelId: context.reelId || null,
@@ -1546,7 +1553,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
       username: u.username,
       full_name: u.full_name,
       email: u.email,
-      profile_picture_url: u.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      profile_picture_url: sanitizeProfilePicUrl(u.profile_picture_url),
       is_online: !!u.is_online,
       is_verified: !!u.is_verified,
       bio: u.bio || ''
@@ -1808,7 +1815,7 @@ app.get('/api/stories', requireAuth, async (req, res) => {
         groupedStories[story.userId] = {
           userId: story.userId,
           username: user.username || 'مستخدم',
-          profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/150',
+          profile_picture_url: sanitizeProfilePicUrl(user.profile_picture_url),
           is_verified: !!user.is_verified,
           is_online: !!user.is_online,
           items: []
@@ -1893,7 +1900,7 @@ app.post('/api/stories/:storyId/like', requireAuth, async (req, res) => {
           type: 'story_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           storyId: storyId,
           timestamp: admin.database.ServerValue.TIMESTAMP,
           is_read: false
@@ -2012,7 +2019,7 @@ app.get('/api/stories/:storyId/viewers', requireAuth, async (req, res) => {
       viewers.push({
         userId: viewerId,
         username: profile.username || 'مستخدم',
-        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url),
         is_verified: !!profile.is_verified,
         hasLiked: !!likesData[viewerId],
         viewedAt: viewsData[viewerId].timestamp || 0
@@ -2063,7 +2070,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
       const contactBlockedMe = blockedMe.has(contactId);
       const isBlockRelation = iBlockedContact || contactBlockedMe;
 
-      let contactProfile = profiles[contactId] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40', is_online: false };
+      let contactProfile = profiles[contactId] || { username: 'مستخدم', profile_picture_url: DEFAULT_PROFILE_PIC_URL, is_online: false };
 
       // If blocked, show default avatar and "Aite user"
       if (isBlockRelation) {
@@ -2647,7 +2654,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
         id: user.id,
         username: user.username,
         full_name: user.full_name,
-        profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40',
+        profile_picture_url: sanitizeProfilePicUrl(user.profile_picture_url),
         last_message: lastMessage,
         unread_count: chatSummary.unread_count || 0,
         is_online: !!user.is_online,
@@ -2686,7 +2693,7 @@ app.get('/api/get-public-info', requireAuth, async (req, res) => {
                 found: true,
                 full_name: profileData.full_name || username,
                 // تأكد من وجود رابط للصورة أو استخدام الافتراضية
-                profile_picture_url: profileData.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+                profile_picture_url: sanitizeProfilePicUrl(profileData.profile_picture_url)
             });
         }
         res.json({ found: false });
@@ -2703,7 +2710,7 @@ app.get('/api/users/all', requireAuth, async (req, res) => {
   try {
     const profilesSnap = await db.ref('profiles').once('value');
     const profiles = profilesSnap.val() || {};
-    const users = Object.values(profiles).filter(u => u.id !== currentUserId).map(user => ({ id: user.id, username: user.username, full_name: user.full_name, profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_online: !!user.is_online }));
+    const users = Object.values(profiles).filter(u => u.id !== currentUserId).map(user => ({ id: user.id, username: user.username, full_name: user.full_name, profile_picture_url: sanitizeProfilePicUrl(user.profile_picture_url), is_online: !!user.is_online }));
     const full = await Promise.all(users.map(async (u) => {
       const isFriendSnap = await db.ref(`friends/${currentUserId}/${u.id}`).once('value');
       const outgoing = await db.ref(`friend_requests/${u.id}/${currentUserId}`).once('value'); // request I sent to them
@@ -2744,7 +2751,7 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
         type: 'friend_request',
         from_user_id: fromId,
         from_username: fromProfile.username || 'مستخدم',
-        from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
         timestamp: admin.database.ServerValue.TIMESTAMP,
         is_read: false
       };
@@ -2789,7 +2796,7 @@ app.post('/api/friends/accept', requireAuth, async (req, res) => {
         type: 'friend_accept',
         from_user_id: toId,
         from_username: fromProfile.username || 'مستخدم',
-        from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
         timestamp: admin.database.ServerValue.TIMESTAMP,
         is_read: false
       };
@@ -2945,7 +2952,7 @@ app.get('/api/friends/requests', requireAuth, async (req, res) => {
     const profiles = await Promise.all(items.map(i => db.ref(`profiles/${i.from}`).once('value')));
     const out = items.map((it, idx) => {
       const p = profiles[idx].val() || {};
-      return { from: it.from, timestamp: it.timestamp, username: p.username || 'مستخدم', profile_picture_url: p.profile_picture_url || DEFAULT_PROFILE_PIC_URL };
+      return { from: it.from, timestamp: it.timestamp, username: p.username || 'مستخدم', profile_picture_url: sanitizeProfilePicUrl(p.profile_picture_url) };
     });
 
     res.json({ ok: true, requests: out });
@@ -3023,7 +3030,7 @@ app.get('/api/friends/user/:userId', requireAuth, async (req, res) => {
         id: fId,
         username: p.username || 'مستخدم',
         full_name: p.full_name || '',
-        profile_picture_url: p.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        profile_picture_url: sanitizeProfilePicUrl(p.profile_picture_url),
         is_online: !!p.is_online,
         is_mutual: isMutual,
         is_me: fId === currentUserId,
@@ -3077,7 +3084,7 @@ app.get('/api/discover-users', requireAuth, async (req, res) => {
         id: uid,
         username: profile.username || 'مستخدم',
         full_name: profile.full_name || '',
-        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url),
         is_online: !!profile.is_online,
         is_verified: !!profile.is_verified,
         mutual_friends_count: fofScores[uid] || 0
@@ -3530,7 +3537,7 @@ app.get('/api/posts', requireAuth, async (req, res) => {
         is_liked: likedStatuses[post.postId] || false,
         user: {
           username: profiles[post.userId]?.username || 'مستخدم',
-          profile_picture_url: profiles[post.userId]?.profile_picture_url || defaultProfileUrl,
+          profile_picture_url: sanitizeProfilePicUrl(profiles[post.userId]?.profile_picture_url),
           is_online: !!profiles[post.userId]?.is_online,
           is_verified: !!profiles[post.userId]?.is_verified
         }
@@ -3613,7 +3620,7 @@ app.get('/api/posts/user/:userId', requireAuth, async (req, res) => {
       is_liked: likedStatuses[post.postId] || false,
       user: {
         username: profiles[post.userId]?.username || 'مستخدم',
-        profile_picture_url: profiles[post.userId]?.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        profile_picture_url: sanitizeProfilePicUrl(profiles[post.userId]?.profile_picture_url),
         is_online: !!profiles[post.userId]?.is_online,
         is_verified: !!profiles[post.userId]?.is_verified
       }
@@ -3673,7 +3680,7 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
           type: 'post_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: postId,
           reelId: null,
           timestamp: admin.database.ServerValue.TIMESTAMP,
@@ -3710,7 +3717,7 @@ app.get('/api/posts/:postId/likes', requireAuth, async (req, res) => {
         users.push({
           id: uid,
           username: profile.username || 'مستخدم',
-          profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url),
           is_verified: !!profile.is_verified
         });
       }
@@ -3739,7 +3746,7 @@ app.get('/api/reels/:reelId/likes', requireAuth, async (req, res) => {
         users.push({
           id: uid,
           username: profile.username || 'مستخدم',
-          profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url),
           is_verified: !!profile.is_verified
         });
       }
@@ -3782,7 +3789,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
       user: {
         userId: userId,
         username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
       },
       likes: 0,
       repliesCount: 0
@@ -3809,7 +3816,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
           type: 'post_comment',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: postId,
           reelId: null,
           commentId: commentId,
@@ -4013,7 +4020,7 @@ app.post('/api/posts/:postId/comments/:commentId/like', requireAuth, async (req,
           type: 'comment_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: postId,
           commentId: commentId,
           timestamp: admin.database.ServerValue.TIMESTAMP,
@@ -4062,7 +4069,7 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
       commentId,
       userId,
       username: userData.username || 'مستخدم',
-      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
       content: content.trim(),
       timestamp: timestamp
     };
@@ -4091,7 +4098,7 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
           type: 'comment_reply',
           from_user_id: userId,
           from_username: userData.username || 'مستخدم',
-          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
           postId,
           commentId,
           replyId,
@@ -4310,7 +4317,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/like', require
           type: 'reply_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: postId,
           commentId: commentId,
           replyId: replyId,
@@ -4355,7 +4362,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
       commentId,
       userId,
       username: userData.username || 'مستخدم',
-      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
       content: content.trim(),
       timestamp: admin.database.ServerValue.TIMESTAMP,
       likes: 0,
@@ -4387,7 +4394,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
           type: 'reply_reply',
           from_user_id: userId,
           from_username: userData.username || 'مستخدم',
-          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
           postId,
           commentId,
           replyId: newReplyId,
@@ -4455,7 +4462,7 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/like', require
           type: 'reply_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: null,
           reelId: reelId,
           commentId: commentId,
@@ -4500,7 +4507,7 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requir
       commentId,
       userId,
       username: userData.username || 'مستخدم',
-      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
       content: content.trim(),
       timestamp: admin.database.ServerValue.TIMESTAMP,
       likes: 0,
@@ -4532,7 +4539,7 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requir
           type: 'reply_reply',
           from_user_id: userId,
           from_username: userData.username || 'مستخدم',
-          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
           postId: null,
           reelId,
           commentId,
@@ -4567,7 +4574,7 @@ app.get('/api/posts/:postId/comments/:commentId/likes', requireAuth, async (req,
       const profileSnap = await db.ref(`profiles/${uid}`).once('value');
       const profile = profileSnap.val();
       if (profile) {
-        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url), is_verified: !!profile.is_verified });
       }
     }
     res.json({ ok: true, users });
@@ -4589,7 +4596,7 @@ app.get('/api/posts/:postId/comments/:commentId/replies/:replyId/likes', require
       const profileSnap = await db.ref(`profiles/${uid}`).once('value');
       const profile = profileSnap.val();
       if (profile) {
-        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url), is_verified: !!profile.is_verified });
       }
     }
     res.json({ ok: true, users });
@@ -4611,7 +4618,7 @@ app.get('/api/reels/:reelId/comments/:commentId/likes', requireAuth, async (req,
       const profileSnap = await db.ref(`profiles/${uid}`).once('value');
       const profile = profileSnap.val();
       if (profile) {
-        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url), is_verified: !!profile.is_verified });
       }
     }
     res.json({ ok: true, users });
@@ -4633,7 +4640,7 @@ app.get('/api/reels/:reelId/comments/:commentId/replies/:replyId/likes', require
       const profileSnap = await db.ref(`profiles/${uid}`).once('value');
       const profile = profileSnap.val();
       if (profile) {
-        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_verified: !!profile.is_verified });
+        users.push({ id: uid, username: profile.username || 'مستخدم', profile_picture_url: sanitizeProfilePicUrl(profile.profile_picture_url), is_verified: !!profile.is_verified });
       }
     }
     res.json({ ok: true, users });
@@ -4825,7 +4832,7 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
         is_liked: likeSnap.exists(),
         user: {
           username: userData.username || 'مستخدم',
-          profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150',
+          profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
           is_online: !!userData.is_online,
           is_verified: !!userData.is_verified
         }
@@ -4906,7 +4913,7 @@ app.post('/api/reels/:reelId/like', requireAuth, async (req, res) => {
           type: 'reel_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: null,
           reelId: reelId,
           timestamp: admin.database.ServerValue.TIMESTAMP,
@@ -5067,7 +5074,7 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
       id: commentRef.key,
       userId,
       username: user.username,
-      profile_picture_url: user.profile_picture_url,
+      profile_picture_url: sanitizeProfilePicUrl(user.profile_picture_url),
       content,
       timestamp: admin.database.ServerValue.TIMESTAMP,
       likes: 0,
@@ -5089,7 +5096,7 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
           type: 'reel_comment',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: null,
           reelId: reelId,
           commentId: commentData.id,
@@ -5162,7 +5169,7 @@ app.post('/api/reels/:reelId/comments/:commentId/like', requireAuth, async (req,
           type: 'comment_like',
           from_user_id: userId,
           from_username: fromProfile.username || 'مستخدم',
-          from_profile_picture_url: fromProfile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(fromProfile.profile_picture_url),
           postId: null,
           reelId: reelId,
           commentId: commentId,
@@ -5209,7 +5216,7 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
       commentId,
       userId,
       username: userData.username || 'مستخدم',
-      profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
       content: content.trim(),
       timestamp: timestamp
     };
@@ -5238,7 +5245,7 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
           type: 'comment_reply',
           from_user_id: userId,
           from_username: userData.username || 'مستخدم',
-          from_profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          from_profile_picture_url: sanitizeProfilePicUrl(userData.profile_picture_url),
           postId: null,
           reelId,
           commentId,
@@ -5895,7 +5902,7 @@ app.get('/partials/posts', requireAuth, async (req, res) => {
     postsArr.forEach(post => {
       const user = profiles[post.userId] || {};
       const username = user.username || 'مستخدم';
-      const avatar = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+      const avatar = sanitizeProfilePicUrl(user.profile_picture_url);
       html += `
         <div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${escapeHtml(post.postId)}">
           <div class="flex items-start justify-between mb-3">
@@ -5969,7 +5976,7 @@ app.get('/partials/chat_content', requireAuth, async (req, res) => {
     postsArr.forEach(post => {
       const user = profiles[post.userId] || {};
       const username = user.username || 'مستخدم';
-      const avatar = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+      const avatar = sanitizeProfilePicUrl(user.profile_picture_url);
       html += `<div class="glass-post-card p-4 rounded-xl shadow-lg" data-post-id="${escapeHtml(post.postId)}"><div class="flex items-start justify-between mb-3"><div class="flex items-center"><a href="/profile?userId=${escapeHtml(post.userId)}" class="avatar-with-dot"><img src="${avatar}" alt="${escapeHtml(username)}" class="w-10 h-10 rounded-full object-cover ml-3 border border-gray-600"></a><div><a href="/profile?userId=${escapeHtml(post.userId)}" class="text-white font-semibold hover:text-blue-400">${escapeHtml(username)}</a><p class="text-gray-400 text-xs">${new Date(post.timestamp || Date.now()).toLocaleString('ar-EG')}</p></div></div><div><button class="text-gray-400 post-menu-button" onclick="togglePostMenu('${escapeHtml(post.postId)}', '${escapeHtml(post.userId)}', event, this)"><i class="fas fa-ellipsis-v"></i></button></div></div><p class="text-gray-200 whitespace-pre-wrap">${escapeHtml(post.content || '')}</p></div>`;
     });
     html += `</div>`;
@@ -6035,7 +6042,7 @@ app.get('/api/messages/:chatId', requireAuth, async (req, res) => {
       currentUserId: currentUserId,
       otherUser: {
         username: otherUserData.username || 'مستخدم',
-        avatar: otherUserData.profilePic || DEFAULT_PROFILE_PIC_URL
+        avatar: sanitizeProfilePicUrl(otherUserData.profilePic)
       }
     });
 
@@ -6148,7 +6155,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
                 id: user.id,
                 username: user.username,
                 full_name: isBlockRelation ? '' : (user.full_name || ''),
-                profile_picture_url: isBlockRelation ? DEFAULT_PROFILE_PIC_URL : (user.profile_picture_url || DEFAULT_PROFILE_PIC_URL),
+                profile_picture_url: isBlockRelation ? DEFAULT_PROFILE_PIC_URL : (sanitizeProfilePicUrl(user.profile_picture_url)),
                 is_verified: isBlockRelation ? false : !!user.is_verified,
                 last_message: lastMessage,
                 unread_count: chatSummary.unread_count || 0,
@@ -6231,7 +6238,7 @@ app.get('/api/mention-search', requireAuth, async (req, res) => {
         userId: uid,
         username: p.username || '',
         full_name: p.full_name || '',
-        profile_picture_url: p.profile_picture_url || DEFAULT_PROFILE_PIC_URL
+        profile_picture_url: sanitizeProfilePicUrl(p.profile_picture_url)
       });
     });
 
@@ -6512,7 +6519,7 @@ app.post('/api/marketplace/create', requireAuth, writeLimiter, (req, res, next) 
       images: imageUrls,
       sellerId: userId,
       sellerUsername: profile.username || 'مستخدم',
-      sellerProfilePic: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      sellerProfilePic: sanitizeProfilePicUrl(profile.profile_picture_url),
       sellerVerified: profile.verified || false,
       createdAt: Date.now(),
       status: 'active'
@@ -6697,7 +6704,7 @@ app.post('/api/orders/create', requireAuth, writeLimiter, async (req, res) => {
       sellerUsername: product.sellerUsername || '',
       buyerId: buyerId,
       buyerUsername: buyerProfile.username || '',
-      buyerProfilePic: buyerProfile.profile_picture_url || '',
+      buyerProfilePic: sanitizeProfilePicUrl(buyerProfile.profile_picture_url),
       fullName: escapeHtml(truncateText(fullName, 100)),
       phone: escapeHtml(truncateText(phone, 20)),
       wilaya: escapeHtml(truncateText(wilaya, 100)),
@@ -6790,7 +6797,7 @@ app.get('/api/link-preview', requireAuth, async (req, res) => {
           price: p.price || 0,
           image: (p.images && p.images.length > 0) ? p.images[0] : null,
           sellerUsername: p.sellerUsername || '',
-          sellerProfilePic: p.sellerProfilePic || null,
+          sellerProfilePic: sanitizeProfilePicUrl(p.sellerProfilePic),
           sellerVerified: !!p.sellerVerified
         }
       });
