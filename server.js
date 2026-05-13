@@ -346,6 +346,10 @@ app.get('/favicon.ico', (req, res) => { res.sendFile(path.join(__dirname, 'views
 app.get('/favicon-32.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-32.png')); });
 app.get('/favicon-16.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-16.png')); });
 app.get('/notification.mp3', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notification.mp3')); });
+app.get('/aite-logo.webp', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'aite-logo.webp')); });
+app.get('/default_profile.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'default_profile.png')); });
+app.get('/badge.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'badge.png')); });
+app.get('/trimer.jpg', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'trimer.jpg')); });
 app.get('/wilayas_data.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'wilayas_data.js')); });
 app.get('/common.css', (req, res) => { res.setHeader('Content-Type', 'text/css'); res.sendFile(path.join(__dirname, 'views', 'common.css')); });
 app.get('/components.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'components.js')); });
@@ -460,7 +464,7 @@ app.get('/api/posts/one/:postId', requireAuth, async (req, res) => {
       is_liked: isLiked,
       user: {
         username: userData.username || 'مستخدم',
-        profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150',
+        profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
         is_online: !!userData.is_online,
         is_verified: !!userData.is_verified
       }
@@ -1808,7 +1812,7 @@ app.get('/api/stories', requireAuth, async (req, res) => {
         groupedStories[story.userId] = {
           userId: story.userId,
           username: user.username || 'مستخدم',
-          profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/150',
+          profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
           is_verified: !!user.is_verified,
           is_online: !!user.is_online,
           items: []
@@ -2063,7 +2067,7 @@ app.get('/api/chats', requireAuth, async (req, res) => {
       const contactBlockedMe = blockedMe.has(contactId);
       const isBlockRelation = iBlockedContact || contactBlockedMe;
 
-      let contactProfile = profiles[contactId] || { username: 'مستخدم', profile_picture_url: 'https://via.placeholder.com/40', is_online: false };
+      let contactProfile = profiles[contactId] || { username: 'مستخدم', profile_picture_url: DEFAULT_PROFILE_PIC_URL, is_online: false };
 
       // If blocked, show default avatar and "Aite user"
       if (isBlockRelation) {
@@ -2647,7 +2651,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
         id: user.id,
         username: user.username,
         full_name: user.full_name,
-        profile_picture_url: user.profile_picture_url || 'https://via.placeholder.com/40',
+        profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
         last_message: lastMessage,
         unread_count: chatSummary.unread_count || 0,
         is_online: !!user.is_online,
@@ -4825,7 +4829,7 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
         is_liked: likeSnap.exists(),
         user: {
           username: userData.username || 'مستخدم',
-          profile_picture_url: userData.profile_picture_url || 'https://via.placeholder.com/150',
+          profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
           is_online: !!userData.is_online,
           is_verified: !!userData.is_verified
         }
