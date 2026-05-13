@@ -38,7 +38,7 @@ const r2Client = new S3Client({
   forcePathStyle: true,
 });
 
-const DEFAULT_PROFILE_PIC_URL = '/default_profile.png';
+const DEFAULT_PROFILE_PIC_URL = 'https://pub-7c93bdf7768e4bd3a90334827b920b16.r2.dev/f547d800625af9056d62efe8969aeea0.jpg';
 
 // ---------------- Web Push (VAPID) Setup ----------------
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
