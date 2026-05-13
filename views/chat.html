@@ -5166,7 +5166,7 @@ function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Helper: convert video URL to a thumbnail image URL (supports both Cloudinary and ImageKit)
+// Helper: convert video URL to a thumbnail image URL (supports Cloudinary, ImageKit legacy, and R2)
 function getVideoThumbnail(videoUrl) {
     if (!videoUrl) return '';
     // Cloudinary video thumbnail (backward compat)
@@ -5175,7 +5175,7 @@ function getVideoThumbnail(videoUrl) {
     if (match) {
         return match[1] + 'so_1,w_640,q_auto/' + match[2] + match[3] + '.jpg';
     }
-    // ImageKit video thumbnail
+    // R2 / ImageKit video thumbnail
     if (videoUrl.includes('ik.imagekit.io') || videoUrl.includes('.r2.dev')) {
         return videoUrl.replace(/\.(mp4|mov|avi|webm|mkv|m4v)(\?.*)?$/i, '.jpg') + '?tr=so-1,w-640';
     }
@@ -5330,7 +5330,7 @@ sendBtn.onclick = async () => {
     var mediaFilename = null;
     var usedServerFallback = false;
 
-    // Upload file directly to ImageKit if present (compress images first)
+    // Upload file directly to R2 if present (compress images first)
     if (uploadedFile) {
       var fileToSend = uploadedFile;
       var ft = uploadedFile.type || '';
@@ -5350,12 +5350,12 @@ sendBtn.onclick = async () => {
         }
       }
 
-      // Method 1: Direct ImageKit upload
+      // Method 1: Direct R2 upload
       try {
         var result = await uploadToR2(fileToSend);
         mediaUrl = result.url;
       } catch(ikErr) {
-        console.warn('Direct ImageKit upload failed:', ikErr.message);
+        console.warn('Direct R2 upload failed:', ikErr.message);
         if (sendBtn) sendBtn.innerHTML = '<div class="sending-spinner"></div>';
 
         // Method 2: Server fallback upload
