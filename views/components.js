@@ -14,23 +14,6 @@
         return text;
     }
 
-    function normalizeVisuals() {
-        var nodes = document.querySelectorAll('[style*="linear-gradient"], [style*="box-shadow"], [style*="backdrop-filter"], [style*="filter: blur"]');
-        for (var i = 0; i < nodes.length; i++) {
-            var node = nodes[i];
-            if (node.style.backgroundImage && node.style.backgroundImage.indexOf('linear-gradient') !== -1) {
-                node.style.backgroundImage = 'none';
-            }
-            if (node.style.background && node.style.background.indexOf('linear-gradient') !== -1) {
-                node.style.background = '';
-            }
-            if (node.style.boxShadow) node.style.boxShadow = 'none';
-            if (node.style.backdropFilter) node.style.backdropFilter = 'none';
-            if (node.style.webkitBackdropFilter) node.style.webkitBackdropFilter = 'none';
-            if (node.style.filter && node.style.filter.indexOf('blur') !== -1) node.style.filter = 'none';
-        }
-    }
-
     // ===== SIDEBAR =====
     function injectSidebar() {
         // Don't inject if sidebar already exists
@@ -102,7 +85,6 @@
             var span = document.createElement('span');
             span.textContent = tr(item.label);
             span.setAttribute('data-i18n', item.label);
-            span.className = 'sidebar-label';
             a.appendChild(span);
 
             nav.appendChild(a);
@@ -175,13 +157,6 @@
                 icon.className = item.icon + ' text-xl';
                 circle.appendChild(icon);
                 a.appendChild(circle);
-                var label = document.createElement('span');
-                label.className = 'bottom-nav-label';
-                if (item.id === 'homeBtn') label.textContent = tr('الرئيسية');
-                if (item.id === 'searchBtn') label.textContent = tr('بحث');
-                if (item.id === 'reelsBtn') label.textContent = tr('ريلز');
-                if (item.id === 'messagesBtn') label.textContent = tr('الرسائل');
-                a.appendChild(label);
                 nav.appendChild(a);
             }
         }
@@ -202,15 +177,15 @@
             + '<h3 style="font-size:18px;font-weight:700;margin:0 0 16px;text-align:center;" data-i18n="\u0625\u0646\u0634\u0627\u0621">' + tr('\u0625\u0646\u0634\u0627\u0621') + '</h3>'
             + '<div style="display:flex;flex-direction:column;gap:8px;">'
             + '<a href="/create-post" class="create-modal-item">'
-            + '<div class="create-modal-icon"><i class="fas fa-pen-to-square"></i></div>'
+            + '<div class="create-modal-icon" style="background:rgba(59,130,246,0.15);"><i class="fas fa-pen-to-square" style="color:#60a5fa;"></i></div>'
             + '<span data-i18n="\u0645\u0646\u0634\u0648\u0631">' + tr('\u0645\u0646\u0634\u0648\u0631') + '</span>'
             + '</a>'
             + '<a href="/create-story" class="create-modal-item">'
-            + '<div class="create-modal-icon"><i class="fas fa-circle-plus"></i></div>'
+            + '<div class="create-modal-icon" style="background:rgba(168,85,247,0.15);"><i class="fas fa-circle-plus" style="color:#a855f7;"></i></div>'
             + '<span data-i18n="\u0642\u0635\u0629">' + tr('\u0642\u0635\u0629') + '</span>'
             + '</a>'
             + '<a href="/create-reel" class="create-modal-item">'
-            + '<div class="create-modal-icon"><i class="fas fa-clapperboard"></i></div>'
+            + '<div class="create-modal-icon" style="background:rgba(239,68,68,0.15);"><i class="fas fa-clapperboard" style="color:#f87171;"></i></div>'
             + '<span data-i18n="\u0631\u064A\u0644\u0632">' + tr('\u0631\u064A\u0644\u0632') + '</span>'
             + '</a>'
             + '</div>'
@@ -252,7 +227,6 @@
                         injectBottomNav();
                     }
                 }
-                normalizeVisuals();
     }
 
 
