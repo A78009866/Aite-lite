@@ -353,6 +353,7 @@ app.get('/badge.png', (req, res) => { res.sendFile(path.join(__dirname, 'views',
 app.get('/trimer.jpg', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'trimer.jpg')); });
 app.get('/wilayas_data.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'wilayas_data.js')); });
 app.get('/common.css', (req, res) => { res.setHeader('Content-Type', 'text/css'); res.sendFile(path.join(__dirname, 'views', 'common.css')); });
+app.get('/glass-theme.css', (req, res) => { res.setHeader('Content-Type', 'text/css'); res.sendFile(path.join(__dirname, 'views', 'glass-theme.css')); });
 app.get('/components.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'components.js')); });
 app.get('/i18n.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'i18n.js')); });
 
