@@ -150,6 +150,17 @@ app.use((req, res, next) => {
   next();
 });
 
+const staticOptions = {
+  maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+  etag: true,
+  lastModified: true,
+};
+
+function sendViewAsset(res, fileName, contentType) {
+  if (contentType) res.setHeader('Content-Type', contentType);
+  res.sendFile(path.join(__dirname, 'views', fileName), staticOptions);
+}
+
 // Rate limiting - general
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -338,24 +349,24 @@ function requireAdmin(req, res, next) {
 });
 
 // ---------------- PWA Static Assets ----------------
-app.get('/manifest.json', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'manifest.json')); });
-app.get('/sw.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'sw.js')); });
-app.get('/icon-192.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'icon-192.png')); });
-app.get('/icon-512.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'icon-512.png')); });
-app.get('/apple-touch-icon.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'apple-touch-icon.png')); });
-app.get('/favicon.ico', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon.ico')); });
-app.get('/favicon-32.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-32.png')); });
-app.get('/favicon-16.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'favicon-16.png')); });
-app.get('/notification.mp3', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'notification.mp3')); });
-app.get('/aite-logo.webp', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'aite-logo.webp')); });
-app.get('/default_profile.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'default_profile.png')); });
-app.get('/badge.png', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'badge.png')); });
-app.get('/trimer.jpg', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'trimer.jpg')); });
-app.get('/wilayas_data.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'wilayas_data.js')); });
-app.get('/common.css', (req, res) => { res.setHeader('Content-Type', 'text/css'); res.sendFile(path.join(__dirname, 'views', 'common.css')); });
-app.get('/glass-theme.css', (req, res) => { res.setHeader('Content-Type', 'text/css'); res.sendFile(path.join(__dirname, 'views', 'glass-theme.css')); });
-app.get('/components.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'components.js')); });
-app.get('/i18n.js', (req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(path.join(__dirname, 'views', 'i18n.js')); });
+app.get('/manifest.json', (req, res) => { sendViewAsset(res, 'manifest.json', 'application/manifest+json'); });
+app.get('/sw.js', (req, res) => { sendViewAsset(res, 'sw.js', 'application/javascript'); });
+app.get('/icon-192.png', (req, res) => { sendViewAsset(res, 'icon-192.png'); });
+app.get('/icon-512.png', (req, res) => { sendViewAsset(res, 'icon-512.png'); });
+app.get('/apple-touch-icon.png', (req, res) => { sendViewAsset(res, 'apple-touch-icon.png'); });
+app.get('/favicon.ico', (req, res) => { sendViewAsset(res, 'favicon.ico'); });
+app.get('/favicon-32.png', (req, res) => { sendViewAsset(res, 'favicon-32.png'); });
+app.get('/favicon-16.png', (req, res) => { sendViewAsset(res, 'favicon-16.png'); });
+app.get('/notification.mp3', (req, res) => { sendViewAsset(res, 'notification.mp3'); });
+app.get('/aite-logo.webp', (req, res) => { sendViewAsset(res, 'aite-logo.webp'); });
+app.get('/default_profile.png', (req, res) => { sendViewAsset(res, 'default_profile.png'); });
+app.get('/badge.png', (req, res) => { sendViewAsset(res, 'badge.png'); });
+app.get('/trimer.jpg', (req, res) => { sendViewAsset(res, 'trimer.jpg'); });
+app.get('/wilayas_data.js', (req, res) => { sendViewAsset(res, 'wilayas_data.js', 'application/javascript'); });
+app.get('/common.css', (req, res) => { sendViewAsset(res, 'common.css', 'text/css'); });
+app.get('/glass-theme.css', (req, res) => { sendViewAsset(res, 'glass-theme.css', 'text/css'); });
+app.get('/components.js', (req, res) => { sendViewAsset(res, 'components.js', 'application/javascript'); });
+app.get('/i18n.js', (req, res) => { sendViewAsset(res, 'i18n.js', 'application/javascript'); });
 
 // ---------------- Routes: Pages ----------------
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'views', 'splash.html')); });

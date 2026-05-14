@@ -1,5 +1,5 @@
 // Service Worker - Smart Offline Caching + PWA Support
-const CACHE_NAME = 'aite-cache-v5';
+const CACHE_NAME = 'aite-cache-v6';
 const OFFLINE_PAGE = '/offline';
 
 // Assets to pre-cache (app shell)
@@ -13,6 +13,10 @@ const PRECACHE_URLS = [
   '/apple-touch-icon.png',
   '/notification.mp3',
   '/manifest.json',
+  '/common.css',
+  '/glass-theme.css',
+  '/components.js',
+  '/i18n.js',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
 ];
@@ -53,29 +57,18 @@ self.addEventListener('fetch', (event) => {
   // Skip WebSocket and SSE connections
   if (url.pathname.startsWith('/api/sse') || url.pathname.startsWith('/socket')) return;
 
-  // API requests: Network-first with cache fallback
+  if (url.pathname.match(/\.(mp4|webm|mov|m4v|mp3|wav|ogg|m4a|aac|flac)$/)) return;
+
+  // API requests: Network-first without persistent cache for chat/feed data
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          // Cache successful API responses
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, clone);
-            });
-          }
-          return response;
-        })
+        .then((response) => response)
         .catch(() => {
-          // Return cached API response when offline
-          return caches.match(event.request).then((cached) => {
-            if (cached) return cached;
-            return new Response(
-              JSON.stringify({ ok: false, offline: true, message: 'أنت غير متصل بالإنترنت' }),
-              { headers: { 'Content-Type': 'application/json' } }
-            );
-          });
+          return new Response(
+            JSON.stringify({ ok: false, offline: true, message: 'أنت غير متصل بالإنترنت' }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
         })
     );
     return;
