@@ -181,8 +181,39 @@ const writeLimiter = rateLimit({
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.json({ limit: '50mb' }));
 
+// Allow the live deployment, local dev servers, and the Capacitor Android app.
+// The Capacitor Android shell loads bundled web assets from `https://localhost`
+// (Capacitor 6 default scheme on Android), and from `capacitor://localhost`
+// on iOS. We accept any localhost origin so future ports do not need a code
+// change. All other origins (including arbitrary websites) are rejected.
+const CORS_STATIC_ORIGINS = new Set([
+  'https://aite-lite.vercel.app',
+  'https://chat-trimer.vercel.app',
+  'http://localhost:8100',
+  'https://localhost',
+  'capacitor://localhost',
+  'ionic://localhost'
+]);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // same-origin requests / curl / mobile WebView with no Origin header
+  if (CORS_STATIC_ORIGINS.has(origin)) return true;
+  try {
+    const u = new URL(origin);
+    // Allow any port on localhost (dev servers, Android emulator scheme).
+    if ((u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'capacitor:' || u.protocol === 'ionic:') &&
+        (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '10.0.2.2')) {
+      return true;
+    }
+  } catch (_) { /* fall through */ }
+  return false;
+}
+
 const corsOptions = {
-  origin: ['http://localhost:8100', 'https://chat-trimer.vercel.app'],
+  origin: function (origin, cb) {
+    if (isAllowedOrigin(origin)) return cb(null, true);
+    return cb(new Error('Origin not allowed by CORS: ' + origin), false);
+  },
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -204,6 +235,10 @@ function fileFilter(req, file, cb) {
   }
 }
 
+// Session cookies are issued cross-origin to the Capacitor mobile shell, so
+// they must use SameSite=None + Secure in production. In local development we
+// fall back to Lax so the cookie still works on plain http://localhost.
+const SESSION_COOKIE_SECURE = process.env.NODE_ENV === 'production';
 app.use(session({
   secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
@@ -211,9 +246,9 @@ app.use(session({
   proxy: true,
   rolling: true,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: SESSION_COOKIE_SECURE,
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: SESSION_COOKIE_SECURE ? 'none' : 'lax',
     maxAge: 30 * 24 * 60 * 60 * 1000
   },
   store: new FirebaseStore({
