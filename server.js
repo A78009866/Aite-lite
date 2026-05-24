@@ -1159,6 +1159,12 @@ function normalizeStoredComment(val) {
   user.userId = user.userId || '';
   user.username = user.username || 'مستخدم';
   user.profile_picture_url = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+  // preserve any verification flag that may already have been stored
+  if (val.user && typeof val.user === 'object' && val.user.is_verified !== undefined) {
+    user.is_verified = !!val.user.is_verified;
+  } else if (val.is_verified !== undefined) {
+    user.is_verified = !!val.is_verified;
+  }
 
   // include likes/replies counts if present (backwards compatible)
   const likesCount = typeof val.likes === 'number' ? val.likes : (val.likesCount || 0);
@@ -1173,6 +1179,20 @@ function normalizeStoredComment(val) {
     likes: likesCount || 0,
     repliesCount: repliesCount || 0
   };
+}
+
+// Resolve a Set/Array of userIds to a `{ userId: { is_verified } }` map.
+async function getVerificationMap(userIds) {
+  const out = {};
+  const ids = Array.from(new Set((userIds || []).filter(Boolean)));
+  if (ids.length === 0) return out;
+  const snaps = await Promise.all(
+    ids.map((uid) => db.ref(`profiles/${uid}/is_verified`).once('value'))
+  );
+  snaps.forEach((snap, i) => {
+    out[ids[i]] = !!snap.val();
+  });
+  return out;
 }
 
 // helper to count children in a snapshot
@@ -3872,6 +3892,9 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
     const savedSnap = await db.ref(`comments/${postId}`).child(commentId).once('value');
     const savedVal = savedSnap.val() || commentData;
     const normalized = normalizeStoredComment(savedVal);
+    if (normalized.user) {
+      normalized.user.is_verified = !!userData.is_verified;
+    }
 
     res.json({ ok: true, comment: normalized, newComments: newCommentsCount });
 
@@ -4150,7 +4173,8 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
     // Process @ mentions in reply content
     try { await processMentions(replyData.content, userId, { type: 'reply', postId, commentId }); } catch (e) { console.error('Mention processing error:', e); }
 
-    res.json({ ok: true, reply: savedReply, repliesCount: newRepliesCount });
+    const replyOut = { ...savedReply, is_verified: !!userData.is_verified };
+    res.json({ ok: true, reply: replyOut, repliesCount: newRepliesCount });
 
   } catch (error) {
     console.error('Error creating reply:', error);
@@ -4172,6 +4196,14 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
       const v = childSnap.val();
       if (v) comments.push(v);
     });
+
+    // Pre-fetch verification flags for every user referenced in any comment OR reply
+    const userIdsForVerification = new Set();
+    for (const c of comments) {
+      const cuid = (c && c.user && c.user.userId) || c.userId || '';
+      if (cuid) userIdsForVerification.add(cuid);
+    }
+    // We'll also include reply authors below once we read them.
 
     // For each comment, fetch likes count, whether current user liked, and latest replies (optionally)
     const enriched = await Promise.all(comments.map(async (c) => {
@@ -4260,6 +4292,26 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
       totalCount += (c.recentReplies ? c.recentReplies.length : (c.repliesCount || 0));
     }
 
+    // Collect reply authors for verification lookup
+    for (const c of enriched) {
+      for (const r of (c.recentReplies || [])) {
+        if (r && r.userId) userIdsForVerification.add(r.userId);
+      }
+    }
+
+    // Resolve verification flags once and stamp them onto every comment+reply payload
+    const verifiedMap = await getVerificationMap(Array.from(userIdsForVerification));
+    for (const c of enriched) {
+      const cuid = (c.user && c.user.userId) || '';
+      if (c.user) c.user.is_verified = !!verifiedMap[cuid];
+      if (Array.isArray(c.recentReplies)) {
+        c.recentReplies = c.recentReplies.map((r) => ({
+          ...r,
+          is_verified: !!verifiedMap[r.userId || ''],
+        }));
+      }
+    }
+
     res.json({ ok: true, comments: enriched, totalCount: totalCount });
   } catch (error) {
     console.error('Error fetching comments:', error);
@@ -4297,6 +4349,14 @@ app.get('/api/posts/:postId/comments/:commentId/replies', requireAuth, async (re
         return { ...r, likes: 0, is_liked: false };
       }
     }));
+    // Stamp is_verified on every reply
+    try {
+      const replyAuthors = enrichedReplies.filter(r => r && r.userId).map(r => r.userId);
+      const verifiedMap = await getVerificationMap(replyAuthors);
+      enrichedReplies.forEach((r) => {
+        if (r) r.is_verified = !!verifiedMap[r.userId || ''];
+      });
+    } catch (e) { /* ignore */ }
     res.json({ ok: true, replies: enrichedReplies.filter(r => r != null) });
   } catch (error) {
     console.error('Error fetching replies:', error);
@@ -4442,7 +4502,8 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
       console.error('Failed to create reply_reply notification:', nerr);
     }
 
-    res.json({ ok: true, reply: savedNestedReply, repliesCount: newRepliesCount });
+    const nestedReplyOut = { ...savedNestedReply, is_verified: !!userData.is_verified };
+    res.json({ ok: true, reply: nestedReplyOut, repliesCount: newRepliesCount });
   } catch (error) {
     console.error('Error creating nested reply:', error);
     res.status(500).json({ ok: false, error: 'Failed to create reply' });
