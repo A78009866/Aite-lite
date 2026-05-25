@@ -322,6 +322,31 @@ function isValidUploadUrl(url) {
   return isValidCloudinaryUrl(url) || isValidImageKitUrl(url) || isValidR2Url(url);
 }
 
+// Apple iTunes music previews (used by the in-app music library)
+// Hosts: audio-ssl.itunes.apple.com, *.mzstatic.com (a1.phobos.apple.com is legacy)
+function isValidItunesPreviewUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const h = parsed.hostname.toLowerCase();
+    return (
+      h === 'audio-ssl.itunes.apple.com' ||
+      h.endsWith('.mzstatic.com') ||
+      h === 'a1.phobos.apple.com' ||
+      h.endsWith('.apple.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Audio URL accepted on story_create: existing uploads OR a direct iTunes preview
+function isValidAudioUrl(url) {
+  if (!url) return false;
+  return isValidUploadUrl(url) || isValidItunesPreviewUrl(url);
+}
+
 function isValidMediaUrl(url) {
   if (!url) return false;
   // Accept Cloudinary, ImageKit (existing uploads) and R2 (new uploads)
@@ -1136,6 +1161,102 @@ async function areFriends(userA, userB) {
   return snap.exists();
 }
 
+// Resolve the full friend-relationship state between currentUserId and otherUserId.
+// Returns { is_friend, request_sent, request_received }.
+async function friendState(currentUserId, otherUserId) {
+  if (!currentUserId || !otherUserId || currentUserId === otherUserId) {
+    return { is_friend: false, request_sent: false, request_received: false };
+  }
+  try {
+    const [friendSnap, outgoingSnap, incomingSnap] = await Promise.all([
+      db.ref(`friends/${currentUserId}/${otherUserId}`).once('value'),
+      db.ref(`friend_requests/${otherUserId}/${currentUserId}`).once('value'),
+      db.ref(`friend_requests/${currentUserId}/${otherUserId}`).once('value')
+    ]);
+    return {
+      is_friend: friendSnap.exists(),
+      request_sent: outgoingSnap.exists(),
+      request_received: incomingSnap.exists()
+    };
+  } catch (e) {
+    return { is_friend: false, request_sent: false, request_received: false };
+  }
+}
+
+// ---------------- Music Library (iTunes Search proxy) ----------------
+// Lightweight curated music library backed by the public iTunes Search API.
+// We never proxy the audio bytes — the client streams the 30s preview URL
+// directly from Apple's CDN; we only relay the JSON search payload here so
+// every platform (web / Flutter / future) hits the same shape.
+const MUSIC_LIB_CACHE = new Map(); // key -> { at, value }
+const MUSIC_LIB_TTL_MS = 15 * 60 * 1000;
+
+function _normalizeTrack(t) {
+  if (!t || !t.previewUrl) return null;
+  return {
+    id: String(t.trackId || t.collectionId || t.previewUrl),
+    title: String(t.trackName || '').slice(0, 200),
+    artist: String(t.artistName || '').slice(0, 200),
+    album: String(t.collectionName || '').slice(0, 200),
+    artwork: String(t.artworkUrl100 || t.artworkUrl60 || t.artworkUrl30 || ''),
+    previewUrl: String(t.previewUrl || ''),
+    durationMs: Number(t.trackTimeMillis || 0),
+    genre: String(t.primaryGenreName || ''),
+  };
+}
+
+async function _itunesSearch(term, opts) {
+  opts = opts || {};
+  const limit = Math.min(Math.max(parseInt(opts.limit || 20, 10) || 20, 1), 50);
+  const country = (opts.country || 'us').toString().toLowerCase().slice(0, 4);
+  const cacheKey = `s:${country}:${limit}:${term}`;
+  const cached = MUSIC_LIB_CACHE.get(cacheKey);
+  if (cached && (Date.now() - cached.at) < MUSIC_LIB_TTL_MS) return cached.value;
+
+  const url = `https://itunes.apple.com/search?media=music&entity=musicTrack&limit=${limit}` +
+    `&country=${encodeURIComponent(country)}&term=${encodeURIComponent(term)}`;
+
+  // Use built-in fetch (Node 18+). If unavailable, fall back to https module.
+  let data;
+  try {
+    if (typeof fetch === 'function') {
+      const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!resp.ok) throw new Error('itunes_http_' + resp.status);
+      data = await resp.json();
+    } else {
+      data = await new Promise((resolve, reject) => {
+        const https = require('https');
+        https.get(url, (resp) => {
+          let raw = '';
+          resp.on('data', (c) => { raw += c; });
+          resp.on('end', () => {
+            try { resolve(JSON.parse(raw)); } catch (e) { reject(e); }
+          });
+        }).on('error', reject);
+      });
+    }
+  } catch (e) {
+    return [];
+  }
+  const tracks = ((data && data.results) || [])
+    .map(_normalizeTrack)
+    .filter(Boolean);
+  MUSIC_LIB_CACHE.set(cacheKey, { at: Date.now(), value: tracks });
+  return tracks;
+}
+
+// Curated categories — each maps to one or two iTunes search seeds.
+const MUSIC_LIB_CATEGORIES = [
+  { id: 'trending',   label: 'رائج',        seeds: ['top hits 2024'],            country: 'us', limit: 25 },
+  { id: 'arabic',     label: 'عربي',        seeds: ['arabic top'],               country: 'sa', limit: 25 },
+  { id: 'pop',        label: 'بوب',          seeds: ['pop hits'],                 country: 'us', limit: 20 },
+  { id: 'hiphop',     label: 'هيب هوب',     seeds: ['hip hop'],                  country: 'us', limit: 20 },
+  { id: 'chill',      label: 'هادئ',        seeds: ['chill lofi'],               country: 'us', limit: 20 },
+  { id: 'workout',    label: 'تمارين',      seeds: ['workout'],                  country: 'us', limit: 20 },
+  { id: 'electronic', label: 'إلكترونية',   seeds: ['electronic dance'],         country: 'us', limit: 20 },
+  { id: 'love',       label: 'رومانسي',     seeds: ['love songs'],               country: 'us', limit: 20 },
+];
+
 
 
 // ---------------- Helper: Normalize stored comments ----------------
@@ -1159,12 +1280,6 @@ function normalizeStoredComment(val) {
   user.userId = user.userId || '';
   user.username = user.username || 'مستخدم';
   user.profile_picture_url = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
-  // preserve any verification flag that may already have been stored
-  if (val.user && typeof val.user === 'object' && val.user.is_verified !== undefined) {
-    user.is_verified = !!val.user.is_verified;
-  } else if (val.is_verified !== undefined) {
-    user.is_verified = !!val.is_verified;
-  }
 
   // include likes/replies counts if present (backwards compatible)
   const likesCount = typeof val.likes === 'number' ? val.likes : (val.likesCount || 0);
@@ -1179,20 +1294,6 @@ function normalizeStoredComment(val) {
     likes: likesCount || 0,
     repliesCount: repliesCount || 0
   };
-}
-
-// Resolve a Set/Array of userIds to a `{ userId: { is_verified } }` map.
-async function getVerificationMap(userIds) {
-  const out = {};
-  const ids = Array.from(new Set((userIds || []).filter(Boolean)));
-  if (ids.length === 0) return out;
-  const snaps = await Promise.all(
-    ids.map((uid) => db.ref(`profiles/${uid}/is_verified`).once('value'))
-  );
-  snaps.forEach((snap, i) => {
-    out[ids[i]] = !!snap.val();
-  });
-  return out;
 }
 
 // helper to count children in a snapshot
@@ -1773,9 +1874,15 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
   if (mediaUrl && !isValidUploadUrl(mediaUrl)) {
     return res.status(400).json({ ok: false, error: 'رابط الوسائط غير صالح.' });
   }
-  if (audioUrl && !isValidUploadUrl(audioUrl)) {
+  // Audio URL: accept R2/Cloudinary uploads OR iTunes preview URLs (music library)
+  if (audioUrl && !isValidAudioUrl(audioUrl)) {
     return res.status(400).json({ ok: false, error: 'رابط الصوت غير صالح.' });
   }
+  // Optional metadata for music-library tracks
+  const audioTitle = truncateText((req.body.audioTitle || req.body.audio_title || '').trim(), 200);
+  const audioArtist = truncateText((req.body.audioArtist || req.body.audio_artist || '').trim(), 200);
+  const audioArtwork = (req.body.audioArtwork || req.body.audio_artwork || '').toString().slice(0, 500);
+  const audioSource = truncateText((req.body.audioSource || req.body.audio_source || '').trim().toLowerCase(), 40);
 
   // If files were uploaded via multer (backward compatibility) - upload to ImageKit
   if (!mediaUrl && req.files && req.files.story_media) {
@@ -1809,6 +1916,10 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
       mediaUrl: mediaUrl,
       mediaType: mediaType || 'image',
       audioUrl: audioUrl,
+      audioTitle: audioTitle || null,
+      audioArtist: audioArtist || null,
+      audioArtwork: audioArtwork || null,
+      audioSource: audioSource || null,
       text: text,
       story_color: storyColor,
       text_x: textX,
@@ -1831,6 +1942,52 @@ app.post('/api/stories/create', requireAuth, writeLimiter, (req, res, next) => {
   } catch (error) {
     console.error('Error creating story:', error);
     res.status(500).json({ ok: false, error: 'فشل في رفع القصة.' });
+  }
+});
+
+// ---------------- Music Library API ----------------
+// GET /api/music/library  -> curated categorized list backed by iTunes search.
+//   Optional: ?category=arabic   -> only that category
+// GET /api/music/search?q=...    -> ad-hoc text search.
+app.get('/api/music/library', requireAuth, async (req, res) => {
+  try {
+    const wantedCat = (req.query.category || '').toString().trim().toLowerCase();
+    const cats = wantedCat
+      ? MUSIC_LIB_CATEGORIES.filter(c => c.id === wantedCat)
+      : MUSIC_LIB_CATEGORIES;
+    const results = await Promise.all(cats.map(async (c) => {
+      const seeds = c.seeds || [c.label];
+      const lists = await Promise.all(seeds.map(s => _itunesSearch(s, { country: c.country, limit: c.limit })));
+      // Merge while keeping order/uniqueness
+      const seen = new Set();
+      const merged = [];
+      for (const list of lists) {
+        for (const t of list) {
+          if (!t || !t.previewUrl || seen.has(t.previewUrl)) continue;
+          seen.add(t.previewUrl);
+          merged.push(t);
+        }
+      }
+      return { id: c.id, label: c.label, tracks: merged };
+    }));
+    res.json({ ok: true, categories: results });
+  } catch (error) {
+    console.error('music/library error:', error);
+    res.status(500).json({ ok: false, error: 'فشل في جلب مكتبة الموسيقى' });
+  }
+});
+
+app.get('/api/music/search', requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim().slice(0, 100);
+  const country = (req.query.country || 'us').toString().slice(0, 4);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+  if (!q) return res.json({ ok: true, tracks: [] });
+  try {
+    const tracks = await _itunesSearch(q, { country, limit });
+    res.json({ ok: true, tracks });
+  } catch (error) {
+    console.error('music/search error:', error);
+    res.status(500).json({ ok: false, error: 'فشل في البحث' });
   }
 });
 
@@ -3520,38 +3677,39 @@ app.get('/api/posts', requireAuth, async (req, res) => {
       likedStatuses[posts[index].postId] = snap.val() !== null;
     });
 
-    // Smart Feed Algorithm: score each post
+    // Smart Feed Algorithm — priority order requested by spec:
+    //   1) Recency (الأحدث)   — dominant
+    //   2) Friend authorship  — strong boost
+    //   3) Engagement (likes + comments) — modest boost
+    // Earlier behaviour over-weighted engagement which hid fresh posts; the
+    // updated weights below ensure the freshest content always rises first
+    // while friends and well-liked posts still bubble up.
     const now = Date.now();
     const ONE_HOUR = 3600000;
 
     const scoredPosts = posts.map(post => {
       let score = 0;
-      const ageHours = Math.max(1, (now - (post.timestamp || now)) / ONE_HOUR);
+      const ageHours = Math.max(0.5, (now - (post.timestamp || now)) / ONE_HOUR);
 
-      // Engagement score: likes + comments*2
-      const engagement = (post.likes || 0) + (post.commentsCount || 0) * 2;
-      score += engagement * 10;
+      // Recency: very steep curve; <1h is huge, decays smoothly afterwards
+      score += 1200 / Math.pow(ageHours, 0.5);
 
-      // Recency bonus: newer posts get higher score (decay over time)
-      score += Math.max(0, 500 / Math.pow(ageHours, 0.6));
-
-      // Friend bonus: posts from friends get significant boost
-      if (myFriendIds.has(post.userId)) {
-        score += 300;
-      }
+      // Friend boost — posts from friends always above strangers at equal age
+      if (myFriendIds.has(post.userId)) score += 350;
 
       // Own posts get a small boost
-      if (post.userId === currentUserId) {
-        score += 200;
-      }
+      if (post.userId === currentUserId) score += 220;
+
+      // Engagement: likes + comments*2 (capped contribution so an old viral
+      // post doesn't bury today's content)
+      const engagement = (post.likes || 0) + (post.commentsCount || 0) * 2;
+      score += Math.min(engagement * 2, 600);
 
       // Media bonus: posts with media are more engaging
-      if (post.media) {
-        score += 50;
-      }
+      if (post.media || (Array.isArray(post.mediaUrls) && post.mediaUrls.length)) score += 40;
 
-      // Small random factor to add variety (0-30)
-      score += Math.random() * 30;
+      // Small random factor to add variety (0-15)
+      score += Math.random() * 15;
 
       return { ...post, _score: score };
     });
@@ -3892,9 +4050,6 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
     const savedSnap = await db.ref(`comments/${postId}`).child(commentId).once('value');
     const savedVal = savedSnap.val() || commentData;
     const normalized = normalizeStoredComment(savedVal);
-    if (normalized.user) {
-      normalized.user.is_verified = !!userData.is_verified;
-    }
 
     res.json({ ok: true, comment: normalized, newComments: newCommentsCount });
 
@@ -4173,8 +4328,7 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
     // Process @ mentions in reply content
     try { await processMentions(replyData.content, userId, { type: 'reply', postId, commentId }); } catch (e) { console.error('Mention processing error:', e); }
 
-    const replyOut = { ...savedReply, is_verified: !!userData.is_verified };
-    res.json({ ok: true, reply: replyOut, repliesCount: newRepliesCount });
+    res.json({ ok: true, reply: savedReply, repliesCount: newRepliesCount });
 
   } catch (error) {
     console.error('Error creating reply:', error);
@@ -4196,14 +4350,6 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
       const v = childSnap.val();
       if (v) comments.push(v);
     });
-
-    // Pre-fetch verification flags for every user referenced in any comment OR reply
-    const userIdsForVerification = new Set();
-    for (const c of comments) {
-      const cuid = (c && c.user && c.user.userId) || c.userId || '';
-      if (cuid) userIdsForVerification.add(cuid);
-    }
-    // We'll also include reply authors below once we read them.
 
     // For each comment, fetch likes count, whether current user liked, and latest replies (optionally)
     const enriched = await Promise.all(comments.map(async (c) => {
@@ -4292,26 +4438,6 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
       totalCount += (c.recentReplies ? c.recentReplies.length : (c.repliesCount || 0));
     }
 
-    // Collect reply authors for verification lookup
-    for (const c of enriched) {
-      for (const r of (c.recentReplies || [])) {
-        if (r && r.userId) userIdsForVerification.add(r.userId);
-      }
-    }
-
-    // Resolve verification flags once and stamp them onto every comment+reply payload
-    const verifiedMap = await getVerificationMap(Array.from(userIdsForVerification));
-    for (const c of enriched) {
-      const cuid = (c.user && c.user.userId) || '';
-      if (c.user) c.user.is_verified = !!verifiedMap[cuid];
-      if (Array.isArray(c.recentReplies)) {
-        c.recentReplies = c.recentReplies.map((r) => ({
-          ...r,
-          is_verified: !!verifiedMap[r.userId || ''],
-        }));
-      }
-    }
-
     res.json({ ok: true, comments: enriched, totalCount: totalCount });
   } catch (error) {
     console.error('Error fetching comments:', error);
@@ -4349,14 +4475,6 @@ app.get('/api/posts/:postId/comments/:commentId/replies', requireAuth, async (re
         return { ...r, likes: 0, is_liked: false };
       }
     }));
-    // Stamp is_verified on every reply
-    try {
-      const replyAuthors = enrichedReplies.filter(r => r && r.userId).map(r => r.userId);
-      const verifiedMap = await getVerificationMap(replyAuthors);
-      enrichedReplies.forEach((r) => {
-        if (r) r.is_verified = !!verifiedMap[r.userId || ''];
-      });
-    } catch (e) { /* ignore */ }
     res.json({ ok: true, replies: enrichedReplies.filter(r => r != null) });
   } catch (error) {
     console.error('Error fetching replies:', error);
@@ -4502,8 +4620,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
       console.error('Failed to create reply_reply notification:', nerr);
     }
 
-    const nestedReplyOut = { ...savedNestedReply, is_verified: !!userData.is_verified };
-    res.json({ ok: true, reply: nestedReplyOut, repliesCount: newRepliesCount });
+    res.json({ ok: true, reply: savedNestedReply, repliesCount: newRepliesCount });
   } catch (error) {
     console.error('Error creating nested reply:', error);
     res.status(500).json({ ok: false, error: 'Failed to create reply' });
@@ -4887,29 +5004,44 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
   try {
     const reelsSnap = await db.ref('reels').once('value');
     let reels = [];
-    
     reelsSnap.forEach(snap => {
       const data = snap.val();
       if (data) reels.push(data);
     });
 
-    reels.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-    // Filter out reels from blocked users
-    const blockedByMe = await getBlockedUserIds(currentUserId);
-    const blockedMe = await getBlockedByUserIds(currentUserId);
+    // Filter out reels from blocked users (both directions)
+    const [blockedByMe, blockedMe, friendsSnap, outgoingReqSnap, incomingReqSnap] = await Promise.all([
+      getBlockedUserIds(currentUserId),
+      getBlockedByUserIds(currentUserId),
+      db.ref(`friends/${currentUserId}`).once('value'),
+      db.ref(`friend_requests`).once('value'),
+      db.ref(`friend_requests/${currentUserId}`).once('value'),
+    ]);
     const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
     reels = reels.filter(r => !allBlockedIds.has(r.userId));
 
-    const finalReels = await Promise.all(reels.map(async (reel) => {
-      const userSnap = await db.ref(`profiles/${reel.userId}`).once('value');
+    // Build friend-state lookup tables in one pass
+    const myFriendIds = new Set(Object.keys(friendsSnap.val() || {}));
+    // outgoing[ otherUserId ] === true iff *I* sent a request to otherUserId
+    // (stored under friend_requests/<to>/<from>)
+    const outgoingMap = new Set();
+    outgoingReqSnap.forEach(toSnap => {
+      const toId = toSnap.key;
+      if (toSnap.child(currentUserId).exists()) outgoingMap.add(toId);
+    });
+    const incomingMap = new Set(Object.keys(incomingReqSnap.val() || {}));
+
+    // Enrich each reel with author profile, like state, comment count, friend state
+    const enriched = await Promise.all(reels.map(async (reel) => {
+      const [userSnap, likeSnap, commentsSnap] = await Promise.all([
+        db.ref(`profiles/${reel.userId}`).once('value'),
+        db.ref(`reels_likes/${reel.reelId}/${currentUserId}`).once('value'),
+        db.ref(`reels_comments/${reel.reelId}`).once('value'),
+      ]);
       const userData = userSnap.val() || {};
-      const likeSnap = await db.ref(`reels_likes/${reel.reelId}/${currentUserId}`).once('value');
-      
-      // Calculate total comments + replies count
+
       let totalCommentsCount = reel.commentsCount || 0;
       try {
-        const commentsSnap = await db.ref(`reels_comments/${reel.reelId}`).once('value');
         let commentsNum = 0;
         let repliesNum = 0;
         commentsSnap.forEach(c => {
@@ -4920,20 +5052,55 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
         if (commentsNum > 0) totalCommentsCount = commentsNum + repliesNum;
       } catch(e) {}
 
+      const isOwner = reel.userId === currentUserId;
+      const isFriend = myFriendIds.has(reel.userId);
+      const requestSent = outgoingMap.has(reel.userId);
+      const requestReceived = incomingMap.has(reel.userId);
+
       return {
         ...reel,
         commentsCount: totalCommentsCount,
         is_liked: likeSnap.exists(),
+        is_friend: isFriend,
+        request_sent: requestSent,
+        request_received: requestReceived,
+        is_owner: isOwner,
         user: {
+          userId: reel.userId,
           username: userData.username || 'مستخدم',
           profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
           is_online: !!userData.is_online,
-          is_verified: !!userData.is_verified
+          is_verified: !!userData.is_verified,
+          is_friend: isFriend,
+          request_sent: requestSent,
+          request_received: requestReceived,
         }
       };
     }));
 
-    res.json({ ok: true, reels: finalReels, currentUserId: currentUserId });
+    // Smart sort: heavy recency bias, friend boost, then likes
+    const now = Date.now();
+    const ONE_HOUR = 3600000;
+    const scored = enriched.map(r => {
+      const ageHours = Math.max(0.5, (now - (r.timestamp || now)) / ONE_HOUR);
+      let score = 0;
+      // Recency dominates: very steep boost for fresh content (<6h)
+      score += 1000 / Math.pow(ageHours, 0.5);
+      // Friend boost
+      if (r.is_friend) score += 250;
+      // Own reels small boost so the user sees their own first
+      if (r.is_owner) score += 150;
+      // Engagement (likes + comments*2)
+      const engagement = (r.likes || 0) + (r.commentsCount || 0) * 2;
+      score += engagement * 1.5;
+      // Tiny randomness for variety
+      score += Math.random() * 5;
+      return { ...r, _score: score };
+    });
+    scored.sort((a, b) => b._score - a._score);
+    const finalReels = scored.map(({ _score, ...r }) => r);
+
+    res.json({ ok: true, reels: finalReels, currentUserId });
   } catch (error) {
     console.error("خطأ في جلب الريلز:", error);
     res.status(500).json({ ok: false, error: 'Error fetching reels' });
