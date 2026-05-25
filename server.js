@@ -654,15 +654,35 @@ async function sendPushNotification(targetUserId, title, body, extraData = {}) {
 
       for (const token of tokens) {
         try {
+          // Forward every routing-relevant field the mobile app needs so a
+          // tap on a system-tray notification can deep-link to the exact
+          // post / reel / chat / profile. FCM data values must be strings.
+          const dataPayload = {
+            title: String(title || 'إشعار جديد'),
+            body: String(body || ''),
+            url: String(extraData.url || ''),
+            type: String(extraData.type || 'general'),
+            click_action: 'OPEN_ACTIVITY',
+          };
+          if (extraData.postId) dataPayload.postId = String(extraData.postId);
+          if (extraData.reelId) dataPayload.reelId = String(extraData.reelId);
+          if (extraData.from_user_id) {
+            dataPayload.from_user_id = String(extraData.from_user_id);
+          }
+          if (extraData.from_username) {
+            dataPayload.from_username = String(extraData.from_username);
+          }
+          if (extraData.from_profile_picture_url) {
+            dataPayload.from_profile_picture_url =
+              String(extraData.from_profile_picture_url);
+          }
+          if (typeof extraData.from_is_verified !== 'undefined') {
+            dataPayload.from_is_verified = String(!!extraData.from_is_verified);
+          }
+
           await admin.messaging().send({
             token: token,
-            data: {
-              title: String(title || 'إشعار جديد'),
-              body: String(body || ''),
-              url: String(extraData.url || ''),
-              type: String(extraData.type || 'general'),
-              click_action: 'OPEN_ACTIVITY'
-            },
+            data: dataPayload,
             android: {
               priority: 'high',
               ttl: 86400000,
@@ -1271,15 +1291,18 @@ function normalizeStoredComment(val) {
     user.userId = val.user.userId || val.user.id || val.user.uid || val.userId || '';
     user.username = val.user.username || val.user.displayName || val.user.name || val.username || 'مستخدم';
     user.profile_picture_url = val.user.profile_picture_url || val.user.photoURL || val.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+    user.is_verified = !!(val.user.is_verified || val.is_verified);
   } else {
     user.userId = val.userId || val.userID || val.from_user_id || '';
     user.username = val.username || val.from_username || 'مستخدم';
     user.profile_picture_url = val.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+    user.is_verified = !!val.is_verified;
   }
 
   user.userId = user.userId || '';
   user.username = user.username || 'مستخدم';
   user.profile_picture_url = user.profile_picture_url || DEFAULT_PROFILE_PIC_URL;
+  user.is_verified = !!user.is_verified;
 
   // include likes/replies counts if present (backwards compatible)
   const likesCount = typeof val.likes === 'number' ? val.likes : (val.likesCount || 0);
@@ -1301,6 +1324,52 @@ function countSnapshotChildren(snap) {
   let c = 0;
   snap.forEach(() => c++);
   return c;
+}
+
+// ---------------- Helper: Enrich comments+replies with current is_verified ----------------
+// Walks a list of comments (each potentially carrying a `recentReplies` array)
+// and back-fills the `user.is_verified` flag (for comments) and `is_verified`
+// (for replies) from the authoritative `profiles/{userId}/is_verified` field.
+// This guarantees the blue badge appears in the app even for comments stored
+// before is_verified was persisted at write time, and stays in sync with
+// account verification status changes.
+async function enrichCommentsWithVerification(comments) {
+  if (!Array.isArray(comments) || comments.length === 0) return;
+  const userIds = new Set();
+  for (const c of comments) {
+    const uid = (c && c.user && (c.user.userId || c.user.id)) || (c && c.userId);
+    if (uid) userIds.add(String(uid));
+    if (Array.isArray(c && c.recentReplies)) {
+      for (const r of c.recentReplies) {
+        const ruid = r && (r.userId || r.user_id || r.uid);
+        if (ruid) userIds.add(String(ruid));
+      }
+    }
+  }
+  if (userIds.size === 0) return;
+  const verifiedMap = {};
+  await Promise.all(Array.from(userIds).map(async (uid) => {
+    try {
+      const snap = await db.ref(`profiles/${uid}/is_verified`).once('value');
+      verifiedMap[uid] = !!snap.val();
+    } catch (_) {
+      verifiedMap[uid] = false;
+    }
+  }));
+  for (const c of comments) {
+    if (c && c.user) {
+      const uid = c.user.userId || c.user.id || c.userId;
+      c.user.is_verified = !!verifiedMap[String(uid)] || !!c.user.is_verified;
+    }
+    if (Array.isArray(c && c.recentReplies)) {
+      for (const r of c.recentReplies) {
+        const ruid = r && (r.userId || r.user_id || r.uid);
+        if (ruid) {
+          r.is_verified = !!verifiedMap[String(ruid)] || !!r.is_verified;
+        }
+      }
+    }
+  }
 }
 
 // ---------------- @ Mention System ----------------
@@ -1366,7 +1435,7 @@ async function processMentions(text, fromUserId, context) {
         if (context.postId) url = `https://aite-lite.vercel.app/post?id=${context.postId}`;
         else if (context.reelId) url = 'https://aite-lite.vercel.app/reels';
 
-        sendPushNotification(mentionedUserId, `${fromProfile.username || 'شخص ما'}`, `أشار إليك: ${truncateText(text, 50)}`, { type: 'mention', url });
+        sendPushNotification(mentionedUserId, `${fromProfile.username || 'شخص ما'}`, `أشار إليك: ${truncateText(text, 50)}`, { type: 'mention', url, postId: context.postId || '', reelId: context.reelId || '', from_user_id: fromUserId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       } catch (innerErr) {
         console.error('Error processing mention for username:', username, innerErr);
       }
@@ -2117,7 +2186,7 @@ app.post('/api/stories/:storyId/like', requireAuth, async (req, res) => {
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للجهاز
-        sendPushNotification(story.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بقصتك ❤️', { type: 'story_like', url: `https://aite-lite.vercel.app/stories` });
+        sendPushNotification(story.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بقصتك ❤️', { type: 'story_like', url: `https://aite-lite.vercel.app/stories`, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       } catch (nerr) {
         console.error('Failed to create story_like notification:', nerr);
       }
@@ -2532,7 +2601,14 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       const senderProfile = senderProfileSnap.val() || {};
       const senderName = senderProfile.username || 'شخص ما';
       const pushBody = previewText || 'رسالة جديدة';
-      sendPushNotification(contact_id, senderName, pushBody, { type: 'new_message', url: `https://aite-lite.vercel.app/chat?id=${senderId}` });
+      sendPushNotification(contact_id, senderName, pushBody, {
+        type: 'message',
+        url: `https://aite-lite.vercel.app/chat?id=${senderId}`,
+        from_user_id: senderId,
+        from_username: senderName,
+        from_profile_picture_url: senderProfile.profile_picture_url || '',
+        from_is_verified: !!senderProfile.is_verified,
+      });
     } catch (pushErr) {
       console.error('Failed to send message push notification:', pushErr);
     }
@@ -2646,7 +2722,14 @@ app.post('/api/messages/:otherId/reactions/:messageId', requireAuth, async (req,
           messageSenderId,
           `${fromProfile.username || 'شخص ما'}`,
           `${reaction} تفاعل على رسالتك`,
-          { type: 'new_message', url: `https://aite-lite.vercel.app/chat?id=${userId}` }
+          {
+            type: 'message_reaction',
+            url: `https://aite-lite.vercel.app/chat?id=${userId}`,
+            from_user_id: userId,
+            from_username: fromProfile.username || '',
+            from_profile_picture_url: fromProfile.profile_picture_url || '',
+            from_is_verified: !!fromProfile.is_verified,
+          }
         );
       } catch (nerr) {
         console.error('Failed to create message_reaction notification:', nerr);
@@ -2967,7 +3050,7 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
       };
       await notifRef.set(notifData);
       // إرسال إشعار Push لطلب الصداقة
-      sendPushNotification(to_id, `${fromProfile.username || 'شخص ما'}`, 'أرسل لك طلب صداقة 👋', { type: 'friend_request', url: `https://aite-lite.vercel.app/all_users` });
+      sendPushNotification(to_id, `${fromProfile.username || 'شخص ما'}`, 'أرسل لك طلب صداقة 👋', { type: 'friend_request', url: `https://aite-lite.vercel.app/profile/${from_id}`, from_user_id: from_id, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
     } catch (nerr) {
       console.error('Failed to create friend_request notification:', nerr);
     }
@@ -3012,7 +3095,7 @@ app.post('/api/friends/accept', requireAuth, async (req, res) => {
       };
       await notifRef.set(notifData);
       // إرسال إشعار Push لقبول الصداقة
-      sendPushNotification(from_id, `${fromProfile.username || 'شخص ما'}`, 'قبل طلب صداقتك ✅', { type: 'friend_accept', url: `https://aite-lite.vercel.app/profile/${toId}` });
+      sendPushNotification(from_id, `${fromProfile.username || 'شخص ما'}`, 'قبل طلب صداقتك ✅', { type: 'friend_accept', url: `https://aite-lite.vercel.app/profile/${toId}`, from_user_id: toId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
     } catch (nerr) {
       console.error('Failed to create friend_accept notification:', nerr);
     }
@@ -3899,7 +3982,7 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للإعجاب بالمنشور
-        sendPushNotification(postData.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بمنشورك ❤️', { type: 'post_like', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+        sendPushNotification(postData.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بمنشورك ❤️', { type: 'post_like', url: `https://aite-lite.vercel.app/post?id=${postId}`, postId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create post_like notification:', nerr);
@@ -4001,6 +4084,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
         userId: userId,
         username: userData.username || 'مستخدم',
         profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_verified: !!userData.is_verified,
       },
       likes: 0,
       repliesCount: 0
@@ -4037,7 +4121,7 @@ app.post('/api/posts/:postId/comment', requireAuth, async (req, res) => {
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للتعليق على المنشور
-        sendPushNotification(postData.userId, `${fromProfile.username || 'شخص ما'}`, `علق على منشورك: ${commentData.content.substring(0, 50)}`, { type: 'post_comment', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+        sendPushNotification(postData.userId, `${fromProfile.username || 'شخص ما'}`, `علق على منشورك: ${commentData.content.substring(0, 50)}`, { type: 'post_comment', url: `https://aite-lite.vercel.app/post?id=${postId}`, postId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create post_comment notification:', nerr);
@@ -4239,7 +4323,7 @@ app.post('/api/posts/:postId/comments/:commentId/like', requireAuth, async (req,
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للإعجاب بالتعليق
-        sendPushNotification(commentOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بتعليقك ❤️', { type: 'comment_like', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+        sendPushNotification(commentOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بتعليقك ❤️', { type: 'comment_like', url: `https://aite-lite.vercel.app/post?id=${postId}`, postId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create comment_like notification:', nerr);
@@ -4281,6 +4365,7 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
       userId,
       username: userData.username || 'مستخدم',
       profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      is_verified: !!userData.is_verified,
       content: content.trim(),
       timestamp: timestamp
     };
@@ -4319,7 +4404,7 @@ app.post('/api/posts/:postId/comments/:commentId/reply', requireAuth, async (req
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للرد على التعليق
-        sendPushNotification(commentOwnerId, `${userData.username || 'شخص ما'}`, `رد على تعليقك: ${replyData.content.substring(0, 50)}`, { type: 'comment_reply', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+        sendPushNotification(commentOwnerId, `${userData.username || 'شخص ما'}`, `رد على تعليقك: ${replyData.content.substring(0, 50)}`, { type: 'comment_reply', url: `https://aite-lite.vercel.app/post?id=${postId}`, postId, from_user_id: userId, from_username: userData.username || '', from_profile_picture_url: userData.profile_picture_url || '', from_is_verified: !!userData.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create comment_reply notification:', nerr);
@@ -4438,6 +4523,10 @@ app.get('/api/posts/:postId/comments', requireAuth, async (req, res) => {
       totalCount += (c.recentReplies ? c.recentReplies.length : (c.repliesCount || 0));
     }
 
+    // Back-fill blue verification badges from the canonical profile flag so
+    // they appear consistently in the comments UI, even for legacy rows.
+    await enrichCommentsWithVerification(enriched);
+
     res.json({ ok: true, comments: enriched, totalCount: totalCount });
   } catch (error) {
     console.error('Error fetching comments:', error);
@@ -4536,7 +4625,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/like', require
           is_read: false
         };
         await notifRef.set(notifData);
-        sendPushNotification(replyOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بردك ❤️', { type: 'reply_like', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+        sendPushNotification(replyOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بردك ❤️', { type: 'reply_like', url: `https://aite-lite.vercel.app/post?id=${postId}`, postId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reply_like notification:', nerr);
@@ -4574,6 +4663,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
       userId,
       username: userData.username || 'مستخدم',
       profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      is_verified: !!userData.is_verified,
       content: content.trim(),
       timestamp: admin.database.ServerValue.TIMESTAMP,
       likes: 0,
@@ -4614,7 +4704,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/reply', requir
           is_read: false
         };
         await notifRef.set(notifData);
-        sendPushNotification(parentReplyOwnerId, `${userData.username || 'شخص ما'}`, `رد على ردك: ${replyData.content.substring(0, 50)}`, { type: 'reply_reply', url: `https://aite-lite.vercel.app/post?id=${postId}` });
+        sendPushNotification(parentReplyOwnerId, `${userData.username || 'شخص ما'}`, `رد على ردك: ${replyData.content.substring(0, 50)}`, { type: 'reply_reply', url: `https://aite-lite.vercel.app/post?id=${postId}`, postId, from_user_id: userId, from_username: userData.username || '', from_profile_picture_url: userData.profile_picture_url || '', from_is_verified: !!userData.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reply_reply notification:', nerr);
@@ -4682,7 +4772,7 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/like', require
           is_read: false
         };
         await notifRef.set(notifData);
-        sendPushNotification(replyOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بردك ❤️', { type: 'reply_like', url: `https://aite-lite.vercel.app/reels` });
+        sendPushNotification(replyOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بردك ❤️', { type: 'reply_like', url: `https://aite-lite.vercel.app/reels?id=${reelId}`, reelId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reels reply_like notification:', nerr);
@@ -4719,6 +4809,7 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requir
       userId,
       username: userData.username || 'مستخدم',
       profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      is_verified: !!userData.is_verified,
       content: content.trim(),
       timestamp: admin.database.ServerValue.TIMESTAMP,
       likes: 0,
@@ -4760,7 +4851,7 @@ app.post('/api/reels/:reelId/comments/:commentId/replies/:replyId/reply', requir
           is_read: false
         };
         await notifRef.set(notifData);
-        sendPushNotification(parentReplyOwnerId, `${userData.username || 'شخص ما'}`, `رد على ردك: ${replyData.content.substring(0, 50)}`, { type: 'reply_reply', url: `https://aite-lite.vercel.app/reels` });
+        sendPushNotification(parentReplyOwnerId, `${userData.username || 'شخص ما'}`, `رد على ردك: ${replyData.content.substring(0, 50)}`, { type: 'reply_reply', url: `https://aite-lite.vercel.app/reels?id=${reelId}`, reelId, from_user_id: userId, from_username: userData.username || '', from_profile_picture_url: userData.profile_picture_url || '', from_is_verified: !!userData.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reels reply_reply notification:', nerr);
@@ -5182,7 +5273,7 @@ app.post('/api/reels/:reelId/like', requireAuth, async (req, res) => {
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للإعجاب بالريل
-        sendPushNotification(updatedReel.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بالريل الخاص بك ❤️', { type: 'reel_like', url: `https://aite-lite.vercel.app/reels` });
+        sendPushNotification(updatedReel.userId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بالريل الخاص بك ❤️', { type: 'reel_like', url: `https://aite-lite.vercel.app/reels?id=${reelId}`, reelId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reel_like notification:', nerr);
@@ -5336,6 +5427,7 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
       userId,
       username: user.username,
       profile_picture_url: user.profile_picture_url,
+      is_verified: !!(user && user.is_verified),
       content,
       timestamp: admin.database.ServerValue.TIMESTAMP,
       likes: 0,
@@ -5367,7 +5459,7 @@ app.post('/api/reels/:reelId/comment', requireAuth, async (req, res) => {
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للتعليق على الريل
-        sendPushNotification(reel.userId, `${fromProfile.username || 'شخص ما'}`, `علق على الريل الخاص بك: ${commentData.content.substring(0, 50)}`, { type: 'reel_comment', url: `https://aite-lite.vercel.app/reels` });
+        sendPushNotification(reel.userId, `${fromProfile.username || 'شخص ما'}`, `علق على الريل الخاص بك: ${commentData.content.substring(0, 50)}`, { type: 'reel_comment', url: `https://aite-lite.vercel.app/reels?id=${reelId}`, reelId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reel_comment notification:', nerr);
@@ -5439,7 +5531,7 @@ app.post('/api/reels/:reelId/comments/:commentId/like', requireAuth, async (req,
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للإعجاب بتعليق الريل
-        sendPushNotification(commentOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بتعليقك ❤️', { type: 'comment_like', url: `https://aite-lite.vercel.app/reels` });
+        sendPushNotification(commentOwnerId, `${fromProfile.username || 'شخص ما'}`, 'أعجب بتعليقك ❤️', { type: 'reel_comment_like', url: `https://aite-lite.vercel.app/reels?id=${reelId}`, reelId, from_user_id: userId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reels comment_like notification:', nerr);
@@ -5478,6 +5570,7 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
       userId,
       username: userData.username || 'مستخدم',
       profile_picture_url: userData.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+      is_verified: !!userData.is_verified,
       content: content.trim(),
       timestamp: timestamp
     };
@@ -5517,7 +5610,7 @@ app.post('/api/reels/:reelId/comments/:commentId/reply', requireAuth, async (req
         };
         await notifRef.set(notifData);
         // إرسال إشعار Push للرد على تعليق الريل
-        sendPushNotification(commentOwnerId, `${userData.username || 'شخص ما'}`, `رد على تعليقك: ${replyData.content.substring(0, 50)}`, { type: 'comment_reply', url: `https://aite-lite.vercel.app/reels` });
+        sendPushNotification(commentOwnerId, `${userData.username || 'شخص ما'}`, `رد على تعليقك: ${replyData.content.substring(0, 50)}`, { type: 'reel_comment_reply', url: `https://aite-lite.vercel.app/reels?id=${reelId}`, reelId, from_user_id: userId, from_username: userData.username || '', from_profile_picture_url: userData.profile_picture_url || '', from_is_verified: !!userData.is_verified });
       }
     } catch (nerr) {
       console.error('Failed to create reels comment_reply notification:', nerr);
@@ -5656,6 +5749,10 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
     for (const c of enriched) {
       totalCount += (c.repliesCount || 0);
     }
+
+    // Back-fill blue verification badges from the canonical profile flag so
+    // they appear consistently in the reel comments UI.
+    await enrichCommentsWithVerification(enriched);
 
     res.json({ ok: true, comments: enriched, totalCount: totalCount });
   } catch (error) {
