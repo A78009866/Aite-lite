@@ -3995,58 +3995,66 @@ app.post('/api/posts/:postId/like', requireAuth, async (req, res) => {
   }
 });
 
-// Get list of users who liked a post
+// Get list of users who liked a post (with friend / request state)
 app.get('/api/posts/:postId/likes', requireAuth, async (req, res) => {
   const { postId } = req.params;
+  const currentUserId = req.session.userId;
   try {
     const likesSnap = await db.ref(`likes/${postId}`).once('value');
     const likesObj = likesSnap.val() || {};
     const userIds = Object.keys(likesObj);
 
-    const users = [];
-    for (const uid of userIds) {
+    const users = await Promise.all(userIds.map(async (uid) => {
       const profileSnap = await db.ref(`profiles/${uid}`).once('value');
       const profile = profileSnap.val();
-      if (profile) {
-        users.push({
-          id: uid,
-          username: profile.username || 'مستخدم',
-          profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          is_verified: !!profile.is_verified
-        });
-      }
-    }
+      if (!profile) return null;
+      const fs = await friendState(currentUserId, uid);
+      return {
+        id: uid,
+        username: profile.username || 'مستخدم',
+        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_verified: !!profile.is_verified,
+        is_owner: uid === currentUserId,
+        is_friend: fs.is_friend,
+        request_sent: fs.request_sent,
+        request_received: fs.request_received,
+      };
+    }));
 
-    res.json({ ok: true, users });
+    res.json({ ok: true, users: users.filter(Boolean) });
   } catch (error) {
     console.error('Error fetching post likes list:', error);
     res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
 
-// Get list of users who liked a reel
+// Get list of users who liked a reel (with friend / request state)
 app.get('/api/reels/:reelId/likes', requireAuth, async (req, res) => {
   const { reelId } = req.params;
+  const currentUserId = req.session.userId;
   try {
     const likesSnap = await db.ref(`reels_likes/${reelId}`).once('value');
     const likesObj = likesSnap.val() || {};
     const userIds = Object.keys(likesObj);
 
-    const users = [];
-    for (const uid of userIds) {
+    const users = await Promise.all(userIds.map(async (uid) => {
       const profileSnap = await db.ref(`profiles/${uid}`).once('value');
       const profile = profileSnap.val();
-      if (profile) {
-        users.push({
-          id: uid,
-          username: profile.username || 'مستخدم',
-          profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
-          is_verified: !!profile.is_verified
-        });
-      }
-    }
+      if (!profile) return null;
+      const fs = await friendState(currentUserId, uid);
+      return {
+        id: uid,
+        username: profile.username || 'مستخدم',
+        profile_picture_url: profile.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+        is_verified: !!profile.is_verified,
+        is_owner: uid === currentUserId,
+        is_friend: fs.is_friend,
+        request_sent: fs.request_sent,
+        request_received: fs.request_received,
+      };
+    }));
 
-    res.json({ ok: true, users });
+    res.json({ ok: true, users: users.filter(Boolean) });
   } catch (error) {
     console.error('Error fetching reel likes list:', error);
     res.status(500).json({ ok: false, error: 'Server error' });
