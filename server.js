@@ -2529,7 +2529,7 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
         if (raw && typeof raw === 'object') {
           const allowedKeys = [
             'kind', 'post_id', 'reel_id', 'author_id', 'author_username',
-            'author_avatar', 'is_verified', 'thumb_url', 'media_type', 'caption'
+            'author_avatar', 'is_verified', 'thumb_url', 'video_url', 'media_type', 'caption'
           ];
           const sanitized = {};
           for (const k of allowedKeys) {
@@ -2616,6 +2616,10 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
     // 3. تحديث قائمة المحادثات (Chat List) للطرفين
     const updates = {};
     
+    // بيانات الصورة المصغرة للمنشور/الريل المُشارك (تُعرض في قائمة المحادثات)
+    const sharedThumb = sharedObject ? (sharedObject.thumb_url || '') : '';
+    const sharedKind  = sharedObject ? (sharedObject.kind || '')      : '';
+
     // التحديث عند الطرف الآخر (المستقبل)
     updates[`chats/${contact_id}/${senderId}`] = {
       last_message_content: previewText,
@@ -2623,7 +2627,9 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       contact_id: senderId, // الصديق بالنسبة له هو أنا (المرسل)
       unread_count: admin.database.ServerValue.increment(1),
       last_message_sender_id: senderId,
-      last_message_is_read: false
+      last_message_is_read: false,
+      last_message_shared_thumb: sharedThumb,
+      last_message_shared_kind: sharedKind
     };
 
     // التحديث عندي (المرسل)
@@ -2633,7 +2639,9 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       contact_id: contact_id, // الصديق بالنسبة لي هو هو
       unread_count: 0, // أنا قرأت رسالتي
       last_message_sender_id: senderId,
-      last_message_is_read: false
+      last_message_is_read: false,
+      last_message_shared_thumb: sharedThumb,
+      last_message_shared_kind: sharedKind
     };
 
     await db.ref().update(updates);
