@@ -2517,8 +2517,43 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       };
     }
 
-    // إذا لم يكن هناك نص ولا ملفات ولا رابط مباشر، نعتبرها رسالة فارغة
-    if (!content.trim() && files.length === 0 && !mediaObject) {
+    // === مشاركة منشور/ريل داخل المحادثة ===
+    // العميل يرسل حقل `shared` كـ JSON يحتوي على نوع العنصر المُشارك
+    // (post / reel) ومعرّفه وبيانات صاحب المنشور ومعاينة الوسائط، حتى تتمكن
+    // فقاعة الرسالة من رسم بطاقة جذابة قابلة للنقر تنقل المستلم إلى العنصر.
+    let sharedObject = null;
+    if (req.body.shared) {
+      try {
+        const raw = typeof req.body.shared === 'string'
+          ? JSON.parse(req.body.shared) : req.body.shared;
+        if (raw && typeof raw === 'object') {
+          const allowedKeys = [
+            'kind', 'post_id', 'reel_id', 'author_id', 'author_username',
+            'author_avatar', 'is_verified', 'thumb_url', 'media_type', 'caption'
+          ];
+          const sanitized = {};
+          for (const k of allowedKeys) {
+            const v = raw[k];
+            if (v === undefined || v === null) continue;
+            if (typeof v === 'string') {
+              sanitized[k] = truncateText(v, 600);
+            } else if (typeof v === 'boolean' || typeof v === 'number') {
+              sanitized[k] = v;
+            }
+          }
+          // قبول النوع الصحيح فقط ووجود معرّف العنصر المناسب.
+          if (sanitized.kind === 'post' && sanitized.post_id) {
+            sharedObject = sanitized;
+          } else if (sanitized.kind === 'reel' && sanitized.reel_id) {
+            sharedObject = sanitized;
+          }
+        }
+      } catch (_) { sharedObject = null; }
+    }
+    // =========================================================
+
+    // إذا لم يكن هناك نص ولا ملفات ولا رابط مباشر ولا مشاركة، نعتبرها رسالة فارغة
+    if (!content.trim() && files.length === 0 && !mediaObject && !sharedObject) {
        return res.status(400).json({ ok: false, error: 'لا يمكن إرسال رسالة فارغة' });
     }
 
@@ -2552,6 +2587,7 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
       senderId: senderId,
       content: content,
       media: mediaObject, // حفظنا الكائن بالاسم الذي ينتظره chat.html
+      shared: sharedObject, // [جديد] منشور/ريل تمت مشاركته داخل المحادثة
       timestamp: timestamp,
       is_read: false,
       // بيانات الرد إذا وجدت
@@ -2568,6 +2604,13 @@ app.post('/api/messages/send', writeLimiter, (req, res, next) => {
     if (!content && mediaObject) {
       const type = mediaObject.type;
       previewText = type === 'image' ? 'صورة' : type === 'video' ? 'فيديو' : type === 'audio' ? 'رسالة صوتية' : 'ملف مرفق';
+    }
+    if (!content && !mediaObject && sharedObject) {
+      // Keep this string plain — the client recognises the marker tokens
+      // ("تمت مشاركة منشور" / "تمت مشاركة ريل") and renders a leading icon
+      // inside the chat list preview row, so we deliberately omit any
+      // emoji here.
+      previewText = sharedObject.kind === 'reel' ? 'تمت مشاركة ريل' : 'تمت مشاركة منشور';
     }
 
     // 3. تحديث قائمة المحادثات (Chat List) للطرفين
