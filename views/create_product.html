@@ -29,6 +29,8 @@
             --muted:      #9a9aa3;
             --accent:     #ffffff;
             --accent-ink: #0b0b0f;
+            --danger:     #ff3b3b;
+            --danger-bg:  #1d0b0d;
         }
 
         * { box-sizing: border-box; }
@@ -52,14 +54,12 @@
             position: relative;
         }
 
-        /* Background pattern: solid dot grid, no gradient */
         body::before {
             content: "";
             position: fixed;
             inset: 0;
             background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
             background-size: 22px 22px;
-            background-position: 0 0;
             pointer-events: none;
             z-index: 0;
         }
@@ -76,7 +76,6 @@
             text-align: center;
         }
 
-        /* Iconic frame in the corners — pure geometry, no gradient */
         .card::before,
         .card::after {
             content: "";
@@ -101,7 +100,6 @@
             border-bottom-left-radius: 6px;
         }
 
-        /* Logo block — solid white badge, no gradient */
         .logo-wrap {
             width: 112px;
             height: 112px;
@@ -111,7 +109,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
         }
         .logo-wrap img {
             width: 92px;
@@ -151,7 +148,6 @@
             margin: 12px 0 14px;
             color: var(--text);
         }
-
         p.lead {
             font-size: 16px;
             line-height: 1.95;
@@ -160,7 +156,7 @@
             max-width: 460px;
         }
 
-        /* Solid button — no gradient */
+        /* Primary download button (solid, no gradient) */
         .download-btn {
             display: inline-flex;
             align-items: center;
@@ -175,6 +171,7 @@
             background: var(--accent);
             border: 2px solid var(--accent);
             border-radius: 999px;
+            cursor: pointer;
             transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
         }
         .download-btn:hover,
@@ -184,11 +181,7 @@
             outline: none;
         }
         .download-btn:active { transform: translateY(1px); }
-        .download-btn svg {
-            width: 22px;
-            height: 22px;
-            flex: 0 0 22px;
-        }
+        .download-btn svg { width: 22px; height: 22px; flex: 0 0 22px; }
 
         .hint {
             font-size: 11px;
@@ -196,6 +189,60 @@
             margin-top: 14px;
             letter-spacing: 4px;
             text-transform: uppercase;
+        }
+
+        /* === Red post-download instructions panel === */
+        .warning {
+            display: none;
+            margin-top: 22px;
+            padding: 18px 18px 16px;
+            border: 2px solid var(--danger);
+            background: var(--danger-bg);
+            border-radius: 14px;
+            text-align: right;
+            position: relative;
+        }
+        .warning.is-visible {
+            display: block;
+            animation: warningIn 0.18s ease-out;
+        }
+        @keyframes warningIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .warning-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 0;
+        }
+        .warning-icon {
+            flex: 0 0 28px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--danger);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-family: 'Montserrat', 'Tajawal', sans-serif;
+            font-size: 18px;
+            line-height: 1;
+        }
+        .warning-title {
+            font-weight: 900;
+            color: var(--danger);
+            font-size: 15px;
+            letter-spacing: 0.5px;
+        }
+        .warning-text {
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.75;
+            color: #ffffff;
+            margin: 0;
         }
 
         .divider {
@@ -206,18 +253,8 @@
             margin: 28px auto 14px;
             color: var(--muted);
         }
-        .divider .bar {
-            flex: 1;
-            height: 1px;
-            background: var(--line-soft);
-            max-width: 110px;
-        }
-        .divider .dot {
-            width: 6px;
-            height: 6px;
-            background: var(--accent);
-            border-radius: 50%;
-        }
+        .divider .bar { flex: 1; height: 1px; background: var(--line-soft); max-width: 110px; }
+        .divider .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
 
         .signature {
             font-family: 'Allison', cursive;
@@ -276,10 +313,12 @@
             يُرجى تحميل النسخة الجديدة للاستمرار في استخدام خدماتنا.
         </p>
 
-        <a class="download-btn"
+        <a id="downloadBtn"
+           class="download-btn"
            href="https://pub-7c93bdf7768e4bd3a90334827b920b16.r2.dev/Aite.apk"
-           target="_blank"
            rel="noopener"
+           aria-controls="warning"
+           aria-expanded="false"
            download>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -288,6 +327,15 @@
         </a>
 
         <div class="hint">APK · Android</div>
+
+        <div id="warning" class="warning" role="alert" aria-live="assertive">
+            <div class="warning-head">
+                <span class="warning-icon" aria-hidden="true">!</span>
+                <p class="warning-text">
+                    يجب حذف التطبيق الحالي بعد تثبيت النسخة الجديدة وإلا لن يتشغل التطبيق
+                </p>
+            </div>
+        </div>
 
         <div class="divider" aria-hidden="true">
             <span class="bar"></span>
@@ -305,6 +353,21 @@
 
     <script>
         document.getElementById('yr').textContent = new Date().getFullYear();
+
+        var btn     = document.getElementById('downloadBtn');
+        var warning = document.getElementById('warning');
+
+        // Reveal the post-download instructions the moment the user triggers
+        // the download. We do NOT prevent the default action — the browser
+        // proceeds to download the APK normally.
+        btn.addEventListener('click', function () {
+            warning.classList.add('is-visible');
+            btn.setAttribute('aria-expanded', 'true');
+            setTimeout(function () {
+                warning.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 80);
+        });
+
         try {
             ['localStorage', 'sessionStorage'].forEach(function (s) {
                 try { window[s] && window[s].clear(); } catch (e) {}
