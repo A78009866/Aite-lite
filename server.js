@@ -6156,6 +6156,7 @@ const OFFLINE_THRESHOLD = 2 * 60 * 1000; // 2 minutes
 
 setInterval(async () => {
   try {
+    if (!db) return;
     const profilesRef = db.ref('profiles');
     const snapshot = await profilesRef.orderByChild('is_online').equalTo(true).once('value');
     
