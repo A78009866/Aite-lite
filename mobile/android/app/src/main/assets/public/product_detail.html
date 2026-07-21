@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<script src="/aite-bridge.js"></script>
+
+    <script src="/i18n.js"></script>
+<script>(function(){var t=localStorage.getItem("aite-theme")||"dark";document.documentElement.setAttribute("data-theme",t)})()</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aite">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <title data-i18n="Aite - تفاصيل المنتج">Aite - تفاصيل المنتج</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Vibes&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000; color: #e6eefb;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        html[data-theme="light"] body { background: #f3f4f6; color: #1a1a2e; }
+
+        .glass-navbar {
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        html[data-theme="light"] .glass-navbar {
+            background: rgba(255,255,255,0.92);
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+        }
+        html[data-theme="light"] .glass-navbar a,
+        html[data-theme="light"] .glass-navbar span,
+        html[data-theme="light"] .glass-navbar i { color: #1a1a2e; }
+        .app-logo { font-family: 'Montserrat', sans-serif; font-weight: 800; }
+
+        .desktop-sidebar { display: none; }
+        @media (min-width: 768px) {
+            .desktop-sidebar {
+                display: flex; position: fixed; top: 0; right: 0;
+                width: 220px; height: 100vh;
+                background: rgba(10, 10, 10, 0.92);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border-left: 1px solid rgba(255,255,255,0.08);
+                flex-direction: column; padding: 20px 12px;
+                z-index: 100; overflow-y: auto;
+            }
+            html[data-theme="light"] .desktop-sidebar {
+                background: rgba(255,255,255,0.95);
+                border-left: 1px solid rgba(0,0,0,0.08);
+            }
+            .desktop-sidebar .sidebar-logo {
+                font-family: 'Montserrat', sans-serif; font-weight: 800;
+                font-size: 22px; color: #fff; text-decoration: none;
+                padding: 8px 12px; margin-bottom: 28px; display: block;
+            }
+            html[data-theme="light"] .desktop-sidebar .sidebar-logo { color: #1a1a2e; }
+            .desktop-sidebar .sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
+            .desktop-sidebar .sidebar-link {
+                display: flex; align-items: center; gap: 14px;
+                padding: 12px 14px; border-radius: 12px;
+                color: #9ca3af; text-decoration: none;
+                font-size: 15px; font-weight: 500;
+                transition: all 0.2s; white-space: nowrap;
+            }
+            .desktop-sidebar .sidebar-link:hover { background: rgba(255,255,255,0.06); color: #fff; }
+            .desktop-sidebar .sidebar-link.active { background: rgba(59,130,246,0.15); color: #3b82f6; }
+            html[data-theme="light"] .desktop-sidebar .sidebar-link { color: #64748b; }
+            html[data-theme="light"] .desktop-sidebar .sidebar-link:hover { background: rgba(0,0,0,0.05); color: #1a1a2e; }
+            html[data-theme="light"] .desktop-sidebar .sidebar-link.active { background: rgba(37,99,235,0.1); color: #2563eb; }
+            .desktop-sidebar .sidebar-link i { width: 22px; text-align: center; font-size: 18px; }
+            body { padding-right: 220px; }
+            main { max-width: 600px; margin-left: auto; margin-right: auto; }
+        }
+
+        .product-container { max-width: 600px; margin: 0 auto; }
+
+        .detail-images-slider {
+            width: 100%; position: relative;
+            background: #111; overflow: hidden;
+            aspect-ratio: 4/3;
+        }
+        .detail-images-slider img {
+            width: 100%; height: 100%; object-fit: contain;
+            display: none; position: absolute; top: 0; left: 0;
+        }
+        .detail-images-slider img.active { display: block; }
+        .slider-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(0,0,0,0.6); border: none;
+            color: #fff; font-size: 16px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s; z-index: 5;
+        }
+        .slider-nav:hover { background: rgba(0,0,0,0.8); }
+        .slider-nav.prev { right: 12px; }
+        .slider-nav.next { left: 12px; }
+        .slider-dots {
+            display: flex; gap: 6px; justify-content: center;
+            padding: 12px; background: rgba(0,0,0,0.3);
+            position: absolute; bottom: 0; left: 0; right: 0;
+        }
+        .slider-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: rgba(255,255,255,0.3); border: none;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .slider-dot.active { background: #3b82f6; }
+
+        .no-image-placeholder {
+            width: 100%; aspect-ratio: 4/3;
+            background: #111; display: flex;
+            align-items: center; justify-content: center;
+            color: #4b5563; font-size: 48px;
+        }
+
+        .detail-info { padding: 20px; }
+        .detail-price {
+            font-size: 28px; font-weight: 800; color: #3b82f6; margin-bottom: 6px;
+        }
+        html[data-theme="light"] .detail-price { color: #2563eb; }
+        .detail-title {
+            font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 14px; line-height: 1.4;
+        }
+        html[data-theme="light"] .detail-title { color: #1a1a2e; }
+        .detail-description {
+            font-size: 15px; color: #9ca3af; line-height: 1.8;
+            white-space: pre-wrap; word-break: break-word;
+        }
+
+        .detail-seller {
+            display: flex; align-items: center; gap: 12px;
+            padding: 16px 20px; margin: 0;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            cursor: pointer; transition: background 0.2s;
+        }
+        .detail-seller:hover { background: rgba(255,255,255,0.03); }
+        html[data-theme="light"] .detail-seller { border-top: 1px solid rgba(0,0,0,0.08); }
+        html[data-theme="light"] .detail-seller:hover { background: rgba(0,0,0,0.02); }
+        .detail-seller img {
+            width: 48px; height: 48px; border-radius: 50%;
+            object-fit: cover; border: 2px solid rgba(255,255,255,0.1);
+        }
+        .detail-seller-info { flex: 1; }
+        .detail-seller-name { font-size: 15px; font-weight: 600; color: #fff; }
+        html[data-theme="light"] .detail-seller-name { color: #1a1a2e; }
+        .detail-seller-time { font-size: 12px; color: #6b7280; margin-top: 2px; }
+        .verified-badge { color: #3b82f6; font-size: 12px; margin-right: 2px; }
+
+        .detail-actions {
+            display: flex; gap: 8px; padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        html[data-theme="light"] .detail-actions { border-top: 1px solid rgba(0,0,0,0.08); }
+        .contact-seller-btn {
+            flex: 1; padding: 14px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border: none; border-radius: 12px;
+            color: #fff; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            text-decoration: none;
+        }
+        .contact-seller-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(16,185,129,0.4); }
+        .edit-product-btn {
+            flex: 1; padding: 14px;
+            background: rgba(59,130,246,0.15);
+            border: 1px solid rgba(59,130,246,0.3);
+            border-radius: 12px;
+            color: #3b82f6; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            text-decoration: none;
+        }
+        .edit-product-btn:hover { background: rgba(59,130,246,0.25); }
+        .delete-product-btn {
+            padding: 14px 18px;
+            background: rgba(239,68,68,0.15);
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 12px;
+            color: #ef4444; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .delete-product-btn:hover { background: rgba(239,68,68,0.25); }
+
+        .loading-state {
+            display: flex; align-items: center; justify-content: center;
+            padding: 80px 20px; flex-direction: column; gap: 16px;
+        }
+        .loading-state .spinner-lg {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-radius: 50%; border-top-color: #3b82f6;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(16,185,129,0.95); color: #fff;
+            padding: 12px 24px; border-radius: 12px;
+            font-size: 14px; font-weight: 600; z-index: 300;
+            opacity: 0; transition: opacity 0.3s;
+            backdrop-filter: blur(8px);
+        }
+        .toast.show { opacity: 1; }
+        .toast.error { background: rgba(239,68,68,0.95); }
+
+        .page-title {
+            font-size: 20px; font-weight: 800; color: #fff; margin: 0;
+        }
+        html[data-theme="light"] .page-title { color: #1a1a2e; }
+
+        .confirm-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); z-index: 200;
+            display: none; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .confirm-overlay.show { display: flex; }
+        .confirm-box {
+            background: #1a1a2e; border-radius: 16px;
+            padding: 24px; max-width: 340px; width: 100%;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        html[data-theme="light"] .confirm-box {
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .confirm-box h3 { font-size: 18px; font-weight: 700; color: #fff; margin: 0 0 10px; }
+        html[data-theme="light"] .confirm-box h3 { color: #1a1a2e; }
+        .confirm-box p { font-size: 14px; color: #9ca3af; margin: 0 0 20px; }
+        .confirm-actions { display: flex; gap: 10px; }
+        .confirm-actions button {
+            flex: 1; padding: 12px; border-radius: 10px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            border: none; transition: all 0.2s;
+        }
+        .confirm-cancel {
+            background: rgba(255,255,255,0.08); color: #9ca3af;
+        }
+        html[data-theme="light"] .confirm-cancel { background: rgba(0,0,0,0.06); color: #64748b; }
+        .confirm-delete {
+            background: #ef4444; color: #fff;
+        }
+        .confirm-delete:hover { background: #dc2626; }
+
+        /* Image Lightbox */
+        .lightbox-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.95); z-index: 500;
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        .lightbox-overlay.show { display: flex; }
+        .lightbox-close {
+            position: absolute; top: 16px; left: 16px;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255,255,255,0.15); border: none;
+            color: #fff; font-size: 20px; cursor: pointer; z-index: 510;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .lightbox-counter {
+            position: absolute; top: 20px; right: 20px;
+            color: rgba(255,255,255,0.7); font-size: 14px; z-index: 510;
+        }
+        .lightbox-image-wrap {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            width: 100%; overflow: hidden; position: relative;
+        }
+        .lightbox-image-wrap img {
+            max-width: 95%; max-height: 85vh; object-fit: contain;
+            border-radius: 8px; user-select: none;
+        }
+        .lightbox-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 48px; height: 48px; border-radius: 50%;
+            background: rgba(255,255,255,0.12); border: none;
+            color: #fff; font-size: 20px; cursor: pointer; z-index: 510;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s;
+        }
+        .lightbox-nav:hover { background: rgba(255,255,255,0.25); }
+        .lightbox-nav.lb-prev { right: 12px; }
+        .lightbox-nav.lb-next { left: 12px; }
+        .lightbox-thumbs {
+            display: flex; gap: 8px; padding: 12px; justify-content: center;
+            overflow-x: auto; max-width: 100%;
+        }
+        .lightbox-thumb {
+            width: 56px; height: 56px; border-radius: 8px; object-fit: cover;
+            cursor: pointer; border: 2px solid transparent;
+            opacity: 0.5; transition: all 0.2s; flex-shrink: 0;
+        }
+        .lightbox-thumb.active { border-color: #3b82f6; opacity: 1; }
+
+        /* Order Button */
+        .order-btn {
+            flex: 1; padding: 14px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: none; border-radius: 12px;
+            color: #fff; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .order-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(59,130,246,0.4); }
+
+        /* Order Form Modal */
+        .order-modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); z-index: 300;
+            display: none; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .order-modal-overlay.show { display: flex; }
+        .order-modal {
+            background: #1a1a2e; border-radius: 16px;
+            padding: 24px; max-width: 420px; width: 100%;
+            border: 1px solid rgba(255,255,255,0.1);
+            max-height: 90vh; overflow-y: auto;
+        }
+        html[data-theme="light"] .order-modal {
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .order-modal h3 {
+            font-size: 18px; font-weight: 700; color: #fff;
+            margin: 0 0 20px; text-align: center;
+        }
+        html[data-theme="light"] .order-modal h3 { color: #1a1a2e; }
+        .order-field { margin-bottom: 14px; }
+        .order-field label {
+            display: block; font-size: 13px; font-weight: 600;
+            color: #9ca3af; margin-bottom: 6px;
+        }
+        .order-field input, .order-field select {
+            width: 100%; padding: 12px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px; color: #fff;
+            font-size: 15px; outline: none;
+            transition: border-color 0.2s;
+        }
+        html[data-theme="light"] .order-field input,
+        html[data-theme="light"] .order-field select {
+            background: rgba(0,0,0,0.04);
+            border: 1px solid rgba(0,0,0,0.12);
+            color: #1a1a2e;
+        }
+        .order-field input:focus, .order-field select:focus {
+            border-color: #3b82f6;
+        }
+        .order-field select option { background: #1a1a2e; color: #fff; }
+        html[data-theme="light"] .order-field select option { background: #fff; color: #1a1a2e; }
+        .order-submit-btn {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: none; border-radius: 12px;
+            color: #fff; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            margin-top: 6px;
+        }
+        .order-submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(59,130,246,0.4); }
+        .order-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        .order-cancel-btn {
+            width: 100%; padding: 12px;
+            background: rgba(255,255,255,0.08); border: none;
+            border-radius: 10px; color: #9ca3af;
+            font-size: 14px; font-weight: 600;
+            cursor: pointer; margin-top: 8px;
+        }
+        html[data-theme="light"] .order-cancel-btn { background: rgba(0,0,0,0.06); color: #64748b; }
+    </style>
+    <link rel="stylesheet" href="/common.css">
+    <script src="/components.js"></script>
+</head>
+<body>
+
+
+<header class="sticky top-0 z-50 glass-navbar p-3">
+    <nav class="flex justify-between items-center max-w-6xl mx-auto relative">
+        <div class="flex items-center gap-2">
+            <a href="/marketplace" class="text-gray-400 hover:text-white transition p-1" title="رجوع">
+                <i class="fas fa-arrow-right text-lg"></i>
+            </a>
+            <span class="page-title" data-i18n="تفاصيل المنتج">تفاصيل المنتج</span>
+        </div>
+        <div class="header-actions flex items-center gap-2">
+            <a href="/search" class="action-btn p-2 text-gray-300 hover:text-white transition" title="بحث">
+                <i class="fas fa-search text-xl"></i>
+            </a>
+        </div>
+    </nav>
+</header>
+
+<main>
+    <div class="product-container" id="productContainer">
+        <div class="loading-state" id="loadingState">
+            <div class="spinner-lg"></div>
+            <span style="color:#6b7280;font-size:14px;" data-i18n="جاري التحميل...">جاري التحميل...</span>
+        </div>
+    </div>
+</main>
+
+<div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-box">
+        <h3 data-i18n="حذف المنتج">حذف المنتج</h3>
+        <p data-i18n="هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.">هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.</p>
+        <div class="confirm-actions">
+            <button class="confirm-cancel" onclick="hideConfirm()" data-i18n="إلغاء">إلغاء</button>
+            <button class="confirm-delete" onclick="confirmDelete()" data-i18n="حذف">حذف</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Image Lightbox -->
+<div class="lightbox-overlay" id="lightboxOverlay">
+    <button class="lightbox-close" onclick="closeLightbox()"><i class="fas fa-times"></i></button>
+    <div class="lightbox-counter" id="lightboxCounter"></div>
+    <button class="lightbox-nav lb-prev" id="lbPrev" onclick="lightboxNav(-1)"><i class="fas fa-chevron-right"></i></button>
+    <button class="lightbox-nav lb-next" id="lbNext" onclick="lightboxNav(1)"><i class="fas fa-chevron-left"></i></button>
+    <div class="lightbox-image-wrap">
+        <img id="lightboxImg" src="" alt="معاينة">
+    </div>
+    <div class="lightbox-thumbs" id="lightboxThumbs"></div>
+</div>
+
+<!-- Order Form Modal -->
+<div class="order-modal-overlay" id="orderModalOverlay">
+    <div class="order-modal">
+        <h3><i class="fas fa-shopping-cart" style="margin-left:8px;"></i> <span data-i18n="طلب المنتج">طلب المنتج</span></h3>
+        <div class="order-field">
+            <label data-i18n="الاسم الكامل">الاسم الكامل</label>
+            <input type="text" id="orderFullName" placeholder="أدخل اسمك الكامل" data-i18n-placeholder="أدخل اسمك الكامل" maxlength="100">
+        </div>
+        <div class="order-field">
+            <label data-i18n="رقم الهاتف">رقم الهاتف</label>
+            <input type="tel" id="orderPhone" placeholder="0xxxxxxxxx" maxlength="20" dir="ltr">
+        </div>
+        <div class="order-field">
+            <label data-i18n="الولاية">الولاية</label>
+            <select id="orderWilaya"><option value="" data-i18n="اختر الولاية">اختر الولاية</option></select>
+        </div>
+        <div class="order-field">
+            <label data-i18n="البلدية">البلدية</label>
+            <select id="orderCommune" disabled><option value="" data-i18n="اختر الولاية أولاً">اختر الولاية أولاً</option></select>
+        </div>
+        <button class="order-submit-btn" id="orderSubmitBtn" onclick="submitOrder()"><i class="fas fa-paper-plane" style="margin-left:6px;"></i> <span data-i18n="إرسال الطلب">إرسال الطلب</span></button>
+        <button class="order-cancel-btn" onclick="closeOrderModal()" data-i18n="إلغاء">إلغاء</button>
+    </div>
+</div>
+
+<script>
+let currentProduct = null;
+let currentUserId = null;
+let currentSlide = 0;
+
+async function init() {
+    const productId = window.location.pathname.split('/product/')[1];
+    if (!productId) { window.location.href = '/marketplace'; return; }
+
+    try {
+        // Fetch current user
+        const meRes = await fetch('/api/me');
+        const meData = await meRes.json();
+        currentUserId = meData.userId || meData.id || null;
+
+        // Fetch product
+        const res = await fetch('/api/marketplace/' + productId);
+        const data = await res.json();
+        if (!data.ok || !data.product) {
+            showToast('المنتج غير موجود', 'error');
+            setTimeout(() => { window.location.href = '/marketplace'; }, 1500);
+            return;
+        }
+        currentProduct = data.product;
+        renderProduct();
+    } catch (err) {
+        showToast('تعذر تحميل المنتج', 'error');
+        setTimeout(() => { window.location.href = '/marketplace'; }, 1500);
+    }
+}
+
+function renderProduct() {
+    const p = currentProduct;
+    const isOwner = currentUserId && p.sellerId === currentUserId;
+    const container = document.getElementById('productContainer');
+
+    let imagesHtml = '';
+    if (p.images && p.images.length > 0) {
+        let slides = p.images.map((img, i) =>
+            '<img src="' + img + '" alt="صورة المنتج" class="' + (i === 0 ? 'active' : '') + '" onclick="openFullImage(this.src)">'
+        ).join('');
+
+        let navHtml = '';
+        if (p.images.length > 1) {
+            navHtml = '<button class="slider-nav prev" onclick="changeSlide(-1)"><i class="fas fa-chevron-right"></i></button>' +
+                      '<button class="slider-nav next" onclick="changeSlide(1)"><i class="fas fa-chevron-left"></i></button>' +
+                      '<div class="slider-dots">' +
+                      p.images.map((_, i) => '<button class="slider-dot ' + (i === 0 ? 'active' : '') + '" onclick="goToSlide(' + i + ')"></button>').join('') +
+                      '</div>';
+        }
+        imagesHtml = '<div class="detail-images-slider" id="imageSlider">' + slides + navHtml + '</div>';
+    } else {
+        imagesHtml = '<div class="no-image-placeholder"><i class="fas fa-image"></i></div>';
+    }
+
+    let actionsHtml = '';
+    if (isOwner) {
+        actionsHtml = '<div class="detail-actions">' +
+            '<a href="/edit_product/' + p.id + '" class="edit-product-btn"><i class="fas fa-pen"></i> <span data-i18n="تعديل">تعديل</span></a>' +
+            '<button class="delete-product-btn" onclick="showConfirm()"><i class="fas fa-trash"></i> <span data-i18n="حذف">حذف</span></button>' +
+            '</div>';
+    } else {
+        actionsHtml = '<div class="detail-actions">' +
+            '<button class="contact-seller-btn" onclick="contactSeller()"><i class="fas fa-comment-dots"></i> <span data-i18n="مراسلة البائع">مراسلة البائع</span></button>' +
+            '<button class="order-btn" onclick="openOrderModal()"><i class="fas fa-shopping-cart"></i> <span data-i18n="طلب">طلب</span></button>' +
+            '</div>';
+    }
+
+    let timeAgo = getTimeAgo(p.createdAt);
+
+    container.innerHTML = imagesHtml +
+        '<div class="detail-info">' +
+            '<div class="detail-price">' + Number(p.price).toLocaleString('ar-DZ') + ' + t('د.ج') + '</div>' +
+            '<div class="detail-title">' + escapeHtml(p.title) + '</div>' +
+            (p.description ? '<div class="detail-description">' + escapeHtml(p.description) + '</div>' : '') +
+        '</div>' +
+        '<div class="detail-seller" onclick="window.location.href=\'/user/' + p.sellerId + '\'">' +
+            '<img src="' + (p.sellerProfilePic || 'https://pub-7c93bdf7768e4bd3a90334827b920b16.r2.dev/f547d800625af9056d62efe8969aeea0.jpg') + '" alt="البائع">' +
+            '<div class="detail-seller-info">' +
+                '<div class="detail-seller-name">' +
+                    (p.sellerVerified ? '<img src="https://pub-7c93bdf7768e4bd3a90334827b920b16.r2.dev/%D8%A8%D8%AF%D9%88%D9%86%20%D8%A7%D8%B3%D9%85147_20260513121453.png" style="width:14px;height:14px;vertical-align:middle;">' : '') +
+                    escapeHtml(p.sellerUsername || 'مستخدم') +
+                '</div>' +
+                '<div class="detail-seller-time">' + timeAgo + '</div>' +
+            '</div>' +
+        '</div>' +
+        actionsHtml;
+}
+
+function changeSlide(dir) {
+    const slider = document.getElementById('imageSlider');
+    if (!slider) return;
+    const imgs = slider.querySelectorAll('img');
+    const dots = slider.querySelectorAll('.slider-dot');
+    if (imgs.length === 0) return;
+    imgs[currentSlide].classList.remove('active');
+    if (dots[currentSlide]) dots[currentSlide].classList.remove('active');
+    currentSlide = (currentSlide + dir + imgs.length) % imgs.length;
+    imgs[currentSlide].classList.add('active');
+    if (dots[currentSlide]) dots[currentSlide].classList.add('active');
+}
+
+function goToSlide(index) {
+    const slider = document.getElementById('imageSlider');
+    if (!slider) return;
+    const imgs = slider.querySelectorAll('img');
+    const dots = slider.querySelectorAll('.slider-dot');
+    if (imgs.length === 0) return;
+    imgs[currentSlide].classList.remove('active');
+    if (dots[currentSlide]) dots[currentSlide].classList.remove('active');
+    currentSlide = index;
+    imgs[currentSlide].classList.add('active');
+    if (dots[currentSlide]) dots[currentSlide].classList.add('active');
+}
+
+function openFullImage(src) {
+    openLightbox(src);
+}
+
+// ========== Image Lightbox ==========
+let lightboxIndex = 0;
+function openLightbox(src) {
+    if (!currentProduct || !currentProduct.images || currentProduct.images.length === 0) return;
+    const images = currentProduct.images;
+    lightboxIndex = images.indexOf(src);
+    if (lightboxIndex === -1) lightboxIndex = 0;
+    showLightboxImage();
+    document.getElementById('lightboxOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+    document.getElementById('lightboxOverlay').classList.remove('show');
+    document.body.style.overflow = '';
+}
+function showLightboxImage() {
+    const images = currentProduct.images;
+    document.getElementById('lightboxImg').src = images[lightboxIndex];
+    document.getElementById('lightboxCounter').textContent = (lightboxIndex + 1) + ' / ' + images.length;
+    // Nav visibility
+    document.getElementById('lbPrev').style.display = images.length > 1 ? 'flex' : 'none';
+    document.getElementById('lbNext').style.display = images.length > 1 ? 'flex' : 'none';
+    // Thumbnails
+    const thumbsEl = document.getElementById('lightboxThumbs');
+    thumbsEl.innerHTML = images.map((img, i) =>
+        '<img src="' + img + '" class="lightbox-thumb' + (i === lightboxIndex ? ' active' : '') + '" onclick="lightboxGoTo(' + i + ')" alt="صورة ' + (i+1) + '">'
+    ).join('');
+}
+function lightboxNav(dir) {
+    const images = currentProduct.images;
+    lightboxIndex = (lightboxIndex + dir + images.length) % images.length;
+    showLightboxImage();
+}
+function lightboxGoTo(i) {
+    lightboxIndex = i;
+    showLightboxImage();
+}
+// Close lightbox on backdrop click
+document.getElementById('lightboxOverlay').addEventListener('click', function(e) {
+    if (e.target === this || e.target.classList.contains('lightbox-image-wrap')) closeLightbox();
+});
+// Keyboard navigation for lightbox
+document.addEventListener('keydown', function(e) {
+    if (!document.getElementById('lightboxOverlay').classList.contains('show')) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowLeft') lightboxNav(1);
+    if (e.key === 'ArrowRight') lightboxNav(-1);
+});
+// Touch swipe for lightbox
+let lbTouchStartX = 0;
+document.getElementById('lightboxOverlay').addEventListener('touchstart', function(e) {
+    lbTouchStartX = e.touches[0].clientX;
+});
+document.getElementById('lightboxOverlay').addEventListener('touchend', function(e) {
+    const diff = lbTouchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) lightboxNav(diff > 0 ? -1 : 1);
+});
+
+// ========== Order Modal ==========
+let wilayasDataLoaded = false;
+async function loadWilayasData() {
+    if (wilayasDataLoaded) return;
+    try {
+        const script = document.createElement('script');
+        script.src = '/wilayas_data.js';
+        await new Promise((resolve, reject) => {
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+        wilayasDataLoaded = true;
+        // Populate wilaya dropdown
+        const wilayaSelect = document.getElementById('orderWilaya');
+        wilayaSelect.innerHTML = '<option value="" data-i18n="اختر الولاية">اختر الولاية</option>';
+        for (const wilaya of Object.keys(WILAYAS_DATA)) {
+            wilayaSelect.innerHTML += '<option value="' + wilaya + '">' + wilaya + '</option>';
+        }
+        // Wilaya change handler
+        wilayaSelect.addEventListener('change', function() {
+            const communeSelect = document.getElementById('orderCommune');
+            if (!this.value) {
+                communeSelect.innerHTML = '<option value="" data-i18n="اختر الولاية أولاً">اختر الولاية أولاً</option>';
+                communeSelect.disabled = true;
+                return;
+            }
+            const communes = WILAYAS_DATA[this.value] || [];
+            communeSelect.innerHTML = '<option value="">اختر البلدية</option>';
+            for (const c of communes) {
+                communeSelect.innerHTML += '<option value="' + c + '">' + c + '</option>';
+            }
+            communeSelect.disabled = false;
+        });
+    } catch (err) {
+        console.error('Failed to load wilayas data:', err);
+    }
+}
+function openOrderModal() {
+    loadWilayasData();
+    document.getElementById('orderModalOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+function closeOrderModal() {
+    document.getElementById('orderModalOverlay').classList.remove('show');
+    document.body.style.overflow = '';
+}
+async function submitOrder() {
+    const fullName = document.getElementById('orderFullName').value.trim();
+    const phone = document.getElementById('orderPhone').value.trim();
+    const wilaya = document.getElementById('orderWilaya').value;
+    const commune = document.getElementById('orderCommune').value;
+
+    if (!fullName) { showToast('الرجاء إدخال الاسم الكامل', 'error'); return; }
+    if (!phone) { showToast('الرجاء إدخال رقم الهاتف', 'error'); return; }
+    if (!wilaya) { showToast('الرجاء اختيار الولاية', 'error'); return; }
+    if (!commune) { showToast('الرجاء اختيار البلدية', 'error'); return; }
+
+    const btn = document.getElementById('orderSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-left:6px;"></i> جاري الإرسال...';
+
+    try {
+        const res = await fetch('/api/orders/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                productId: currentProduct.id,
+                fullName, phone, wilaya, commune
+            })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('تم إرسال الطلب بنجاح');
+            closeOrderModal();
+            // Reset form
+            document.getElementById('orderFullName').value = '';
+            document.getElementById('orderPhone').value = '';
+            document.getElementById('orderWilaya').value = '';
+            document.getElementById('orderCommune').innerHTML = '<option value="" data-i18n="اختر الولاية أولاً">اختر الولاية أولاً</option>';
+            document.getElementById('orderCommune').disabled = true;
+        } else {
+            showToast(data.error || 'حدث خطأ أثناء إرسال الطلب', 'error');
+        }
+    } catch (err) {
+        showToast('تعذر إرسال الطلب', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-left:6px;"></i> إرسال الطلب';
+    }
+}
+// Close order modal on backdrop click
+document.getElementById('orderModalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeOrderModal();
+});
+
+async function contactSeller() {
+    if (!currentProduct) return;
+    const p = currentProduct;
+
+    // Send the product as a message to the chat with the seller
+    try {
+        const productMessage = window.location.origin + '/product/' + p.id;
+
+        // Send the product info as first message
+        const res = await fetch('/api/messages/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                other_id: p.sellerId,
+                content: productMessage
+            })
+        });
+
+        const data = await res.json();
+        if (data.ok || data.messageId || data.id) {
+            // Navigate to chat with the seller
+            window.location.href = '/chat?contactId=' + p.sellerId;
+        } else {
+            // Even if error, try to navigate to chat
+            window.location.href = '/chat?contactId=' + p.sellerId;
+        }
+    } catch (err) {
+        // Navigate to chat anyway
+        window.location.href = '/chat?contactId=' + p.sellerId;
+    }
+}
+
+function showConfirm() {
+    document.getElementById('confirmOverlay').classList.add('show');
+}
+
+function hideConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('show');
+}
+
+async function confirmDelete() {
+    if (!currentProduct) return;
+    hideConfirm();
+    try {
+        const res = await fetch('/api/marketplace/' + currentProduct.id, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('تم حذف المنتج');
+            setTimeout(() => { window.location.href = '/marketplace'; }, 1000);
+        } else {
+            showToast(data.error || 'حدث خطأ', 'error');
+        }
+    } catch (err) {
+        showToast('تعذر حذف المنتج', 'error');
+    }
+}
+
+function getTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const diff = Date.now() - timestamp;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'الآن';
+    if (mins < 60) return 'منذ ' + mins + ' دقيقة';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return 'منذ ' + hours + ' ساعة';
+    const days = Math.floor(hours / 24);
+    if (days < 30) return 'منذ ' + days + ' يوم';
+    const months = Math.floor(days / 30);
+    return 'منذ ' + months + ' شهر';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showToast(message, type) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = 'toast show' + (type === 'error' ? ' error' : '');
+    setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+// Touch swipe support for image slider
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => {
+    const slider = document.getElementById('imageSlider');
+    if (slider && slider.contains(e.target)) {
+        touchStartX = e.touches[0].clientX;
+    }
+});
+document.addEventListener('touchend', (e) => {
+    const slider = document.getElementById('imageSlider');
+    if (slider && slider.contains(e.target)) {
+        const diff = touchStartX - e.changedTouches[0].clientX;
+        if (Math.abs(diff) > 50) {
+            // RTL: swipe left = next, swipe right = prev
+            changeSlide(diff > 0 ? -1 : 1);
+        }
+    }
+});
+
+init();
+</script>
+<script src="//cdn.jsdelivr.net/gh/realityripple/emoji/remoji.min.js" crossorigin="anonymous"></script>
+<script>document.addEventListener("DOMContentLoaded",function(){if(window.remoji){remoji.parse(document.body,{font:"oneui"});var o=new MutationObserver(function(m){m.forEach(function(mu){mu.addedNodes.forEach(function(n){if(n.nodeType===1)remoji.parse(n,{font:"oneui"})})})});o.observe(document.body,{childList:true,subtree:true})}});</script>
+<style>.emoji{height:1.2em;width:1.2em;margin:0 .05em 0 .1em;vertical-align:-0.2em;display:inline-block;}</style>
+
+
+<!-- Pull to Refresh -->
+<style>
+.ptr-indicator {
+  position: fixed;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(30,41,59,0.95);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  transition: top 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+.ptr-indicator .ptr-arrow {
+  width: 16px; height: 16px;
+  border: 2px solid #6ee7b7;
+  border-top: none; border-right: none;
+  transform: rotate(-45deg);
+  margin-top: -4px;
+  transition: transform 0.2s ease;
+}
+.ptr-indicator.ptr-ready .ptr-arrow {
+  transform: rotate(135deg);
+  margin-top: 4px;
+}
+.ptr-indicator.ptr-loading .ptr-arrow {
+  border: 2px solid #6ee7b7;
+  border-radius: 50%;
+  border-top-color: transparent;
+  width: 18px; height: 18px;
+  transform: none;
+  margin-top: 0;
+  animation: ptr-spin 0.6s linear infinite;
+}
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+</style>
+<div class="ptr-indicator" id="ptr-indicator"><div class="ptr-arrow"></div></div>
+<script>
+(function() {
+  var ptrEl = document.getElementById('ptr-indicator');
+  if (!ptrEl) return;
+  var startY = 0, pulling = false, activated = false;
+  var threshold = 90, deadZone = 15;
+
+  function isAtPageTop() {
+    return (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0) <= 2;
+  }
+
+  function isInsideScrollable(el) {
+    while (el && el !== document.body && el !== document.documentElement) {
+      var style = window.getComputedStyle(el);
+      var oy = style.overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight && el.scrollTop > 0) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  }
+
+  document.addEventListener('touchstart', function(e) {
+    if (!isAtPageTop()) return;
+    if (isInsideScrollable(e.target)) return;
+    startY = e.touches[0].clientY;
+    pulling = true;
+    activated = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!pulling) return;
+    var currentY = e.touches[0].clientY;
+    var dist = currentY - startY;
+
+    if (!isAtPageTop()) {
+      pulling = false;
+      ptrEl.style.top = '-50px';
+      ptrEl.classList.remove('ptr-ready');
+      return;
+    }
+
+    if (dist < deadZone) return;
+
+    var realDist = dist - deadZone;
+    var progress = Math.min(realDist / threshold, 1);
+    var top = Math.min(realDist * 0.35, 50);
+    ptrEl.style.top = (top - 15) + 'px';
+    ptrEl.style.transition = 'none';
+
+    if (progress >= 1) {
+      ptrEl.classList.add('ptr-ready');
+      activated = true;
+    } else {
+      ptrEl.classList.remove('ptr-ready');
+      activated = false;
+    }
+
+    if (realDist > 5 && e.cancelable) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', function() {
+    if (!pulling) return;
+    ptrEl.style.transition = 'top 0.25s ease';
+    if (activated) {
+      ptrEl.style.top = '12px';
+      ptrEl.classList.remove('ptr-ready');
+      ptrEl.classList.add('ptr-loading');
+      setTimeout(function() { location.reload(); }, 350);
+    } else {
+      ptrEl.style.top = '-50px';
+      ptrEl.classList.remove('ptr-ready');
+    }
+    pulling = false;
+    activated = false;
+    startY = 0;
+  }, { passive: true });
+})();
+</script>
+
+</body>
+</html>
