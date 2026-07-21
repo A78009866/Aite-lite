@@ -115,18 +115,43 @@ async function uploadFileToR2(file, folder) {
 
 const upload = multer({ storage: memoryStorage, fileFilter: fileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
 
-// Initialize Firebase Admin
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY || '{}');
-
-if (admin.apps.length === 0) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.FIREBASE_DATABASE_URL || "https://trimer-4081b-default-rtdb.firebaseio.com",
-  });
+// Initialize Firebase Admin (robust to missing/malformed credentials)
+let serviceAccount = null;
+try {
+  if (process.env.SERVICE_ACCOUNT_KEY) {
+    const parsed = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+    if (parsed && typeof parsed.project_id === 'string' && parsed.project_id) {
+      serviceAccount = parsed;
+    } else {
+      console.warn('SERVICE_ACCOUNT_KEY is set but missing a valid project_id; ignoring it.');
+    }
+  }
+} catch (e) {
+  console.error('SERVICE_ACCOUNT_KEY is not valid JSON. Firebase initialization skipped. Error:', e.message);
 }
 
-const firebaseAuth = getAuth();
-const db = getDatabase();
+let firebaseAuth = null;
+let db = null;
+if (serviceAccount && admin.apps.length === 0) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: process.env.FIREBASE_DATABASE_URL || "https://trimer-4081b-default-rtdb.firebaseio.com",
+    });
+    firebaseAuth = getAuth();
+    db = getDatabase();
+    console.log('Firebase Admin initialized for project:', serviceAccount.project_id);
+  } catch (initErr) {
+    console.error('Failed to initialize Firebase Admin:', initErr.message);
+  }
+} else if (admin.apps.length > 0) {
+  firebaseAuth = getAuth();
+  db = getDatabase();
+}
+
+if (!db) {
+  console.warn('No Firebase credentials configured. The static frontend will be served, but API endpoints requiring the database will fail until SERVICE_ACCOUNT_KEY is set.');
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -209,6 +234,12 @@ function isAllowedOrigin(origin) {
   return false;
 }
 
+function getCorsOriginHeader(req) {
+  const origin = req.headers.origin;
+  if (isAllowedOrigin(origin)) return origin || [...CORS_STATIC_ORIGINS][0] || '*';
+  return [...CORS_STATIC_ORIGINS][0] || 'null';
+}
+
 const corsOptions = {
   origin: function (origin, cb) {
     if (isAllowedOrigin(origin)) return cb(null, true);
@@ -251,11 +282,13 @@ app.use(session({
     sameSite: SESSION_COOKIE_SECURE ? 'none' : 'lax',
     maxAge: 30 * 24 * 60 * 60 * 1000
   },
-  store: new FirebaseStore({
-    database: db,
-    collection: 'sessions',
-    ttl: 30 * 24 * 60 * 60
-  })
+  store: db
+    ? new FirebaseStore({
+        database: db,
+        collection: 'sessions',
+        ttl: 30 * 24 * 60 * 60
+      })
+    : new session.MemoryStore()
 }));
 
 // Sanitize user-supplied values before using them in Firebase paths
@@ -543,42 +576,75 @@ app.get('/post', requireAuth, (req, res) => {
   return res.redirect(`/post.html${qs}`);
 });
 // API: بحث بسيط يجمع من posts, reels, profiles (فلترة بسيطة على الخادم)
+// تم تحسينه لتجنب جلب العقد الكاملة من قاعدة البيانات.
 app.get('/api/search', requireAuth, async (req, res) => {
   try {
     const qRaw = String(req.query.q || '').trim();
     const q = qRaw.toLowerCase();
     if (!q) return res.json({ ok: true, posts: [], reels: [], people: [] });
 
-    // جلب البيانات الأساسية
-    const [postsSnap, reelsSnap, profilesSnap] = await Promise.all([
-      db.ref('posts').once('value'),
-      db.ref('reels').once('value'),
-      db.ref('profiles').once('value')
+    const POST_LIMIT = 100;
+    const REEL_LIMIT = 50;
+    const PEOPLE_LIMIT = 30;
+
+    // Search people by username/full-name prefix. Falls back to an in-memory scan on the small result set.
+    const [byUsernameSnap, byFullNameSnap] = await Promise.all([
+      db.ref('profiles').orderByChild('username').startAt(q).endAt(q + '\uf8ff').limitToFirst(PEOPLE_LIMIT).once('value'),
+      db.ref('profiles').orderByChild('full_name').startAt(q).endAt(q + '\uf8ff').limitToFirst(PEOPLE_LIMIT).once('value')
     ]);
 
-    const profilesObj = profilesSnap.val() || {};
-    // Normalize profiles array
-    const profilesArr = Object.values(profilesObj).map(p => ({
-      id: p.id || p.uid || '',
-      username: (p.username || '').toLowerCase(),
-      usernameRaw: p.username || '',
-      full_name: (p.full_name || '').toLowerCase(),
-      full_nameRaw: p.full_name || '',
-      profile_picture_url: p.profile_picture_url || ''
-    }));
+    const profilesMap = {};
+    byUsernameSnap.forEach(child => {
+      const p = child.val();
+      if (!p || profilesMap[child.key]) return;
+      profilesMap[child.key] = {
+        id: child.key,
+        username: p.username || '',
+        full_name: p.full_name || '',
+        profile_picture_url: p.profile_picture_url || ''
+      };
+    });
+    byFullNameSnap.forEach(child => {
+      const p = child.val();
+      if (!p || profilesMap[child.key]) return;
+      profilesMap[child.key] = {
+        id: child.key,
+        username: p.username || '',
+        full_name: p.full_name || '',
+        profile_picture_url: p.profile_picture_url || ''
+      };
+    });
+    const people = Object.values(profilesMap).slice(0, PEOPLE_LIMIT);
 
-    // search people
-    const people = profilesArr.filter(u => {
-      return (u.username && u.username.includes(q)) || (u.full_name && u.full_name.includes(q));
-    }).slice(0, 30).map(u => ({ id: u.id, username: u.usernameRaw, full_name: u.full_nameRaw, profile_picture_url: u.profile_picture_url }));
+    // Fetch a recent window of posts/reels, then enrich with author info on demand.
+    const [postsSnap, reelsSnap] = await Promise.all([
+      db.ref('posts').orderByChild('timestamp').limitToLast(POST_LIMIT).once('value'),
+      db.ref('reels').orderByChild('timestamp').limitToLast(REEL_LIMIT).once('value')
+    ]);
 
-    // search posts (check content + author username/full_name)
-    const postsObj = postsSnap.val() || {};
-    const postsArr = Object.values(postsObj);
+    const postsArr = [];
+    const reelsArr = [];
+    const authorIds = new Set();
+    postsSnap.forEach(child => {
+      const p = child.val();
+      if (p) { postsArr.push(p); if (p.userId) authorIds.add(p.userId); }
+    });
+    reelsSnap.forEach(child => {
+      const r = child.val();
+      if (r) { reelsArr.push(r); if (r.userId) authorIds.add(r.userId); }
+    });
+
+    // Batch author profile fetches
+    const profilePromises = {};
+    authorIds.forEach(id => { profilePromises[id] = db.ref(`profiles/${id}`).once('value'); });
+    const profileSnaps = await Promise.all(Object.values(profilePromises));
+    const profiles = {};
+    Object.keys(profilePromises).forEach((id, idx) => { profiles[id] = profileSnaps[idx].val() || {}; });
+
     const matchedPosts = [];
     for (const p of postsArr) {
       const content = (p.content || '').toLowerCase();
-      const author = profilesObj[p.userId] || {};
+      const author = profiles[p.userId] || {};
       const authorName = (author.username || '').toLowerCase();
       const authorFull = (author.full_name || '').toLowerCase();
       if (content.includes(q) || authorName.includes(q) || authorFull.includes(q)) {
@@ -597,13 +663,10 @@ app.get('/api/search', requireAuth, async (req, res) => {
       if (matchedPosts.length >= 30) break;
     }
 
-    // search reels (description + author)
-    const reelsObj = reelsSnap.val() || {};
-    const reelsArr = Object.values(reelsObj);
     const matchedReels = [];
     for (const r of reelsArr) {
       const desc = (r.description || '').toLowerCase();
-      const author = profilesObj[r.userId] || {};
+      const author = profiles[r.userId] || {};
       const authorName = (author.username || '').toLowerCase();
       const authorFull = (author.full_name || '').toLowerCase();
       if (desc.includes(q) || authorName.includes(q) || authorFull.includes(q)) {
@@ -622,7 +685,7 @@ app.get('/api/search', requireAuth, async (req, res) => {
       if (matchedReels.length >= 30) break;
     }
 
-    res.json({ ok: true, posts: matchedPosts, reels: matchedReels, people: people });
+    res.json({ ok: true, posts: matchedPosts, reels: matchedReels, people });
   } catch (err) {
     console.error('Search API error:', err);
     res.status(500).json({ ok: false, error: 'Server error' });
@@ -2061,34 +2124,48 @@ app.get('/api/music/search', requireAuth, async (req, res) => {
 });
 
 // 2. جلب القصص النشطة (أقل من 24 ساعة) وتجميعها بالمستخدم
+// تم تحسينه: جلب قصص لم تنتهِ صلاحيتها فقط مع حد أقصى، وجلب البيانات المرتبطة دفعة واحدة.
 app.get('/api/stories', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.session.userId;
-    const storiesSnap = await db.ref('stories').once('value');
-    const storiesData = storiesSnap.val() || {};
+    const STORY_LIMIT = 200;
     const now = Date.now();
-    
-    let activeStories = Object.values(storiesData).filter(s => s.expiresAt > now);
+
+    // Only fetch stories that have not expired yet, capped to avoid loading the entire node.
+    const storiesSnap = await db.ref('stories')
+      .orderByChild('expiresAt')
+      .startAt(now)
+      .limitToFirst(STORY_LIMIT)
+      .once('value');
+
+    const activeStories = [];
+    storiesSnap.forEach(child => {
+      const s = child.val();
+      if (s) { s.id = s.id || child.key; activeStories.push(s); }
+    });
 
     // Filter out stories from blocked users (both directions)
     const blockedByMe = await getBlockedUserIds(currentUserId);
     const blockedMe = await getBlockedByUserIds(currentUserId);
     const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
-    activeStories = activeStories.filter(s => !allBlockedIds.has(s.userId));
+    const visibleStories = activeStories.filter(s => !allBlockedIds.has(s.userId));
+
+    // Fetch only the profiles we actually need
+    const userIds = [...new Set(visibleStories.map(s => s.userId))];
+    const profilePromises = userIds.map(id => db.ref(`profiles/${id}`).once('value'));
+    const profileSnaps = await Promise.all(profilePromises);
+    const profiles = {};
+    userIds.forEach((id, idx) => { profiles[id] = profileSnaps[idx].val() || {}; });
+
+    // Fetch story views for the returned stories only
+    const viewPromises = visibleStories.map(s => db.ref(`story_views/${s.id}`).once('value'));
+    const viewSnaps = await Promise.all(viewPromises);
+    const storyViews = {};
+    visibleStories.forEach((s, idx) => { storyViews[s.id] = viewSnaps[idx].val() || {}; });
 
     // تجميع القصص حسب المستخدم
     const groupedStories = {};
-    const userIds = [...new Set(activeStories.map(s => s.userId))];
-    
-    // جلب بيانات المستخدمين
-    const profilesSnap = await db.ref('profiles').once('value');
-    const profiles = profilesSnap.val() || {};
-
-    // جلب المشاهدات لتحديد حالة viewed
-    const viewsSnap = await db.ref('story_views').once('value');
-    const allViews = viewsSnap.val() || {};
-
-    activeStories.forEach(story => {
+    visibleStories.forEach(story => {
       if (!groupedStories[story.userId]) {
         const user = profiles[story.userId] || {};
         groupedStories[story.userId] = {
@@ -2100,14 +2177,13 @@ app.get('/api/stories', requireAuth, async (req, res) => {
           items: []
         };
       }
-        // إضافة حالة المشاهدة ولون القصة
-        const storyViews = allViews[story.id] || {};
-        story.viewed = !!storyViews[currentUserId];
-        // حفظ لون القصة على مستوى المجموعة (أول لون غير فارغ)
-        if (story.story_color && !groupedStories[story.userId].story_color) {
-          groupedStories[story.userId].story_color = story.story_color;
-        }
-        groupedStories[story.userId].items.push(story);
+      // إضافة حالة المشاهدة ولون القصة
+      story.viewed = !!storyViews[story.id][currentUserId];
+      // حفظ لون القصة على مستوى المجموعة (أول لون غير فارغ)
+      if (story.story_color && !groupedStories[story.userId].story_color) {
+        groupedStories[story.userId].story_color = story.story_color;
+      }
+      groupedStories[story.userId].items.push(story);
     });
 
     // ترتيب القصص داخل كل مستخدم حسب الوقت
@@ -2942,6 +3018,7 @@ app.put('/api/messages/:otherId/:messageId', requireAuth, async (req, res) => {
 
 // ---------------- API: Users & Profile ----------------
 // /api/users -> returns friends only
+// Optimized: only loads active stories for friends and fetches views for those stories only.
 app.get('/api/users', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
@@ -2950,33 +3027,51 @@ app.get('/api/users', requireAuth, async (req, res) => {
     const friendIds = Object.keys(friendsObj);
     if (friendIds.length === 0) return res.json({ ok: true, users: [] });
 
+    const friendIdSet = new Set(friendIds);
     const profilePromises = friendIds.map(id => db.ref(`profiles/${id}`).once('value'));
     const profileSnapshots = await Promise.all(profilePromises);
-    const profiles = profileSnapshots.map(snap => snap.val() || {});
+    const profiles = {};
+    profileSnapshots.forEach((snap, idx) => { profiles[friendIds[idx]] = snap.val() || {}; });
+
     const allChatsSnap = await db.ref(`chats/${currentUserId}`).once('value');
     const allChats = allChatsSnap.val() || {};
 
-    // Check which friends have active stories + viewed status + story color
+    // Fetch only active stories for friends; capped to avoid loading the entire node.
     const now = Date.now();
-    const storiesSnap = await db.ref('stories').once('value');
-    const allStories = storiesSnap.val() || {};
-    const usersWithStories = new Set();
-    const userStoryColors = {};
-    const userStoryIds = {};
-    Object.values(allStories).forEach(story => {
-      if (story.expiresAt > now) {
-        usersWithStories.add(story.userId);
-        if (!userStoryColors[story.userId] && story.story_color) userStoryColors[story.userId] = story.story_color;
-        if (!userStoryIds[story.userId]) userStoryIds[story.userId] = [];
-        userStoryIds[story.userId].push(story.id);
+    const STORY_LIMIT = 200;
+    const storiesSnap = await db.ref('stories')
+      .orderByChild('expiresAt')
+      .startAt(now)
+      .limitToFirst(STORY_LIMIT)
+      .once('value');
+
+    const activeStories = [];
+    storiesSnap.forEach(child => {
+      const s = child.val();
+      if (s && s.expiresAt > now && friendIdSet.has(s.userId)) {
+        s.id = s.id || child.key;
+        activeStories.push(s);
       }
     });
 
-    const viewsSnap = await db.ref('story_views').once('value');
-    const allViews = viewsSnap.val() || {};
+    const usersWithStories = new Set();
+    const userStoryColors = {};
+    const userStoryIds = {};
+    activeStories.forEach(story => {
+      usersWithStories.add(story.userId);
+      if (!userStoryColors[story.userId] && story.story_color) userStoryColors[story.userId] = story.story_color;
+      if (!userStoryIds[story.userId]) userStoryIds[story.userId] = [];
+      userStoryIds[story.userId].push(story.id);
+    });
 
-    const usersList = profiles.map((user) => {
-      const contactId = user.id;
+    // Fetch story views only for the active stories we are returning
+    const viewPromises = activeStories.map(s => db.ref(`story_views/${s.id}`).once('value'));
+    const viewSnaps = await Promise.all(viewPromises);
+    const allViews = {};
+    activeStories.forEach((s, idx) => { allViews[s.id] = viewSnaps[idx].val() || {}; });
+
+    const usersList = friendIds.map((contactId) => {
+      const user = profiles[contactId] || {};
       const chatSummary = allChats[contactId] || {};
       let lastMessage = null;
       if (chatSummary.last_message_content) {
@@ -2988,14 +3083,14 @@ app.get('/api/users', requireAuth, async (req, res) => {
         };
       }
       let storyViewed = false;
-      if (usersWithStories.has(user.id) && userStoryIds[user.id]) {
-        storyViewed = userStoryIds[user.id].every(sid => {
+      if (usersWithStories.has(contactId) && userStoryIds[contactId]) {
+        storyViewed = userStoryIds[contactId].every(sid => {
           const sv = allViews[sid] || {};
           return !!sv[currentUserId];
         });
       }
       return {
-        id: user.id,
+        id: contactId,
         username: user.username,
         full_name: user.full_name,
         profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
@@ -3003,9 +3098,9 @@ app.get('/api/users', requireAuth, async (req, res) => {
         unread_count: chatSummary.unread_count || 0,
         is_online: !!user.is_online,
         is_verified: !!user.is_verified,
-        has_story: usersWithStories.has(user.id),
+        has_story: usersWithStories.has(contactId),
         story_viewed: storyViewed,
-        story_color: userStoryColors[user.id] || ''
+        story_color: userStoryColors[contactId] || ''
       };
     });
 
@@ -3048,20 +3143,66 @@ app.get('/api/get-public-info', requireAuth, async (req, res) => {
 });
 
 
-// /api/users/all -> all users with is_friend/request flags
+// /api/users/all -> paginated list of all users with is_friend/request flags
+// Added pagination and one-time friend/incoming-request lookups to avoid scanning the entire database.
 app.get('/api/users/all', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
-    const profilesSnap = await db.ref('profiles').once('value');
-    const profiles = profilesSnap.val() || {};
-    const users = Object.values(profiles).filter(u => u.id !== currentUserId).map(user => ({ id: user.id, username: user.username, full_name: user.full_name, profile_picture_url: user.profile_picture_url || DEFAULT_PROFILE_PIC_URL, is_online: !!user.is_online }));
+    const PAGE_SIZE = 50;
+    const startKey = req.query.pageKey ? String(req.query.pageKey) : '';
+
+    // Paginated query by profile key (username order is preferable, but key pagination is a safe default).
+    const profilesSnap = await db.ref('profiles')
+      .orderByKey()
+      .startAt(startKey)
+      .limitToFirst(PAGE_SIZE + 1)
+      .once('value');
+
+    const users = [];
+    profilesSnap.forEach(child => {
+      const u = child.val();
+      if (u && child.key !== currentUserId) {
+        u.id = u.id || child.key;
+        users.push({
+          id: u.id,
+          username: u.username,
+          full_name: u.full_name,
+          profile_picture_url: u.profile_picture_url || DEFAULT_PROFILE_PIC_URL,
+          is_online: !!u.is_online
+        });
+      }
+    });
+
+    // If startKey is present, the first result is the key we already returned on the previous page; drop it.
+    if (startKey && users.length > 0 && users[0].id === startKey) {
+      users.shift();
+    }
+
+    let nextPageKey = null;
+    if (users.length > PAGE_SIZE) {
+      nextPageKey = users[PAGE_SIZE].id;
+      users.length = PAGE_SIZE;
+    }
+
+    // One-time lookups for the current user's friendships and incoming requests
+    const [friendsSnap, incomingSnap] = await Promise.all([
+      db.ref(`friends/${currentUserId}`).once('value'),
+      db.ref(`friend_requests/${currentUserId}`).once('value')
+    ]);
+    const friendSet = new Set(Object.keys(friendsSnap.val() || {}));
+    const incomingSet = new Set(Object.keys(incomingSnap.val() || {}));
+
     const full = await Promise.all(users.map(async (u) => {
-      const isFriendSnap = await db.ref(`friends/${currentUserId}/${u.id}`).once('value');
-      const outgoing = await db.ref(`friend_requests/${u.id}/${currentUserId}`).once('value'); // request I sent to them
-      const incoming = await db.ref(`friend_requests/${currentUserId}/${u.id}`).once('value'); // request they sent to me
-      return { ...u, is_friend: isFriendSnap.exists(), request_sent: outgoing.exists(), request_received: incoming.exists() };
+      const outgoingSnap = await db.ref(`friend_requests/${u.id}/${currentUserId}`).once('value');
+      return {
+        ...u,
+        is_friend: friendSet.has(u.id),
+        request_sent: outgoingSnap.exists(),
+        request_received: incomingSet.has(u.id)
+      };
     }));
-    res.json({ ok: true, users: full });
+
+    res.json({ ok: true, users: full, nextPageKey });
   } catch (error) {
     console.error('Error /api/users/all', error);
     res.status(500).json({ ok: false, error: 'فشل في جلب المستخدمين.' });
@@ -3101,7 +3242,7 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
       };
       await notifRef.set(notifData);
       // إرسال إشعار Push لطلب الصداقة
-      sendPushNotification(to_id, `${fromProfile.username || 'شخص ما'}`, 'أرسل لك طلب صداقة 👋', { type: 'friend_request', url: `https://aite-lite.vercel.app/profile/${from_id}`, from_user_id: from_id, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
+      sendPushNotification(to_id, `${fromProfile.username || 'شخص ما'}`, 'أرسل لك طلب صداقة 👋', { type: 'friend_request', url: `https://aite-lite.vercel.app/profile/${fromId}`, from_user_id: fromId, from_username: fromProfile.username || '', from_profile_picture_url: fromProfile.profile_picture_url || '', from_is_verified: !!fromProfile.is_verified });
     } catch (nerr) {
       console.error('Failed to create friend_request notification:', nerr);
     }
@@ -5030,7 +5171,7 @@ app.get('/api/posts/:postId/comments/stream', requireAuth, async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
-    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : corsOptions.origin[0],
+    'Access-Control-Allow-Origin': getCorsOriginHeader(req),
   });
   res.write('\n');
 
@@ -5152,56 +5293,66 @@ app.post('/api/reels/create', requireAuth, writeLimiter, (req, res, next) => {
 app.get('/api/reels/feed', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
   try {
-    const reelsSnap = await db.ref('reels').once('value');
+    const REEL_PAGE_SIZE = 20;
+    // Fetch only the most recent reels instead of the entire node
+    const reelsSnap = await db.ref('reels')
+      .orderByChild('timestamp')
+      .limitToLast(REEL_PAGE_SIZE)
+      .once('value');
     let reels = [];
     reelsSnap.forEach(snap => {
       const data = snap.val();
-      if (data) reels.push(data);
+      if (data) {
+        data.reelId = data.reelId || snap.key;
+        reels.push(data);
+      }
     });
 
     // Filter out reels from blocked users (both directions)
-    const [blockedByMe, blockedMe, friendsSnap, outgoingReqSnap, incomingReqSnap] = await Promise.all([
+    const [blockedByMe, blockedMe, friendsSnap, incomingReqSnap] = await Promise.all([
       getBlockedUserIds(currentUserId),
       getBlockedByUserIds(currentUserId),
       db.ref(`friends/${currentUserId}`).once('value'),
-      db.ref(`friend_requests`).once('value'),
       db.ref(`friend_requests/${currentUserId}`).once('value'),
     ]);
     const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
     reels = reels.filter(r => !allBlockedIds.has(r.userId));
 
-    // Build friend-state lookup tables in one pass
+    // Build friend-state lookup tables
     const myFriendIds = new Set(Object.keys(friendsSnap.val() || {}));
-    // outgoing[ otherUserId ] === true iff *I* sent a request to otherUserId
-    // (stored under friend_requests/<to>/<from>)
-    const outgoingMap = new Set();
-    outgoingReqSnap.forEach(toSnap => {
-      const toId = toSnap.key;
-      if (toSnap.child(currentUserId).exists()) outgoingMap.add(toId);
-    });
     const incomingMap = new Set(Object.keys(incomingReqSnap.val() || {}));
 
-    // Enrich each reel with author profile, like state, comment count, friend state
-    const enriched = await Promise.all(reels.map(async (reel) => {
-      const [userSnap, likeSnap, commentsSnap] = await Promise.all([
-        db.ref(`profiles/${reel.userId}`).once('value'),
-        db.ref(`reels_likes/${reel.reelId}/${currentUserId}`).once('value'),
-        db.ref(`reels_comments/${reel.reelId}`).once('value'),
-      ]);
-      const userData = userSnap.val() || {};
+    // Batch fetch author profiles, outgoing request status, and like status
+    const authorIds = [...new Set(reels.map(r => r.userId))];
+    const authorPromises = {};
+    const outgoingPromises = {};
+    authorIds.forEach(id => {
+      authorPromises[id] = db.ref(`profiles/${id}`).once('value');
+      outgoingPromises[id] = db.ref(`friend_requests/${id}/${currentUserId}`).once('value');
+    });
+    const likePromises = {};
+    reels.forEach(r => {
+      likePromises[r.reelId] = db.ref(`reels_likes/${r.reelId}/${currentUserId}`).once('value');
+    });
 
-      let totalCommentsCount = reel.commentsCount || 0;
-      try {
-        let commentsNum = 0;
-        let repliesNum = 0;
-        commentsSnap.forEach(c => {
-          commentsNum++;
-          const val = c.val();
-          if (val && typeof val.repliesCount === 'number') repliesNum += val.repliesCount;
-        });
-        if (commentsNum > 0) totalCommentsCount = commentsNum + repliesNum;
-      } catch(e) {}
+    const [authorSnaps, outgoingSnaps, likeSnaps] = await Promise.all([
+      Promise.all(Object.values(authorPromises)),
+      Promise.all(Object.values(outgoingPromises)),
+      Promise.all(Object.values(likePromises))
+    ]);
 
+    const profiles = {};
+    authorIds.forEach((id, idx) => { profiles[id] = authorSnaps[idx].val() || {}; });
+
+    const outgoingMap = new Set();
+    authorIds.forEach((id, idx) => { if (outgoingSnaps[idx].exists()) outgoingMap.add(id); });
+
+    const likeMap = {};
+    reels.forEach((r, idx) => { likeMap[r.reelId] = likeSnaps[idx].exists(); });
+
+    // Enrich each reel with author profile, like state, and friend state
+    const enriched = reels.map(reel => {
+      const userData = profiles[reel.userId] || {};
       const isOwner = reel.userId === currentUserId;
       const isFriend = myFriendIds.has(reel.userId);
       const requestSent = outgoingMap.has(reel.userId);
@@ -5209,8 +5360,9 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
 
       return {
         ...reel,
-        commentsCount: totalCommentsCount,
-        is_liked: likeSnap.exists(),
+        // commentsCount is already maintained at creation time; avoid recounting
+        commentsCount: reel.commentsCount || 0,
+        is_liked: !!likeMap[reel.reelId],
         is_friend: isFriend,
         request_sent: requestSent,
         request_received: requestReceived,
@@ -5226,7 +5378,7 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
           request_received: requestReceived,
         }
       };
-    }));
+    });
 
     // Smart sort: heavy recency bias, friend boost, then likes
     const now = Date.now();
@@ -5825,11 +5977,16 @@ app.get('/api/reels/:reelId/comments', requireAuth, async (req, res) => {
 app.get('/api/notifications', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   try {
-    const snap = await db.ref(`notifications/${userId}`).once('value');
+    const NOTIF_LIMIT = 50;
+    // Fetch the most recent notifications only; unread count is computed on this window.
+    const snap = await db.ref(`notifications/${userId}`)
+      .orderByChild('timestamp')
+      .limitToLast(NOTIF_LIMIT)
+      .once('value');
     const items = [];
     snap.forEach(child => {
       const v = child.val();
-      items.push({ id: child.key, ...v });
+      if (v) items.push({ id: child.key, ...v });
     });
     items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     const unreadCount = items.filter(i => !i.is_read).length;
@@ -5913,7 +6070,7 @@ app.get('/api/notifications/stream', requireAuth, (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : 'null',
+    'Access-Control-Allow-Origin': getCorsOriginHeader(req),
   });
   res.write('\n');
 
@@ -6309,11 +6466,22 @@ app.get('/partials/posts', requireAuth, async (req, res) => {
   try {
     const postsSnap = await db.ref('posts').orderByChild('timestamp').limitToLast(50).once('value');
     const postsArr = [];
-    postsSnap.forEach(child => postsArr.push(child.val()));
+    const authorIds = new Set();
+    postsSnap.forEach(child => {
+      const post = child.val();
+      if (post) {
+        postsArr.push(post);
+        if (post.userId) authorIds.add(post.userId);
+      }
+    });
     postsArr.reverse();
 
-    const profilesSnap = await db.ref('profiles').once('value');
-    const profiles = profilesSnap.val() || {};
+    // Batch fetch only the profiles we need for these posts
+    const profilePromises = {};
+    authorIds.forEach(id => { profilePromises[id] = db.ref(`profiles/${id}`).once('value'); });
+    const profileSnaps = await Promise.all(Object.values(profilePromises));
+    const profiles = {};
+    Object.keys(profilePromises).forEach((id, idx) => { profiles[id] = profileSnaps[idx].val() || {}; });
 
     let html = `<div id="postsFeed" class="max-w-xl mx-auto mt-6 space-y-4">`;
     postsArr.forEach(post => {
@@ -6355,9 +6523,8 @@ app.get('/partials/chat_content', requireAuth, async (req, res) => {
   try {
     const familiesPromise = db.ref('families').once('value');
     const postsPromise = db.ref('posts').orderByChild('timestamp').limitToLast(50).once('value');
-    const profilesPromise = db.ref('profiles').once('value');
 
-    const [familiesSnap, postsSnap, profilesSnap] = await Promise.all([familiesPromise, postsPromise, profilesPromise]);
+    const [familiesSnap, postsSnap] = await Promise.all([familiesPromise, postsPromise]);
 
     const familiesObj = familiesSnap.val() || {};
     const families = Object.keys(familiesObj).map(fid => {
@@ -6372,10 +6539,22 @@ app.get('/partials/chat_content', requireAuth, async (req, res) => {
     });
 
     const postsArr = [];
-    postsSnap.forEach(child => postsArr.push(child.val()));
+    const authorIds = new Set();
+    postsSnap.forEach(child => {
+      const post = child.val();
+      if (post) {
+        postsArr.push(post);
+        if (post.userId) authorIds.add(post.userId);
+      }
+    });
     postsArr.reverse();
 
-    const profiles = profilesSnap.val() || {};
+    // Batch fetch author profiles only for the displayed posts instead of all profiles
+    const profilePromises = {};
+    authorIds.forEach(id => { profilePromises[id] = db.ref(`profiles/${id}`).once('value'); });
+    const profileSnaps = await Promise.all(Object.values(profilePromises));
+    const profiles = {};
+    Object.keys(profilePromises).forEach((id, idx) => { profiles[id] = profileSnaps[idx].val() || {}; });
 
     let html = '';
 
@@ -6416,58 +6595,6 @@ app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ ok: false, error: 'Server error' });
 });
-// ============================================================
-// مسار جديد: جلب رسائل المحادثة (JSON) - يحل مشكلة التاريخ والصوت
-// ============================================================
-app.get('/api/messages/:chatId', requireAuth, async (req, res) => {
-  const chatId = req.params.chatId;
-  const currentUserId = req.session.userId;
-
-  // Validate chatId format to prevent path traversal
-  if (!/^[A-Za-z0-9_-]+$/.test(chatId)) {
-    return res.status(400).json({ error: 'معرف المحادثة غير صالح' });
-  }
-
-  // Verify user is a participant in this chat
-  const parts = chatId.split('_');
-  if (!parts.includes(currentUserId)) {
-    return res.status(403).json({ error: 'غير مصرح لك بالوصول لهذه المحادثة' });
-  }
-
-  try {
-    const messagesRef = admin.database().ref(`chats/${chatId}/messages`);
-    const snapshot = await messagesRef
-      .orderByChild('timestamp')
-      .limitToLast(1000) 
-      .once('value');
-
-    const messages = [];
-    snapshot.forEach(child => {
-      messages.push({
-        ...child.val(),
-        messageId: child.key
-      });
-    });
-
-    const otherUserId = parts[0] === currentUserId ? parts[1] : parts[0];
-    
-    const userSnapshot = await admin.database().ref('users/' + otherUserId).once('value');
-    const otherUserData = userSnapshot.val() || {};
-
-    res.json({
-      messages: messages,
-      currentUserId: currentUserId,
-      otherUser: {
-        username: otherUserData.username || 'مستخدم',
-        avatar: otherUserData.profilePic || DEFAULT_PROFILE_PIC_URL
-      }
-    });
-
-  } catch (err) {
-    console.error('Error fetching json messages:', err);
-    res.status(500).json({ error: 'حدث خطأ أثناء جلب الرسائل' });
-  }
-});
 // ==========================================
 //  نظام بث قائمة المحادثات (SSE) - الإصلاح
 // ==========================================
@@ -6480,7 +6607,7 @@ app.get('/api/users/stream', requireAuth, async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': corsOptions.origin.includes(req.headers.origin) ? req.headers.origin : corsOptions.origin[0],
+    'Access-Control-Allow-Origin': getCorsOriginHeader(req),
   });
   res.write('\n');
 
