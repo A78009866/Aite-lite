@@ -8,6 +8,8 @@ This archive is your full `Aite-lite` repo with the Android wrapper already adde
 | --- | --- |
 | `mobile/` (new) | Capacitor 6 Android wrapper project. Bundles all HTML/CSS/JS from `views/` into the APK so screens open instantly from local storage, and routes API calls to the live backend. |
 | `server.js` (modified) | CORS now allows the Capacitor shell origins (`https://localhost`, `capacitor://localhost`, …), and the session cookie uses `SameSite=None; Secure` in production so it can cross the mobile origin. |
+| `mobile/scripts/aite-bridge.js` | Disables zoom and text selection (except inputs/textareas), and registers the native FCM push token with `/api/save-fcm-token`. |
+| `mobile/android/app/src/main/java/com/aite/app/MainActivity.java` | Disables WebView zoom controls and long-click text selection at the native level. |
 
 Nothing else in the repo is touched.
 
@@ -54,6 +56,11 @@ and the passwords in `mobile/android/keystore.properties`.
 > passwords to a public repo. Once you change the keystore, every future
 > release must be signed with the same keystore — that's Android's upgrade
 > identity rule. Back it up somewhere safe.
+
+> NOTE: Push notifications need your Firebase project's `google-services.json`
+> placed at `mobile/android/app/google-services.json` and the app ID `com.aite.app`
+> registered in that Firebase project. Without it the app still builds and runs,
+> but FCM tokens will not be generated.
 
 ## How fast is "fast"?
 
