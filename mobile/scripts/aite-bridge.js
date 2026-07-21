@@ -287,6 +287,80 @@
     }
   } catch (e) { /* WebView doesn't allow patching location.href – anchor handler still works */ }
 
+  // ----- disable zoom and text selection -----
+  function disableZoomAndSelection() {
+    try {
+      // Ensure viewport disables zoom
+      var meta = document.querySelector('meta[name="viewport"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'viewport');
+        document.head.appendChild(meta);
+      }
+      var existing = meta.getAttribute('content') || '';
+      if (existing.indexOf('user-scalable') === -1) {
+        meta.setAttribute('content', existing + (existing ? ', ' : '') + 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+      }
+      // Disable text selection via CSS while keeping inputs/textareas selectable
+      var style = document.createElement('style');
+      style.textContent = '* { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; } ' +
+                          'input, textarea, [contenteditable="true"] { -webkit-user-select: auto; user-select: auto; }';
+      document.head.appendChild(style);
+      // Prevent context menu/long-press selection on non-input elements
+      document.addEventListener('contextmenu', function (e) {
+        var tag = (e.target && e.target.tagName) || '';
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && e.target.getAttribute('contenteditable') !== 'true') {
+          e.preventDefault();
+        }
+      }, true);
+    } catch (e) { /* ignore */ }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', disableZoomAndSelection);
+  } else {
+    disableZoomAndSelection();
+  }
+
+  // ----- native push notifications -----
+  function setupPushNotifications() {
+    try {
+      var Capacitor = window.Capacitor;
+      if (!Capacitor || !Capacitor.isNativePlatform || !Capacitor.isNativePlatform()) return;
+      var Push = Capacitor.Plugins && Capacitor.Plugins.PushNotifications;
+      if (!Push) return;
+
+      Push.requestPermissions().catch(function () {});
+
+      Push.register().catch(function (err) { console.error('[Push] register failed', err); });
+
+      Push.addListener('registration', function (token) {
+        try {
+          if (!token || !token.value) return;
+          fetch(API_BASE + '/api/save-fcm-token', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token.value })
+          }).catch(function () {});
+        } catch (e) {}
+      });
+
+      Push.addListener('registrationError', function (err) {
+        console.error('[Push] registrationError', err);
+      });
+
+      Push.addListener('pushNotificationReceived', function (notification) {
+        // The OS will display the notification; we just log it for debugging.
+        console.log('[Push] received', notification);
+      });
+    } catch (e) { /* ignore */ }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupPushNotifications);
+  } else {
+    setTimeout(setupPushNotifications, 100);
+  }
+
   // ----- splash auto-redirect helper -----
   // The original splash relies on /api/me to decide where to go. Make sure
   // the bridge has time to install before any inline scripts on the page run
