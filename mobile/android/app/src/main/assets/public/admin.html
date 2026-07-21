@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<script src="/aite-bridge.js"></script>
+
+    <script src="/i18n.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aite">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+    <link rel="shortcut icon" href="/favicon.ico">
+  <title data-i18n="لوحة الإدارة — Aite">لوحة الإدارة — Aite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #000; color: #e5e7eb; font-family: sans-serif; overflow-x: hidden; overflow-wrap: break-word; word-wrap: break-word; }
+    p, span, div, h1, h2, h3, h4, h5, h6, li, td, th, label, a { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
+    .glass { background: rgba(20,20,20,0.6); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.06); }
+    .verified-badge { display: inline-flex; align-items: center; gap:4px; color: #10b981; font-weight:600; font-size:12px; }
+    .stat-card { background: rgba(20,20,20,0.6); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 20px; text-align: center; }
+    .stat-number { font-size: 28px; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .search-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 10px 16px 10px 40px; color: #e5e7eb; width: 100%; font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .search-input:focus { border-color: rgba(59,130,246,0.5); }
+    .search-input::placeholder { color: #6b7280; }
+    .user-card { transition: all 0.2s; border-radius: 16px; }
+    .user-card:hover { background: rgba(30,30,30,0.8); }
+    .btn-action { padding: 6px 14px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+    .btn-v { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+    .btn-v:hover { background: rgba(16,185,129,0.25); }
+    .btn-uv { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+    .btn-uv:hover { background: rgba(107,114,128,0.25); }
+    .btn-del { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+    .btn-del:hover { background: rgba(239,68,68,0.2); }
+    .online-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; border: 2px solid #000; position: absolute; bottom: 1px; left: 1px; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    .modal-box { background: rgba(20,20,30,0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 28px; max-width: 400px; width: 90%; }
+    .tab-btn { padding: 8px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; color: #9ca3af; background: transparent; }
+    .tab-btn.active { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.05); }
+    @media (min-width: 768px) { .admin-container { max-width: 900px; margin-left: auto; margin-right: auto; } }
+    @media (min-width: 1024px) { .admin-container { max-width: 1100px; } }
+  
+/* ========== SKELETON / SHIMMER LOADING ========== */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 0.35s ease;
+}
+.skeleton-loader.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.skeleton-bone {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 8px;
+}
+html[data-theme="light"] .skeleton-bone {
+  background: linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0.06) 75%);
+  background-size: 800px 100%;
+}
+.skeleton-loader .sk-bg {
+  background: #000;
+}
+html[data-theme="light"] .skeleton-loader .sk-bg {
+  background: #f0f2f5;
+}
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+</style>
+
+<!-- Aite PWA Native App Features -->
+<style>
+#aite-progress-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 5px;
+  width: 0;
+  background: linear-gradient(270deg, #64B5F6, #90CAF9, #BBDEFB);
+  z-index: 999999;
+  pointer-events: none;
+  opacity: 0;
+  transition: width 150ms ease-out;
+  border-radius: 3px 0 0 3px;
+}
+#aite-progress-bar.active {
+  opacity: 1;
+}
+@media (display-mode: standalone) {
+  * {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none !important;
+  }
+  *:not(input):not(textarea):not([contenteditable="true"]) {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+  }
+  ::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  body {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    overscroll-behavior: none !important;
+    -webkit-user-drag: none !important;
+    -webkit-text-size-adjust: none !important;
+  }
+  img {
+    -webkit-user-drag: none !important;
+    user-drag: none !important;
+  }
+}
+#aite-offline-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+  background: #000000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 30px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+#aite-offline-overlay.show {
+  display: flex;
+}
+#aite-offline-overlay::before {
+  content: "";
+  position: absolute;
+  top: -200px;
+  left: -200px;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(57,130,247,0.19) 0%, rgba(57,130,247,0.08) 50%, transparent 100%);
+  pointer-events: none;
+}
+#aite-offline-overlay::after {
+  content: "";
+  position: absolute;
+  bottom: -200px;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(120,50,220,0.13) 0%, rgba(120,50,220,0.06) 50%, transparent 100%);
+  pointer-events: none;
+}
+.aite-offline-logo {
+  width: 110px;
+  height: 110px;
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  animation: aite-float 2s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 1;
+}
+@keyframes aite-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-30px); }
+}
+.aite-offline-title {
+  font-size: 60px;
+  font-weight: 900;
+  margin-top: 25px;
+  background: linear-gradient(90deg, #FFFFFF, #3982f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.05em;
+  position: relative;
+  z-index: 1;
+}
+.aite-offline-msg {
+  color: rgba(255,255,255,0.6);
+  font-size: 18px;
+  margin-top: 5px;
+  letter-spacing: 0.1em;
+  font-weight: 300;
+  position: relative;
+  z-index: 1;
+}
+.aite-offline-btn {
+  margin-top: 40px;
+  background: linear-gradient(135deg, #3982f7, #7832dc);
+  color: #fff;
+  border: none;
+  padding: 0 30px;
+  height: 45px;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.aite-offline-btn:active {
+  transform: scale(0.95);
+}
+</style>
+</head>
+<body class="min-h-screen p-4 md:p-6">
+
+<div id="skeletonLoader" class="skeleton-loader">
+  <div class="sk-bg" style="min-height:100vh;padding:0;">
+    <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div class="skeleton-bone" style="width:120px;height:24px;border-radius:6px;"></div>
+      <div class="skeleton-bone skeleton-circle" style="width:32px;height:32px;"></div>
+    </div>
+    <!-- Stats cards -->
+    <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+      
+      <div style="padding:16px;border-radius:14px;border:1px solid rgba(255,255,255,0.06);">
+        <div class="skeleton-bone" style="width:60px;height:12px;margin-bottom:10px;border-radius:4px;"></div>
+        <div class="skeleton-bone" style="width:80px;height:24px;border-radius:6px;"></div>
+      </div>
+      <div style="padding:16px;border-radius:14px;border:1px solid rgba(255,255,255,0.06);">
+        <div class="skeleton-bone" style="width:60px;height:12px;margin-bottom:10px;border-radius:4px;"></div>
+        <div class="skeleton-bone" style="width:80px;height:24px;border-radius:6px;"></div>
+      </div>
+      <div style="padding:16px;border-radius:14px;border:1px solid rgba(255,255,255,0.06);">
+        <div class="skeleton-bone" style="width:60px;height:12px;margin-bottom:10px;border-radius:4px;"></div>
+        <div class="skeleton-bone" style="width:80px;height:24px;border-radius:6px;"></div>
+      </div>
+      <div style="padding:16px;border-radius:14px;border:1px solid rgba(255,255,255,0.06);">
+        <div class="skeleton-bone" style="width:60px;height:12px;margin-bottom:10px;border-radius:4px;"></div>
+        <div class="skeleton-bone" style="width:80px;height:24px;border-radius:6px;"></div>
+      </div>
+    </div>
+    <!-- User list -->
+    <div style="padding:0 16px;display:flex;flex-direction:column;gap:8px;">
+      
+      <div style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);">
+        <div class="skeleton-bone skeleton-circle" style="width:40px;height:40px;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton-bone" style="width:100px;height:14px;margin-bottom:5px;border-radius:4px;"></div>
+          <div class="skeleton-bone" style="width:70px;height:10px;border-radius:4px;"></div>
+        </div>
+        <div class="skeleton-bone" style="width:60px;height:28px;border-radius:8px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);">
+        <div class="skeleton-bone skeleton-circle" style="width:40px;height:40px;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton-bone" style="width:100px;height:14px;margin-bottom:5px;border-radius:4px;"></div>
+          <div class="skeleton-bone" style="width:70px;height:10px;border-radius:4px;"></div>
+        </div>
+        <div class="skeleton-bone" style="width:60px;height:28px;border-radius:8px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);">
+        <div class="skeleton-bone skeleton-circle" style="width:40px;height:40px;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton-bone" style="width:100px;height:14px;margin-bottom:5px;border-radius:4px;"></div>
+          <div class="skeleton-bone" style="width:70px;height:10px;border-radius:4px;"></div>
+        </div>
+        <div class="skeleton-bone" style="width:60px;height:28px;border-radius:8px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);">
+        <div class="skeleton-bone skeleton-circle" style="width:40px;height:40px;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton-bone" style="width:100px;height:14px;margin-bottom:5px;border-radius:4px;"></div>
+          <div class="skeleton-bone" style="width:70px;height:10px;border-radius:4px;"></div>
+        </div>
+        <div class="skeleton-bone" style="width:60px;height:28px;border-radius:8px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);">
+        <div class="skeleton-bone skeleton-circle" style="width:40px;height:40px;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton-bone" style="width:100px;height:14px;margin-bottom:5px;border-radius:4px;"></div>
+          <div class="skeleton-bone" style="width:70px;height:10px;border-radius:4px;"></div>
+        </div>
+        <div class="skeleton-bone" style="width:60px;height:28px;border-radius:8px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <!-- Header -->
+  <header class="admin-container mb-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;">
+          <i class="fas fa-shield-alt" style="color:#fff;font-size:18px;"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold" data-i18n="لوحة الإدارة">لوحة الإدارة</h1>
+          <p class="text-xs text-gray-500" data-i18n="إدارة المستخدمين والتحقق">إدارة المستخدمين والتحقق</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/chat_list" class="text-sm text-gray-400 hover:text-white transition-colors"><i class="fas fa-arrow-right ml-1"></i> <span data-i18n="العودة">العودة</span></a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="admin-container mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="stat-card">
+        <div class="stat-number" id="stat-total">-</div>
+        <div class="text-xs text-gray-400 mt-1" data-i18n="إجمالي المستخدمين">إجمالي المستخدمين</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-online" style="background:linear-gradient(135deg,#22c55e,#10b981);-webkit-background-clip:text;">-</div>
+        <div class="text-xs text-gray-400 mt-1" data-i18n="متصل الآن">متصل الآن</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-verified" style="background:linear-gradient(135deg,#f59e0b,#eab308);-webkit-background-clip:text;">-</div>
+        <div class="text-xs text-gray-400 mt-1" data-i18n="موثق">موثق</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-unverified" style="background:linear-gradient(135deg,#6b7280,#9ca3af);-webkit-background-clip:text;">-</div>
+        <div class="text-xs text-gray-400 mt-1" data-i18n="غير موثق">غير موثق</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search + Filter -->
+  <div class="admin-container mb-4">
+    <div class="glass rounded-2xl p-4">
+      <div class="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
+        <div class="relative w-full md:w-80">
+          <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+          <input type="text" id="searchInput" class="search-input" placeholder="ابحث باسم المستخدم أو الاسم...">
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button class="tab-btn active" data-filter="all" onclick="setFilter('all',this)" data-i18n="الكل">الكل</button>
+          <button class="tab-btn" data-filter="verified" onclick="setFilter('verified',this)" data-i18n="موثق">موثق</button>
+          <button class="tab-btn" data-filter="unverified" onclick="setFilter('unverified',this)" data-i18n="غير موثق">غير موثق</button>
+          <button class="tab-btn" data-filter="online" onclick="setFilter('online',this)" data-i18n="متصل">متصل</button>
+          <button id="refreshBtn" class="btn-action" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);"><i class="fas fa-sync"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Users List -->
+  <div class="admin-container">
+    <div id="usersContainer" class="space-y-2">
+      <div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin ml-2"></i> <span data-i18n="جارٍ تحميل المستخدمين...">جارٍ تحميل المستخدمين...</span></div>
+    </div>
+  </div>
+
+  <!-- Password Change Modal -->
+  <div id="passwordModal" class="modal-overlay" style="display:none;" onclick="closePasswordModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(59,130,246,0.1);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+          <i class="fas fa-key" style="color:#60a5fa;font-size:22px;"></i>
+        </div>
+        <h3 style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;" data-i18n="تغيير كلمة المرور">تغيير كلمة المرور</h3>
+        <p style="font-size:13px;color:#9ca3af;">تغيير كلمة مرور <span id="passwordUsername" style="color:#60a5fa;font-weight:600;"></span></p>
+      </div>
+      <div style="margin-bottom:16px;">
+        <input type="password" id="newPasswordInput" placeholder="كلمة المرور الجديدة (6 أحرف على الأقل)" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e5e7eb;font-size:14px;outline:none;" onfocus="this.style.borderColor='rgba(59,130,246,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+        <div id="passwordError" style="display:none;color:#f87171;font-size:12px;margin-top:6px;"></div>
+        <div id="passwordSuccess" style="display:none;color:#22c55e;font-size:12px;margin-top:6px;"></div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="closePasswordModal()" style="flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#9ca3af;font-weight:600;cursor:pointer;font-size:14px;" data-i18n="إلغاء">إلغاء</button>
+        <button id="confirmPasswordBtn" onclick="confirmPasswordChange()" style="flex:1;padding:10px;border-radius:12px;border:none;background:rgba(59,130,246,0.8);color:#fff;font-weight:600;cursor:pointer;font-size:14px;" data-i18n="تغيير">تغيير</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="modal-overlay" style="display:none;" onclick="closeDeleteModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(239,68,68,0.1);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+          <i class="fas fa-trash-alt" style="color:#f87171;font-size:22px;"></i>
+        </div>
+        <h3 style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;" data-i18n="حذف الحساب">حذف الحساب</h3>
+        <p style="font-size:13px;color:#9ca3af;">هل أنت متأكد من حذف حساب <span id="deleteUsername" style="color:#f87171;font-weight:600;"></span>؟</p>
+        <p style="font-size:12px;color:#6b7280;margin-top:4px;" data-i18n="سيتم حذف جميع بياناته نهائياً (المنشورات، التعليقات، المحادثات، كل شيء)">سيتم حذف جميع بياناته نهائياً (المنشورات، التعليقات، المحادثات، كل شيء)</p>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="closeDeleteModal()" style="flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#9ca3af;font-weight:600;cursor:pointer;font-size:14px;" data-i18n="إلغاء">إلغاء</button>
+        <button id="confirmDeleteBtn" onclick="confirmDelete()" style="flex:1;padding:10px;border-radius:12px;border:none;background:rgba(239,68,68,0.8);color:#fff;font-weight:600;cursor:pointer;font-size:14px;" data-i18n="حذف نهائي">حذف نهائي</button>
+      </div>
+    </div>
+  </div>
+
+  <script>var t = (window.AiteI18n && window.AiteI18n.t) ? window.AiteI18n.t : function(s){return s;};
+
+    var usersContainer = document.getElementById('usersContainer');
+    var refreshBtn = document.getElementById('refreshBtn');
+    var searchInput = document.getElementById('searchInput');
+    var allUsers = [];
+    var currentFilter = 'all';
+    var deleteTargetId = null;
+    var defaultPic = 'https://pub-7c93bdf7768e4bd3a90334827b920b16.r2.dev/f547d800625af9056d62efe8969aeea0.jpg';
+
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function fetchUsers() {
+      usersContainer.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin ml-2"></i> <span data-i18n="جاري التحميل...">جاري التحميل...</span></div>';
+      try {
+        var res = await fetch('/api/admin/users', { credentials: 'same-origin' });
+        if (!res.ok) {
+          usersContainer.innerHTML = '<div class="text-center text-red-500 py-8">خطأ: ' + res.status + '</div>';
+          return;
+        }
+        var data = await res.json();
+        if (!data.ok || !data.users) {
+          usersContainer.innerHTML = '<div class="text-center text-red-500 py-8">خطأ في البيانات.</div>';
+          return;
+        }
+        allUsers = data.users;
+        updateStats();
+        renderUsers();
+      } catch (err) {
+        console.error(err);
+        usersContainer.innerHTML = '<div class="text-center text-red-500 py-8">فشل الاتصال بالخادم.</div>';
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('stat-total').textContent = allUsers.length;
+      document.getElementById('stat-online').textContent = allUsers.filter(function(u){ return u.is_online; }).length;
+      document.getElementById('stat-verified').textContent = allUsers.filter(function(u){ return u.is_verified; }).length;
+      document.getElementById('stat-unverified').textContent = allUsers.filter(function(u){ return !u.is_verified; }).length;
+    }
+
+    function renderUsers() {
+      var query = searchInput.value.trim().toLowerCase();
+      var filtered = allUsers.slice();
+      if (currentFilter === 'verified') filtered = filtered.filter(function(u){ return u.is_verified; });
+      else if (currentFilter === 'unverified') filtered = filtered.filter(function(u){ return !u.is_verified; });
+      else if (currentFilter === 'online') filtered = filtered.filter(function(u){ return u.is_online; });
+      if (query) {
+        filtered = filtered.filter(function(u){
+          return (u.username||'').toLowerCase().indexOf(query)!==-1 || (u.full_name||'').toLowerCase().indexOf(query)!==-1 || (u.email||'').toLowerCase().indexOf(query)!==-1;
+        });
+      }
+      if (filtered.length === 0) {
+        usersContainer.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fas fa-users-slash ml-2"></i> <span data-i18n="لا يوجد مستخدمون مطابقون">لا يوجد مستخدمون مطابقون</span></div>';
+        return;
+      }
+      usersContainer.innerHTML = '';
+      filtered.forEach(function(u) {
+        var card = document.createElement('div');
+        card.className = 'user-card glass p-3 flex items-center justify-between';
+        card.dataset.userId = u.id;
+        var picUrl = u.profile_picture_url || defaultPic;
+        var verifyBtn = u.is_verified
+          ? '<button class="btn-action btn-uv" onclick="toggleVerify(\'' + u.id + '\',false,this)"><i class="fas fa-times-circle ml-1"></i> <span data-i18n="إلغاء">إلغاء</span></button>'
+          : '<button class="btn-action btn-v" onclick="toggleVerify(\'' + u.id + '\',true,this)"><i class="fas fa-check-circle ml-1"></i> <span data-i18n="توثيق">توثيق</span></button>';
+        card.innerHTML =
+          '<div class="flex items-center gap-3 min-w-0 flex-grow">' +
+            '<div class="relative flex-shrink-0">' +
+              '<img src="' + escapeHtml(picUrl) + '" class="w-12 h-12 rounded-full object-cover border border-gray-700" loading="lazy">' +
+              (u.is_online ? '<div class="online-dot"></div>' : '') +
+            '</div>' +
+            '<div class="min-w-0 flex-grow">' +
+              '<div class="flex items-center gap-2 flex-wrap">' +
+                '<span class="font-semibold text-sm text-gray-100 truncate">' + escapeHtml(u.username||'') + '</span>' +
+                (u.is_verified ? '<span class="verified-badge"><i class="fas fa-check-circle" style="font-size:11px;"></i> <span data-i18n="موثق" data-i18n="موثق">موثق</span></span>' : '') +
+                (u.is_online ? '<span style="font-size:10px;color:#22c55e;font-weight:500;" data-i18n="متصل">&#9679; متصل</span>' : '') +
+              '</div>' +
+              '<div class="text-xs text-gray-400 truncate">' + escapeHtml(u.full_name||'') + '</div>' +
+              '<div class="text-xs text-gray-600 truncate">' + escapeHtml(u.email||'') + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="flex items-center gap-2 flex-shrink-0 mr-2">' +
+            verifyBtn +
+            '<button class="btn-action" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);" onclick="openPasswordModal(\'' + u.id + '\',\'' + escapeHtml(u.username||'') + '\')"><i class="fas fa-key"></i></button>' +
+            '<button class="btn-action btn-del" onclick="openDeleteModal(\'' + u.id + '\',\'' + escapeHtml(u.username||'') + '\')"><i class="fas fa-trash-alt"></i></button>' +
+          '</div>';
+        usersContainer.appendChild(card);
+      });
+    }
+
+    function setFilter(filter, btn) {
+      currentFilter = filter;
+      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      renderUsers();
+    }
+
+    async function toggleVerify(userId, verify, btnEl) {
+      btnEl.disabled = true;
+      btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      try {
+        var res = await fetch('/api/admin/users/' + encodeURIComponent(userId) + '/verify', {
+          method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+          body: JSON.stringify({ verify: verify })
+        });
+        var j = await res.json();
+        if (res.ok && j.ok) {
+          var user = allUsers.find(function(u){ return u.id === userId; });
+          if (user) user.is_verified = verify;
+          updateStats();
+          renderUsers();
+        } else { alert(t('فشل: ') + (j.error || res.status)); }
+      } catch(err) { console.error(err); alert(t('خطأ في الاتصال')); }
+    }
+
+    function openDeleteModal(userId, username) {
+      deleteTargetId = userId;
+      document.getElementById('deleteUsername').textContent = username;
+      document.getElementById('deleteModal').style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').style.display = 'none';
+      deleteTargetId = null;
+    }
+
+    async function confirmDelete() {
+      if (!deleteTargetId) return;
+      var btn = document.getElementById('confirmDeleteBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> ' + t('جارٍ الحذف...');
+      try {
+        var res = await fetch('/api/admin/users/' + encodeURIComponent(deleteTargetId), { method:'DELETE', credentials:'same-origin' });
+        var j = await res.json();
+        if (res.ok && j.ok) {
+          allUsers = allUsers.filter(function(u){ return u.id !== deleteTargetId; });
+          updateStats(); renderUsers(); closeDeleteModal();
+        } else { alert(t('فشل الحذف: ') + (j.error||'')); }
+      } catch(err) { console.error(err); alert(t('خطأ في الاتصال')); }
+      finally { btn.disabled = false; btn.innerHTML = t('حذف نهائي'); }
+    }
+
+    var passwordTargetId = null;
+
+    function openPasswordModal(userId, username) {
+      passwordTargetId = userId;
+      document.getElementById('passwordUsername').textContent = username;
+      document.getElementById('newPasswordInput').value = '';
+      document.getElementById('passwordError').style.display = 'none';
+      document.getElementById('passwordSuccess').style.display = 'none';
+      document.getElementById('passwordModal').style.display = 'flex';
+      setTimeout(function(){ document.getElementById('newPasswordInput').focus(); }, 100);
+    }
+
+    function closePasswordModal() {
+      document.getElementById('passwordModal').style.display = 'none';
+      passwordTargetId = null;
+    }
+
+    async function confirmPasswordChange() {
+      if (!passwordTargetId) return;
+      var newPassword = document.getElementById('newPasswordInput').value;
+      var errorEl = document.getElementById('passwordError');
+      var successEl = document.getElementById('passwordSuccess');
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+      if (!newPassword || newPassword.length < 6) {
+        errorEl.textContent = t('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+        errorEl.style.display = 'block';
+        return;
+      }
+      var btn = document.getElementById('confirmPasswordBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري التغيير...';
+      try {
+        var res = await fetch('/api/admin/users/' + encodeURIComponent(passwordTargetId) + '/change-password', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+          body: JSON.stringify({ newPassword: newPassword })
+        });
+        var j = await res.json();
+        if (res.ok && j.ok) {
+          successEl.textContent = t('تم تغيير كلمة المرور بنجاح');
+          successEl.style.display = 'block';
+          setTimeout(closePasswordModal, 1500);
+        } else {
+          errorEl.textContent = j.error || 'فشل تغيير كلمة المرور';
+          errorEl.style.display = 'block';
+        }
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = t('خطأ في الاتصال');
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'تغيير';
+      }
+    }
+
+    searchInput.addEventListener('input', renderUsers);
+    refreshBtn.addEventListener('click', fetchUsers);
+    fetchUsers();
+  </script>
+
+<script>
+
+(function(){
+  var sk = document.getElementById('skeletonLoader');
+  if (!sk) return;
+  function hideSkeleton() {
+    sk.classList.add('hidden');
+    setTimeout(function(){ sk.style.display = 'none'; }, 400);
+  }
+  // Hide on DOMContentLoaded + small delay for data fetch
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(hideSkeleton, 600);
+  } else {
+    window.addEventListener('DOMContentLoaded', function(){ setTimeout(hideSkeleton, 600); });
+  }
+  // Fallback: max 4 seconds
+  setTimeout(hideSkeleton, 4000);
+})();
+
+</script>
+
+
+
+
+<!-- PWA Install Prompt -->
+<div id="pwaInstallBar" style="display:none;">
+  <style>
+    #pwaInstallBar {
+      position:fixed; bottom:0; left:0; right:0; z-index:99999;
+      animation: pwaBarSlide 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+    #pwaInstallBar .pwa-bar-inner {
+      background: #111827;
+      margin: 10px;
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    #pwaInstallBar .pwa-bar-icon {
+      width: 46px; height: 46px;
+      border-radius: 12px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #pwaInstallBar .pwa-bar-text {
+      flex: 1; min-width: 0;
+    }
+    #pwaInstallBar .pwa-bar-title {
+      font-size: 15px; font-weight: 700; color: #fff;
+    }
+    #pwaInstallBar .pwa-bar-desc {
+      font-size: 12px; color: #9ca3af; margin-top: 1px;
+    }
+    #pwaInstallBar .pwa-bar-btn {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    #pwaInstallBar .pwa-bar-btn:active { background: #2563eb; }
+    #pwaInstallBar .pwa-bar-close {
+      background: none; border: none;
+      color: #6b7280; font-size: 22px;
+      cursor: pointer; padding: 2px 4px; line-height: 1;
+    }
+    @keyframes pwaBarSlide {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    /* iOS overlay */
+    #iosInstallOverlay {
+      position:fixed; inset:0; z-index:999999;
+      background:rgba(0,0,0,0.88);
+      display:flex; align-items:center; justify-content:center;
+      padding:20px; animation: fadeInOverlay 0.3s ease;
+    }
+    @keyframes fadeInOverlay {
+      from { opacity:0; } to { opacity:1; }
+    }
+    .ios-install-box {
+      background:#1a1a2e; border-radius:20px; padding:28px 24px;
+      max-width:340px; width:100%; text-align:center;
+      border:1px solid rgba(255,255,255,0.1);
+      box-shadow:0 16px 48px rgba(0,0,0,0.5);
+    }
+    .ios-step {
+      background:rgba(255,255,255,0.05); border-radius:12px;
+      padding:12px 16px; margin-bottom:8px; text-align:right;
+      direction:rtl; color:#cbd5e1; font-size:14px;
+    }
+  </style>
+
+  <div class="pwa-bar-inner">
+    <img src="/icon-192.png" alt="Aite" class="pwa-bar-icon">
+    <div class="pwa-bar-text">
+      <div class="pwa-bar-title">Aite</div>
+      <div class="pwa-bar-desc" id="pwaBarDesc" data-i18n="تثبيت التطبيق على جهازك">تثبيت التطبيق على جهازك</div>
+    </div>
+    <button class="pwa-bar-btn" id="pwaBarInstallBtn" onclick="pwaInstallApp()" data-i18n="تثبيت">تثبيت</button>
+    <button class="pwa-bar-close" onclick="pwaDismiss()">&times;</button>
+  </div>
+</div>
+
+<script>var t = (window.AiteI18n && window.AiteI18n.t) ? window.AiteI18n.t : function(s){return s;};
+
+(function(){
+  // ===== PWA Full App Install =====
+  var DISMISS_KEY = 'aite_install_dismiss_v2';
+  var bar = document.getElementById('pwaInstallBar');
+  var desc = document.getElementById('pwaBarDesc');
+  var btn = document.getElementById('pwaBarInstallBtn');
+  var _prompt = null;
+
+  // Is app already running in standalone (installed)?
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+  }
+
+  // Was banner dismissed in last 12 hours?
+  function wasDismissed() {
+    try {
+      var t = localStorage.getItem(DISMISS_KEY);
+      if (!t) return false;
+      return (Date.now() - parseInt(t)) < 12*60*60*1000;
+    } catch(e){ return false; }
+  }
+
+  // Don't show if already installed or dismissed
+  if (isStandalone()) return;
+
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) && !window.MSStream;
+
+  // ---- Android / Chrome / Edge / Desktop: Native install ----
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    _prompt = e;
+    if (!wasDismissed()) {
+      bar.style.display = 'block';
+    }
+  });
+
+  // ---- iOS: Show after delay with custom instructions ----
+  if (isIOS && !wasDismissed()) {
+    setTimeout(function(){
+      if (desc) desc.textContent = t('أضف Aite إلى الشاشة الرئيسية');
+      if (btn) btn.textContent = t('إضافة');
+      bar.style.display = 'block';
+    }, 2500);
+  }
+
+  // Install button click
+  window.pwaInstallApp = function() {
+    if (_prompt) {
+      // Native browser install prompt (Android/Chrome/Edge/Desktop)
+      _prompt.prompt();
+      _prompt.userChoice.then(function(result) {
+        if (result.outcome === 'accepted') {
+          bar.style.display = 'none';
+          try { localStorage.removeItem(DISMISS_KEY); } catch(e){}
+        }
+        _prompt = null;
+      });
+    } else if (isIOS) {
+      // Show iOS step-by-step instructions
+      var ov = document.createElement('div');
+      ov.id = 'iosInstallOverlay';
+      ov.innerHTML = '<div class="ios-install-box">'
+        + '<img src="/icon-192.png" style="width:60px;height:60px;border-radius:14px;margin:0 auto 14px;display:block;">'
+        + '<h3 style="color:#fff;font-size:19px;font-weight:700;margin:0 0 6px;" data-i18n="تثبيت Aite">تثبيت Aite</h3>'
+        + '<p style="color:#9ca3af;font-size:13px;margin:0 0 18px;" data-i18n="اتبع الخطوات التالية لتثبيت التطبيق:">اتبع الخطوات التالية لتثبيت التطبيق:</p>'
+        + '<div class="ios-step" data-i18n="1. اضغط على أيقونة المشاركة ⬆️ في شريط Safari">1. اضغط على أيقونة المشاركة <span style="font-size:17px;">⬆️</span> في شريط Safari</div>'
+        + '<div class="ios-step" data-i18n="2. اختر إضافة إلى الشاشة الرئيسية">2. اختر <b style="color:#fff;">"إضافة إلى الشاشة الرئيسية"</b> <span style="font-size:15px;">📱</span></div>'
+        + '<div class="ios-step" data-i18n="3. اضغط إضافة في الأعلى">3. اضغط <b style="color:#fff;">"إضافة"</b> في الأعلى</div>'
+        + '<button onclick="this.closest(\x27#iosInstallOverlay\x27).remove()" style="margin-top:18px;background:#3b82f6;color:#fff;border:none;padding:11px 34px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;" data-i18n="فهمت">' + t('فهمت') + '</button>'
+        + '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(ev){ if(ev.target===ov) ov.remove(); });
+    }
+  };
+
+  // Dismiss for 12 hours
+  window.pwaDismiss = function() {
+    bar.style.display = 'none';
+    try { localStorage.setItem(DISMISS_KEY, Date.now().toString()); } catch(e){}
+  };
+
+  // Auto-hide on successful install
+  window.addEventListener('appinstalled', function() {
+    bar.style.display = 'none';
+    _prompt = null;
+  });
+})();
+</script>
+<script>
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(function(reg) { console.log('SW registered:', reg.scope); })
+      .catch(function(err) { console.log('SW registration failed:', err); });
+  });
+}
+</script>
+
+<!-- Aite PWA Native App Features -->
+<div id="aite-progress-bar"></div>
+<div id="aite-offline-overlay">
+  <img src="/icon-192.png" alt="Aite" class="aite-offline-logo">
+  <div class="aite-offline-title">Aite</div>
+  <div class="aite-offline-msg">no internet connection</div>
+  <button class="aite-offline-btn" onclick="location.reload()">Try Again</button>
+</div>
+<script>
+(function(){
+  var isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (!isPWA) return;
+
+  var bar = document.getElementById('aite-progress-bar');
+  var currentProgress = 0;
+  var progressTimer = null;
+  var isNavigating = false;
+
+  function setProgress(value) {
+    currentProgress = Math.min(value, 100);
+    if (bar) bar.style.width = currentProgress + '%';
+  }
+
+  function startProgress() {
+    if (isNavigating) return;
+    isNavigating = true;
+    currentProgress = 0;
+    if (bar) {
+      bar.style.transition = 'none';
+      bar.style.width = '0';
+      bar.style.opacity = '0';
+      void bar.offsetWidth;
+      bar.classList.add('active');
+      bar.style.opacity = '1';
+      bar.style.transition = 'width 150ms ease-out';
+    }
+    setProgress(15);
+    if (progressTimer) clearInterval(progressTimer);
+    progressTimer = setInterval(function() {
+      if (currentProgress < 50) setProgress(currentProgress + 3);
+      else if (currentProgress < 75) setProgress(currentProgress + 1.5);
+      else if (currentProgress < 90) setProgress(currentProgress + 0.5);
+      if (currentProgress >= 92) { clearInterval(progressTimer); progressTimer = null; }
+    }, 150);
+  }
+
+  function completeProgress() {
+    if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+    if (!bar) return;
+    bar.style.transition = 'width 100ms ease-out';
+    setProgress(100);
+    setTimeout(function() {
+      bar.style.transition = 'opacity 200ms ease';
+      bar.style.opacity = '0';
+      setTimeout(function() {
+        bar.classList.remove('active');
+        bar.style.width = '0';
+        bar.style.transition = 'width 150ms ease-out';
+        bar.style.opacity = '';
+        currentProgress = 0;
+        isNavigating = false;
+      }, 200);
+    }, 150);
+  }
+
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+    if (link.target === '_blank') return;
+    startProgress();
+  });
+
+  window.addEventListener('beforeunload', function() { startProgress(); });
+  window.addEventListener('pageshow', function() { completeProgress(); });
+  if (document.readyState === 'complete') completeProgress();
+  else window.addEventListener('load', function() { completeProgress(); });
+
+  document.addEventListener('contextmenu', function(e) {
+    var tag = e.target.tagName.toLowerCase();
+    if (tag !== 'input' && tag !== 'textarea' && !e.target.isContentEditable) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('dragstart', function(e) { e.preventDefault(); }, { passive: false });
+
+  var offlineOverlay = document.getElementById('aite-offline-overlay');
+  function checkOnline() {
+    if (!navigator.onLine && offlineOverlay) offlineOverlay.classList.add('show');
+    else if (offlineOverlay) offlineOverlay.classList.remove('show');
+  }
+  window.addEventListener('online', checkOnline);
+  window.addEventListener('offline', checkOnline);
+
+  var notifSound = null;
+  try { notifSound = new Audio('/notification.mp3'); notifSound.volume = 1.0; notifSound.preload = 'auto'; } catch(e) {}
+  window.aitePlayNotificationSound = function() {
+    try {
+      if (notifSound) { notifSound.currentTime = 0; notifSound.play().catch(function(){}); }
+      if (navigator.vibrate) navigator.vibrate([0, 300, 200, 300]);
+    } catch(e) {}
+  };
+  document.addEventListener('aite-new-notification', function() { window.aitePlayNotificationSound(); });
+})();
+</script>
+
+<!-- Aite Web Push Subscription -->
+<script>
+(function(){
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  async function subscribeWebPush() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) return; // already subscribed
+
+      const resp = await fetch('/api/vapid-public-key');
+      const data = await resp.json();
+      if (!data.ok || !data.publicKey) return;
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      const applicationServerKey = urlBase64ToUint8Array(data.publicKey);
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey
+      });
+
+      await fetch('/api/web-push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ subscription: subscription.toJSON() })
+      });
+    } catch (e) {
+      console.warn('Web Push subscription failed:', e);
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  // Subscribe after page loads (with small delay to not block rendering)
+  if (document.readyState === 'complete') {
+    setTimeout(subscribeWebPush, 2000);
+  } else {
+    window.addEventListener('load', function() {
+      setTimeout(subscribeWebPush, 2000);
+    });
+  }
+})();
+</script>
+<script src="//cdn.jsdelivr.net/gh/realityripple/emoji/remoji.min.js" crossorigin="anonymous"></script>
+<script>document.addEventListener("DOMContentLoaded",function(){if(window.remoji){remoji.parse(document.body,{font:"oneui"});var o=new MutationObserver(function(m){m.forEach(function(mu){mu.addedNodes.forEach(function(n){if(n.nodeType===1)remoji.parse(n,{font:"oneui"})})})});o.observe(document.body,{childList:true,subtree:true})}});</script>
+<style>.emoji{height:1.2em;width:1.2em;margin:0 .05em 0 .1em;vertical-align:-0.2em;display:inline-block;}</style>
+
+
+
+<!-- Pull to Refresh -->
+<style>
+.ptr-indicator {
+  position: fixed;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(30,41,59,0.95);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  transition: top 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+.ptr-indicator .ptr-arrow {
+  width: 16px; height: 16px;
+  border: 2px solid #6ee7b7;
+  border-top: none; border-right: none;
+  transform: rotate(-45deg);
+  margin-top: -4px;
+  transition: transform 0.2s ease;
+}
+.ptr-indicator.ptr-ready .ptr-arrow {
+  transform: rotate(135deg);
+  margin-top: 4px;
+}
+.ptr-indicator.ptr-loading .ptr-arrow {
+  border: 2px solid #6ee7b7;
+  border-radius: 50%;
+  border-top-color: transparent;
+  width: 18px; height: 18px;
+  transform: none;
+  margin-top: 0;
+  animation: ptr-spin 0.6s linear infinite;
+}
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+</style>
+<div class="ptr-indicator" id="ptr-indicator"><div class="ptr-arrow"></div></div>
+<script>
+(function() {
+  var ptrEl = document.getElementById('ptr-indicator');
+  if (!ptrEl) return;
+  var startY = 0, pulling = false, activated = false;
+  var threshold = 90, deadZone = 15;
+
+  function isAtPageTop() {
+    return (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0) <= 2;
+  }
+
+  function isInsideScrollable(el) {
+    while (el && el !== document.body && el !== document.documentElement) {
+      var style = window.getComputedStyle(el);
+      var oy = style.overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight && el.scrollTop > 0) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  }
+
+  document.addEventListener('touchstart', function(e) {
+    if (!isAtPageTop()) return;
+    if (isInsideScrollable(e.target)) return;
+    startY = e.touches[0].clientY;
+    pulling = true;
+    activated = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!pulling) return;
+    var currentY = e.touches[0].clientY;
+    var dist = currentY - startY;
+
+    if (!isAtPageTop()) {
+      pulling = false;
+      ptrEl.style.top = '-50px';
+      ptrEl.classList.remove('ptr-ready');
+      return;
+    }
+
+    if (dist < deadZone) return;
+
+    var realDist = dist - deadZone;
+    var progress = Math.min(realDist / threshold, 1);
+    var top = Math.min(realDist * 0.35, 50);
+    ptrEl.style.top = (top - 15) + 'px';
+    ptrEl.style.transition = 'none';
+
+    if (progress >= 1) {
+      ptrEl.classList.add('ptr-ready');
+      activated = true;
+    } else {
+      ptrEl.classList.remove('ptr-ready');
+      activated = false;
+    }
+
+    if (realDist > 5 && e.cancelable) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', function() {
+    if (!pulling) return;
+    ptrEl.style.transition = 'top 0.25s ease';
+    if (activated) {
+      ptrEl.style.top = '12px';
+      ptrEl.classList.remove('ptr-ready');
+      ptrEl.classList.add('ptr-loading');
+      setTimeout(function() { location.reload(); }, 350);
+    } else {
+      ptrEl.style.top = '-50px';
+      ptrEl.classList.remove('ptr-ready');
+    }
+    pulling = false;
+    activated = false;
+    startY = 0;
+  }, { passive: true });
+})();
+</script>
+
+</body>
+</html>
