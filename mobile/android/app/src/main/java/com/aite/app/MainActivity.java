@@ -2,6 +2,7 @@ package com.aite.app;
 
 import android.os.Bundle;
 import android.view.View;
+import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
@@ -16,6 +17,11 @@ public class MainActivity extends BridgeActivity {
       settings.setSupportZoom(false);
       settings.setBuiltInZoomControls(false);
       settings.setDisplayZoomControls(false);
+      settings.setDomStorageEnabled(true);
+      settings.setDatabaseEnabled(true);
+      // Accept cross-origin cookies from the live backend (aite-lite.vercel.app).
+      CookieManager.getInstance().setAcceptCookie(true);
+      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
       // Prevent text selection / context menu at the native level.
       webView.setOnLongClickListener(new View.OnLongClickListener() {
         @Override
