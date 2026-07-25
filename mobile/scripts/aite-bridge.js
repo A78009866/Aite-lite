@@ -331,7 +331,11 @@
 
       Push.requestPermissions().catch(function () {});
 
-      Push.register().catch(function (err) { console.error('[Push] register failed', err); });
+      // NOTE: Push.register() is intentionally not called automatically.
+      // It requires a valid google-services.json in mobile/android/app/.
+      // Without it the native FCM SDK is not initialized and register() crashes
+      // the app. Add your google-services.json, then uncomment the next line.
+      // Push.register().catch(function (err) { console.error('[Push] register failed', err); });
 
       Push.addListener('registration', function (token) {
         try {
