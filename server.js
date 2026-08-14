@@ -230,6 +230,10 @@ function isAllowedOrigin(origin) {
         (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '10.0.2.2')) {
       return true;
     }
+    // Allow any Vercel preview/production deployment (e.g. friendgram-*.vercel.app).
+    if (u.hostname.endsWith('.vercel.app')) {
+      return true;
+    }
   } catch (_) { /* fall through */ }
   return false;
 }
