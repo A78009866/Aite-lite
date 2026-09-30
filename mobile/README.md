@@ -1,104 +1,36 @@
 # Aite Mobile (Android)
 
-A Capacitor 6 wrapper that turns the Aite web app into a fast native Android APK.
+A Capacitor 8 Android wrapper that packages the existing Aite web views and uses the live backend for data. It targets Android 16 (API 36) for current Google Play submissions.
 
-## Why this approach
+## Requirements
 
-* **Speed**: every HTML/CSS/JS file is copied out of `../views` and shipped inside the APK,
-  so navigation between screens happens entirely from local storage. Only data calls go
-  over the network.
-* **No UI rewrite**: the bundled web app is the existing site verbatim. A small runtime
-  shim (`scripts/aite-bridge.js`) is injected into every HTML page to:
-  * absolutize `fetch`, `XMLHttpRequest`, and `EventSource` URLs to the live backend
-    (`https://aite-lite.vercel.app`) with `credentials: include`,
-  * map server-style URLs like `/profile/:userId` and `/check-status` to the matching
-    bundled HTML file (or, for server-only routes, run the redirect logic locally), and
-  * keep session cookies attached across the WebView boundary.
-* **Real native APK**: Android Studio is not required to build; everything ships through
-  `gradlew`.
+- Node.js 22+
+- JDK 21
+- Android SDK Platform 36 and Build-Tools 36.x
+- Android Studio 2025.2.1+ (optional for command-line builds)
 
-## Project layout
-
-```
-mobile/
-├── android/                       Capacitor-generated Android Studio project
-├── scripts/
-│   ├── aite-bridge.js             runtime shim injected into every page
-│   ├── build-web.js               copies ../views -> www and injects the shim
-│   └── gen-android-assets.sh      regenerates launcher icons + splash from icon-512.png
-├── capacitor.config.json
-└── package.json
-```
-
-## Build prerequisites
-
-* Node.js 18+
-* Java 17 (OpenJDK)
-* Android SDK with `build-tools;34.0.0`, `platform-tools`, `platforms;android-34`
-* `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) exported
-
-Set `local.properties` in `android/` if `ANDROID_HOME` isn't visible to Gradle:
-
-```
-sdk.dir=/path/to/android-sdk
-```
-
-## Build a debug APK
+## Build
 
 ```bash
 cd mobile
-npm install
-npm run build        # copies views/ -> www/ and injects aite-bridge.js
-npx cap sync android # copies www/ into android/app/src/main/assets/public
-cd android
-./gradlew assembleDebug
+npm ci
+npm run android:debug     # Debug APK
+npm run android:release   # Signed release APK (requires private keystore.properties)
+npm run android:bundle    # Signed release AAB for Play Console (requires private keystore.properties)
 ```
 
-The APK ends up at `android/app/build/outputs/apk/debug/app-debug.apk` (~5 MB).
+The web assets are generated from `../views/` by `npm run build`; `npm run sync` also runs `npx cap sync android`.
 
-`npm run android:debug` does all three steps in one command.
+### Private signing setup
 
-## Build a release APK
+A sample property file is at `android/keystore.properties.example`. Copy it to `android/keystore.properties`, create/provide a private upload key in `android/keystore/`, and fill in the actual alias and passwords locally. Both paths are ignored by Git. Never commit or send signing keys/passwords in chat.
 
-```bash
-cd mobile/android
-./gradlew assembleRelease
-```
+The old release keystore and passwords were removed because they had been committed to the public repository. If this app already has a Play listing, do not create a random replacement key: match the Play Console upload key or reset it through Play Console first. Set a versionCode higher than the one already uploaded.
 
-Signing is not configured by default; add a `signingConfigs` block to
-`android/app/build.gradle` (or use Android Studio's "Generate Signed Bundle / APK"
-flow) before shipping a release build to a real device or Play Console.
+### App navigation
 
-## Backend changes required for cross-origin auth
+A launcher start clears stale route state and returns to the normal app entry flow: signed-in users go to `chat_list`, signed-out users to `accounts`/login. Internal pages remain navigable through the WebView history.
 
-The Capacitor shell loads pages from `https://localhost` and talks to
-`https://aite-lite.vercel.app` for data. For session cookies to flow across that
-boundary, `server.js` already has the following adjustments in this PR:
+### Push notifications
 
-* `corsOptions.origin` now allows the production deployment, `https://localhost`,
-  and the Capacitor / Ionic schemes — every other origin is still rejected.
-* `session.cookie.sameSite` is set to `'none'` in production (and stays `'lax'`
-  in local dev), so the Set-Cookie response from `aite-lite.vercel.app` is honored
-  by the Capacitor WebView. `httpOnly` and `secure` are unchanged.
-
-Once those changes are deployed to `aite-lite.vercel.app`, the APK can log in,
-fetch posts, receive `EventSource` notifications, and so on, against the live
-backend without any additional configuration.
-
-## Regenerating launcher icons / splash
-
-The Android launcher icon and splash screen are generated from `../views/icon-512.png`:
-
-```bash
-bash scripts/gen-android-assets.sh
-```
-
-Rerun this whenever the source icon changes.
-
-## Adding a new server route
-
-If `server.js` introduces a route that has no corresponding HTML file in `views/`
-(for example, a server-only redirect like `/check-status`), add a clause to
-`handleServerOnlyRoute` in `scripts/aite-bridge.js`. For new HTML pages, just add
-them to `views/` — `npm run build` will pick them up. For URL patterns like
-`/profile/:userId`, add a regex entry to `DYNAMIC_ROUTES` in the same file.
+Push notifications require `android/app/google-services.json`, registered for application ID `com.aite.app`. It is intentionally not tracked in Git.

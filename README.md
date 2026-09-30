@@ -4,32 +4,21 @@ A Node.js + Express backend for the Aite social/chat web app, with static HTML v
 
 ## Quick start
 
-1. Copy the environment template and fill in your Firebase / R2 credentials:
-   ```bash
-   cp .env.example .env
-   # edit .env with your credentials
-   ```
-
+1. Copy `.env.example` to `.env` and add the Firebase/R2 credentials.
 2. Install dependencies and run the backend:
    ```bash
    npm install
    npm start
    ```
+3. Preview only the static frontend with `npm run preview`.
 
-3. To preview only the static frontend (no Firebase required):
-   ```bash
-   npm run preview
-   ```
+## Recent fixes
 
-## What was fixed
+- Reels now load in cursor-based pages, including older records and legacy reels whose timestamp is missing; the Android feed appends pages as the user swipes.
+- A fresh Android launcher start clears stale route state and returns through the app entry flow (signed-in users go to `chat_list`; signed-out users go to accounts/login).
+- Upgraded the Android shell to Capacitor 8 / Android API 36, as required for current Google Play submissions.
+- Removed the previously committed Android keystore and passwords. Those signing values were public and must not be reused for a Play release.
 
-- Restored all `views/*.html` files from the pre-shutdown commit, bringing the web app back online.
-- Made Firebase initialization robust: the server now starts even when `SERVICE_ACCOUNT_KEY` is missing, and falls back to a memory-backed session store for local development.
-- Fixed SSE `Access-Control-Allow-Origin` headers that were calling a function as if it were an array.
-- Removed a duplicate/unreachable `/api/messages/:chatId` route.
-- Fixed a `from_id`/`fromId` typo in friend-request push notifications.
-- Reduced unbounded Firebase reads in the heaviest endpoints: `/api/search`, `/api/stories`, `/api/users`, `/api/users/all`, `/api/reels/feed`, `/partials/posts`, `/partials/chat_content`, and `/api/notifications`.
+## Android build / release
 
-## Mobile build
-
-See `INSTALL_MOBILE.md` and the `mobile/` directory.
+See `INSTALL_MOBILE.md`. A release APK/AAB must be signed with the private upload key associated with the Play Console app. Never commit that key or its password.

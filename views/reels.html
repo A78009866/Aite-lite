@@ -1148,6 +1148,12 @@ html[data-theme="light"] #replyIndicator {
   let swiperInstance = null;
   let currentReelsData = [];
   let currentUserId = null;
+  const REELS_PAGE_SIZE = 20;
+  const REELS_MIN_BUFFER = 3;
+  let reelFeedCursor = null;
+  let reelFeedHasMore = false;
+  let reelFeedLoading = false;
+  const seenReelIds = new Set();
   let currentReelIdForComments = null;
   let replyingToCommentId = null;
   let replyingToReplyId = null;
@@ -1182,51 +1188,113 @@ html[data-theme="light"] #replyIndicator {
     }
   }).catch(()=>{});
 
+  async function requestReelPage(cursor, focusReelId) {
+    const params = new URLSearchParams({ limit: String(REELS_PAGE_SIZE) });
+    if (cursor) params.set('before', cursor);
+    if (focusReelId) params.set('id', focusReelId);
+    const response = await fetch('/api/reels/feed?' + params.toString(), { credentials: 'include' });
+    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+    const data = await response.json();
+    if (!data || !data.ok) throw new Error(data && data.error ? data.error : 'Reel feed request failed');
+    return data;
+  }
+
+  function rememberUniqueReels(items) {
+    const unique = [];
+    (Array.isArray(items) ? items : []).forEach(reel => {
+      const id = reel && reel.reelId ? String(reel.reelId) : '';
+      if (!id || seenReelIds.has(id)) return;
+      seenReelIds.add(id);
+      unique.push(reel);
+    });
+    return unique;
+  }
+
+  function updateReelFeedCursor(data) {
+    reelFeedCursor = data && typeof data.nextCursor === 'string' ? data.nextCursor : null;
+    reelFeedHasMore = !!(data && data.hasMore && reelFeedCursor);
+  }
+
   async function loadReels() {
+    const wrapper = document.getElementById('reelsWrapper');
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetReelId = urlParams.get('id');
     try {
-      const res = await fetch('/api/reels/feed', { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-      const data = await res.json();
+      const data = await requestReelPage(null, targetReelId);
       currentUserId = data.currentUserId || currentUserId || null;
-      
-      if(data.ok && data.reels && data.reels.length > 0) {
-        currentReelsData = data.reels;
-        renderReels(data.reels);
-        
-        // --- التعديل الجديد: قراءة الـ id من الرابط ---
-        const urlParams = new URLSearchParams(window.location.search);
-        const targetReelId = urlParams.get('id');
+      updateReelFeedCursor(data);
+      currentReelsData = rememberUniqueReels(data.reels);
+
+      // If recent records were removed by block filters, backfill a small first
+      // screen from older pages so the user doesn't appear to have only one reel.
+      while (currentReelsData.length < REELS_MIN_BUFFER && reelFeedHasMore && reelFeedCursor) {
+        const olderPage = await requestReelPage(reelFeedCursor);
+        updateReelFeedCursor(olderPage);
+        currentReelsData.push(...rememberUniqueReels(olderPage.reels));
+      }
+
+      if (currentReelsData.length > 0) {
+        renderReels(currentReelsData);
+
         highlightCommentId = urlParams.get('commentId');
         highlightReplyId = urlParams.get('replyId');
         let initialIndex = 0;
-
         if (targetReelId) {
-            // البحث عن ترتيب الريل المطلوب
-            const index = data.reels.findIndex(r => r.reelId === targetReelId);
-            if (index !== -1) {
-                initialIndex = index;
-            }
+          const index = currentReelsData.findIndex(r => String(r.reelId) === targetReelId);
+          if (index !== -1) initialIndex = index;
         }
-        
-        // تمرير الفهرس (Index) للدالة
-        initSwiper(initialIndex);
 
-        // Auto-open comments if navigating from notification with commentId/replyId
+        initSwiper(initialIndex);
         if (targetReelId && (highlightCommentId || highlightReplyId)) {
           setTimeout(() => { openComments(targetReelId); }, 500);
         }
+
+        // Swiper cannot emit a swipe-to-next event when the first page has only
+        // one or two visible items; fetch ahead in that case.
+        if (currentReelsData.length < REELS_MIN_BUFFER && reelFeedHasMore) {
+          loadMoreReels(true);
+        }
       } else {
-        document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-gray-500" data-i18n="لا توجد ريلز حالياً">' + t('لا توجد ريلز حالياً') + '</div>';
+        wrapper.innerHTML = '<div class="swiper-slide text-gray-500" data-i18n="لا توجد ريلز حالياً">' + t('لا توجد ريلز حالياً') + '</div>';
       }
-    } catch(e) {
+    } catch (e) {
       console.error(e);
-      document.getElementById('reelsWrapper').innerHTML = '<div class="swiper-slide text-red-500" data-i18n="خطأ في التحميل">' + t('خطأ في التحميل') + '</div>';
+      wrapper.innerHTML = '<div class="swiper-slide text-red-500" data-i18n="خطأ في التحميل">' + t('خطأ في التحميل') + '</div>';
     }
   }
 
-  function renderReels(reels) {
+  async function loadMoreReels(fillBuffer = false) {
+    if (reelFeedLoading || !reelFeedHasMore || !reelFeedCursor) return;
+    reelFeedLoading = true;
+    try {
+      // If a page contains only reels hidden by block filters, keep paging until
+      // at least one new visible reel arrives or the feed is exhausted.
+      do {
+        const data = await requestReelPage(reelFeedCursor);
+        updateReelFeedCursor(data);
+        const nextReels = rememberUniqueReels(data.reels);
+        if (nextReels.length) {
+          currentReelsData.push(...nextReels);
+          renderReels(nextReels, true);
+          if (swiperInstance) {
+            swiperInstance.update();
+            preloadAdjacentVideos(swiperInstance);
+          }
+        }
+        if (!fillBuffer || currentReelsData.length >= REELS_MIN_BUFFER || !reelFeedHasMore) break;
+      } while (reelFeedHasMore && reelFeedCursor);
+    } catch (e) {
+      console.warn('Could not load another reel page:', e);
+    } finally {
+      reelFeedLoading = false;
+    }
+  }
+
+  function renderReels(reels, append = false) {
     const wrapper = document.getElementById('reelsWrapper');
-    wrapper.innerHTML = reels.map((reel, index) => {
+    const startIndex = append ? wrapper.querySelectorAll('.swiper-slide[data-id]').length : 0;
+    const slidesHtml = reels.map((reel, localIndex) => {
+      const index = startIndex + localIndex;
       const isOwner = reel.userId === currentUserId;
       const poster = reel.thumbnailUrl || getVideoThumbnail(reel.videoUrl) || BLACK_POSTER;
       return `
@@ -1279,12 +1347,18 @@ html[data-theme="light"] #replyIndicator {
       </div>
     `}).join('');
 
-    setupVideoInteractions();
+    if (append) wrapper.insertAdjacentHTML('beforeend', slidesHtml);
+    else wrapper.innerHTML = slidesHtml;
+
+    const renderedSlides = Array.from(wrapper.querySelectorAll('.swiper-slide[data-id]')).slice(startIndex);
+    setupVideoInteractions(renderedSlides);
     updateVerifiedBadges();
   }
 
-  function setupVideoInteractions() {
-    document.querySelectorAll('video').forEach(vid => {
+  function setupVideoInteractions(slides) {
+    const slideList = slides ? Array.from(slides) : Array.from(document.querySelectorAll('.swiper-slide[data-id]'));
+    const videos = slideList.flatMap(slide => Array.from(slide.querySelectorAll('video')));
+    videos.forEach(vid => {
       const slide = vid.closest('.swiper-slide');
       const reelId = slide.getAttribute('data-id');
       const progressBar = document.getElementById(`progressBar-${reelId}`);
@@ -1375,6 +1449,7 @@ html[data-theme="light"] #replyIndicator {
           pauseAllVideos();
           playCurrentVideo(this);
           preloadAdjacentVideos(this);
+          if (this.activeIndex >= this.slides.length - 3) loadMoreReels(false);
         },
         slideChangeTransitionEnd: function() {
           // Ensure video plays smoothly after transition completes

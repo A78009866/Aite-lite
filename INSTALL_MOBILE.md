@@ -1,89 +1,57 @@
-# Aite-lite — Android APK integration
+# Aite Android build and release
 
-This archive is your full `Aite-lite` repo with the Android wrapper already added.
+The Android wrapper is on Capacitor 8 and targets Android 16 (API 36), the current Google Play target for new apps and updates.
 
-## What changed compared to your current `main` branch
+## Build requirements
 
-| Path | What it is |
-| --- | --- |
-| `mobile/` (new) | Capacitor 6 Android wrapper project. Bundles all HTML/CSS/JS from `views/` into the APK so screens open instantly from local storage, and routes API calls to the live backend. |
-| `server.js` (modified) | CORS now allows the Capacitor shell origins (`https://localhost`, `capacitor://localhost`, …), and the session cookie uses `SameSite=None; Secure` in production so it can cross the mobile origin. |
-| `mobile/scripts/aite-bridge.js` | Disables zoom and text selection (except inputs/textareas), and registers the native FCM push token with `/api/save-fcm-token`. |
-| `mobile/android/app/src/main/java/com/aite/app/MainActivity.java` | Disables WebView zoom controls and long-click text selection at the native level. |
+- Node.js 22 or newer
+- JDK 21
+- Android SDK Platform 36 and Android SDK Build-Tools 36.x
+- Android Studio 2025.2.1 or newer (optional for command-line builds)
 
-Nothing else in the repo is touched.
-
-## Steps to publish
-
-```bash
-cd Aite-lite               # this folder, after you unzip
-git checkout -b android-apk
-git add mobile/ server.js
-git commit -m "Add Capacitor Android APK wrapper"
-git push -u origin android-apk
-```
-
-Open a PR on github.com/A78009866/Aite-lite from `android-apk` -> `main`.
-
-Then push `server.js` (via the merge) to production so Vercel redeploys
-`aite-lite.vercel.app` with the new CORS + cookie config. The APK needs that
-deploy live to actually log in / fetch data.
-
-## Build the APK yourself
-
-Requirements:
-
-* Node.js 18+
-* Java 17 (OpenJDK)
-* Android SDK with `platforms;android-34`, `build-tools;34.0.0`, `platform-tools`
-* `ANDROID_HOME` env var pointing at the SDK
+## Build a test APK
 
 ```bash
 cd mobile
-npm install
-npm run android:debug      # -> android/app/build/outputs/apk/debug/app-debug.apk
-# or
-npm run android:release    # -> android/app/build/outputs/apk/release/app-release.apk (signed)
+npm ci
+npm run android:debug
 ```
 
-`npm run android:release` signs the APK using `mobile/android/keystore/aite-release.keystore`
-and the passwords in `mobile/android/keystore.properties`.
+Output: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`.
 
-> NOTE: that keystore is a self-generated dev keystore so the demo APK installs
-> cleanly. **Replace it with a private keystore before publishing to Play Store**
-> (`keytool -genkeypair -keystore my-release.keystore -alias aite -keyalg RSA
->  -keysize 2048 -validity 10950`), and never commit a real keystore /
-> passwords to a public repo. Once you change the keystore, every future
-> release must be signed with the same keystore — that's Android's upgrade
-> identity rule. Back it up somewhere safe.
+## Sign a release APK and Play bundle
 
-> NOTE: Push notifications need your Firebase project's `google-services.json`
-> placed at `mobile/android/app/google-services.json` and the app ID `com.aite.app`
-> registered in that Firebase project. Without it the app still builds and runs,
-> but FCM tokens will not be generated.
+**Do not use the old key/passwords that were tracked in this public repository.** They are considered compromised and have been removed from the current source tree. If this app is already on Google Play, use the existing private upload key or request an upload-key reset in Play Console before building. If it is a first release, create a new private upload key and enroll in Play App Signing.
 
-## How fast is "fast"?
+Generate a private upload key locally (never commit it):
 
-Every page (`accounts.html`, `login.html`, `chat_list.html`, `reels.html`, etc.)
-is bundled inside the APK. There is no network round-trip to load a screen —
-only the actual data calls (`/api/...`) go over the wire. On the live site
-each navigation re-downloads HTML+JS+CSS; in the APK it does not.
+```bash
+cd mobile/android
+mkdir -p keystore
+keytool -genkeypair -v -keystore keystore/upload-key.jks -alias aite-upload \
+  -keyalg RSA -keysize 2048 -validity 10000
+cp keystore.properties.example keystore.properties
+# Edit keystore.properties with the actual passwords/alias. Keep it private.
+```
 
-The runtime shim `mobile/scripts/aite-bridge.js` is injected into every page
-by `mobile/scripts/build-web.js`. It:
+`keystore.properties` is ignored by Git. Then build:
 
-1. Absolutizes `fetch`, `XMLHttpRequest`, and `EventSource` URLs to
-   `https://aite-lite.vercel.app` with `credentials: 'include'`.
-2. Translates server-style URLs (`/profile/:id`, `/post/:id`, etc.) into the
-   matching local HTML file.
-3. Handles synthetic server-only paths like `/check-status` and `/logout` by
-   calling the backend and then redirecting locally.
+```bash
+cd ../
+npm ci
+npm run android:release   # signed APK
+npm run android:bundle    # signed AAB for Google Play
+```
 
-## Adding a new server route
+Outputs:
 
-1. New HTML page — just drop it into `views/`. `npm run build` (inside
-   `mobile/`) will copy it to `mobile/www` and inject the bridge.
-2. New URL pattern like `/foo/:id` — add it to the `DYNAMIC_ROUTES` regex array
-   in `mobile/scripts/aite-bridge.js`.
-3. New server-only route like `/check-status` — add a clause to
-   `handleServerOnlyRoute` in the same file, then rebuild.
+- `mobile/android/app/build/outputs/apk/release/app-release.apk`
+- `mobile/android/app/build/outputs/bundle/release/app-release.aab`
+
+Back up the upload key securely and keep it for future updates. Do not send the key or its passwords in chat, commit them, or place them in a public repository. Increase `versionCode` in `mobile/android/app/build.gradle` for every Play update; the current value is only a starting value and must be checked against the app's Play Console listing.
+
+## Backend deployment and reels
+
+The reels pagination fix includes a change to `server.js`, so deploy the backend as well as rebuilding the mobile app. The mobile wrapper still calls the live backend at `https://aite-lite.vercel.app`.
+
+Push notifications require the matching Firebase `google-services.json` in `mobile/android/app/` and the app ID `com.aite.app` registered in that Firebase project. This file is intentionally not tracked.

@@ -20,6 +20,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/clien
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const nodemailer = require('nodemailer');
 const webpush = require('web-push');
+const { paginateReelRows, timestampFromPushKey } = require('./lib/reel-feed-pagination');
 
 // Cloudflare R2 Configuration
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -5296,20 +5297,49 @@ app.post('/api/reels/create', requireAuth, writeLimiter, (req, res, next) => {
 
 app.get('/api/reels/feed', requireAuth, async (req, res) => {
   const currentUserId = req.session.userId;
+  const DEFAULT_PAGE_SIZE = 20;
+  const MAX_PAGE_SIZE = 50;
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const pageSize = Number.isInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, MAX_PAGE_SIZE)
+    : DEFAULT_PAGE_SIZE;
+  const beforeKey = typeof req.query.before === 'string' ? req.query.before.trim() : '';
+
+  if (beforeKey.length > 128) {
+    return res.status(400).json({ ok: false, error: 'Invalid reel cursor' });
+  }
+
   try {
-    const REEL_PAGE_SIZE = 20;
-    // Fetch only the most recent reels instead of the entire node
-    const reelsSnap = await db.ref('reels')
-      .orderByChild('timestamp')
-      .limitToLast(REEL_PAGE_SIZE)
-      .once('value');
-    let reels = [];
+    const reelsRef = db.ref('reels').orderByKey();
+    // endAt is inclusive in Realtime Database, so request extra rows for the
+    // cursor itself and to detect whether another older page exists.
+    const reelsQuery = beforeKey
+      ? reelsRef.endAt(beforeKey).limitToLast(pageSize + 2)
+      : reelsRef.limitToLast(pageSize + 1);
+    const reelsSnap = await reelsQuery.once('value');
+    const snapshotRows = [];
     reelsSnap.forEach(snap => {
-      const data = snap.val();
-      if (data) {
-        data.reelId = data.reelId || snap.key;
-        reels.push(data);
+      const value = snap.val();
+      if (value && typeof value === 'object') snapshotRows.push({ key: snap.key, value });
+    });
+
+    const { selectedRows, hasMore, nextCursor } = paginateReelRows(snapshotRows, beforeKey, pageSize);
+    const rowsToEnrich = selectedRows.slice();
+    const focusReelId = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+    if (/^[A-Za-z0-9_-]{1,128}$/.test(focusReelId) && !selectedRows.some(row => row.key === focusReelId)) {
+      const focusSnap = await db.ref(`reels/${focusReelId}`).once('value');
+      const focusValue = focusSnap.val();
+      if (focusValue && typeof focusValue === 'object') {
+        rowsToEnrich.push({ key: focusSnap.key || focusReelId, value: focusValue });
       }
+    }
+    let reels = rowsToEnrich.map(({ key, value }) => {
+      const reel = { ...value, reelId: value.reelId || key };
+      const storedTimestamp = Number(value.timestamp);
+      reel.timestamp = Number.isFinite(storedTimestamp) && storedTimestamp > 0
+        ? storedTimestamp
+        : timestampFromPushKey(key);
+      return reel;
     });
 
     // Filter out reels from blocked users (both directions)
@@ -5320,14 +5350,14 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
       db.ref(`friend_requests/${currentUserId}`).once('value'),
     ]);
     const allBlockedIds = new Set([...blockedByMe, ...blockedMe]);
-    reels = reels.filter(r => !allBlockedIds.has(r.userId));
+    reels = reels.filter(r => r.userId && !allBlockedIds.has(r.userId));
 
     // Build friend-state lookup tables
     const myFriendIds = new Set(Object.keys(friendsSnap.val() || {}));
     const incomingMap = new Set(Object.keys(incomingReqSnap.val() || {}));
 
     // Batch fetch author profiles, outgoing request status, and like status
-    const authorIds = [...new Set(reels.map(r => r.userId))];
+    const authorIds = [...new Set(reels.map(r => r.userId).filter(Boolean))];
     const authorPromises = {};
     const outgoingPromises = {};
     authorIds.forEach(id => {
@@ -5364,7 +5394,6 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
 
       return {
         ...reel,
-        // commentsCount is already maintained at creation time; avoid recounting
         commentsCount: reel.commentsCount || 0,
         is_liked: !!likeMap[reel.reelId],
         is_friend: isFriend,
@@ -5384,35 +5413,39 @@ app.get('/api/reels/feed', requireAuth, async (req, res) => {
       };
     });
 
-    // Smart sort: heavy recency bias, friend boost, then likes
+    // Keep the existing relevance boosts, but make ties stable between requests.
     const now = Date.now();
     const ONE_HOUR = 3600000;
     const scored = enriched.map(r => {
-      const ageHours = Math.max(0.5, (now - (r.timestamp || now)) / ONE_HOUR);
-      let score = 0;
-      // Recency dominates: very steep boost for fresh content (<6h)
-      score += 1000 / Math.pow(ageHours, 0.5);
-      // Friend boost
+      const reelTimestamp = Number(r.timestamp) || now;
+      const ageHours = Math.max(0.5, (now - reelTimestamp) / ONE_HOUR);
+      let score = 1000 / Math.pow(ageHours, 0.5);
       if (r.is_friend) score += 250;
-      // Own reels small boost so the user sees their own first
       if (r.is_owner) score += 150;
-      // Engagement (likes + comments*2)
-      const engagement = (r.likes || 0) + (r.commentsCount || 0) * 2;
+      const engagement = (Number(r.likes) || 0) + (Number(r.commentsCount) || 0) * 2;
       score += engagement * 1.5;
-      // Tiny randomness for variety
-      score += Math.random() * 5;
       return { ...r, _score: score };
     });
-    scored.sort((a, b) => b._score - a._score);
+    scored.sort((a, b) =>
+      b._score - a._score ||
+      (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0) ||
+      String(b.reelId).localeCompare(String(a.reelId))
+    );
     const finalReels = scored.map(({ _score, ...r }) => r);
 
-    res.json({ ok: true, reels: finalReels, currentUserId });
+    res.json({
+      ok: true,
+      reels: finalReels,
+      currentUserId,
+      pageSize,
+      hasMore,
+      nextCursor
+    });
   } catch (error) {
     console.error("خطأ في جلب الريلز:", error);
     res.status(500).json({ ok: false, error: 'Error fetching reels' });
   }
 });
-
 app.delete('/api/reels/:reelId', requireAuth, async (req, res) => {
   const userId = req.session.userId;
   const { reelId } = req.params;
